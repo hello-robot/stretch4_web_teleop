@@ -12,8 +12,8 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 
 # Local Imports
-from stretch_web_teleop.msg import TextToSpeech
-from stretch_web_teleop_helpers.text_to_speech_helpers import (
+from stretch4_web_teleop.msg import TextToSpeech
+from stretch4_web_teleop_helpers.text_to_speech_helpers import (
     GTTS,
     PyTTSx3,
     TextToSpeechEngine,

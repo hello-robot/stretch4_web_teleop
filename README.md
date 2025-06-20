@@ -84,7 +84,7 @@ and verify the symlinks are setup correctly.
 First, navigate to the folder containing the codebase using:
 
 ```
-colcon_cd stretch_web_teleop
+colcon_cd stretch4_web_teleop
 ```
 
 Next, launch the interface:
@@ -316,7 +316,7 @@ The operator can send text to be spoken on the robot. The operator can also save
     <img src="documentation/assets/tutorial/text_to_speech.gif">
 </p>
 
-Text-to-speech can also be performed with a command-line interface, by running `ros2 run stretch_web_teleop text_to_speech_ui.py`. This is particulalry useful in situations where a separate operator is controlling the robot and a separate operator is controlling speech interactions.
+Text-to-speech can also be performed with a command-line interface, by running `ros2 run stretch4_web_teleop text_to_speech_ui.py`. This is particulalry useful in situations where a separate operator is controlling the robot and a separate operator is controlling speech interactions.
 
 <p align="center">
     <img src="documentation/assets/tutorial/text_to_speech_cli.gif">
@@ -341,7 +341,7 @@ First, ensure that your robot has the latest version of Web Teleop by [updating 
 
 Then, launch the program normally, and if you see "FAILURE. COULD NOT LAUNCH WEB TELEOP.", then locate the zipped-up logs file and send them to Hello Robot Support (support@hello-robot.com).
 
-To locate the logs, open a file explorer, go into "Home", go into "stretch_user", go into "log", go into "web_teleop", locate the folder with the latest timestamp, and send "stretch_web_teleop_logs.zip" to the support team.
+To locate the logs, open a file explorer, go into "Home", go into "stretch_user", go into "log", go into "web_teleop", locate the folder with the latest timestamp, and send "stretch4_web_teleop_logs.zip" to the support team.
 
 # Licenses
 

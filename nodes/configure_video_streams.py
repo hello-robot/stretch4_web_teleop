@@ -26,7 +26,7 @@ from sensor_msgs.msg import CameraInfo, CompressedImage, Image, JointState, Poin
 from std_msgs.msg import String
 from std_srvs.srv import SetBool
 
-from stretch_web_teleop_helpers.conversions import (
+from stretch4_web_teleop_helpers.conversions import (
     cv2_image_to_ros_msg,
     deproject_pixel_to_pointcloud_point,
     depth_img_to_pointcloud,

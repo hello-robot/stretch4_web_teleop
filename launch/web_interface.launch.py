@@ -181,7 +181,7 @@ def map_configuration_to_drivers(model, tool, has_beta_teleop_kit, has_nav_head_
 
 
 def generate_launch_description():
-    teleop_interface_package = str(get_package_share_path("stretch_web_teleop"))
+    teleop_interface_package = str(get_package_share_path("stretch4_web_teleop"))
     core_package = str(get_package_share_path("stretch_core"))
     rosbridge_package = str(get_package_share_path("rosbridge_server"))
     stretch_core_path = str(get_package_share_directory("stretch_core"))
@@ -448,7 +448,7 @@ def generate_launch_description():
         bools[i] = "True"
         label = labels[i]
         configure_video_streams_node = Node(
-            package="stretch_web_teleop",
+            package="stretch4_web_teleop",
             executable="configure_video_streams.py",
             name=f"configure_video_streams_{label}",
             output="screen",
@@ -547,7 +547,7 @@ def generate_launch_description():
         or stretch_tool == "tool_stretch_dex_wrist"
     ):
         move_to_pregrasp_node = Node(
-            package="stretch_web_teleop",
+            package="stretch4_web_teleop",
             executable="move_to_pregrasp.py",
             output="screen",
             arguments=[LaunchConfiguration("params")],
@@ -557,7 +557,7 @@ def generate_launch_description():
 
     # Text to speech
     text_to_speech_node = Node(
-        package="stretch_web_teleop",
+        package="stretch4_web_teleop",
         executable="text_to_speech.py",
         output="screen",
         arguments=[LaunchConfiguration("tts_engine")],

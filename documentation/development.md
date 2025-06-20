@@ -404,4 +404,4 @@ export const Operator = () => {
 
 ## Wrap-up
 
-In this tutorial, we've covered the files you'd need to edit to add new development to the interface. We've taken the example of homing, and added UI that enables the operator to home the robot remotely. In practice, the homing UX is a bit more complex than what we showed in this example. Check out [the pull request](https://github.com/hello-robot/stretch_web_teleop/pull/98) to see the complete functionality for this feature!
+In this tutorial, we've covered the files you'd need to edit to add new development to the interface. We've taken the example of homing, and added UI that enables the operator to home the robot remotely. In practice, the homing UX is a bit more complex than what we showed in this example. Check out [the pull request](https://github.com/hello-robot/stretch4_web_teleop/pull/98) to see the complete functionality for this feature!

@@ -13,7 +13,7 @@ from ament_index_python import get_package_share_directory
 from rclpy.node import Node
 
 # Local Imports
-from stretch_web_teleop.msg import TextToSpeech
+from stretch4_web_teleop.msg import TextToSpeech
 
 
 def print_and_flush(message: str):
@@ -192,10 +192,10 @@ if __name__ == "__main__":
     # Configure the GNU readline module for better interactive input
     history_filename = "text_to_speech_ui_history.txt"
     config_share_dir = os.path.join(
-        get_package_share_directory("stretch_web_teleop"),
+        get_package_share_directory("stretch4_web_teleop"),
         "config",
     )
-    config_src_dir = os.path.expanduser("~/ament_ws/src/stretch_web_teleop/config")
+    config_src_dir = os.path.expanduser("~/ament_ws/src/stretch4_web_teleop/config")
     readline.read_history_file(os.path.join(config_share_dir, history_filename))
     readline.set_completer(HistoryCompleter().complete)
     readline.parse_and_bind("tab: complete")

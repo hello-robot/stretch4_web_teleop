@@ -45,6 +45,7 @@ import {
 import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
 import { Alert } from "./basic_components/Alert";
+import MapIcon from "@mui/icons-material/Map";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -301,6 +302,16 @@ export const MobileOperator = (props: {
                             isCameraVeilVisible={isCameraVeilVisible}
                         />
                     </div>
+                    <button
+                        onPointerDown={() => {
+                            setHideMap(false);
+                            setHideControls(true);
+                        }}
+                    >
+                        <MapIcon
+                            className="material-icons icon"
+                        />
+                    </button>
                     <TabGroup
                         tabLabels={["Controls", "Recordings"]}
                         tabContent={[controlModes, recordingList]}

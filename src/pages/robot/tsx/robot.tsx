@@ -578,7 +578,7 @@ export class Robot extends React.Component {
         this.moveToPregraspClient = new ROSLIB.ActionHandle({
             ros: this.ros,
             name: moveToPregraspActionName,
-            actionType: "stretch_web_teleop/action/MoveToPregrasp",
+            actionType: "stretch4_web_teleop/action/MoveToPregrasp",
         });
     }
 
@@ -602,7 +602,7 @@ export class Robot extends React.Component {
         this.textToSpeechTopic = new ROSLIB.Topic({
             ros: this.ros,
             name: "/text_to_speech",
-            messageType: "stretch_web_teleop/msg/TextToSpeech",
+            messageType: "stretch4_web_teleop/msg/TextToSpeech",
         });
     }
 

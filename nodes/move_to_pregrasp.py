@@ -29,23 +29,23 @@ from tf2_geometry_msgs import PoseStamped
 from tf_transformations import quaternion_about_axis, quaternion_multiply
 
 # Local Imports
-from stretch_web_teleop.action import MoveToPregrasp
-from stretch_web_teleop_helpers.constants import (
+from stretch4_web_teleop.action import MoveToPregrasp
+from stretch4_web_teleop_helpers.constants import (
     Frame,
     Joint,
     adjust_arm_lift_for_base_collision,
     get_pregrasp_wrist_configuration,
     get_stow_configuration,
 )
-from stretch_web_teleop_helpers.conversions import (
+from stretch4_web_teleop_helpers.conversions import (
     deproject_pixel_to_pointcloud_point,
     depth_img_to_pointcloud,
     remaining_time,
     ros_msg_to_cv2_image,
     tf2_transform,
 )
-from stretch_web_teleop_helpers.move_to_pregrasp_state import MoveToPregraspState
-from stretch_web_teleop_helpers.stretch_ik_control import (
+from stretch4_web_teleop_helpers.move_to_pregrasp_state import MoveToPregraspState
+from stretch4_web_teleop_helpers.stretch_ik_control import (
     MotionGeneratorRetval,
     StretchIKControl,
 )
@@ -100,7 +100,7 @@ class MoveToPregraspNode(Node):
         self.wrist_offset: Optional[Tuple[float, float]] = None
 
         # Create the inverse jacobian controller to execute motions
-        urdf_fpaths = uu.generate_ik_urdfs("stretch_web_teleop", rigid_wrist_urdf=False)
+        urdf_fpaths = uu.generate_ik_urdfs("stretch4_web_teleop", rigid_wrist_urdf=False)
         urdf_fpath = urdf_fpaths[0]
         self.controller = StretchIKControl(
             self,
