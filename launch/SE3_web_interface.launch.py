@@ -108,7 +108,7 @@ def generate_launch_description():
                 [
                     teleop_interface_package,
                     "config",
-                    "configure_video_streams_params.yaml",
+                    "SE3_configure_video_streams_params.yaml",
                 ]
             )
         ],

@@ -12,7 +12,7 @@
                     # Number of degrees to rotate video stream clockwise
                     # Pass "rotate": null to not rotate
                     # "rotate": null,
-                    "rotate": "ROTATE_90_CLOCKWISE",
+                    "rotate": "ROTATE_90_COUNTERCLOCKWISE",
                 } },
     "realsense":
         {
