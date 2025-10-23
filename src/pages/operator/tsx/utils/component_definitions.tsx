@@ -17,9 +17,7 @@ export enum ComponentType {
     LayoutGrid = "Layout Grid",
     Panel = "Panel",
     SingleTab = "Tab",
-    CameraView = "Camera View",
     ButtonPad = "Button Pad",
-    PredictiveDisplay = "Predictive Display",
     Map = "Map",
     RunStopButton = "Run Stop Button",
     BatteryGauge = "Battery Gauge",
@@ -110,100 +108,6 @@ export type PanelDefinition = ComponentDefinition & {
 export type TabDefinition = ParentComponentDefinition & {
     /** The label that appears at the top of the tabs object. */
     label: string;
-};
-
-/**
- * Definition for a video stream component
- */
-export type CameraViewDefinition = ParentComponentDefinition & {
-    /** Indicates the camera video of the video stream */
-    id: CameraViewId;
-    /** Whether to display the default buttons under the camera view */
-    displayButtons: boolean;
-};
-
-/**
- * Definition for the gripper stream component
- *
- * @note these modifications to the overhead view are implemented in the
- * backend, so if multiple overhead streams are visible to the user
- * simultaneously, any change to this definition for one view will impact
- * all views.
- */
-export type GripperVideoStreamDef = CameraViewDefinition & {
-    /**
-     * Whether to display the expanded gripper view or the default one
-     */
-    expandedGripperView?: boolean;
-    /**
-     * If pixels within the graspable region should be highlighted.
-     */
-    depthSensing?: boolean;
-};
-
-/**
- * Definition for the fixed overhead stream component
- *
- * @note these modifications to the overhead view are implemented in the
- * backend, so if multiple overhead streams are visible to the user
- * simultaneously, any change to this definition for one view will impact
- * all views.
- */
-export type FixedOverheadVideoStreamDef = CameraViewDefinition & {
-    /**
-     * Predictive display toggle
-     */
-    predictiveDisplay?: boolean;
-};
-
-/**
- * Definition for the adjustable overhead stream component
- *
- * @note these modifications to the overhead view are implemented in the
- * backend, so if multiple overhead streams are visible to the user
- * simultaneously, any change to this definition for one view will impact
- * all views.
- */
-export type AdjustableOverheadVideoStreamDef = CameraViewDefinition & {
-    /**
-     * If the Realsense camera should pan and tilt to keep the gripper centered
-     * in the view.
-     */
-    followGripper?: boolean;
-    /**
-     * Predictive display toggle
-     */
-    predictiveDisplay?: boolean;
-};
-
-/**
- * Definition for the Realsense video stream component
- *
- * @note these modifications to the Realsense view are implemented in the
- * backend, so if multiple Realsense streams are visible to the user
- * simultaneously, any change to this definition for one view will impact
- * all views.
- */
-export type RealsenseVideoStreamDef = CameraViewDefinition & {
-    /**
-     * If the Realsense camera should pan and tilt to keep the gripper centered
-     * in the view.
-     */
-    followGripper?: boolean;
-    /**
-     * If the AR depth ring should be shown to indicate the extent of the
-     * reachable area.
-     */
-    depthSensing?: boolean;
-    /**
-     * If the user should be allowed to click on the image and have the robot
-     * move to the pre-grasp position relative to the clicked object.
-     */
-    selectObjectForMoveToPregrasp?: boolean;
-    /**
-     * If the user has toggled on the human body pose estimate overlay.
-     */
-    bodyPoseAR?: boolean;
 };
 
 /**

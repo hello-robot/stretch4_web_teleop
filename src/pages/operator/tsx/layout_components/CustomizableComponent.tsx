@@ -7,8 +7,6 @@ import { DropZoneState } from "./DropZone";
 import { Panel } from "./Panel";
 import { RemoteStream, StretchTool } from "shared/util";
 import { ButtonPad } from "./ButtonPad";
-import { CameraView } from "./CameraView";
-import { PredictiveDisplay } from "./PredictiveDisplay";
 import { ButtonStateMap } from "../function_providers/ButtonFunctionProvider";
 import { Map } from "./Map";
 import { RunStopButton } from "../static_components/RunStop";
@@ -72,10 +70,6 @@ export const CustomizableComponent = (props: CustomizableComponentProps) => {
             return <Panel {...props} />;
         case ComponentType.ButtonPad:
             return <ButtonPad {...props} />;
-        case ComponentType.CameraView:
-            return <CameraView {...props} />;
-        case ComponentType.PredictiveDisplay:
-            return <PredictiveDisplay {...props} />;
         case ComponentType.Map:
             return <Map {...props} />;
         case ComponentType.RunStopButton:

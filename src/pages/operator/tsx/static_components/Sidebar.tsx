@@ -87,8 +87,7 @@ export const Sidebar = (props: SidebarProps) => {
 function componentDescription(definition: ComponentDefinition): string {
     switch (definition.type) {
         case ComponentType.ButtonPad:
-        case ComponentType.CameraView:
-            return `${(definition as CameraViewDefinition | ButtonPadDefinition).id} ${definition.type}`;
+            return `${(definition as ButtonPadDefinition).id} ${definition.type}`;
         case ComponentType.SingleTab:
             return `\"${(definition as TabDefinition).label}\" Tab`;
         case ComponentType.Panel:
@@ -300,88 +299,10 @@ type OptionsProps = {
 const SidebarOptions = (props: OptionsProps) => {
     let contents: JSX.Element | null = null;
     switch (props.selectedDefinition.type) {
-        case ComponentType.CameraView:
-            switch ((props.selectedDefinition as CameraViewDefinition).id!) {
-                case CameraViewId.overhead:
-                    contents = <OverheadVideoStreamOptions {...props} />;
-                    break;
-                case CameraViewId.realsense:
-                    contents = <VideoStreamOptions {...props} />;
-                    break;
-                case CameraViewId.gripper:
-                    contents = <VideoStreamOptions {...props} />;
-                    break;
-            }
-            break;
         case ComponentType.SingleTab:
             contents = <TabOptions {...props} />;
     }
     return <div id="sidebar-options">{contents}</div>;
-};
-
-/** Options for the overhead camera video stream layout component. */
-const OverheadVideoStreamOptions = (props: OptionsProps) => {
-    const definition = props.selectedDefinition as CameraViewDefinition;
-    const pd =
-        definition.children.length > 0 &&
-        definition.children[0].type == ComponentType.PredictiveDisplay;
-    const [predictiveDisplayOn, setPredictiveDisplayOn] = React.useState(pd);
-    const [showButtons, setShowButtons] = React.useState<boolean>(true);
-
-    function togglePredictiveDisplay() {
-        const newPdOn = !predictiveDisplayOn;
-        setPredictiveDisplayOn(newPdOn);
-        if (newPdOn) {
-            // Add predictive display to the stream
-            definition.children = [{ type: ComponentType.PredictiveDisplay }];
-        } else {
-            definition.children = [];
-        }
-        props.updateLayout();
-    }
-
-    function toggleButtons() {
-        setShowButtons(!showButtons);
-        definition.displayButtons = showButtons;
-        props.updateLayout();
-    }
-
-    return (
-        <React.Fragment>
-            {/* <OnOffToggleButton
-                on={predictiveDisplayOn}
-                onClick={togglePredictiveDisplay}
-                label="Predictive Display"
-            /> */}
-            <OnOffToggleButton
-                on={!definition.displayButtons}
-                onClick={toggleButtons}
-                label="Display Buttons"
-            />
-        </React.Fragment>
-    );
-};
-
-/** Options for the camera video stream layout component. */
-const VideoStreamOptions = (props: OptionsProps) => {
-    const definition = props.selectedDefinition as CameraViewDefinition;
-    const [showButtons, setShowButtons] = React.useState<boolean>(true);
-
-    function toggleButtons() {
-        setShowButtons(!showButtons);
-        definition.displayButtons = showButtons;
-        props.updateLayout();
-    }
-
-    return (
-        <React.Fragment>
-            <OnOffToggleButton
-                on={!definition.displayButtons}
-                onClick={toggleButtons}
-                label="Display Buttons"
-            />
-        </React.Fragment>
-    );
 };
 
 /** Options when user selects a single tab within a panel. */
@@ -470,7 +391,6 @@ const SidebarComponentProvider = (props: SidebarComponentProviderProps) => {
     /** The options for possible components to add */
     const outlines: ComponentProviderTabOutline[] = [
         { type: ComponentType.Panel },
-        { type: ComponentType.CameraView, ids: Object.values(CameraViewId) },
         { type: ComponentType.ButtonPad, ids: Object.values(ButtonPadId) },
         { type: ComponentType.Map },
     ];
@@ -481,7 +401,6 @@ const SidebarComponentProvider = (props: SidebarComponentProviderProps) => {
         // Add children based on the component type
         switch (type) {
             case ComponentType.Panel:
-            case ComponentType.CameraView:
                 (definition as ParentComponentDefinition).children = [];
                 break;
             case ComponentType.Map:

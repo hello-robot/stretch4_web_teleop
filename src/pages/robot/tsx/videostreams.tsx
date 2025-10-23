@@ -84,13 +84,13 @@ export class VideoStream extends React.Component<VideoStreamProps> {
                 "stream got image with latency",
                 Date.now() / 1.0e3 -
                     (message.header.stamp.sec +
-                        message.header.stamp.nanosec / 1.0e9),
+                        message.header.stamp.nanosec / 1.0e9)
             );
         }
         if (!this.imageReceived) {
             let { width, height } = jpeg.decode(
                 Uint8Array.from(atob(message.data), (c) => c.charCodeAt(0)),
-                true,
+                true
             );
             this.aspectRatio = width / height;
             this.height = Math.max(height * this.aspectRatio, 1000);
@@ -102,7 +102,7 @@ export class VideoStream extends React.Component<VideoStreamProps> {
             URL.revokeObjectURL(this.img.src);
         }
         this.img.src = URL.createObjectURL(
-            dataURItoBlob("data:image/jpg;base64," + message.data),
+            dataURItoBlob("data:image/jpg;base64," + message.data)
         );
     }
 
@@ -116,7 +116,7 @@ export class VideoStream extends React.Component<VideoStreamProps> {
             console.log("Starting video stream", this.streamName);
             if (!this.canvas.current) throw "Video stream canvas null";
             this.outputVideoStream = this.canvas.current.captureStream(
-                this.fps,
+                this.fps
             );
             this.video.srcObject = this.outputVideoStream;
             this.drawVideo();
@@ -141,10 +141,6 @@ export class VideoStream extends React.Component<VideoStreamProps> {
 /** Renders all three video streams side by side */
 export const AllVideoStreamComponent = (props: { streams: VideoStream[] }) => {
     console.log(props.streams);
-    // let buttonPads = Bp.ExampleButtonPads;
-    // let buttonPads = [undefined, undefined, undefined];
-    // Replace the overhead button pad with predictive display
-    // buttonPads[0] = <PredictiveDisplay onClick={(len, ang) => console.log(`Length: ${len}, Angle: ${ang}`)} />;
     const widths = ["30%", "22.5%", "45%"];
     return (
         <div id="video-stream-container">
