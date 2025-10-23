@@ -28,10 +28,7 @@ import {
 import { AllVideoStreamComponent, VideoStream } from "./videostreams";
 import { AudioStream } from "./audiostreams";
 import ROSLIB from "roslib";
-import {
-    HasBetaTeleopKitMessage,
-    StretchToolMessage,
-} from "../../../shared/util";
+import { StretchToolMessage } from "../../../shared/util";
 import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
 
 export const robot = new Robot({
@@ -48,7 +45,6 @@ export const robot = new Robot({
     modeCallback: forwardMode,
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
-    hasBetaTeleopKitCallback: forwardHasBetaTeleopKit,
     stretchToolCallback: forwardStretchTool,
 });
 
@@ -175,15 +171,6 @@ function forwardIsRunStopped(isRunStopped: boolean) {
         type: "isRunStopped",
         enabled: isRunStopped,
     } as IsRunStoppedMessage);
-}
-
-function forwardHasBetaTeleopKit(value: boolean) {
-    if (!connection) throw "WebRTC connection undefined!";
-
-    connection.sendData({
-        type: "hasBetaTeleopKit",
-        value: value,
-    } as HasBetaTeleopKitMessage);
 }
 
 function forwardStretchTool(value: string) {
@@ -319,8 +306,6 @@ function handleMessage(message: WebRTCMessage) {
         case "getOccupancyGrid":
             robot.getOccupancyGrid();
             break;
-        case "getHasBetaTeleopKit":
-            robot.getHasBetaTeleopKit();
         case "moveToPregrasp":
             robot.executeMoveToPregraspGoal(
                 message.scaled_x,

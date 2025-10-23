@@ -18,7 +18,6 @@ export type cmd =
     | StopMoveToPregraspCommand
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
-    | GetHasBetaTeleopKit
     | GetStretchTool
     | ShowTabletCommand
     | StopShowTabletCommand
@@ -81,10 +80,6 @@ export interface LookAtGripper {
 
 export interface GetOccupancyGrid {
     type: "getOccupancyGrid";
-}
-
-export interface GetHasBetaTeleopKit {
-    type: "getHasBetaTeleopKit";
 }
 
 export interface GetStretchTool {

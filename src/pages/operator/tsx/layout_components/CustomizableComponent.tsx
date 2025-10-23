@@ -27,8 +27,6 @@ export type SharedState = {
     buttonStateMap?: ButtonStateMap;
     /** Whether or not to hide the button labels */
     hideLabels?: boolean;
-    /** Whether or not the beta teleop cameras are being used */
-    hasBetaTeleopKit: boolean;
     /** What tool is attached to the stretch gripper. */
     stretchTool: StretchTool;
     /** Whether or not robot has been homed */

@@ -64,7 +64,7 @@ export function getStretchTool(stretchTool: string) {
         return StretchTool.TABLET;
     } else if (
         ["eoa_wrist_dw3_tool_sg3", "tool_stretch_dex_wrist"].includes(
-            stretchTool,
+            stretchTool
         )
     ) {
         return StretchTool.DEX_GRIPPER;
@@ -115,7 +115,6 @@ export type WebRTCMessage =
     | ModeMessage
     | IsHomedMessage
     | IsRunStoppedMessage
-    | HasBetaTeleopKitMessage
     | StretchToolMessage
     | cmd;
 
@@ -149,11 +148,6 @@ export interface IsHomedMessage {
 export interface IsRunStoppedMessage {
     type: "isRunStopped";
     enabled: boolean;
-}
-
-export interface HasBetaTeleopKitMessage {
-    type: "hasBetaTeleopKit";
-    value: boolean;
 }
 
 export interface StretchToolMessage {
@@ -410,14 +404,14 @@ export function generateUUID(): uuid {
             var r = (Math.random() * 16) | 0,
                 v = c == "x" ? r : (r & 0x3) | 0x8;
             return v.toString(16);
-        },
+        }
     );
 }
 
 export async function waitUntil(
     condition,
     timeout = 5000,
-    checkInterval = 100,
+    checkInterval = 100
 ) {
     let interval;
     let waitPromise = new Promise((resolve) => {
@@ -433,7 +427,7 @@ export async function waitUntil(
         setTimeout(() => {
             clearInterval(interval);
             resolve(false);
-        }, timeout),
+        }, timeout)
     );
     return await Promise.any([waitPromise, timeoutPromise]);
 }
@@ -441,7 +435,7 @@ export async function waitUntil(
 export async function waitUntilAsync(
     condition,
     timeout = 5000,
-    checkInterval = 100,
+    checkInterval = 100
 ) {
     let interval;
     let waitPromise = new Promise((resolve) => {
@@ -458,7 +452,7 @@ export async function waitUntilAsync(
         setTimeout(() => {
             clearInterval(interval);
             resolve(false);
-        }, timeout),
+        }, timeout)
     );
     return await Promise.any([waitPromise, timeoutPromise]);
 }

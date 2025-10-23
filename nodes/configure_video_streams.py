@@ -59,7 +59,6 @@ class ConfigureVideoStreams(Node):
     def __init__(
         self,
         params_file,
-        has_beta_teleop_kit,
         use_overhead: bool = True,
         use_realsense: bool = True,
         use_gripper: bool = True,
@@ -82,7 +81,6 @@ class ConfigureVideoStreams(Node):
         use_overhead: If True, subscribe to the overhead camera image messages.
         use_realsense: If True, subscribe to the realsense camera image messages.
         use_gripper: If True, subscribe to the gripper camera image messages.
-        has_beta_teleop_kit: Whether the robot has the beta teleop kit.
         use_pointcloud: If True, subscribe to the raw pointcloud message. If False,
             subscribe to the aligned depth image message.
         use_compressed_image: If True, subscribe to the compressed image messages.
@@ -102,7 +100,6 @@ class ConfigureVideoStreams(Node):
 
         # These are parameters the web app uses to determine which features to
         # enabled. They are not used in this node itself.
-        self.declare_parameter("has_beta_teleop_kit", rclpy.Parameter.Type.BOOL)
         self.declare_parameter("stretch_tool", rclpy.Parameter.Type.STRING)
 
         # Subscribe to the TF camera feeds to project camera points into base frame.
@@ -187,57 +184,49 @@ class ConfigureVideoStreams(Node):
             self.latest_gripper_camera_rgb_image = None
             self.latest_gripper_camera_rgb_image_lock = threading.Lock()
             self.expanded_gripper = False
-            if has_beta_teleop_kit:
-                self.gripper_camera_rgb_subscriber = self.create_subscription(
-                    Image,
-                    "/gripper_camera/image_raw",
-                    self.gripper_camera_cb,
+
+            # Subscribe to the RGB ompressed image topic
+            self.gripper_camera_rgb_subscriber = self.create_subscription(
+                CompressedImage if use_compressed_image else Image,
+                "/gripper_camera/image_raw"
+                + ("/compressed" if use_compressed_image else ""),
+                self.gripper_realsense_rgb_cb,
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
+                callback_group=MutuallyExclusiveCallbackGroup(),
+            )
+
+            # Services for expanding the gripper image
+            self.expanded_gripper_service = self.create_service(
+                SetBool, "expanded_gripper", self.expanded_gripper_callback
+            )
+
+            # Subscribe to the depth image topic
+            self.latest_gripper_realsense_depth_image = None
+            self.latest_gripper_realsense_depth_image_lock = threading.Lock()
+            if use_pointcloud:
+                self.gripper_depth_subscriber = self.create_subscription(
+                    PointCloud2,
+                    "/gripper_camera/depth/color/points",
+                    self.gripper_realsense_depth_cb,
                     QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
                     callback_group=MutuallyExclusiveCallbackGroup(),
                 )
             else:
-                # Subscribe to the RGB ompressed image topic
-                self.gripper_camera_rgb_subscriber = self.create_subscription(
+                self.gripper_depth_subscriber = self.create_subscription(
                     CompressedImage if use_compressed_image else Image,
-                    "/gripper_camera/image_raw"
-                    + ("/compressed" if use_compressed_image else ""),
-                    self.gripper_realsense_rgb_cb,
+                    "/gripper_camera/aligned_depth_to_color/image_raw"
+                    + ("/compressedDepth" if use_compressed_image else ""),
+                    self.gripper_realsense_depth_cb,
                     QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
                     callback_group=MutuallyExclusiveCallbackGroup(),
                 )
-
-                # Services for expanding the gripper image
-                self.expanded_gripper_service = self.create_service(
-                    SetBool, "expanded_gripper", self.expanded_gripper_callback
-                )
-
-                # Subscribe to the depth image topic
-                self.latest_gripper_realsense_depth_image = None
-                self.latest_gripper_realsense_depth_image_lock = threading.Lock()
-                if use_pointcloud:
-                    self.gripper_depth_subscriber = self.create_subscription(
-                        PointCloud2,
-                        "/gripper_camera/depth/color/points",
-                        self.gripper_realsense_depth_cb,
-                        QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
-                        callback_group=MutuallyExclusiveCallbackGroup(),
-                    )
-                else:
-                    self.gripper_depth_subscriber = self.create_subscription(
-                        CompressedImage if use_compressed_image else Image,
-                        "/gripper_camera/aligned_depth_to_color/image_raw"
-                        + ("/compressedDepth" if use_compressed_image else ""),
-                        self.gripper_realsense_depth_cb,
-                        QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
-                        callback_group=MutuallyExclusiveCallbackGroup(),
-                    )
-                self.gripper_camera_info_subscriber = self.create_subscription(
-                    CameraInfo,
-                    "/gripper_camera/color/camera_info",
-                    self.gripper_camera_info_cb,
-                    QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
-                    callback_group=MutuallyExclusiveCallbackGroup(),
-                )
+            self.gripper_camera_info_subscriber = self.create_subscription(
+                CameraInfo,
+                "/gripper_camera/color/camera_info",
+                self.gripper_camera_info_cb,
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
+                callback_group=MutuallyExclusiveCallbackGroup(),
+            )
             self.joint_state_subscription = self.create_subscription(
                 JointState,
                 "/stretch/joint_states",
@@ -297,15 +286,11 @@ class ConfigureVideoStreams(Node):
 
         # Default image perspectives
         if self.use_overhead:
-            self.overhead_camera_perspective = (
-                "fixed" if has_beta_teleop_kit else "wide_angle_cam"
-            )
+            self.overhead_camera_perspective = "wide_angle_cam"
         if self.use_realsense:
             self.realsense_camera_perspective = "default"
         if self.use_gripper:
-            self.gripper_camera_perspective = (
-                "default" if has_beta_teleop_kit else "d405"
-            )
+            self.gripper_camera_perspective = "d405"
 
         # Services for enabling the depth AR overlay on the realsense stream
         if self.use_realsense:
@@ -1080,10 +1065,9 @@ if __name__ == "__main__":
     print(sys.argv)
     node = ConfigureVideoStreams(
         params_file=sys.argv[1],
-        has_beta_teleop_kit=sys.argv[2] == "True",
-        use_overhead=sys.argv[3] == "True",
-        use_realsense=sys.argv[4] == "True",
-        use_gripper=sys.argv[5] == "True",
+        use_overhead=sys.argv[2] == "True",
+        use_realsense=sys.argv[3] == "True",
+        use_gripper=sys.argv[4] == "True",
     )
     print("Publishing reconfigured video stream")
     # Use a MultiThreadedExecutor so that subscriptions, actions, etc. can be

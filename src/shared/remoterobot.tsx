@@ -22,7 +22,7 @@ import {
     ROSPose,
     waitUntil,
 } from "shared/util";
-import { GetHasBetaTeleopKit, GetStretchTool } from "./commands";
+import { GetStretchTool } from "./commands";
 export type robotMessageChannel = (message: cmd) => void;
 
 export class RemoteRobot extends React.Component<{}, any> {
@@ -198,13 +198,6 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getOccupancyGrid(type: "getOccupancyGrid") {
         let cmd: GetOccupancyGrid = {
-            type: type,
-        };
-        this.robotChannel(cmd);
-    }
-
-    getHasBetaTeleopKit(type: "getHasBetaTeleopKit") {
-        let cmd: GetHasBetaTeleopKit = {
             type: type,
         };
         this.robotChannel(cmd);

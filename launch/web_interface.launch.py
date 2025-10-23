@@ -25,22 +25,6 @@ from launch.substitutions import (
     PathJoinSubstitution,
 )
 
-
-def symlinks_to_has_beta_teleop_kit():
-    usb_device_seen = {
-        "hello-navigation-camera": False,
-        "hello-gripper-camera": False,
-    }
-
-    listOfFiles = os.listdir("/dev")
-    pattern = "hello*"
-    for entry in listOfFiles:
-        if fnmatch.fnmatch(entry, pattern):
-            usb_device_seen[entry] = True
-
-    return all(usb_device_seen.values())
-
-
 def symlinks_to_has_nav_head_cam():
     usb_device_seen = {
         "hello-nav-head-camera": False,
@@ -55,7 +39,7 @@ def symlinks_to_has_nav_head_cam():
     return all(usb_device_seen.values())
 
 
-def map_configuration_to_drivers(model, tool, has_beta_teleop_kit, has_nav_head_cam):
+def map_configuration_to_drivers(model, tool, has_nav_head_cam):
     """This method maps configurations to drivers. I.e. it identifies the robot configuration
     based on the variables provided and returns which drivers should be activated. If the
     variables don't constitute a valid configuration, something is wrong with the hardware,
@@ -67,116 +51,38 @@ def map_configuration_to_drivers(model, tool, has_beta_teleop_kit, has_nav_head_
         tuple with four elements:
           which_realsense_drivers ('d435i-only' or 'both'),
           add_gripper_driver (True or False),
-          add_navigation_driver (True or False),
           add_head_nav_driver (True or False)
     """
-    # Stretch RE1
-    if (
-        model == "RE1V0"
-        and tool == "tool_stretch_gripper"
-        and has_beta_teleop_kit is False
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", False, False, False
-    elif (
-        model == "RE1V0"
-        and tool == "tool_stretch_gripper"
-        and has_beta_teleop_kit is True
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", True, True, False
-    elif (
-        model == "RE1V0"
-        and tool == "tool_stretch_dex_wrist"
-        and has_beta_teleop_kit is False
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", False, False, False
-    elif (
-        model == "RE1V0"
-        and tool == "tool_stretch_dex_wrist"
-        and has_beta_teleop_kit is True
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", True, True, False
-    # Stretch 2
-    elif (
-        model == "RE2V0"
-        and tool == "tool_stretch_gripper"
-        and has_beta_teleop_kit is False
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", False, False, False
-    elif (
-        model == "RE2V0"
-        and tool == "tool_stretch_gripper"
-        and has_beta_teleop_kit is True
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", True, True, False
-    elif (
-        model == "RE2V0"
-        and tool == "tool_stretch_dex_wrist"
-        and has_beta_teleop_kit is False
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", False, False, False
-    elif (
-        model == "RE2V0"
-        and tool == "tool_stretch_dex_wrist"
-        and has_beta_teleop_kit is True
-        and has_nav_head_cam is False
-    ):
-        return "d435-only", True, True, False
-    # Stretch 2+ (upgraded Stretch 2)
-    elif (
-        model == "RE2V0"
-        and tool == "eoa_wrist_dw3_tool_sg3"
-        and has_beta_teleop_kit is False
-        and has_nav_head_cam is True
-    ):
-        return "both", False, False, True
-    elif (
-        model == "RE2V0"
-        and tool == "eoa_wrist_dw3_tool_nil"
-        and has_beta_teleop_kit is False
-        and has_nav_head_cam is True
-    ):
-        return "both", False, False, True
     # Stretch 3
-    elif (
+    if (
         model == "SE3"
         and tool == "eoa_wrist_dw3_tool_sg3"
-        and has_beta_teleop_kit is False
         and has_nav_head_cam is True
     ):
-        return "both", False, False, True
+        return "both", False, True
     elif (
         model == "SE3"
         and tool == "eoa_wrist_dw3_tool_nil"
-        and has_beta_teleop_kit is False
         and has_nav_head_cam is True
     ):
-        return "both", False, False, True
+        return "both", False, True
     elif (
         model == "SE3"
         and tool == "eoa_wrist_dw3_tool_tablet_12in"
-        and has_beta_teleop_kit is False
         and has_nav_head_cam is True
     ):
-        return "both", False, False, True
+        return "both", False, True
     # Stretch
     elif (
         model == "SE4"
         and tool == "eoa_wrist_dw4_tool_sg4"
-        and has_beta_teleop_kit is False
         and has_nav_head_cam is True
     ):
-        return "none", False, False, True
+        return "none", False, True
     
     raise ValueError(
         f"cannot find valid configuration for model={model}, tool={tool}, "
-        f"has_beta_teleop_kit={has_beta_teleop_kit}, has_nav_head_cam={has_nav_head_cam}"
+        f"has_nav_head_cam={has_nav_head_cam}"
     )
 
 
@@ -191,17 +97,14 @@ def generate_launch_description():
     stretch_serial_no = robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
-    stretch_has_beta_teleop_kit = symlinks_to_has_beta_teleop_kit()
     stretch_has_nav_head_cam = symlinks_to_has_nav_head_cam()
     (
         drivers_realsense,
         driver_gripper_cam,
-        driver_navigation_cam,
         driver_nav_head_cam,
     ) = map_configuration_to_drivers(
         stretch_model,
         stretch_tool,
-        stretch_has_beta_teleop_kit,
         stretch_has_nav_head_cam,
     )
 
@@ -306,26 +209,6 @@ def generate_launch_description():
             )
         )
 
-    if driver_navigation_cam is True:
-        # Beta Teleop Kit Navigation Camera
-        ld.add_action(
-            GroupAction(
-                actions=[
-                    IncludeLaunchDescription(
-                        PythonLaunchDescriptionSource(
-                            PathJoinSubstitution(
-                                [
-                                    core_package,
-                                    "launch",
-                                    "beta_navigation_camera.launch.py",
-                                ]
-                            )
-                        )
-                    )
-                ]
-            )
-        )
-
     if driver_nav_head_cam is True:
         # Nav Head Wide Angle Camera
         ld.add_action(
@@ -366,7 +249,7 @@ def generate_launch_description():
             )
         )
 
-    if driver_navigation_cam is False and driver_nav_head_cam is False:
+    if driver_nav_head_cam is False:
         # Blank Navigation Camera Node
         # Publish blank image if no navigation camera exists
         ld.add_action(
@@ -469,12 +352,10 @@ def generate_launch_description():
             output="screen",
             arguments=[
                 LaunchConfiguration("params"),
-                str(stretch_has_beta_teleop_kit),
                 *bools,
             ],
             parameters=[
                 {
-                    "has_beta_teleop_kit": stretch_has_beta_teleop_kit,
                     "stretch_tool": stretch_tool,
                 }
             ],
