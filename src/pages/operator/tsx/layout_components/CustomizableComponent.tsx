@@ -10,7 +10,6 @@ import { ButtonPad } from "./ButtonPad";
 import { CameraView } from "./CameraView";
 import { PredictiveDisplay } from "./PredictiveDisplay";
 import { ButtonStateMap } from "../function_providers/ButtonFunctionProvider";
-import { ButtonGrid } from "./ButtonGrid";
 import { VirtualJoystick } from "./VirtualJoystick";
 import { Map } from "./Map";
 import { RunStopButton } from "../static_components/RunStop";
@@ -78,8 +77,6 @@ export const CustomizableComponent = (props: CustomizableComponentProps) => {
             return <CameraView {...props} />;
         case ComponentType.PredictiveDisplay:
             return <PredictiveDisplay {...props} />;
-        case ComponentType.ButtonGrid:
-            return <ButtonGrid {...props} />;
         case ComponentType.VirtualJoystick:
             return <VirtualJoystick {...props} />;
         case ComponentType.Map:

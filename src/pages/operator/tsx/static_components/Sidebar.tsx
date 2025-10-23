@@ -93,7 +93,6 @@ function componentDescription(definition: ComponentDefinition): string {
             return `\"${(definition as TabDefinition).label}\" Tab`;
         case ComponentType.Panel:
         case ComponentType.VirtualJoystick:
-        case ComponentType.ButtonGrid:
         case ComponentType.Map:
             return definition.type;
         default:
@@ -474,7 +473,6 @@ const SidebarComponentProvider = (props: SidebarComponentProviderProps) => {
         { type: ComponentType.Panel },
         { type: ComponentType.CameraView, ids: Object.values(CameraViewId) },
         { type: ComponentType.ButtonPad, ids: Object.values(ButtonPadId) },
-        { type: ComponentType.ButtonGrid },
         { type: ComponentType.VirtualJoystick },
         { type: ComponentType.Map },
     ];

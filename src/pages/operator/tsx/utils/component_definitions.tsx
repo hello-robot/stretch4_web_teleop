@@ -20,7 +20,6 @@ export enum ComponentType {
     CameraView = "Camera View",
     ButtonPad = "Button Pad",
     PredictiveDisplay = "Predictive Display",
-    ButtonGrid = "Button Grid",
     VirtualJoystick = "Joystick",
     Map = "Map",
     RunStopButton = "Run Stop Button",
