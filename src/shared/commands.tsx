@@ -20,8 +20,6 @@ export type cmd =
     | GetBatteryVoltageCommand
     | GetHasBetaTeleopKit
     | GetStretchTool
-    | PlayTextToSpeech
-    | StopTextToSpeech
     | ShowTabletCommand
     | StopShowTabletCommand
     | HomeTheRobotCommand;
@@ -127,17 +125,6 @@ export interface StopShowTabletCommand {
 
 export interface GetBatteryVoltageCommand {
     type: "getBatteryVoltage";
-}
-
-export interface PlayTextToSpeech {
-    type: "playTextToSpeech";
-    text: string;
-    override_behavior: number;
-    is_slow: boolean;
-}
-
-export interface StopTextToSpeech {
-    type: "stopTextToSpeech";
 }
 
 export interface HomeTheRobotCommand {

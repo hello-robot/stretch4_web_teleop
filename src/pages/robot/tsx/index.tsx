@@ -91,7 +91,7 @@ robot.setOnRosConnectCallback(async () => {
     robot.getJointLimits();
 
     console.log(
-        "Waiting for configured signaler (i.e. logging in if using Firebase)",
+        "Waiting for configured signaler (i.e. logging in if using Firebase)"
     );
     await loginFirebaseSignalerAsRobot();
     await connection.configure_signaler("");
@@ -198,7 +198,7 @@ function forwardStretchTool(value: string) {
 function forwardJointStates(
     robotPose: RobotPose,
     jointValues: ValidJointStateDict,
-    effortValues: ValidJointStateDict,
+    effortValues: ValidJointStateDict
 ) {
     if (!connection) throw "WebRTC connection undefined!";
 
@@ -325,7 +325,7 @@ function handleMessage(message: WebRTCMessage) {
             robot.executeMoveToPregraspGoal(
                 message.scaled_x,
                 message.scaled_y,
-                message.horizontal,
+                message.horizontal
             );
             break;
         case "stopMoveToPregrasp":
@@ -333,16 +333,6 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "getStretchTool":
             robot.getStretchTool();
-            break;
-        case "playTextToSpeech":
-            robot.playTextToSpeech(
-                message.text,
-                message.override_behavior,
-                message.is_slow,
-            );
-            break;
-        case "stopTextToSpeech":
-            robot.stopTextToSpeech();
             break;
         case "showTablet":
             robot.executeShowTabletGoal();
@@ -372,5 +362,5 @@ const root = createRoot(container!); // createRoot(container!) if you use TypeSc
 root.render(
     <AllVideoStreamComponent
         streams={[navigationStream, realsenseStream, gripperStream]}
-    />,
+    />
 );

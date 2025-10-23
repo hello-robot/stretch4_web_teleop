@@ -98,7 +98,7 @@ function componentDescription(definition: ComponentDefinition): string {
             return definition.type;
         default:
             throw Error(
-                `Cannot get description for component type ${definition.type}\nYou may need to add a case for this component in the switch statement.`,
+                `Cannot get description for component type ${definition.type}\nYou may need to add a case for this component in the switch statement.`
             );
     }
 }
@@ -112,10 +112,6 @@ export type GlobalOptionsProps = {
     /** If the save/load poses should be displayed. */
     displayMovementRecorder: boolean;
     setDisplayMovementRecorder: (displayMovementRecorder: boolean) => void;
-
-    /** If the text-to-speech component should be displayed */
-    displayTextToSpeech: boolean;
-    setDisplayTextToSpeech: (displayTextToSpeech: boolean) => void;
 
     /** If the button text labels should be displayed */
     displayLabels: boolean;
@@ -158,17 +154,10 @@ const SidebarGlobalOptions = (props: GlobalOptionsProps) => {
                     on={!props.displayMovementRecorder}
                     onClick={() =>
                         props.setDisplayMovementRecorder(
-                            !props.displayMovementRecorder,
+                            !props.displayMovementRecorder
                         )
                     }
                     label="Display movement recorder"
-                />
-                <OnOffToggleButton
-                    on={!props.displayTextToSpeech}
-                    onClick={() =>
-                        props.setDisplayTextToSpeech(!props.displayTextToSpeech)
-                    }
-                    label="Display text-to-speech"
                 />
                 <button onClick={() => setShowLoadLayoutModal(true)}>
                     Load layout
@@ -229,10 +218,10 @@ const LoadLayoutModal = (props: {
     }
 
     const defaultOptions = props.defaultLayouts.map((layoutName) =>
-        mapFunct(layoutName, true),
+        mapFunct(layoutName, true)
     );
     const customOptions = props.customLayouts.map((layoutName) =>
-        mapFunct(layoutName, false),
+        mapFunct(layoutName, false)
     );
 
     return (

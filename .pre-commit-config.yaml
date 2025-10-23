@@ -2,80 +2,79 @@
 # See https://pre-commit.com/hooks.html for more hooks
 
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: check-added-large-files
-      - id: check-case-conflict
-      - id: check-executables-have-shebangs
-      - id: check-merge-conflict
-      - id: check-shebang-scripts-are-executable
-      - id: check-symlinks
-      - id: check-xml
-      - id: check-yaml
-      - id: debug-statements
-      - id: destroyed-symlinks
-      - id: detect-private-key
-      - id: end-of-file-fixer
-      - id: mixed-line-ending
-      - id: requirements-txt-fixer
-      - id: trailing-whitespace
-        exclude: config/text_to_speech_ui_history.txt
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.5.0
+      hooks:
+          - id: check-added-large-files
+          - id: check-case-conflict
+          - id: check-executables-have-shebangs
+          - id: check-merge-conflict
+          - id: check-shebang-scripts-are-executable
+          - id: check-symlinks
+          - id: check-xml
+          - id: check-yaml
+          - id: debug-statements
+          - id: destroyed-symlinks
+          - id: detect-private-key
+          - id: end-of-file-fixer
+          - id: mixed-line-ending
+          - id: requirements-txt-fixer
+          - id: trailing-whitespace
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-        args: ["--profile", "black", "--check"]
+    - repo: https://github.com/pycqa/isort
+      rev: 5.12.0
+      hooks:
+          - id: isort
+            args: ["--profile", "black", "--check"]
 
-  - repo: https://github.com/psf/black
-    rev: 23.1.0
-    hooks:
-      - id: black
-        args: ["--check"]
+    - repo: https://github.com/psf/black
+      rev: 23.1.0
+      hooks:
+          - id: black
+            args: ["--check"]
 
-  - repo: https://github.com/pycqa/flake8
-    rev: 5.0.4
-    hooks:
-      - id: flake8
+    - repo: https://github.com/pycqa/flake8
+      rev: 5.0.4
+      hooks:
+          - id: flake8
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.981
-    hooks:
-      - id: mypy
-        args:
-          [
-            --install-types,
-            --non-interactive,
-            --no-strict-optional,
-            --ignore-missing-imports,
-          ]
+    - repo: https://github.com/pre-commit/mirrors-mypy
+      rev: v0.981
+      hooks:
+          - id: mypy
+            args:
+                [
+                    --install-types,
+                    --non-interactive,
+                    --no-strict-optional,
+                    --ignore-missing-imports,
+                ]
 
-  - repo: https://github.com/lovesegfault/beautysh
-    rev: v6.2.1
-    hooks:
-      - id: beautysh
-        args: ["--check"]
+    - repo: https://github.com/lovesegfault/beautysh
+      rev: v6.2.1
+      hooks:
+          - id: beautysh
+            args: ["--check"]
 
-  - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.16
-    hooks:
-      - id: mdformat
-        args: ["--check"]
-        exclude: \.github/.*
+    - repo: https://github.com/executablebooks/mdformat
+      rev: 0.7.16
+      hooks:
+          - id: mdformat
+            args: ["--check"]
+            exclude: \.github/.*
 
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.4
-    hooks:
-      - id: codespell
-        exclude: >
-          (?x)^(
-              .*\.svg
-          )$
+    - repo: https://github.com/codespell-project/codespell
+      rev: v2.2.4
+      hooks:
+          - id: codespell
+            exclude: >
+                (?x)^(
+                    .*\.svg
+                )$
 
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: "v8.56.0"
-    hooks:
-      - id: eslint
-        files: \.[jt]sx?$
-        types: [file]
+    - repo: https://github.com/pre-commit/mirrors-eslint
+      rev: "v8.56.0"
+      hooks:
+          - id: eslint
+            files: \.[jt]sx?$
+            types: [file]

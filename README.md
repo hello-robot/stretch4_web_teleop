@@ -20,12 +20,12 @@ For operator-to-robot text-to-speech, the web interface uses the system default 
 
 However, note the system defaults can change when you (un)plug audio devices (e.g., sometimes (un)plugging a mic can cause the system default speaker to change). Thus, it is best practice to always check.
 
-In the below instructions,  replace `<sink/source>` with `sink` for a speaker and `source` for a microphone. Note that this won't work if you're using X-11 forwarding:
+In the below instructions, replace `<sink/source>` with `sink` for a speaker and `source` for a microphone. Note that this won't work if you're using X-11 forwarding:
 
 1. List all speakers/microphones: `pactl list short <sink/source>s`
 1. Get the default: `pactl get-default-<sink/source>`
 1. Set the default: `pactl set-default-<sink/source> <device-name>` where `<device-name>` is one of the names listed from the above command.
-   1. The built-in default speaker will be called something like `alsa_output.pci-0000_00_1f.3.analog-stereo`, and the built-in default mic will be called something like `alsa_input.usb-SEEED_ReSpeaker_4_Mic_Array__UAC1.0_-00.multichannel-input`.
+    1. The built-in default speaker will be called something like `alsa_output.pci-0000_00_1f.3.analog-stereo`, and the built-in default mic will be called something like `alsa_input.usb-SEEED_ReSpeaker_4_Mic_Array__UAC1.0_-00.multichannel-input`.
 
 ### Audio volume/gain
 
@@ -274,9 +274,9 @@ Each button pad controls a different set of joints on the robot. When you click 
 
 The action modes can be selected in the dropdown in the top-left corner of the interface. The action modes provides varying degrees of discrete and continuous control.
 
-- **Step Actions**: When you click, Stretch will move a fixed distance based on the selected speed.
-- **Press-Release**: Stretch will move while you are pressing and holding the button and will stop when you release.
-- **Click-Click**: Stretch will start moving when you click and will stop when you click again. You can also stop Stretch by moving the cursor outside the button you clicked.
+-   **Step Actions**: When you click, Stretch will move a fixed distance based on the selected speed.
+-   **Press-Release**: Stretch will move while you are pressing and holding the button and will stop when you release.
+-   **Click-Click**: Stretch will start moving when you click and will stop when you click again. You can also stop Stretch by moving the cursor outside the button you clicked.
 
 ## Movement Recorder
 
@@ -308,30 +308,16 @@ Audio from the robot can be streamed to the operator directly through the robot'
     <img src="documentation/assets/tutorial/robot_to_operator_audio_streaming.gif">
 </p>
 
-### Operator-to-Robot Text-to-Speech
-
-The operator can send text to be spoken on the robot. The operator can also save commonly-used text, and can stop an ongoing utterance. When used in conjunction with robot-to-operator audio streaming, the operator can also hear when the robot has finished speaking.
-
-<p align="center">
-    <img src="documentation/assets/tutorial/text_to_speech.gif">
-</p>
-
-Text-to-speech can also be performed with a command-line interface, by running `ros2 run stretch4_web_teleop text_to_speech_ui.py`. This is particulalry useful in situations where a separate operator is controlling the robot and a separate operator is controlling speech interactions.
-
-<p align="center">
-    <img src="documentation/assets/tutorial/text_to_speech_cli.gif">
-</p>
-
 ## Using a Tablet as the End Effector
 
 Stay tuned for instructions on using the web interface with a tablet as an end effector!
 
 # Contributing
 
-- This repository uses pre-commit hooks to enforce consistent formatting and style.
-  - Install pre-commit: `python3 -m pip install pre-commit`
-  - Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
-  - Moving forward, pre-commit hooks will run before you create any commit.
+-   This repository uses pre-commit hooks to enforce consistent formatting and style.
+    -   Install pre-commit: `python3 -m pip install pre-commit`
+    -   Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
+    -   Moving forward, pre-commit hooks will run before you create any commit.
 
 # Troubleshooting
 

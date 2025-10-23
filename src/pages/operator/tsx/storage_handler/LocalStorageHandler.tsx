@@ -11,7 +11,6 @@ export class LocalStorageHandler extends StorageHandler {
     public static MAP_POSE_NAMES_KEY = "user_map_pose_names";
     public static MAP_POSE_TYPES_KEY = "user_map_pose_types";
     public static POSE_RECORDING_NAMES_KEY = "user_pose_recording_names";
-    public static TEXT_TO_SPEECH_KEY = "text_to_speech";
 
     constructor(onStorageHandlerReadyCallback: () => void) {
         super(onStorageHandlerReadyCallback);
@@ -31,13 +30,13 @@ export class LocalStorageHandler extends StorageHandler {
 
     public saveCustomLayout(
         layout: LayoutDefinition,
-        layoutName: string,
+        layoutName: string
     ): void {
         const layoutNames = this.getCustomLayoutNames();
         layoutNames.push(layoutName);
         localStorage.setItem(
             LocalStorageHandler.LAYOUT_NAMES_KEY,
-            JSON.stringify(layoutNames),
+            JSON.stringify(layoutNames)
         );
         localStorage.setItem(layoutName, JSON.stringify(layout));
     }
@@ -45,13 +44,13 @@ export class LocalStorageHandler extends StorageHandler {
     public saveCurrentLayout(layout: LayoutDefinition): void {
         localStorage.setItem(
             LocalStorageHandler.CURRENT_LAYOUT_KEY,
-            JSON.stringify(layout),
+            JSON.stringify(layout)
         );
     }
 
     public loadCurrentLayout(): LayoutDefinition | null {
         const storedJson = localStorage.getItem(
-            LocalStorageHandler.CURRENT_LAYOUT_KEY,
+            LocalStorageHandler.CURRENT_LAYOUT_KEY
         );
         if (!storedJson) return null;
         return JSON.parse(storedJson);
@@ -59,7 +58,7 @@ export class LocalStorageHandler extends StorageHandler {
 
     public getCustomLayoutNames(): string[] {
         const storedJson = localStorage.getItem(
-            LocalStorageHandler.LAYOUT_NAMES_KEY,
+            LocalStorageHandler.LAYOUT_NAMES_KEY
         );
         if (!storedJson) return [];
         return JSON.parse(storedJson);
@@ -68,7 +67,7 @@ export class LocalStorageHandler extends StorageHandler {
     public saveMapPose(
         poseName: string,
         pose: ROSLIB.Transform,
-        poseType: string,
+        poseType: string
     ) {
         const poseNames = this.getMapPoseNames();
         const poseTypes = this.getMapPoseTypes();
@@ -83,18 +82,18 @@ export class LocalStorageHandler extends StorageHandler {
         }
         localStorage.setItem(
             LocalStorageHandler.MAP_POSE_NAMES_KEY,
-            JSON.stringify(poseNames),
+            JSON.stringify(poseNames)
         );
         localStorage.setItem(
             LocalStorageHandler.MAP_POSE_TYPES_KEY,
-            JSON.stringify(poseTypes),
+            JSON.stringify(poseTypes)
         );
         localStorage.setItem("map_" + poseName, JSON.stringify(pose));
     }
 
     public getMapPoseNames(): string[] {
         const storedJson = localStorage.getItem(
-            LocalStorageHandler.MAP_POSE_NAMES_KEY,
+            LocalStorageHandler.MAP_POSE_NAMES_KEY
         );
         if (!storedJson) return [];
         return JSON.parse(storedJson);
@@ -118,7 +117,7 @@ export class LocalStorageHandler extends StorageHandler {
 
     public getMapPoseTypes(): string[] {
         const storedJson = localStorage.getItem(
-            LocalStorageHandler.MAP_POSE_TYPES_KEY,
+            LocalStorageHandler.MAP_POSE_TYPES_KEY
         );
         if (!storedJson) return [];
         return JSON.parse(storedJson);
@@ -134,14 +133,13 @@ export class LocalStorageHandler extends StorageHandler {
         poseTypes.splice(index, 1);
         localStorage.setItem(
             LocalStorageHandler.MAP_POSE_NAMES_KEY,
-            JSON.stringify(poseNames),
+            JSON.stringify(poseNames)
         );
         localStorage.setItem(
             LocalStorageHandler.MAP_POSE_TYPES_KEY,
-            JSON.stringify(poseTypes),
+            JSON.stringify(poseTypes)
         );
     }
-
 
     /**
      * Renames a map pose from
@@ -163,18 +161,18 @@ export class LocalStorageHandler extends StorageHandler {
         poseTypes[idx] = type;
         localStorage.setItem(
             LocalStorageHandler.MAP_POSE_NAMES_KEY,
-            JSON.stringify(poseNames),
+            JSON.stringify(poseNames)
         );
         localStorage.setItem(
             LocalStorageHandler.MAP_POSE_TYPES_KEY,
-            JSON.stringify(poseTypes),
+            JSON.stringify(poseTypes)
         );
         localStorage.setItem("map_" + poseNameNew, JSON.stringify(pose));
     }
 
     public getRecordingNames(): string[] {
         const storedJson = localStorage.getItem(
-            LocalStorageHandler.POSE_RECORDING_NAMES_KEY,
+            LocalStorageHandler.POSE_RECORDING_NAMES_KEY
         );
         if (!storedJson) return [];
         return JSON.parse(storedJson);
@@ -193,11 +191,11 @@ export class LocalStorageHandler extends StorageHandler {
             recordingNames.push(recordingName);
         localStorage.setItem(
             LocalStorageHandler.POSE_RECORDING_NAMES_KEY,
-            JSON.stringify(recordingNames),
+            JSON.stringify(recordingNames)
         );
         localStorage.setItem(
             "recording_" + recordingName,
-            JSON.stringify(poses),
+            JSON.stringify(poses)
         );
     }
 
@@ -209,36 +207,7 @@ export class LocalStorageHandler extends StorageHandler {
         recordingNames.splice(index, 1);
         localStorage.setItem(
             LocalStorageHandler.POSE_RECORDING_NAMES_KEY,
-            JSON.stringify(recordingNames),
-        );
-    }
-
-    public getSavedTexts(): string[] {
-        const storedJson = localStorage.getItem(
-            LocalStorageHandler.TEXT_TO_SPEECH_KEY,
-        );
-        if (!storedJson) return [];
-        return JSON.parse(storedJson);
-    }
-
-    public saveText(text: string): void {
-        const texts = this.getSavedTexts();
-        if (texts.includes(text)) return;
-        texts.push(text);
-        localStorage.setItem(
-            LocalStorageHandler.TEXT_TO_SPEECH_KEY,
-            JSON.stringify(texts),
-        );
-    }
-
-    public deleteText(text: string): void {
-        const texts = this.getSavedTexts();
-        if (!texts.includes(text)) return;
-        const index = texts.indexOf(text);
-        texts.splice(index, 1);
-        localStorage.setItem(
-            LocalStorageHandler.TEXT_TO_SPEECH_KEY,
-            JSON.stringify(texts),
+            JSON.stringify(recordingNames)
         );
     }
 }

@@ -13,8 +13,6 @@ import {
     GetOccupancyGrid,
     MoveBaseCommand,
     PlaybackPosesCommand,
-    PlayTextToSpeech,
-    StopTextToSpeech,
     HomeTheRobotCommand,
 } from "shared/commands";
 import {
@@ -66,7 +64,11 @@ export class RemoteRobot extends React.Component<{}, any> {
         return this.moveBaseGoalReached;
     }
 
-    driveBase(linVelX: number, linVelY: number, angVel: number): VelocityCommand {
+    driveBase(
+        linVelX: number,
+        linVelY: number,
+        angVel: number
+    ): VelocityCommand {
         let cmd: DriveCommand = {
             type: "driveBase",
             modifier: { linVelX: linVelX, linVelY: linVelY, angVel: angVel },
@@ -84,7 +86,11 @@ export class RemoteRobot extends React.Component<{}, any> {
             affirm: () => {
                 let affirmEvent: DriveCommand = {
                     type: "driveBase",
-                    modifier: { linVelX: linVelX, linVelY: linVelY, angVel: angVel },
+                    modifier: {
+                        linVelX: linVelX,
+                        linVelY: linVelY,
+                        angVel: angVel,
+                    },
                 };
                 this.robotChannel(affirmEvent);
             },
@@ -93,7 +99,7 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     incrementalMove(
         jointName: ValidJoints,
-        increment: number,
+        increment: number
     ): VelocityCommand {
         let cmd: IncrementalMove = {
             type: "incrementalMove",
@@ -119,7 +125,7 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     setCameraPerspective(
         camera: "overhead" | "realsense" | "gripper",
-        perspective: string,
+        perspective: string
     ) {
         let cmd: CameraPerspectiveCommand = {
             type: "setCameraPerspective",
@@ -174,7 +180,7 @@ export class RemoteRobot extends React.Component<{}, any> {
             | "setGripperDepthSensing"
             | "setRealsenseBodyPoseEstimate"
             | "setRunStop",
-        toggle: boolean,
+        toggle: boolean
     ) {
         let cmd: ToggleCommand = {
             type: type,
@@ -236,37 +242,6 @@ export class RemoteRobot extends React.Component<{}, any> {
     }
 
     /**
-     * Speak the specified text.
-     *
-     * @param text text to speak
-     * @param override_behavior 0 to queue, 1 to interrupt
-     * @param is_slow False for normal speed, True for slow speed
-     */
-    playTextToSpeech(
-        text: string,
-        override_behavior: number = 0,
-        is_slow: boolean = false,
-    ) {
-        let cmd: PlayTextToSpeech = {
-            type: "playTextToSpeech",
-            text: text,
-            override_behavior: override_behavior,
-            is_slow: is_slow,
-        };
-        this.robotChannel(cmd);
-    }
-
-    /**
-     * Stop the text that is currently being spoken.
-     */
-    stopTextToSpeech() {
-        let cmd: StopTextToSpeech = {
-            type: "stopTextToSpeech",
-        };
-        this.robotChannel(cmd);
-    }
-
-    /**
      * Ask the robot to home itself.
      */
     homeTheRobot() {
@@ -287,7 +262,7 @@ class RobotSensors extends React.Component {
     private runStopEnabled: boolean = false;
     private functionProviderCallback?: (
         inJointLimits: ValidJointStateDict,
-        inCollision: ValidJointStateDict,
+        inCollision: ValidJointStateDict
     ) => void;
     private batteryFunctionProviderCallback?: (voltage: number) => void;
     private modeFunctionProviderCallback?: (mode: string) => void;
@@ -297,11 +272,11 @@ class RobotSensors extends React.Component {
 
     constructor(props: {}) {
         super(props);
-        this.functionProviderCallback = () => { };
-        this.batteryFunctionProviderCallback = () => { };
-        this.modeFunctionProviderCallback = () => { };
-        this.isHomedFunctionProviderCallback = () => { };
-        this.runStopFunctionProviderCallback = () => { };
+        this.functionProviderCallback = () => {};
+        this.batteryFunctionProviderCallback = () => {};
+        this.modeFunctionProviderCallback = () => {};
+        this.isHomedFunctionProviderCallback = () => {};
+        this.runStopFunctionProviderCallback = () => {};
         this.setFunctionProviderCallback =
             this.setFunctionProviderCallback.bind(this);
         this.setBatteryFunctionProviderCallback =
@@ -329,7 +304,7 @@ class RobotSensors extends React.Component {
     checkValidJointState(
         robotPose: RobotPose,
         jointValues: ValidJointStateDict,
-        effortValues: ValidJointStateDict,
+        effortValues: ValidJointStateDict
     ) {
         if (robotPose !== this.robotPose) {
             this.robotPose = robotPose;
@@ -343,7 +318,7 @@ class RobotSensors extends React.Component {
             const same =
                 key in this.inJointLimits
                     ? jointValues[key]![0] == this.inJointLimits[key]![0] &&
-                    jointValues[key]![1] == this.inJointLimits[key]![1]
+                      jointValues[key]![1] == this.inJointLimits[key]![1]
                     : false;
             // If same value, remove from dict so not passed to callback
             if (same) delete jointValues[key];
@@ -357,7 +332,7 @@ class RobotSensors extends React.Component {
             const same =
                 key in this.inCollision
                     ? effortValues[key]![0] == this.inCollision[key]![0] &&
-                    effortValues[key]![1] == this.inCollision[key]![1]
+                      effortValues[key]![1] == this.inCollision[key]![1]
                     : false;
             // If same value, remove from dict so not passed to callback
             if (same) delete effortValues[key];
@@ -387,8 +362,8 @@ class RobotSensors extends React.Component {
     setFunctionProviderCallback(
         callback: (
             inJointLimits: ValidJointStateDict,
-            inCollision: ValidJointStateDict,
-        ) => void,
+            inCollision: ValidJointStateDict
+        ) => void
     ) {
         this.functionProviderCallback = callback;
     }
@@ -400,7 +375,7 @@ class RobotSensors extends React.Component {
      * @param callback callback to function provider
      */
     setJointStateFunctionProviderCallback(
-        callback: (robotPose: RobotPose) => void,
+        callback: (robotPose: RobotPose) => void
     ) {
         this.jointStateFunctionProviderCallback = callback;
     }
@@ -481,7 +456,7 @@ class RobotSensors extends React.Component {
         wrist_roll: boolean,
         wrist_pitch: boolean,
         wrist_yaw: boolean,
-        gripper: boolean,
+        gripper: boolean
     ): RobotPose {
         let filteredPose: RobotPose = {};
         if (head) {

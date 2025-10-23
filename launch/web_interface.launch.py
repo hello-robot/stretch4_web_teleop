@@ -609,16 +609,6 @@ def generate_launch_description():
         )
         ld.add_action(move_to_pregrasp_node)
 
-    # Text to speech
-    text_to_speech_node = Node(
-        package="stretch4_web_teleop",
-        executable="text_to_speech.py",
-        output="screen",
-        arguments=[LaunchConfiguration("tts_engine")],
-        parameters=[],
-    )
-    ld.add_action(text_to_speech_node)
-
     if stretch_tool == "eoa_wrist_dw3_tool_tablet_12in":
         detect_body_landmarks_node = Node(
             package="stretch_show_tablet",

@@ -54,7 +54,7 @@ export enum ButtonPadIdMobile {
     Arm = "Arm Mobile",
     Gripper = "Gripper Mobile",
     Drive = "Drive Mobile",
-    OmniDrive = "Omni Drive Mobile"
+    OmniDrive = "Omni Drive Mobile",
 }
 
 /**
@@ -89,7 +89,6 @@ export type ParentComponentDefinition = ComponentDefinition & {
 
 export type LayoutDefinition = ComponentDefinition & {
     displayMovementRecorder: boolean;
-    displayTextToSpeech: boolean;
     displayLabels: boolean;
     actionMode: ActionModeType;
     children: LayoutGridDefinition[];

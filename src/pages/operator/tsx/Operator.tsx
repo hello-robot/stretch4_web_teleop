@@ -39,7 +39,6 @@ import {
 import { MovementRecorder } from "./layout_components/MovementRecorder";
 import { Alert } from "./basic_components/Alert";
 import "operator/css/Operator.css";
-import { TextToSpeech } from "./layout_components/TextToSpeech";
 import { HomeTheRobot } from "./layout_components/HomeTheRobot";
 
 /** Operator interface webpage */
@@ -186,17 +185,6 @@ export const Operator = (props: {
     }
 
     /**
-     * Sets the text-to-speech component to display or hidden.
-     *
-     * @param displayTextToSpeech whether the text-to-speech component should
-     *    be displayed.
-     */
-    function setDisplayTextToSpeech(displayTextToSpeech: boolean) {
-        layout.current.displayTextToSpeech = displayTextToSpeech;
-        updateLayout();
-    }
-
-    /**
      * Sets the display labels property to display or hidden.
      *
      * @param displayLabels if the button text labels should be displayed
@@ -303,18 +291,16 @@ export const Operator = (props: {
     /** Properties for the global options area of the sidebar */
     const globalOptionsProps: GlobalOptionsProps = {
         displayMovementRecorder: layout.current.displayMovementRecorder,
-        displayTextToSpeech: layout.current.displayTextToSpeech,
         displayLabels: layout.current.displayLabels,
         setDisplayMovementRecorder: setDisplayMovementRecorder,
-        setDisplayTextToSpeech: setDisplayTextToSpeech,
         setDisplayLabels: setDisplayLabels,
         defaultLayouts: Object.keys(DEFAULT_LAYOUTS),
         customLayouts: props.storageHandler.getCustomLayoutNames(),
         loadLayout: (layoutName: string, dflt: boolean) => {
             layout.current = dflt
                 ? props.storageHandler.loadDefaultLayout(
-                    layoutName as DefaultLayoutName
-                )
+                      layoutName as DefaultLayoutName
+                  )
                 : props.storageHandler.loadCustomLayout(layoutName);
             updateLayout();
         },
@@ -377,7 +363,7 @@ export const Operator = (props: {
                             <span>
                                 {buttonCollision.length > 0
                                     ? buttonCollision.join(", ") +
-                                    " in collision!"
+                                      " in collision!"
                                     : ""}
                             </span>
                         </Alert>
@@ -439,14 +425,6 @@ export const Operator = (props: {
                     <MovementRecorder
                         hideLabels={!layout.current.displayLabels}
                     />
-                </div>
-                <div
-                    className={className("operator-text-to-speech", {
-                        hideLabels: !layout.current.displayLabels,
-                    })}
-                    hidden={!layout.current.displayTextToSpeech}
-                >
-                    <TextToSpeech hideLabels={!layout.current.displayLabels} />
                 </div>
             </div>
             <div id="operator-body">

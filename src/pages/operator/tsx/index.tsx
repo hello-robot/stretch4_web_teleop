@@ -26,7 +26,6 @@ import { UnderVideoFunctionProvider } from "./function_providers/UnderVideoFunct
 import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
-import { TextToSpeechFunctionProvider } from "./function_providers/TextToSpeechFunctionProvider";
 import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
 import { isMobile } from "react-device-detect";
@@ -59,7 +58,6 @@ export var batteryVoltageFunctionProvider =
 export var mapFunctionProvider: MapFunctionProvider;
 export var underMapFunctionProvider: UnderMapFunctionProvider;
 export var movementRecorderFunctionProvider: MovementRecorderFunctionProvider;
-export var textToSpeechFunctionProvider: TextToSpeechFunctionProvider;
 export var homeTheRobotFunctionProvider: HomeTheRobotFunctionProvider =
     new HomeTheRobotFunctionProvider();
 
@@ -101,7 +99,7 @@ new Promise<void>(async (resolve) => {
         // Wait for WebRTC connection to resolve, timeout after 10 seconds
         let isResolved = await waitUntil(
             () => connection.connectionState() == "connected",
-            10000,
+            10000
         );
         if (!isResolved) {
             console.warn("WebRTC connection could not resolve");
@@ -112,7 +110,7 @@ new Promise<void>(async (resolve) => {
         // Wait for data to flow through the data channel, timeout after 10 seconds
         connected = await waitUntilAsync(
             async () => await connection.isConnected(),
-            10000,
+            10000
         );
         if (!connected) {
             console.warn("No data flowing through data channel");
@@ -166,7 +164,7 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             remoteRobot.sensors.checkValidJointState(
                 message.robotPose,
                 message.jointsInLimits,
-                message.jointsInCollision,
+                message.jointsInCollision
             );
             break;
         case "mode":
@@ -190,7 +188,7 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
                 occupancyGrid = message.message;
             } else {
                 occupancyGrid.data = occupancyGrid.data.concat(
-                    message.message.data,
+                    message.message.data
                 );
             }
             break;
@@ -233,10 +231,7 @@ function initializeOperator() {
     const storageHandlerReadyCallback = () => {
         underMapFunctionProvider = new UnderMapFunctionProvider(storageHandler);
         movementRecorderFunctionProvider = new MovementRecorderFunctionProvider(
-            storageHandler,
-        );
-        textToSpeechFunctionProvider = new TextToSpeechFunctionProvider(
-            storageHandler,
+            storageHandler
         );
         renderOperator(storageHandler);
     };
@@ -257,22 +252,22 @@ function configureRemoteRobot() {
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(
-        buttonFunctionProvider.updateJointStates,
+        buttonFunctionProvider.updateJointStates
     );
     remoteRobot.sensors.setJointStateFunctionProviderCallback(
-        underVideoFunctionProvider.jointStateCallback,
+        underVideoFunctionProvider.jointStateCallback
     );
     remoteRobot.sensors.setBatteryFunctionProviderCallback(
-        batteryVoltageFunctionProvider.updateVoltage,
+        batteryVoltageFunctionProvider.updateVoltage
     );
     remoteRobot.sensors.setModeFunctionProviderCallback(
-        homeTheRobotFunctionProvider.updateModeState,
+        homeTheRobotFunctionProvider.updateModeState
     );
     remoteRobot.sensors.setIsHomedFunctionProviderCallback(
-        homeTheRobotFunctionProvider.updateIsHomedState,
+        homeTheRobotFunctionProvider.updateIsHomedState
     );
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
-        runStopFunctionProvider.updateRunStopState,
+        runStopFunctionProvider.updateRunStopState
     );
 }
 
@@ -296,7 +291,7 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
             };
             return new FirebaseStorageHandler(
                 storageHandlerReadyCallback,
-                config,
+                config
             );
         default:
             return new LocalStorageHandler(storageHandlerReadyCallback);
@@ -314,19 +309,19 @@ function renderOperator(storageHandler: StorageHandler) {
 
     !isMobile
         ? root.render(
-            <MobileOperator
-                remoteStreams={allRemoteStreams}
-                layout={layout}
-                storageHandler={storageHandler}
-            />,
-        )
+              <MobileOperator
+                  remoteStreams={allRemoteStreams}
+                  layout={layout}
+                  storageHandler={storageHandler}
+              />
+          )
         : root.render(
-            <MobileOperator
-                remoteStreams={allRemoteStreams}
-                layout={layout}
-                storageHandler={storageHandler}
-            />,
-        );
+              <MobileOperator
+                  remoteStreams={allRemoteStreams}
+                  layout={layout}
+                  storageHandler={storageHandler}
+              />
+          );
 
     if (!isMobile) {
         var loader = document.createElement("div");

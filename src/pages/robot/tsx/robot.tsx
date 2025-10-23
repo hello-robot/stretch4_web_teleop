@@ -62,7 +62,7 @@ export class Robot extends React.Component {
     private jointStateCallback: (
         robotPose: RobotPose,
         jointValues: ValidJointStateDict,
-        effortValues: ValidJointStateDict,
+        effortValues: ValidJointStateDict
     ) => void;
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
@@ -79,14 +79,13 @@ export class Robot extends React.Component {
     private subscriptions: ROSLIB.Topic[] = [];
     private hasBetaTeleopKitParam: ROSLIB.Param;
     private stretchToolParam: ROSLIB.Param;
-    private textToSpeechTopic?: ROSLIB.Topic;
     private homeTheRobotService?: ROSLIB.Service;
 
     constructor(props: {
         jointStateCallback: (
             robotPose: RobotPose,
             jointValues: ValidJointStateDict,
-            effortValues: ValidJointStateDict,
+            effortValues: ValidJointStateDict
         ) => void;
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
@@ -143,7 +142,7 @@ export class Robot extends React.Component {
                     await this.onRosConnectCallback();
             } else {
                 console.log(
-                    "Required ROS nodes are not yet loaded. Reconnecting.",
+                    "Required ROS nodes are not yet loaded. Reconnecting."
                 );
                 this.reconnect();
             }
@@ -177,7 +176,7 @@ export class Robot extends React.Component {
             "/navigation_camera/image_raw/rotated/compressed",
             // "/stretch/joint_states",
         ],
-        timeout_ms: number = 5000,
+        timeout_ms: number = 5000
     ): Promise<boolean> {
         // For backwards compatibility with older versions of roslibjs, use the
         // local copy of getPublishers if the ROS object does not have it.
@@ -205,7 +204,7 @@ export class Robot extends React.Component {
                                     required_topics.length
                                 ) {
                                     console.log(
-                                        "Got publishers on all required topics.",
+                                        "Got publishers on all required topics."
                                     );
                                     isResolved = true;
                                     resolve(true);
@@ -221,11 +220,11 @@ export class Robot extends React.Component {
                             console.log(
                                 "Error in getting publishers for topic",
                                 topic,
-                                error,
+                                error
                             );
                             isResolved = true;
                             resolve(false);
-                        },
+                        }
                     );
                 }
                 resolve(
@@ -237,13 +236,13 @@ export class Robot extends React.Component {
                                     required_topics.length
                                 ) {
                                     console.log(
-                                        "Timed out with at least one required topic not having publishers.",
+                                        "Timed out with at least one required topic not having publishers."
                                     );
                                     resolve(false);
                                 }
                             }
-                        }, timeout_ms),
-                    ),
+                        }, timeout_ms)
+                    )
                 );
             } else {
                 console.log("ROS is not connected.");
@@ -266,21 +265,21 @@ export class Robot extends React.Component {
             this.moveBaseResultCallback,
             "Navigation canceled!",
             "Navigation succeeded!",
-            "Navigation failed!",
+            "Navigation failed!"
         );
         this.subscribeToActionResult(
             moveToPregraspActionName,
             this.moveToPregraspResultCallback,
             "Move To Pre-grasp canceled!",
             "Move To Pre-grasp succeeded!",
-            "Move To Pre-grasp failed!",
+            "Move To Pre-grasp failed!"
         );
         this.subscribeToActionResult(
             showTabletActionName,
             this.showTabletResultCallback,
             "Show Tablet canceled!",
             "Show Tablet succeeded!",
-            "Show Tablet failed!",
+            "Show Tablet failed!"
         );
         this.createTrajectoryClient();
         this.createMoveBaseClient();
@@ -299,7 +298,6 @@ export class Robot extends React.Component {
         this.createMapFrameTFClient();
         this.subscribeToHeadTiltTF();
         this.subscribeToMapTF();
-        this.createTextToSpeechTopic();
         this.createHomeTheRobotService();
 
         return Promise.resolve();
@@ -327,7 +325,7 @@ export class Robot extends React.Component {
         jointStateTopic.subscribe((msg: ROSJointState) => {
             this.jointState = msg;
             let robotPose: RobotPose = rosJointStatetoRobotPose(
-                this.jointState,
+                this.jointState
             );
             let jointValues: ValidJointStateDict = {};
             let effortValues: ValidJointStateDict = {};
@@ -357,7 +355,7 @@ export class Robot extends React.Component {
                     "Got joint limit for",
                     name,
                     msg.position[idx],
-                    msg.velocity[idx],
+                    msg.velocity[idx]
                 );
                 if (name == "joint_arm") name = "wrist_extension";
                 this.jointLimits[name] = [msg.position[idx], msg.velocity[idx]];
@@ -482,7 +480,7 @@ export class Robot extends React.Component {
             (response: { map: ROSOccupancyGrid }) => {
                 if (this.occupancyGridCallback)
                     this.occupancyGridCallback(response.map);
-            },
+            }
         );
     }
 
@@ -502,7 +500,7 @@ export class Robot extends React.Component {
             },
             (error) => {
                 console.log("Got joint limits service failed", error);
-            },
+            }
         );
     }
 
@@ -511,7 +509,7 @@ export class Robot extends React.Component {
         callback?: (goalState: ActionState) => void,
         cancelMsg?: string,
         successMsg?: string,
-        failureMsg?: string,
+        failureMsg?: string
     ) {
         // Get the messages
         if (!cancelMsg) {
@@ -595,14 +593,6 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/stretch/cmd_vel",
             messageType: "geometry_msgs/Twist",
-        });
-    }
-
-    createTextToSpeechTopic() {
-        this.textToSpeechTopic = new ROSLIB.Topic({
-            ros: this.ros,
-            name: "/text_to_speech",
-            messageType: "stretch4_web_teleop/msg/TextToSpeech",
         });
     }
 
@@ -703,7 +693,7 @@ export class Robot extends React.Component {
             "link_gripper_finger_left",
             (transform) => {
                 this.linkGripperFingerLeftTF = transform;
-            },
+            }
         );
     }
 
@@ -712,7 +702,7 @@ export class Robot extends React.Component {
             "link_DW3_tablet_12in",
             (transform) => {
                 this.linkTabletTF = transform;
-            },
+            }
         );
     }
 
@@ -742,13 +732,13 @@ export class Robot extends React.Component {
                 response
                     ? console.log(
                           "Successfully set realsense depth sensing to",
-                          toggle,
+                          toggle
                       )
                     : console.log(
                           "Failed to set realsense depth sensing to",
-                          toggle,
+                          toggle
                       );
-            },
+            }
         );
     }
 
@@ -760,13 +750,13 @@ export class Robot extends React.Component {
                 response
                     ? console.log(
                           "Successfully set gripper depth sensing to",
-                          toggle,
+                          toggle
                       )
                     : console.log(
                           "Failed to set gripper depth sensing to",
-                          toggle,
+                          toggle
                       );
-            },
+            }
         );
     }
 
@@ -778,10 +768,10 @@ export class Robot extends React.Component {
                 response
                     ? console.log(
                           "Successfully set expanded gripper to",
-                          toggle,
+                          toggle
                       )
                     : console.log("Failed to set expanded gripper to", toggle);
-            },
+            }
         );
     }
 
@@ -793,13 +783,13 @@ export class Robot extends React.Component {
                 response
                     ? console.log(
                           "Successfully set realsense depth sensing to",
-                          toggle,
+                          toggle
                       )
                     : console.log(
                           "Failed to set realsense depth sensing to",
-                          toggle,
+                          toggle
                       );
-            },
+            }
         );
     }
 
@@ -811,10 +801,10 @@ export class Robot extends React.Component {
                 response
                     ? console.log(
                           "Successfully set compute body pose to",
-                          toggle,
+                          toggle
                       )
                     : console.log("Failed to set compute body pose to", toggle);
-            },
+            }
         );
     }
 
@@ -864,10 +854,10 @@ export class Robot extends React.Component {
     }
 
     executeBaseVelocity = (props: {
-        linVelX: number,
-        linVelY: number,
-        angVel: number,
-      }): void => {
+        linVelX: number;
+        linVelY: number;
+        angVel: number;
+    }): void => {
         // this.switchToNavigationMode();
         this.stopExecution();
         let twist = new ROSLIB.Message({
@@ -890,7 +880,7 @@ export class Robot extends React.Component {
 
     makeIncrementalMoveGoal(
         jointName: ValidJoints,
-        jointValueInc: number,
+        jointValueInc: number
     ): ROSLIB.Goal | undefined {
         if (!this.jointState) throw "jointState is undefined";
         let newJointValue = this.getJointValue(jointName);
@@ -951,7 +941,7 @@ export class Robot extends React.Component {
     makeMoveToPregraspGoal(
         scaled_x: number,
         scaled_y: number,
-        horizontal: boolean,
+        horizontal: boolean
     ) {
         if (!this.moveToPregraspClient)
             throw "moveToPregraspClient is undefined";
@@ -1132,7 +1122,7 @@ export class Robot extends React.Component {
     executeMoveToPregraspGoal(
         scaled_x?: number,
         scaled_y?: number,
-        horizontal?: boolean,
+        horizontal?: boolean
     ) {
         if (
             scaled_x === undefined ||
@@ -1145,12 +1135,12 @@ export class Robot extends React.Component {
             "Got move to pregrasp goal",
             scaled_x,
             scaled_y,
-            horizontal,
+            horizontal
         );
         this.moveToPregraspGoal = this.makeMoveToPregraspGoal(
             scaled_x,
             scaled_y,
-            horizontal,
+            horizontal
         );
         this.moveToPregraspClient.createClient(this.moveToPregraspGoal);
 
@@ -1200,7 +1190,7 @@ export class Robot extends React.Component {
                 }
                 this.lookAtGripperInterval = window.setTimeout(
                     lookIfReadyAndRepeat,
-                    500,
+                    500
                 );
             };
             lookIfReadyAndRepeat();
@@ -1229,7 +1219,7 @@ export class Robot extends React.Component {
 
         // Normalize posDifference
         const scalar = Math.sqrt(
-            posDifference.x ** 2 + posDifference.y ** 2 + posDifference.z ** 2,
+            posDifference.x ** 2 + posDifference.y ** 2 + posDifference.z ** 2
         );
         posDifference.x /= scalar;
         posDifference.y /= scalar;
@@ -1318,31 +1308,6 @@ export class Robot extends React.Component {
         return inCollision;
     }
 
-    playTextToSpeech(
-        text: string,
-        override_behavior: number = 0,
-        is_slow: boolean = false,
-    ) {
-        if (!this.textToSpeechTopic) throw "textToSpeechTopic is undefined";
-        if (override_behavior != 0 && override_behavior != 1) {
-            console.log(
-                "override behavior must be 0 (queue) or 1 (interrupt). Setting to 0.",
-            );
-            override_behavior = 0;
-        }
-        let message = new ROSLIB.Message({
-            text: text,
-            is_slow: is_slow,
-            override_behavior: override_behavior,
-        });
-        this.textToSpeechTopic.publish(message);
-    }
-
-    stopTextToSpeech() {
-        // Send an empty string and override behavior 1 to interrupt the current speech
-        this.playTextToSpeech("", 1);
-    }
-
     /**
      * Copied from https://github.com/hello-vinitha/roslibjs/pull/1 and
      * https://github.com/RobotWebTools/roslibjs/pull/760 , included here for
@@ -1351,7 +1316,7 @@ export class Robot extends React.Component {
     getPublishers(
         topic: string,
         callback: (publishers: string[]) => void,
-        failedCallback: (message: any) => void,
+        failedCallback: (message: any) => void
     ) {
         var publishersClient = new ROSLIB.Service({
             ros: this.ros,
@@ -1368,7 +1333,7 @@ export class Robot extends React.Component {
                 function (result: any) {
                     callback(result.publishers);
                 },
-                failedCallback,
+                failedCallback
             );
         } else {
             publishersClient.callService(request, function (result) {
