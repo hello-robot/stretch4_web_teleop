@@ -28,24 +28,30 @@ import {
 } from "./function_providers/ButtonFunctionProvider";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
+import HeadCam from "./layout_components/HeadCam";
 import "operator/css/MobileOperator.css";
 import { SimpleCameraView } from "./layout_components/SimpleCameraView";
 import { SharedState } from "./layout_components/CustomizableComponent";
-import { VirtualJoystick } from "./layout_components/VirtualJoystick";
-import FooterControls from "./layout_components/FooterControls";
+import FooterHeadCam from "./layout_components/FooterHeadCam";
 import { ButtonPad } from "./layout_components/ButtonPad";
 // import Swipe from "./static_components/Swipe";
 import { Map } from "./layout_components/Map";
 import { TabGroup } from "./basic_components/TabGroup";
-import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
+import SwipeableViews from 'react-swipeable-views';
 import {
     MovementRecorder,
     MovementRecorderFunction,
 } from "./layout_components/MovementRecorder";
+import AutoNav from "./layout_components/AutoNav";
 import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
 import { Alert } from "./basic_components/Alert";
+<<<<<<< HEAD
 import MapIcon from "@mui/icons-material/Map";
+=======
+import { VirtualJoystick } from "./layout_components/VirtualJoystick";
+import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
+>>>>>>> upstream/feature/mobile-xp
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -63,8 +69,6 @@ export const MobileOperator = (props: {
     const [velocityScale, setVelocityScale] = React.useState<number>(
         FunctionProvider.velocityScale
     );
-    const [hideMap, setHideMap] = React.useState<boolean>(true);
-    const [hideControls, setHideControls] = React.useState<boolean>(false);
     const [activeMainGroupTab, setActiveMainGroupTab] =
         React.useState<number>(0);
     const [activeControlTab, setActiveControlTab] = React.useState<number>(0);
@@ -73,6 +77,11 @@ export const MobileOperator = (props: {
     const [showAlert, setShowAlert] = React.useState<boolean>(true);
     // Manage the blurring+darkening of the camera feed
     const [isCameraVeilVisible, isCameraVeilVisibleSet] = useState(false);
+    const [swipeableViewsIdx, swipeableViewsIdxSet] = useState<number>(0);
+    const [swipeableViewsStyles, swipeableViewsStylesSet] = useState([
+        { filter: 'brightness(1) blur(0px)' },
+        { filter: 'brightness(1) blur(0px)' },
+    ]);
 
     React.useEffect(() => {
         setTimeout(function () {
@@ -161,20 +170,6 @@ export const MobileOperator = (props: {
         hasBetaTeleopKit: hasBetaTeleopKit,
         stretchTool: stretchTool,
     };
-
-    // function updateScreens() {
-    //     if (hideMap) {
-    //         setHideMap(false);
-    //         setHideControls(true);
-    //     } else {
-    //         setHideControls(false);
-    //         setHideMap(true);
-    //     }
-    // }
-    // const swipeHandlers = Swipe({
-    //     onSwipedLeft: () => updateScreens(),
-    //     onSwipedRight: () => updateScreens(),
-    // });
 
     const driveMode = (show: boolean) => {
         return show ? (
@@ -279,74 +274,81 @@ export const MobileOperator = (props: {
         );
     };
 
-    console.log('speed', FunctionProvider.velocityScale)
-
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <div id="mobile-operator-body">
-                <div className={className("controls", { hideControls })}>
+                <SwipeableViews
+                    className="swipeable-views"
+                    index={swipeableViewsIdx}
+                    onChangeIndex={(idx: number) => (swipeableViewsIdxSet(idx))}
+                    enableMouseEvents={true}
+                    containerStyle={{ height: '100%' }}
+                    slideStyle={{ overflowX: 'hidden', position: 'relative' }}
+                    springConfig={{
+                        duration: '0.2s',
+                        easeFunction: 'cubic-bezier(0.15, 0.3, 0.25, 1)',
+                        delay: '0s'
+                    }}
+                    // This "style" prop is required...
+                    // CSS via "className" won't be applied.
+                    style={{ overflowX: 'visible', height: '100%' }}
+                    // Handler for animation brightness/blur fx
+                    // as user is swiping between views
+                    onSwitching={(slideOffset, type) => {
+                        if (type === 'move') {
+                            // Calculate filter values based on slide offset
+                            const newStyles = swipeableViewsStyles.map((style, index) => {
+                                // Determine the position of each slide relative to the active slide
+                                const relativePosition = index - slideOffset;
+                                const absPosition = Math.abs(relativePosition);
+
+                                // Apply brightness and blur: reduce brightness and increase blur as slides move away
+                                const brightness = Math.max(0.2, 1 - absPosition * 0.7); // Min brightness 0.5
+                                const blur = Math.min(10, absPosition * 5); // Max blur 5px
+
+                                return {
+                                    filter: `brightness(${brightness}) blur(${blur}px)`,
+                                };
+                            });
+                            swipeableViewsStylesSet(newStyles);
+                        } else if (type === 'end') {
+                            // Reset styles when transition ends
+                            const newStyles = swipeableViewsStyles.map(() => ({
+                                filter: 'brightness(1) blur(0px)',
+                            }));
+                            swipeableViewsStylesSet(newStyles);
+                        }
+                    }}
+                >
                     <div
-                        // onPointerDown={() => {
-                        //     if (cameraID == CameraViewId.realsense)
-                        //         setCameraID(CameraViewId.overhead);
-                        //     else if (cameraID == CameraViewId.overhead)
-                        //         setCameraID(CameraViewId.gripper);
-                        //     else if (cameraID == CameraViewId.gripper)
-                        //         setCameraID(CameraViewId.realsense);
-                        // }}
-                        className="simple-camera-view-wrapper_XP"
+                        style={swipeableViewsStyles[0]}
+                        className="head-cam-wrapper"
                     >
-                        <SimpleCameraView
-                            id={cameraID}
-                            remoteStreams={remoteStreams}
+                        <HeadCam
+                            cameraID={cameraID}
                             isCameraVeilVisible={isCameraVeilVisible}
+                            remoteStreams={remoteStreams}
+                            tabContent={[controlModes, recordingList]}
+                            activeMainGroupTab={activeMainGroupTab}
+                            setActiveMainGroupTab={setActiveMainGroupTab}
+                            setVelocityScale={setVelocityScale}
+                            setActionMode={setActionMode}
+                            isCameraVeilVisibleSet={isCameraVeilVisibleSet}
+                            swipeableViewsIdxSet={swipeableViewsIdxSet}
                         />
                     </div>
-                    <button
-                        onPointerDown={() => {
-                            setHideMap(false);
-                            setHideControls(true);
-                        }}
+                    <div
+                        style={swipeableViewsStyles[1]}
+                        className="auto-nav-wrapper"
                     >
-                        <MapIcon
-                            className="material-icons icon"
+                        <AutoNav
+                            sharedState={sharedState}
+                            swipeableViewsIdx={swipeableViewsIdx}
+                            swipeableViewsIdxSet={swipeableViewsIdxSet}
                         />
-                    </button>
-                    <TabGroup
-                        tabLabels={["Controls", "Recordings"]}
-                        tabContent={[controlModes, recordingList]}
-                        startIdx={activeMainGroupTab}
-                        onChange={(index: number) =>
-                            setActiveMainGroupTab(index)
-                        }
-                        pill={false}
-                        key={"main-group"}
-                    />
-                </div>
-                <div className={className("map", { hideMap })}>
-                    <Map
-                        {...{
-                            path: "",
-                            definition: {
-                                type: ComponentType.Map,
-                                selectGoal: false,
-                            } as MapDefinition,
-                            sharedState: sharedState,
-                        }}
-                    />
-                </div>
-                <FooterControls
-                    actionSpeedCurrent={FunctionProvider.velocityScale}
-                    onActionSpeedChange={(newSpeed: number) => {
-                        setVelocityScale(newSpeed);
-                        FunctionProvider.velocityScale = newSpeed;
-                    }}
-                    actionModeCurrent={FunctionProvider.actionMode}
-                    onActionModeChange={setActionMode}
-                    isCameraVeilVisible={isCameraVeilVisible}
-                    isCameraVeilVisibleSet={isCameraVeilVisibleSet}
-                />
+                    </div>
+                </SwipeableViews>
             </div>
-        </div>
+        </div >
     );
 };

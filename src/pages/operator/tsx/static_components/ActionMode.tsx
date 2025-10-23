@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Modal from '../basic_components/ModalMobile';
+import ModalMobile from '../basic_components/ModalMobile';
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionMode.css";
 import { ActionModeType } from "../utils/component_definitions";
@@ -46,11 +46,15 @@ export const ActionMode = (props: ActionModeProps) => {
 
     return (
         <div className="action-mode">
-            <ModalActionMode isOpen={isModalOpen} mode={props.mode} handleClose={(newActionMode: ActionModeType) => {
-                setIsModalOpen(false);
-                props.setCameraVeilCallback(false);
-                props.onChange(newActionMode)
-            }} />
+            <ModalActionMode
+                isOpen={isModalOpen}
+                mode={props.mode}
+                handleClose={(newActionMode: ActionModeType) => {
+                    setIsModalOpen(false);
+                    props.setCameraVeilCallback(false);
+                    props.onChange(newActionMode)
+                }}
+            />
             <MagneticWrapper>
                 <button
                     className="button-action-mode"
@@ -58,12 +62,12 @@ export const ActionMode = (props: ActionModeProps) => {
                         setIsModalOpen(!isModalOpen);
                         props.setCameraVeilCallback(!isModalOpen)
                         buttonFunctionProvider.disableActiveButton()
-                }}
+                    }}
                     aria-label="Change action mode"
                     aria-hidden={props.isCameraVeilVisible}
                 >
-                    <span className="action-mode-icon"></span>
                     <div>{props.mode}</div>
+                    <span className="action-mode-icon"></span>
                 </button>
             </MagneticWrapper>
         </div>
@@ -94,7 +98,6 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleC
         if (loading) return;
         setLoading(true);
         // This is a synthetic delay, replace with actual logic
-        console.log("Selected Action Mode:", selectedMode);
         setTimeout(() => {
             setLoading(false);
             handleClose(selectedMode); // Close the modal
@@ -107,7 +110,7 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleC
         <MagneticWrapper>
             <button
                 className="btn btn-primary" // Style from ModalActionMode.css
-                onClick={handleConfirm}
+                onPointerDown={handleConfirm}
                 disabled={loading}
             >
                 {loading ? <span className="spinner" /> : 'Confirm'}
@@ -116,11 +119,10 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleC
     );
 
     return (
-        <Modal
+        <ModalMobile
             isOpen={isOpen}
-            onClose={() => handleClose}
             title="Action Mode"
-            subtitle="SELECT"
+            subtitle="NAVIGATE"
             footer={modalFooterContent}
             modalClassName="action-mode-modal"
         >
@@ -148,6 +150,6 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleC
                     </label>
                 ))}
             </div>
-        </Modal>
+        </ModalMobile>
     );
 };

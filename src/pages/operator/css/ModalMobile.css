@@ -4,34 +4,35 @@
 }
 
 .modal-overlay {
-  position: fixed;
-  top: 0;
+  position: absolute;
+  bottom: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   /* Aligns modal to the bottom */
-  align-items: center;
+  justify-content: flex-end;
   /* Centers modal horizontally */
-  background-color: rgba(0, 0, 0, 0.6);
+  align-items: center;
   /* Semi-transparent background */
-  z-index: 1000;
+  background-color: rgba(0, 0, 0, 0.6);
   /* Ensure it's on top */
+  z-index: 1000;
   opacity: 0;
   /* --animation-timing-function is defined in ActionMode.css, ensure it's accessible or redefine here */
-  /* transition: opacity 300ms 200ms var(--animation-timing-function-modal); */
+  transition: opacity 300ms 200ms var(--animation-timing-function-modal);
+  backdrop-filter: blur(5px);
 }
 
 .modal-overlay.enter {
-  animation: modal-fade-in 300ms var(--animation-timing-function-modal) forwards;
+  animation: modal-fade-in 150ms var(--animation-timing-function-modal) forwards;
   animation-delay: 200ms;
   /* Delay fade-in of overlay slightly less or same as modal */
 }
 
 .modal-overlay.exit {
-  animation: modal-fade-out 300ms var(--animation-timing-function-modal) forwards;
+  animation: modal-fade-out 150ms var(--animation-timing-function-modal) forwards;
 }
 
 .modal-content-wrapper {
@@ -51,7 +52,7 @@
   box-sizing: border-box;
 
 
-  /* top: 100%); /
+  /* top: 100%); /`
   position: relative;
   top: 100%;
 
@@ -79,23 +80,25 @@
 
 
 .modal-content-wrapper.enter {
-  animation: modal-slide-up 300ms var(--animation-timing-function-modal) forwards;
+  animation: modal-slide-up 400ms var(--animation-timing-function-modal) forwards;
   animation-delay: 200ms;
 }
 
 .modal-content-wrapper.exit {
-  animation: modal-slide-down 300ms var(--animation-timing-function-modal) forwards;
+  animation: modal-slide-down 250ms var(--animation-timing-function-modal) forwards;
 }
 
 .modal-header {
   margin-bottom: 20px;
   font-weight: 800;
   padding: 0 5px;
+  display: flex;
+  justify-content: space-between;
   /* Align with radio group padding */
 }
 
 .modal-subtitle {
-  color: #FBCCDB;
+  color: hsl(204, 86%, 47%);
   /* From original */
   font-size: 12px;
   text-transform: uppercase;
