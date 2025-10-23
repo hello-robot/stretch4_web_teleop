@@ -6,7 +6,7 @@ import {
     ComponentDefinition,
     ComponentType,
     MapDefinition,
-    LayoutDefinition
+    LayoutDefinition,
 } from "./utils/component_definitions";
 import {
     className,
@@ -37,7 +37,7 @@ import { ButtonPad } from "./layout_components/ButtonPad";
 // import Swipe from "./static_components/Swipe";
 import { Map } from "./layout_components/Map";
 import { TabGroup } from "./basic_components/TabGroup";
-import SwipeableViews from 'react-swipeable-views';
+import SwipeableViews from "react-swipeable-views";
 import {
     MovementRecorder,
     MovementRecorderFunction,
@@ -46,12 +46,8 @@ import AutoNav from "./layout_components/AutoNav";
 import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
 import { Alert } from "./basic_components/Alert";
-<<<<<<< HEAD
-import MapIcon from "@mui/icons-material/Map";
-=======
 import { VirtualJoystick } from "./layout_components/VirtualJoystick";
 import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
->>>>>>> upstream/feature/mobile-xp
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -64,7 +60,7 @@ export const MobileOperator = (props: {
     >([]);
     const [moveBaseState, setMoveBaseState] = React.useState<MoveBaseState>();
     const [cameraID, setCameraID] = React.useState<CameraViewId>(
-        CameraViewId.overhead,
+        CameraViewId.overhead
     );
     const [velocityScale, setVelocityScale] = React.useState<number>(
         FunctionProvider.velocityScale
@@ -79,8 +75,8 @@ export const MobileOperator = (props: {
     const [isCameraVeilVisible, isCameraVeilVisibleSet] = useState(false);
     const [swipeableViewsIdx, swipeableViewsIdxSet] = useState<number>(0);
     const [swipeableViewsStyles, swipeableViewsStylesSet] = useState([
-        { filter: 'brightness(1) blur(0px)' },
-        { filter: 'brightness(1) blur(0px)' },
+        { filter: "brightness(1) blur(0px)" },
+        { filter: "brightness(1) blur(0px)" },
     ]);
 
     React.useEffect(() => {
@@ -110,9 +106,7 @@ export const MobileOperator = (props: {
     const layout = React.useRef<LayoutDefinition>(props.layout);
     FunctionProvider.actionMode = layout.current.actionMode;
     const actionModes = Object.values(ActionModeType);
-    const actionModesIdx = actionModes.indexOf(
-        layout.current.actionMode
-    )
+    const actionModesIdx = actionModes.indexOf(layout.current.actionMode);
     /** Rerenders the operator */
     function updateLayout() {
         console.log("update layout");
@@ -158,11 +152,11 @@ export const MobileOperator = (props: {
     /** State passed from the operator and shared by all components */
     const sharedState: SharedState = {
         customizing: false,
-        onSelect: () => { },
+        onSelect: () => {},
         remoteStreams: remoteStreams,
         selectedPath: "deselected",
         dropZoneState: {
-            onDrop: () => { },
+            onDrop: () => {},
             selectedDefinition: undefined,
         },
         buttonStateMap: buttonStateMap.current,
@@ -280,41 +274,48 @@ export const MobileOperator = (props: {
                 <SwipeableViews
                     className="swipeable-views"
                     index={swipeableViewsIdx}
-                    onChangeIndex={(idx: number) => (swipeableViewsIdxSet(idx))}
+                    onChangeIndex={(idx: number) => swipeableViewsIdxSet(idx)}
                     enableMouseEvents={true}
-                    containerStyle={{ height: '100%' }}
-                    slideStyle={{ overflowX: 'hidden', position: 'relative' }}
+                    containerStyle={{ height: "100%" }}
+                    slideStyle={{ overflowX: "hidden", position: "relative" }}
                     springConfig={{
-                        duration: '0.2s',
-                        easeFunction: 'cubic-bezier(0.15, 0.3, 0.25, 1)',
-                        delay: '0s'
+                        duration: "0.2s",
+                        easeFunction: "cubic-bezier(0.15, 0.3, 0.25, 1)",
+                        delay: "0s",
                     }}
                     // This "style" prop is required...
                     // CSS via "className" won't be applied.
-                    style={{ overflowX: 'visible', height: '100%' }}
+                    style={{ overflowX: "visible", height: "100%" }}
                     // Handler for animation brightness/blur fx
                     // as user is swiping between views
                     onSwitching={(slideOffset, type) => {
-                        if (type === 'move') {
+                        if (type === "move") {
                             // Calculate filter values based on slide offset
-                            const newStyles = swipeableViewsStyles.map((style, index) => {
-                                // Determine the position of each slide relative to the active slide
-                                const relativePosition = index - slideOffset;
-                                const absPosition = Math.abs(relativePosition);
+                            const newStyles = swipeableViewsStyles.map(
+                                (style, index) => {
+                                    // Determine the position of each slide relative to the active slide
+                                    const relativePosition =
+                                        index - slideOffset;
+                                    const absPosition =
+                                        Math.abs(relativePosition);
 
-                                // Apply brightness and blur: reduce brightness and increase blur as slides move away
-                                const brightness = Math.max(0.2, 1 - absPosition * 0.7); // Min brightness 0.5
-                                const blur = Math.min(10, absPosition * 5); // Max blur 5px
+                                    // Apply brightness and blur: reduce brightness and increase blur as slides move away
+                                    const brightness = Math.max(
+                                        0.2,
+                                        1 - absPosition * 0.7
+                                    ); // Min brightness 0.5
+                                    const blur = Math.min(10, absPosition * 5); // Max blur 5px
 
-                                return {
-                                    filter: `brightness(${brightness}) blur(${blur}px)`,
-                                };
-                            });
+                                    return {
+                                        filter: `brightness(${brightness}) blur(${blur}px)`,
+                                    };
+                                }
+                            );
                             swipeableViewsStylesSet(newStyles);
-                        } else if (type === 'end') {
+                        } else if (type === "end") {
                             // Reset styles when transition ends
                             const newStyles = swipeableViewsStyles.map(() => ({
-                                filter: 'brightness(1) blur(0px)',
+                                filter: "brightness(1) blur(0px)",
                             }));
                             swipeableViewsStylesSet(newStyles);
                         }
@@ -349,6 +350,6 @@ export const MobileOperator = (props: {
                     </div>
                 </SwipeableViews>
             </div>
-        </div >
+        </div>
     );
 };
