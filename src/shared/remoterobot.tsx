@@ -14,6 +14,9 @@ import {
     MoveBaseCommand,
     PlaybackPosesCommand,
     HomeTheRobotCommand,
+    GetHasBetaTeleopKit,
+    GetStretchTool,
+    GetStretchModel,
 } from "shared/commands";
 import {
     ValidJointStateDict,
@@ -22,7 +25,6 @@ import {
     ROSPose,
     waitUntil,
 } from "shared/util";
-import { GetStretchTool } from "./commands";
 export type robotMessageChannel = (message: cmd) => void;
 
 export class RemoteRobot extends React.Component<{}, any> {
@@ -205,6 +207,13 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getStretchTool(type: "getStretchTool") {
         let cmd: GetStretchTool = {
+            type: type,
+        };
+        this.robotChannel(cmd);
+    }
+
+    getStretchModel(type: "getStretchModel") {
+        let cmd: GetStretchModel = {
             type: type,
         };
         this.robotChannel(cmd);

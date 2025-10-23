@@ -10,6 +10,9 @@ import {
     ActionState,
     ActionStatusList,
     ROSBatteryState,
+    StretchTool,
+    StretchModel,
+    getStretchTool,
 } from "shared/util";
 import {
     rosJointStatetoRobotPose,
@@ -74,10 +77,13 @@ export class Robot extends React.Component {
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
+    private stretchModelCallback: (value: string) => void;
     private lookAtGripperInterval?: number; // ReturnType<typeof setInterval>
     private subscriptions: ROSLIB.Topic[] = [];
     private stretchToolParam: ROSLIB.Param;
     private homeTheRobotService?: ROSLIB.Service;
+    private stretchTool: StretchTool;
+    private stretchModel: StretchModel;
 
     constructor(props: {
         jointStateCallback: (
@@ -95,6 +101,7 @@ export class Robot extends React.Component {
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
+        stretchModelCallback: (value: string) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -108,6 +115,7 @@ export class Robot extends React.Component {
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
+        this.stretchModelCallback = props.stretchModelCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -295,6 +303,7 @@ export class Robot extends React.Component {
         this.subscribeToHeadTiltTF();
         this.subscribeToMapTF();
         this.createHomeTheRobotService();
+        this.initStretchParams();
 
         return Promise.resolve();
     }
@@ -422,7 +431,7 @@ export class Robot extends React.Component {
         this.subscriptions.push(topic);
     }
 
-    getStretchTool() {
+    initStretchParams() {
         console.log("Getting stretch tool", this.ros.isConnected);
         // NOTE: This information can also come from the /tool topic.
         // However, we only need it once, so opt for a parameter.
@@ -430,24 +439,27 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/configure_video_streams_gripper:stretch_tool",
         });
-
         this.stretchToolParam.get((value: string) => {
-            console.log("stretch tool: ", value);
-            if (value === "eoa_wrist_dw3_tool_tablet_12in") {
-                this.subscribeToTabletTF();
-            } else if (
-                [
-                    "eoa_wrist_dw3_tool_sg3",
-                    "tool_stretch_dex_wrist",
-                    "tool_stretch_gripper",
-                ].includes(value)
-            ) {
-                this.subscribeToGripperFingerTF();
-            } else {
-                this.subscribeToWristYawTF();
-            }
-            if (this.stretchToolCallback) this.stretchToolCallback(value);
+            this.stretchTool = getStretchTool(value);
         });
+        this.stretchTool === StretchTool.DW4
+            ? (this.stretchModel = StretchModel.SE4)
+            : (this.stretchModel = StretchModel.SE3);
+    }
+
+    getStretchTool() {
+        if (this.stretchTool == StretchTool.TABLET) {
+            this.subscribeToTabletTF();
+        } else {
+            this.subscribeToGripperFingerTF();
+        }
+        if (this.stretchToolCallback)
+            this.stretchToolCallback(this.stretchTool);
+    }
+
+    getStretchModel() {
+        if (this.stretchModelCallback)
+            this.stretchModelCallback(this.stretchModel);
     }
 
     getOccupancyGrid() {
@@ -1082,7 +1094,8 @@ export class Robot extends React.Component {
     stopTrajectoryClient() {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         if (this.poseGoal) {
-            this.trajectoryClient.cancelGoal();
+            if (this.stretchModel === StretchModel.SE3)
+                this.trajectoryClient.cancelGoal();
             // this.poseGoal.cancel()
             this.poseGoal = undefined;
         }
@@ -1227,8 +1240,11 @@ export class Robot extends React.Component {
     }
 
     getJointValue(jointName: ValidJoints): number {
-        // Paper over Hello's fake joint implementation
-        if (jointName === "joint_arm" || jointName === "wrist_extension") {
+        // Paper over Hello's fake joint implementation for SE3
+        if (
+            this.stretchModel === StretchModel.SE3 &&
+            (jointName === "joint_arm" || jointName === "wrist_extension")
+        ) {
             return (
                 this.getJointValue("joint_arm_l0") +
                 this.getJointValue("joint_arm_l1") +

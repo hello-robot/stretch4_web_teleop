@@ -53,25 +53,34 @@ export interface ROSJointState extends Message {
 }
 
 export enum StretchTool {
-    DEX_GRIPPER = "dex gripper",
-    GRIPPER = "gripper",
-    TABLET = "tablet",
+    DW4 = "eoa_wrist_dw4_tool_sg4",
+    DW3 = "eoa_wrist_dw3_tool_sg3",
+    TABLET = "eoa_wrist_dw3_tool_tablet_12in",
     UNKNOWN = "unknown",
+}
+
+export enum StretchModel {
+    SE3 = "SE3",
+    SE4 = "SE4",
 }
 
 export function getStretchTool(stretchTool: string) {
     if (stretchTool === "eoa_wrist_dw3_tool_tablet_12in") {
         return StretchTool.TABLET;
-    } else if (
-        ["eoa_wrist_dw3_tool_sg3", "tool_stretch_dex_wrist"].includes(
-            stretchTool
-        )
-    ) {
-        return StretchTool.DEX_GRIPPER;
-    } else if (stretchTool === "tool_stretch_gripper") {
-        return StretchTool.GRIPPER;
+    } else if (stretchTool === "eoa_wrist_dw3_tool_sg3") {
+        return StretchTool.DW3;
+    } else if (stretchTool === "eoa_wrist_dw4_tool_sg4") {
+        return StretchTool.DW4;
     } else {
         return StretchTool.UNKNOWN;
+    }
+}
+
+export function getStretchModel(stretchModel: string) {
+    if (stretchModel === "SE3") {
+        return StretchModel.SE3;
+    } else {
+        return StretchModel.SE4;
     }
 }
 

@@ -255,11 +255,11 @@ def generate_launch_description():
             d405_params,
             "2",
             [
-                ("/gripper_camera/color/image_rect_raw", "/gripper_camera/image_raw"),
-                (
-                    "/gripper_camera/color/image_rect_raw/compressed",
-                    "/gripper_camera/image_raw/compressed",
-                ),
+                # ("/gripper_camera/color/image_rect_raw", "/gripper_camera/image_raw"),
+                # (
+                #     "/gripper_camera/color/image_rect_raw/compressed",
+                #     "/gripper_camera/image_raw/compressed",
+                # ),
             ],
         ),
     ]
