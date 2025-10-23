@@ -46,7 +46,6 @@ import AutoNav from "./layout_components/AutoNav";
 import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
 import { Alert } from "./basic_components/Alert";
-import { VirtualJoystick } from "./layout_components/VirtualJoystick";
 import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
 
 /** Operator interface webpage */
@@ -168,13 +167,6 @@ export const MobileOperator = (props: {
     const driveMode = (show: boolean) => {
         return show ? (
             <React.Fragment key={"drive-mode"}>
-                {/* <VirtualJoystick
-                {...{
-                    path: "",
-                    definition: { type: ComponentType.VirtualJoystick },
-                    sharedState: sharedState
-                }}
-            /> */}
                 <ButtonPad
                     {...{
                         path: "",
