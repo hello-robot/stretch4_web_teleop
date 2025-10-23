@@ -1,8 +1,7 @@
 import fnmatch
 import os
 
-import stretch_body_ii
-from stretch_body_ii import robot
+import stretch_body.robot_params
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
 from launch_ros.actions import Node
@@ -53,13 +52,25 @@ def map_configuration_to_drivers(model, tool, has_nav_head_cam):
           add_gripper_driver (True or False),
           add_head_nav_driver (True or False)
     """
-    # Stretch 4
+    # Stretch 3
     if (
-        model == "SE4"
-        and tool == "eoa_wrist_dw4_tool_sg4"
+        model == "SE3"
+        and tool == "eoa_wrist_dw3_tool_sg3"
         and has_nav_head_cam is True
     ):
-        return "none", False, True
+        return "both", False, True
+    elif (
+        model == "SE3"
+        and tool == "eoa_wrist_dw3_tool_nil"
+        and has_nav_head_cam is True
+    ):
+        return "both", False, True
+    elif (
+        model == "SE3"
+        and tool == "eoa_wrist_dw3_tool_tablet_12in"
+        and has_nav_head_cam is True
+    ):
+        return "both", False, True
     
     raise ValueError(
         f"cannot find valid configuration for model={model}, tool={tool}, "
@@ -74,7 +85,7 @@ def generate_launch_description():
     stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
 
-    robot_params = stretch_body_ii.params.robot_params_SE4.nominal_params
+    _, robot_params = stretch_body.robot_params.RobotParams().get_params()
     stretch_serial_no = robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
@@ -97,7 +108,7 @@ def generate_launch_description():
                 [
                     teleop_interface_package,
                     "config",
-                    "SE3_configure_video_streams_params.yaml",
+                    "configure_video_streams_params.yaml",
                 ]
             )
         ],
@@ -117,11 +128,11 @@ def generate_launch_description():
         "keyfile", default_value=stretch_serial_no + "+6-key.pem"
     )
     nav2_params_file_param = DeclareLaunchArgument(
-        "nav2_params_file",
-        default_value=os.path.join(
-            stretch_navigation_path, 'config', 'nav2_params_switch_controller.yaml',
-        ),
-        description="Full path to the ROS2 parameters file to use for all launched nodes",
+    "nav2_params_file",
+    default_value=os.path.join(
+        stretch_navigation_path, 'config', 'nav2_params.yaml',
+    ),
+    description="Full path to the ROS2 parameters file to use for all launched nodes",
     )
     
     bt_param = DeclareLaunchArgument(
@@ -357,20 +368,11 @@ def generate_launch_description():
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    [stretch_core_path, "/launch/airy_rslidar.launch.py"]
+                    [stretch_core_path, "/launch/rplidar.launch.py"]
                 )
             ),
         ],
     )
-
-    switch_controller_config = Node(
-        package='stretch_nav2',
-        executable='switch_controller_config.py',
-        name='switch_controller_config',
-        output='screen'
-    )
-
-    ld.add_action(switch_controller_config)
     ld.add_action(navigation_bringup_launch)
 
     ld.add_action(
