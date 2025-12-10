@@ -30,7 +30,7 @@ const moveToPregraspActionName = "/move_to_pregrasp";
 const showTabletActionName = "/show_tablet";
 
 export class Robot extends React.Component {
-    private ros: ROSLIB.Ros;
+    private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
     private rosReconnectTimerID?: ReturnType<typeof setTimeout>;
     private onRosConnectCallback?: () => Promise<void>;
@@ -80,7 +80,7 @@ export class Robot extends React.Component {
     private stretchModelCallback: (value: string) => void;
     private lookAtGripperInterval?: number; // ReturnType<typeof setInterval>
     private subscriptions: Topic[] = [];
-    private stretchToolParam: ROSLIB.Param;
+    private stretchToolParam: Param;
     private homeTheRobotService?: Service;
     private stretchTool: StretchTool;
     private stretchModel: StretchModel;
@@ -171,7 +171,7 @@ export class Robot extends React.Component {
 
     async checkROSConnection(
         required_topics: string[] = [
-            "/camera/color/image_raw/rotated/compressed",
+            // "/camera/color/image_raw/rotated/compressed",
             "/gripper_camera/image_raw/cropped/compressed",
             "/navigation_camera/image_raw/rotated/compressed",
             // "/stretch/joint_states",
@@ -190,43 +190,24 @@ export class Robot extends React.Component {
         console.log("Checking ROS connection...");
         return new Promise(async (resolve) => {
             if (this.ros.isConnected) {
-                for (let topic of required_topics) {
-                    // Verify that the topic has a publisher
-                    getPublishers(
-                        topic,
-                        // Success callback
-                        (publishers: string[]) => {
-                            if (publishers.length > 0) {
-                                console.log("Got a publisher on topic", topic);
-                                numRequiredTopicsWithPublisher += 1;
-                                if (
-                                    numRequiredTopicsWithPublisher ===
-                                    required_topics.length
-                                ) {
-                                    console.log(
-                                        "Got publishers on all required topics."
-                                    );
-                                    isResolved = true;
-                                    resolve(true);
-                                }
-                            } else {
-                                console.log("No publisher on topic", topic);
-                                isResolved = true;
-                                resolve(false);
-                            }
-                        },
-                        // Failure callback
-                        (error) => {
-                            console.log(
-                                "Error in getting publishers for topic",
-                                topic,
-                                error
-                            );
+                this.ros.getTopics((result: {topics: string[], types: string[]}) => {
+                    for (let required_topic of required_topics) {
+                        if (!result.topics.includes(required_topic)) {
+                            console.log("Required topic not found:", required_topic);
                             isResolved = true;
                             resolve(false);
                         }
-                    );
-                }
+                    }
+                    console.log("All required topics found.");
+                    isResolved = true;
+                    resolve(true);
+                },
+                (error) => {
+                    console.log("Error in getting topics:", error);
+                    isResolved = true;
+                    resolve(false);
+                });
+
                 resolve(
                     await new Promise<boolean>((resolve) =>
                         setTimeout(() => {
@@ -431,7 +412,7 @@ export class Robot extends React.Component {
         console.log("Getting stretch tool", this.ros.isConnected);
         // NOTE: This information can also come from the /tool topic.
         // However, we only need it once, so opt for a parameter.
-        this.stretchToolParam = new ROSLIB.Param({
+        this.stretchToolParam = new Param({
             ros: this.ros,
             name: "/configure_video_streams_gripper:stretch_tool",
         });
@@ -872,7 +853,7 @@ export class Robot extends React.Component {
     makeIncrementalMoveGoal(
         jointName: ValidJoints,
         jointValueInc: number
-    ): ROSLIB.Goal | undefined {
+    ): Goal | undefined {
         if (!this.jointState) throw "jointState is undefined";
         let newJointValue = this.getJointValue(jointName);
         // Paper over Hello's fake joints

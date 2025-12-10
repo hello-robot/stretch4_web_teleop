@@ -1,8 +1,7 @@
 import fnmatch
 import os
 
-import stretch_body_ii
-from stretch_body_ii import robot
+from stretch_body_ii.robot.robot_params_SE4 import nominal_params as robot_params
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
 from launch_ros.actions import Node
@@ -27,7 +26,7 @@ from launch.substitutions import (
 
 def symlinks_to_has_nav_head_cam():
     usb_device_seen = {
-        "hello-nav-head-camera": False,
+        "hello-nav-head-camera-stereo": False,
     }
 
     listOfFiles = os.listdir("/dev")
@@ -93,8 +92,7 @@ def generate_launch_description():
     stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
 
-    robot_params = stretch_body_ii.params.robot_params_SE4.nominal_params
-    stretch_serial_no = robot_params["robot"]["serial_no"]
+    stretch_serial_no = 'stretch-se4-4013' #robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
     stretch_has_nav_head_cam = symlinks_to_has_nav_head_cam()
@@ -123,11 +121,6 @@ def generate_launch_description():
     )
     map_yaml = DeclareLaunchArgument(
         "map_yaml", description="filepath to previously captured map", default_value=""
-    )
-    tts_engine = DeclareLaunchArgument(
-        "tts_engine",
-        description="name of the TTS engine. Either pyttsx3 or gtts.",
-        default_value="gtts",
     )
     certfile_arg = DeclareLaunchArgument(
         "certfile", default_value=stretch_serial_no + "+6.pem"
@@ -161,7 +154,6 @@ def generate_launch_description():
     ld = LaunchDescription(
         [
             map_yaml,
-            tts_engine,
             nav2_params_file_param,
             params_file,
             certfile_arg,
@@ -209,66 +201,65 @@ def generate_launch_description():
             )
         )
 
-    if driver_nav_head_cam is True:
-        # Nav Head Wide Angle Camera
-        ld.add_action(
-            GroupAction(
-                actions=[
-                    IncludeLaunchDescription(
-                        PythonLaunchDescriptionSource(
-                            PathJoinSubstitution(
-                                [
-                                    teleop_interface_package,
-                                    "launch",
-                                    "navigation_camera.launch.py",
-                                ]
-                            )
-                        )
-                    )
-                ]
-            )
-        )
+    # if driver_nav_head_cam is True and stretch_model == "SE3":
+    #     # Nav Head Wide Angle Camera
+    #     ld.add_action(
+    #         GroupAction(
+    #             actions=[
+    #                 IncludeLaunchDescription(
+    #                     PythonLaunchDescriptionSource(
+    #                         PathJoinSubstitution(
+    #                             [
+    #                                 teleop_interface_package,
+    #                                 "launch",
+    #                                 "navigation_camera.launch.py",
+    #                             ]
+    #                         )
+    #                     )
+    #                 )
+    #             ]
+    #         )
+    #     )
+    # elif driver_nav_head_cam is True and stretch_model == "SE4":
+    #     # Nav Head Wide Angle Camera
+    #     ld.add_action(
+    #         GroupAction(
+    #             actions=[
+    #                 IncludeLaunchDescription(
+    #                     PythonLaunchDescriptionSource(
+    #                         PathJoinSubstitution(
+    #                             [
+    #                                 core_package,
+    #                                 "launch",
+    #                                 "luxonis.launch.py",
+    #                             ]
+    #                         )
+    #                     )
+    #                 )
+    #             ]
+    #         )
+    #     )
 
-    if driver_gripper_cam is True:
-        # Beta Teleop Kit Gripper Camera
-        ld.add_action(
-            GroupAction(
-                actions=[
-                    IncludeLaunchDescription(
-                        PythonLaunchDescriptionSource(
-                            PathJoinSubstitution(
-                                [
-                                    core_package,
-                                    "launch",
-                                    "beta_gripper_camera.launch.py",
-                                ]
-                            )
-                        )
-                    )
-                ]
-            )
+    # if driver_nav_head_cam is False:
+    # Blank Navigation Camera Node
+    # Publish blank image if no navigation camera exists
+    ld.add_action(
+        Node(
+            package="image_publisher",
+            executable="image_publisher_node",
+            name="navigation_camera_node",
+            output="screen",
+            parameters=[{"publish_rate": 15.0}],
+            remappings=[("image_raw", "/navigation_camera/image_raw")],
+            arguments=[
+                PathJoinSubstitution(
+                    [teleop_interface_package, "nodes", "blank_image.png"]
+                )
+            ],
         )
+    )
 
-    if driver_nav_head_cam is False:
-        # Blank Navigation Camera Node
-        # Publish blank image if no navigation camera exists
-        ld.add_action(
-            Node(
-                package="image_publisher",
-                executable="image_publisher_node",
-                name="navigation_camera_node",
-                output="screen",
-                parameters=[{"publish_rate": 15.0}],
-                remappings=[("image_raw", "/navigation_camera/image_raw")],
-                arguments=[
-                    PathJoinSubstitution(
-                        [teleop_interface_package, "nodes", "blank_image.png"]
-                    )
-                ],
-            )
-        )
-
-    if drivers_realsense == "d405-only" and driver_gripper_cam is False:
+    if drivers_realsense == "d405-only":
         # Blank Gripper Camera Node
         # Publish blank image if there is no gripper camera exists
         ld.add_action(
@@ -288,8 +279,8 @@ def generate_launch_description():
         )
 
     tf2_web_republisher_node = Node(
-        package="tf2_web_republisher_py",
-        executable="tf2_web_republisher",
+        package="tf2_web_republisher",
+        executable="tf2_web_republisher_node",
         name="tf2_web_republisher_node",
     )
     ld.add_action(tf2_web_republisher_node)
@@ -343,7 +334,8 @@ def generate_launch_description():
     labels = ["overhead", "realsense", "gripper"]
     for i in range(len(labels)):
         bools = ["False", "False", "False"]
-        bools[i] = "True"
+        if labels[i] != "realsense":
+            bools[i] = "True"
         label = labels[i]
         configure_video_streams_node = Node(
             package="stretch4_web_teleop",
@@ -399,7 +391,7 @@ def generate_launch_description():
             output='screen'
         )
 
-        ld.add_action(switch_controller_config)
+        # ld.add_action(switch_controller_config)
     else: 
         navigation_bringup_launch = GroupAction(
             condition=LaunchConfigurationNotEquals("map_yaml", ""),
@@ -429,7 +421,7 @@ def generate_launch_description():
                 ),
             ],
         )
-    ld.add_action(navigation_bringup_launch)
+    # ld.add_action(navigation_bringup_launch)
 
     ld.add_action(
         ExecuteProcess(
@@ -461,21 +453,6 @@ def generate_launch_description():
         )
     )
 
-    # ld.add_action(
-    #     ExecuteProcess(
-    #         cmd=[
-    #             [
-    #                 FindExecutable(name="ros2"),
-    #                 " param set ",
-    #                 "/gripper_camera ",
-    #                 "depth_module.enable_auto_exposure ",
-    #                 "true",
-    #             ]
-    #         ],
-    #         shell=True,
-    #     )
-    # )
-
     # Move To Pre-grasp Action Server
     if (
         stretch_tool == "eoa_wrist_dw3_tool_sg3"
@@ -489,27 +466,5 @@ def generate_launch_description():
             parameters=[],
         )
         ld.add_action(move_to_pregrasp_node)
-
-    if stretch_tool == "eoa_wrist_dw3_tool_tablet_12in":
-        detect_body_landmarks_node = Node(
-            package="stretch_show_tablet",
-            executable="detect_body_landmarks",
-            output="screen",
-        )
-        ld.add_action(detect_body_landmarks_node)
-
-        plan_tablet_pose_node = Node(
-            package="stretch_show_tablet",
-            executable="plan_tablet_pose_service",
-            output="screen",
-        )
-        ld.add_action(plan_tablet_pose_node)
-
-        show_tablet_node = Node(
-            package="stretch_show_tablet",
-            executable="show_tablet_server",
-            output="screen",
-        )
-        ld.add_action(show_tablet_node)
 
     return ld

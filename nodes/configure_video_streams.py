@@ -9,7 +9,7 @@ from typing import Dict, Union
 import cv2
 import numpy as np
 import numpy.typing as npt
-import pcl
+# import pcl
 import PyKDL  # TODO: This can be removed, as it is only used to perform a transformation that can be done with numpy
 import rclpy
 import ros2_numpy
@@ -720,7 +720,7 @@ class ConfigureVideoStreams(Node):
             if self.realsense_depth_ar:
                 with self.latest_realsense_depth_image_lock:
                     depth_msg = self.latest_realsense_depth_image
-                image = self.overlay_realsense_depth_ar(depth_msg, image)
+                # image = self.overlay_realsense_depth_ar(depth_msg, image)
             if self.realsense_body_pose_ar:
                 with self.latest_body_landmarks_str_lock:
                     body_landmarks_str = self.latest_body_landmarks_str
@@ -793,8 +793,8 @@ class ConfigureVideoStreams(Node):
         if self.gripper_depth_ar:
             with self.latest_gripper_realsense_depth_image_lock:
                 depth_msg = self.latest_gripper_realsense_depth_image
-            if depth_msg is not None:
-                image = self.overlay_gripper_depth_ar(image, depth_msg)
+            # if depth_msg is not None:
+            #     image = self.overlay_gripper_depth_ar(image, depth_msg)
 
         if self.expanded_gripper:
             # Compute and publish the expanded gripper image
