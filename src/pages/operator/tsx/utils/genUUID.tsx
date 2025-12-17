@@ -1,9 +1,9 @@
 /**
- * This function generates a random 7-character alphanumeric string. 
- * 
+ * This function generates a random 7-character alphanumeric string.
+ *
  * Example usage:
  * genUUID() => "41g2c3y"
- * 
+ *
  **/
 
 const genUUID = (): string => {

@@ -20,7 +20,7 @@ interface ModalMobileProps {
  * that can be used to display content in a dialog format.
  * It supports animations for entering and exiting,
  * and can be customized with titles, subtitles, and footers.
- * 
+ *
  * @param isOpen - Controls the visibility of the modal.
  * @param title - Title of the modal.
  * @param onClose - Callback when the modal is closed.

@@ -679,7 +679,7 @@ class ConfigureVideoStreams(Node):
                 start_time - Time.from_msg(depth_msg.header.stamp)
             ).nanoseconds / 1.0e9
             self.get_logger().info(
-                f"Realsense depth recv lag: {lag:.3f} seconds",
+                f"Realsense depth recv lag: {lag: .3f} seconds",
                 throttle_duration_sec=1.0,
             )
         with self.latest_realsense_depth_image_lock:
@@ -695,7 +695,7 @@ class ConfigureVideoStreams(Node):
                 start_time - Time.from_msg(rgb_ros_image.header.stamp)
             ).nanoseconds / 1.0e9
             self.get_logger().info(
-                f"Realsense RGB recv lag: {lag:.3f} seconds",
+                f"Realsense RGB recv lag: {lag: .3f} seconds",
                 throttle_duration_sec=1.0,
             )
 
@@ -756,7 +756,7 @@ class ConfigureVideoStreams(Node):
                 start_time - Time.from_msg(depth_msg.header.stamp)
             ).nanoseconds / 1.0e9
             self.get_logger().info(
-                f"Gripper Depth recv lag: {lag:.3f} seconds",
+                f"Gripper Depth recv lag: {lag: .3f} seconds",
                 throttle_duration_sec=1.0,
             )
 
@@ -773,7 +773,7 @@ class ConfigureVideoStreams(Node):
                 start_time - Time.from_msg(ros_image.header.stamp)
             ).nanoseconds / 1.0e9
             self.get_logger().info(
-                f"Gripper RGB recv lag: {lag:.3f} seconds",
+                f"Gripper RGB recv lag: {lag: .3f} seconds",
                 throttle_duration_sec=1.0,
             )
 
@@ -989,7 +989,7 @@ class ConfigureVideoStreams(Node):
                 start_time - Time.from_msg(ros_image.header.stamp)
             ).nanoseconds / 1.0e9
             self.get_logger().info(
-                f"Navigation RGB recv lag: {lag:.3f} seconds",
+                f"Navigation RGB recv lag: {lag: .3f} seconds",
                 throttle_duration_sec=1.0,
             )
 

@@ -49,11 +49,11 @@ const notHomedDisabledFunctions = new Set<ButtonPadButton>([
 /**
  * A set of buttons which can be overlaid as a child of a camera view or
  * standalone.
- * 
+ *
  * TODO: Probably good idea to extract this
  * to dedicated React component for moving
  * the robot base
- * 
+ *
  * <ButtonPad> 👉 <DirectionalPad>
  * @param props {@link ButtonPadProps}
  */

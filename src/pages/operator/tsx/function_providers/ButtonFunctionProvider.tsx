@@ -403,7 +403,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                                 this.setButtonActiveState(this.activeButtonPadFunction);
                             }
 
-                            // If the robot is moving, and same button pressed 
+                            // If the robot is moving, and same button pressed
                             // stop and set the button to inactive
                             else if (this.activeButtonPadFunction == buttonPadFunction &&
                                 this.activeVelocityAction) {

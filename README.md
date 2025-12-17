@@ -25,7 +25,7 @@ In the below instructions, replace `<sink/source>` with `sink` for a speaker and
 1. List all speakers/microphones: `pactl list short <sink/source>s`
 1. Get the default: `pactl get-default-<sink/source>`
 1. Set the default: `pactl set-default-<sink/source> <device-name>` where `<device-name>` is one of the names listed from the above command.
-    1. The built-in default speaker will be called something like `alsa_output.pci-0000_00_1f.3.analog-stereo`, and the built-in default mic will be called something like `alsa_input.usb-SEEED_ReSpeaker_4_Mic_Array__UAC1.0_-00.multichannel-input`.
+   1. The built-in default speaker will be called something like `alsa_output.pci-0000_00_1f.3.analog-stereo`, and the built-in default mic will be called something like `alsa_input.usb-SEEED_ReSpeaker_4_Mic_Array__UAC1.0_-00.multichannel-input`.
 
 ### Audio volume/gain
 
@@ -274,9 +274,9 @@ Each button pad controls a different set of joints on the robot. When you click 
 
 The action modes can be selected in the dropdown in the top-left corner of the interface. The action modes provides varying degrees of discrete and continuous control.
 
--   **Step Actions**: When you click, Stretch will move a fixed distance based on the selected speed.
--   **Press-Release**: Stretch will move while you are pressing and holding the button and will stop when you release.
--   **Click-Click**: Stretch will start moving when you click and will stop when you click again. You can also stop Stretch by moving the cursor outside the button you clicked.
+- **Step Actions**: When you click, Stretch will move a fixed distance based on the selected speed.
+- **Press-Release**: Stretch will move while you are pressing and holding the button and will stop when you release.
+- **Click-Click**: Stretch will start moving when you click and will stop when you click again. You can also stop Stretch by moving the cursor outside the button you clicked.
 
 ## Movement Recorder
 
@@ -314,10 +314,10 @@ Stay tuned for instructions on using the web interface with a tablet as an end e
 
 # Contributing
 
--   This repository uses pre-commit hooks to enforce consistent formatting and style.
-    -   Install pre-commit: `python3 -m pip install pre-commit`
-    -   Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
-    -   Moving forward, pre-commit hooks will run before you create any commit.
+- This repository uses pre-commit hooks to enforce consistent formatting and style.
+  - Install pre-commit: `python3 -m pip install pre-commit`
+  - Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
+  - Moving forward, pre-commit hooks will run before you create any commit.
 
 # Troubleshooting
 

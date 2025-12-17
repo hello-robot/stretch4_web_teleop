@@ -227,7 +227,7 @@ class StretchIKControl:
         # NOTE: Waiting for the service can block, although we haven't noticed an issue
         # stemming from it.
         get_joint_limits_client.wait_for_service()
-        response = get_joint_limits_client.call(Trigger.Request())
+        response: Trigger.Response = get_joint_limits_client.call(Trigger.Request())
         if not response.success:
             self.node.get_logger().error("Failed to get joint limits.")
             return False

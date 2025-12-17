@@ -100,7 +100,9 @@ class MoveToPregraspNode(Node):
         self.wrist_offset: Optional[Tuple[float, float]] = None
 
         # Create the inverse jacobian controller to execute motions
-        urdf_fpaths = uu.generate_ik_urdfs("stretch4_web_teleop", rigid_wrist_urdf=False)
+        urdf_fpaths = uu.generate_ik_urdfs(
+            "stretch4_web_teleop", rigid_wrist_urdf=False
+        )
         urdf_fpath = urdf_fpaths[0]
         self.controller = StretchIKControl(
             self,
@@ -408,7 +410,7 @@ class MoveToPregraspNode(Node):
                             start_time,
                             self.action_timeout,
                             return_secs=True,
-                        ),
+                        ).nanoseconds,
                         check_cancel=lambda: terminate_motion_executors,
                         err_callback=distance_callback,
                     )

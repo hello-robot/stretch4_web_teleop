@@ -56,9 +56,9 @@ interface ModalLocationsMenuProps {
 }
 
 /**
- * ModalAddLocation component allows users to add a new location 
+ * ModalAddLocation component allows users to add a new location
  * by entering a name for the location.
- * 
+ *
  * @param functs - Functions for handling auto navigation.
  * @param poses - Current list of saved poses.
  * @param posesSet - Function to update the list of saved poses.
@@ -100,7 +100,7 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
     // Automatically focus the input field
     // when the modal is opened
     useEffect(() => {
-        // Timeout is a workaround to ensure 
+        // Timeout is a workaround to ensure
         // modal is fully rendered
         //
         // Note: iOS forbids scripted focus() on
@@ -165,7 +165,7 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
 /**
  * LocationsMenuListItem component represents a single item in the Locations Menu.
  * It allows users to edit or delete a saved location.
- * 
+ *
  * @param pose - The name of the location.
  * @param poses - Current list of saved poses.
  * @param posesSet - Function to update the list of saved poses.
@@ -334,7 +334,7 @@ const LocationsMenuListItem: React.FC<{
 /**
  * ModalLocationsMenu component displays a list of saved locations
  * for auto navigation. Users can select a location to navigate to.
- * 
+ *
  * @param poses - List of saved poses for navigation goals.
  * @param posesSet - Function to update the list of saved poses.
  * @param functs - Functions for handling auto navigation.
@@ -463,7 +463,7 @@ const ModalLocationsMenu: React.FC<ModalLocationsMenuProps> = ({
  * FooterAutoNav component provides a footer for auto navigation controls.
  * It includes buttons for starting navigation, adding locations,
  * and accessing the locations menu.
- * 
+ *
  * @param handleSelectGoal - Function to handle goal selection.
  * @param functs - Functions for handling auto navigation.
  * @param isModalAddLocationVisible - State to control visibility of the Add Location modal.

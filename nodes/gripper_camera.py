@@ -75,7 +75,7 @@ UVC_SETTINGS = {
 }
 
 # Set video format and size
-cmd = f"v4l2-ctl --device {UVC_VIDEO_INDEX} --set-fmt-video=width={UVC_COLOR_SIZE[0]},height={UVC_COLOR_SIZE[1]}"
+cmd = f"v4l2-ctl --device {UVC_VIDEO_INDEX} --set-fmt-video=width={UVC_COLOR_SIZE[0]}, height={UVC_COLOR_SIZE[1]}"
 os.system(cmd)
 
 # Set UVC SettingsNone
