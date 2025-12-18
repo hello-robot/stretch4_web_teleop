@@ -46,6 +46,7 @@ import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
 import { Alert } from "./basic_components/Alert";
 import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
+import GripperCamPIP from "./layout_components/GripperCamPIP";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -326,6 +327,11 @@ export const MobileOperator = (props: {
                             setActionMode={setActionMode}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
+                        />
+                        <GripperCamPIP
+                            cameraID={CameraViewId.gripper}
+                            remoteStreams={remoteStreams}
+                            isCameraVeilVisible={isCameraVeilVisible}
                         />
                     </div>
                     <div
