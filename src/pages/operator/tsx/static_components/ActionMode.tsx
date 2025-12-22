@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import ModalMobile from '../basic_components/ModalMobile';
+import ModalMobile from "../basic_components/ModalMobile";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionMode.css";
 import { ActionModeType } from "../utils/component_definitions";
 import { buttonFunctionProvider } from "operator/tsx/index";
+import actionModeIcon from "operator/icons/Action_Mode.svg";
 
 /**Details of the action modes */
 type ActionModeDetails = {
@@ -34,7 +35,6 @@ export type ActionModeProps = {
      * @param enable whether or not to display the camera veil
      */
     setCameraVeilCallback: (enable: boolean) => void;
-
 };
 
 /**
@@ -52,7 +52,7 @@ export const ActionMode = (props: ActionModeProps) => {
                 handleClose={(newActionMode: ActionModeType) => {
                     setIsModalOpen(false);
                     props.setCameraVeilCallback(false);
-                    props.onChange(newActionMode)
+                    props.onChange(newActionMode);
                 }}
             />
             <MagneticWrapper>
@@ -60,14 +60,18 @@ export const ActionMode = (props: ActionModeProps) => {
                     className="button-action-mode"
                     onClick={() => {
                         setIsModalOpen(!isModalOpen);
-                        props.setCameraVeilCallback(!isModalOpen)
-                        buttonFunctionProvider.disableActiveButton()
+                        props.setCameraVeilCallback(!isModalOpen);
+                        buttonFunctionProvider.disableActiveButton();
                     }}
-                    aria-label="Change action mode"
+                    aria-label="Change action mode"
                     aria-hidden={props.isCameraVeilVisible}
                 >
+                    <img
+                        src={actionModeIcon}
+                        alt="Action mode"
+                        className="action-mode-icon"
+                    />
                     <div>{props.mode}</div>
-                    <span className="action-mode-icon"></span>
                 </button>
             </MagneticWrapper>
         </div>
@@ -84,14 +88,27 @@ interface ModalActionModeProps {
     handleClose: (newActionMode: ActionModeType) => void;
 }
 
-const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleClose }) => {
+const ModalActionMode: React.FC<ModalActionModeProps> = ({
+    mode,
+    isOpen,
+    handleClose,
+}) => {
     const [selectedMode, setSelectedMode] = useState<ActionModeType>(mode);
     const [loading, setLoading] = useState<boolean>(false);
 
     const options: ActionModeDetails[] = [
-        { mode: ActionModeType.PressAndHold, desc: 'Stretch moves while you press and hold a button and stops when you release.' },
-        { mode: ActionModeType.ClickClick, desc: 'Stretch moves when you tap a button and stops when you tap again.' },
-        { mode: ActionModeType.StepActions, desc: 'Stretch moves a fixed distance based on the selected speed with each click.' },
+        {
+            mode: ActionModeType.PressAndHold,
+            desc: "Stretch moves while you press and hold a button and stops when you release.",
+        },
+        {
+            mode: ActionModeType.ClickClick,
+            desc: "Stretch moves when you tap a button and stops when you tap again.",
+        },
+        {
+            mode: ActionModeType.StepActions,
+            desc: "Stretch moves a fixed distance based on the selected speed with each click.",
+        },
     ];
 
     const handleConfirm = (): void => {
@@ -113,7 +130,7 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleC
                 onPointerDown={handleConfirm}
                 disabled={loading}
             >
-                {loading ? <span className="spinner" /> : 'Confirm'}
+                {loading ? <span className="spinner" /> : "Confirm"}
             </button>
         </MagneticWrapper>
     );
@@ -127,10 +144,10 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleC
             modalClassName="action-mode-modal"
         >
             <div className="action-mode-options">
-                {options.map(opt => (
+                {options.map((opt) => (
                     <label
                         key={opt.mode}
-                        className={`radio-group ${selectedMode === opt.mode ? 'selected' : ''}`}
+                        className={`radio-group ${selectedMode === opt.mode ? "selected" : ""}`}
                     >
                         <input
                             type="radio"
@@ -142,10 +159,17 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({ mode, isOpen, handleC
                             aria-label={`Use \"${opt.mode}\" `}
                             aria-checked={selectedMode === opt.mode}
                         />
-                        <span className="radio-label" aria-hidden="true"
-                        >{opt.mode}</span>
+                        <span className="radio-label" aria-hidden="true">
+                            {opt.mode}
+                        </span>
                         {selectedMode === opt.mode && (
-                            <p className="radio-desc" id={`desc-${opt.mode}`} aria-hidden="true">{opt.desc}</p>
+                            <p
+                                className="radio-desc"
+                                id={`desc-${opt.mode}`}
+                                aria-hidden="true"
+                            >
+                                {opt.desc}
+                            </p>
                         )}
                     </label>
                 ))}

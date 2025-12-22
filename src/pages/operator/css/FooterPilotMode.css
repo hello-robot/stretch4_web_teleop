@@ -1,0 +1,129 @@
+.footer-pilot-mode {
+    display: flex;
+    justify-content: space-between;
+    flex-direction: column;
+    /* Height will likely need to be
+    more fluid in the future */
+    height: 131px;
+}
+
+.footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 0px;
+    background-color: #000000;
+    --button-width: 80px;
+}
+
+@media (min-width: 900px) {
+    .footer-row {
+        width: 54%;
+        margin: 0 auto;
+    }
+}
+
+.action-speed,
+.pilot-selection-dropdown {
+    max-height: 50px;
+    border-radius: 5px;
+    width: var(--button-width);
+}
+
+/* START ActionSpeed */
+.action-speed {
+    display: flex;
+    flex-direction: row;
+}
+
+.action-speed button.button-action-speed {
+    position: relative;
+    left: -7px;
+    width: 60px;
+    height: 34px;
+    border-radius: 10px;
+    padding: 0;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.action-speed button.button-action-speed .action-speed-icon {
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+    object-fit: cover;
+    object-position: -2px center;
+    filter: brightness(1);
+    transition: filter 200ms ease-out;
+}
+
+.action-speed button.button-action-speed:active .action-speed-icon {
+    filter: brightness(1.5);
+}
+
+/* END ActionSpeed */
+
+/* START ActionMode */
+.action-mode {
+    flex: 0 0 auto;
+}
+
+/* START ActionMode */
+.action-mode button.button-action-mode {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border-radius: 4px;
+    background: transparent;
+    border: 1px solid hsl(0deg 0% 100% / 10%);
+    box-shadow: none;
+    white-space: nowrap;
+    color: hsl(204, 44%, 66%);
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 10px;
+}
+
+@media (hover: hover) {
+    .action-mode button.button-action-mode:hover {
+        border: 1px solid hsl(0deg 0% 100% / 20%);
+        background-color: hsl(204deg 75.37% 28.38%);
+    }
+}
+
+.action-mode button.button-action-mode:active {
+    background-color: hsl(204deg 75.37% 28.38%);
+}
+
+.action-mode .action-mode-icon {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+}
+
+/* END ActionMode */
+
+.pilot-selection-dropdown {
+    display: flex;
+    flex-direction: row-reverse;
+}
+
+.pilot-selection-dropdown button {
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    background-color: transparent;
+}
+
+.pilot-selection-dropdown button .icon {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    filter: brightness(1);
+    transition: filter 200ms ease-out;
+}
+
+.pilot-selection-dropdown button:active .icon {
+    filter: brightness(1.5);
+}

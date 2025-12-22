@@ -1,12 +1,12 @@
-import React from 'react';
-import { SimpleCameraView } from './SimpleCameraView';
+import React from "react";
+import { SimpleCameraView } from "./SimpleCameraView";
 import { TabGroup } from "../basic_components/TabGroup";
-import FooterHeadCam from './FooterHeadCam';
+import FooterPilotMode from "./FooterPilotMode";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { CameraViewId } from "../utils/component_definitions";
-import "../../css/HeadCam.css";
+import "../../css/PilotMode.css";
 
-interface HeadCamProps {
+interface PilotModeProps {
     cameraID: CameraViewId;
     remoteStreams: any; // Replace 'any' with the actual type if known
     isCameraVeilVisible: boolean;
@@ -19,7 +19,7 @@ interface HeadCamProps {
     swipeableViewsIdxSet: (idx: number) => void;
 }
 
-const HeadCam: React.FC<HeadCamProps> = ({
+const PilotMode: React.FC<PilotModeProps> = ({
     cameraID,
     remoteStreams,
     isCameraVeilVisible,
@@ -50,7 +50,7 @@ const HeadCam: React.FC<HeadCamProps> = ({
                     key={"main-group"}
                 />
             </div>
-            <FooterHeadCam
+            <FooterPilotMode
                 actionSpeedCurrent={FunctionProvider.velocityScale}
                 onActionSpeedChange={(newSpeed: number) => {
                     setVelocityScale(newSpeed);
@@ -66,4 +66,4 @@ const HeadCam: React.FC<HeadCamProps> = ({
     );
 };
 
-export default HeadCam;
+export default PilotMode;

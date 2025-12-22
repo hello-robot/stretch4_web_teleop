@@ -27,11 +27,11 @@ import {
 } from "./function_providers/ButtonFunctionProvider";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import HeadCam from "./layout_components/HeadCam";
+import PilotMode from "./layout_components/PilotMode";
 import "operator/css/MobileOperator.css";
 import { SimpleCameraView } from "./layout_components/SimpleCameraView";
 import { SharedState } from "./layout_components/CustomizableComponent";
-import FooterHeadCam from "./layout_components/FooterHeadCam";
+import FooterPilotMode from "./layout_components/FooterPilotMode";
 import { ButtonPad } from "./layout_components/ButtonPad";
 // import Swipe from "./static_components/Swipe";
 import { Map } from "./layout_components/Map";
@@ -274,6 +274,8 @@ export const MobileOperator = (props: {
                         easeFunction: "cubic-bezier(0.15, 0.3, 0.25, 1)",
                         delay: "0s",
                     }}
+                    // Disable touch events. This is useful when you want to prohibit the user from changing slides.
+                    disabled
                     // This "style" prop is required...
                     // CSS via "className" won't be applied.
                     style={{ overflowX: "visible", height: "100%" }}
@@ -316,7 +318,7 @@ export const MobileOperator = (props: {
                         style={swipeableViewsStyles[0]}
                         className="head-cam-wrapper"
                     >
-                        <HeadCam
+                        <PilotMode
                             cameraID={cameraID}
                             isCameraVeilVisible={isCameraVeilVisible}
                             remoteStreams={remoteStreams}
