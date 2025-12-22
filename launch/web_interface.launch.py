@@ -24,6 +24,7 @@ from launch.substitutions import (
     PathJoinSubstitution,
 )
 
+
 def symlinks_to_has_nav_head_cam():
     usb_device_seen = {
         "hello-nav-head-camera-stereo": False,
@@ -53,16 +54,10 @@ def map_configuration_to_drivers(model, tool, has_nav_head_cam):
           add_head_nav_driver (True or False)
     """
     # Stretch 3
-    if (
-        model == "SE3"
-        and tool == "eoa_wrist_dw3_tool_sg3"
-        and has_nav_head_cam is True
-    ):
+    if model == "SE3" and tool == "eoa_wrist_dw3_tool_sg3" and has_nav_head_cam is True:
         return "both", False, True
     elif (
-        model == "SE3"
-        and tool == "eoa_wrist_dw3_tool_nil"
-        and has_nav_head_cam is True
+        model == "SE3" and tool == "eoa_wrist_dw3_tool_nil" and has_nav_head_cam is True
     ):
         return "both", False, True
     elif (
@@ -73,12 +68,10 @@ def map_configuration_to_drivers(model, tool, has_nav_head_cam):
         return "both", False, True
     # Stretch
     elif (
-        model == "SE4"
-        and tool == "eoa_wrist_dw4_tool_sg4"
-        and has_nav_head_cam is True
+        model == "SE4" and tool == "eoa_wrist_dw4_tool_sg4" and has_nav_head_cam is True
     ):
         return "d405-only", False, True
-    
+
     raise ValueError(
         f"cannot find valid configuration for model={model}, tool={tool}, "
         f"has_nav_head_cam={has_nav_head_cam}"
@@ -132,23 +125,30 @@ def generate_launch_description():
         nav2_params_file_param = DeclareLaunchArgument(
             "nav2_params_file",
             default_value=os.path.join(
-                stretch_navigation_path, 'config', 'nav2_params_switch_controller.yaml',
+                stretch_navigation_path,
+                "config",
+                "nav2_params_switch_controller.yaml",
             ),
             description="Full path to the ROS2 parameters file to use for all launched nodes",
         )
     else:
         nav2_params_file_param = DeclareLaunchArgument(
-        "nav2_params_file",
-        default_value=os.path.join(
-            stretch_navigation_path, 'config', 'nav2_params.yaml',
-        ),
-        description="Full path to the ROS2 parameters file to use for all launched nodes",
-    )
-    
+            "nav2_params_file",
+            default_value=os.path.join(
+                stretch_navigation_path,
+                "config",
+                "nav2_params.yaml",
+            ),
+            description="Full path to the ROS2 parameters file to use for all launched nodes",
+        )
+
     bt_param = DeclareLaunchArgument(
-        'bt_tree_path',
-        default_value=os.path.join(stretch_navigation_path, 'xml', 'navigate_w_dynamic_controller.xml'),
-        description='Full path to the BT file to use for nav2_bt_navigator')
+        "bt_tree_path",
+        default_value=os.path.join(
+            stretch_navigation_path, "xml", "navigate_w_dynamic_controller.xml"
+        ),
+        description="Full path to the BT file to use for nav2_bt_navigator",
+    )
 
     # Start collecting nodes to launch
     ld = LaunchDescription(
@@ -385,10 +385,10 @@ def generate_launch_description():
         )
 
         switch_controller_config = Node(
-            package='stretch_nav2',
-            executable='switch_controller_config.py',
-            name='switch_controller_config',
-            output='screen'
+            package="stretch_nav2",
+            executable="switch_controller_config.py",
+            name="switch_controller_config",
+            output="screen",
         )
 
         # ld.add_action(switch_controller_config)

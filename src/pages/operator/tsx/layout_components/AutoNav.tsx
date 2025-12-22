@@ -74,7 +74,7 @@ export interface MapFunctions {
 /**
  * AutoNav component for handling autonomous navigation features.
  * It provides a map interface, goal selection, and navigation controls.
- * 
+ *
  * @param sharedState - Shared state for the application
  * @param swipeableViewsIdx - Current index of the swipeable views
  * @param swipeableViewsIdxSet - Function to set the swipeable views index
@@ -186,7 +186,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
          */
         DisplayGoalMarker: (pose: ROSLIB.Vector3) =>
             occupancyGrid!.createGoalMarker(pose.x, pose.y, true),
-        
+
         /**
          * Play the current navigation sequence (if supported by occupancyGrid).
          */
@@ -203,8 +203,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
     /**
      * Callback to set the map pose and navigate to the selected goal
      * Sets goal marker & initiates navigation to selected location.
-     * 
-     * @param pose - Pose to navigate to 
+     *
+     * @param pose - Pose to navigate to
     */
 
     underMapFunctionProvider.setMapPoseCallback((pose: ROSLIB.Vector3) => {
@@ -295,7 +295,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
         occupancyGridSet(occupancyGrid);
     }, []);
 
-    // Show friendly, helpful toast when 
+    // Show friendly, helpful toast when
     // user dives into the AutoNav UX
     useEffect(() => {
         // Synthetic lag

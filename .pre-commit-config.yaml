@@ -55,6 +55,8 @@ repos:
       hooks:
           - id: beautysh
             args: ["--check"]
+            additional_dependencies:
+              - setuptools
 
     - repo: https://github.com/executablebooks/mdformat
       rev: 0.7.16

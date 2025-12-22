@@ -373,7 +373,7 @@ def remaining_time(
     elapsed_time = now - start_time
     diff = Duration(nanoseconds=timeout.nanoseconds - elapsed_time.nanoseconds)
     if return_secs:
-        return diff.nanoseconds / 1.0e9
+        return Duration(nanoseconds=int(diff.nanoseconds / 1.0e9))
     return diff
 
 

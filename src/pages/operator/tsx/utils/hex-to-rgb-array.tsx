@@ -1,10 +1,10 @@
 /**
  * Converts a hex color string to an RGB array.
- * 
+ *
  * @param {string} hex - The hex color string (e.g., '#ff8800' or 'ff8800').
  * @returns {[number, number, number]} An array containing the RGB values.
  * @throws {Error} If the hex color is invalid.
- * 
+ *
  * Usage:
  * const myColor = hexToRgbArray('#ffffff'); // Returns [255, 255, 255]
  */
