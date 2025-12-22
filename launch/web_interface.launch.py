@@ -392,7 +392,7 @@ def generate_launch_description():
         )
 
         # ld.add_action(switch_controller_config)
-    else: 
+    else:
         navigation_bringup_launch = GroupAction(
             condition=LaunchConfigurationNotEquals("map_yaml", ""),
             actions=[
