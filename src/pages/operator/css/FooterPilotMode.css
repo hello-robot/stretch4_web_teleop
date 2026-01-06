@@ -24,7 +24,7 @@
 }
 
 .action-speed,
-.pilot-selection-dropdown {
+.menu-pilot-controls {
     max-height: 50px;
     border-radius: 5px;
     width: var(--button-width);
@@ -65,7 +65,8 @@
 
 /* START ActionMode */
 .action-mode {
-    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
 }
 
 /* START ActionMode */
@@ -104,19 +105,18 @@
 
 /* END ActionMode */
 
-.pilot-selection-dropdown {
+.menu-pilot-controls {
     display: flex;
     flex-direction: row-reverse;
 }
 
-.pilot-selection-dropdown button {
+.menu-pilot-controls button {
     margin: 0;
     padding: 0;
     box-shadow: none;
-    background-color: transparent;
 }
 
-.pilot-selection-dropdown button .icon {
+.menu-pilot-controls button .icon {
     display: inline-block;
     width: 30px;
     height: 30px;
@@ -124,6 +124,6 @@
     transition: filter 200ms ease-out;
 }
 
-.pilot-selection-dropdown button:active .icon {
+.menu-pilot-controls button:active .icon {
     filter: brightness(1.5);
 }

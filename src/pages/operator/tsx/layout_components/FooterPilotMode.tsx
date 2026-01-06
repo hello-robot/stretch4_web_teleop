@@ -1,13 +1,17 @@
 import React, { useState } from "react";
-import { BatteryGauge } from "../static_components/BatteryGauge";
 import { ActionSpeed } from "../static_components/ActionSpeed";
-import { ActionModeType } from "../utils/component_definitions";
+import { MenuPilotControls } from "../static_components/MenuPilotControls";
+import {
+    ActionModeType,
+    PilotButtonPadType,
+} from "../utils/component_definitions";
 import { ActionMode } from "../static_components/ActionMode";
-import "operator/css/FooterPilotMode.css";
 import FooterGlobal from "./FooterGlobal";
-import pilotSelectorIcon from "operator/icons/Pilot_Selector.svg";
+import "operator/css/FooterPilotMode.css";
 
 interface FooterControlsProps {
+    pilotControlsCurrent: PilotButtonPadType;
+    setPilotControlsCurrent: (value: string) => void;
     actionSpeedCurrent?: number;
     onActionSpeedChange: (newSpeed: number) => void;
     actionModeCurrent?: ActionModeType;
@@ -17,7 +21,9 @@ interface FooterControlsProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
 }
 
-const FooterPilotMode: React.FC<FooterControlsProps> = ({
+const FooterHeadCam: React.FC<FooterControlsProps> = ({
+    pilotControlsCurrent,
+    setPilotControlsCurrent,
     actionSpeedCurrent,
     onActionSpeedChange,
     actionModeCurrent,
@@ -43,19 +49,14 @@ const FooterPilotMode: React.FC<FooterControlsProps> = ({
                     isCameraVeilVisible={isCameraVeilVisible}
                     setCameraVeilCallback={isCameraVeilVisibleSet}
                 />
-                <div className="pilot-selection-dropdown">
-                    <button
-                        onClick={() =>
-                            console.log("Tapped on ButtonPad switcher")
-                        }
-                    >
-                        <img
-                            src={pilotSelectorIcon}
-                            alt="Pilot selector"
-                            className="icon"
-                        />
-                    </button>
-                </div>
+                <MenuPilotControls
+                    buttonPad={pilotControlsCurrent}
+                    onChange={setPilotControlsCurrent}
+                    isCameraVeilVisible={isCameraVeilVisible}
+                    setCameraVeilCallback={isCameraVeilVisibleSet}
+                    pilotControlsCurrent={pilotControlsCurrent}
+                    setPilotControlsCurrent={setPilotControlsCurrent}
+                />
             </div>
             <div className="footer-row">
                 <FooterGlobal />
@@ -64,4 +65,4 @@ const FooterPilotMode: React.FC<FooterControlsProps> = ({
     );
 };
 
-export default FooterPilotMode;
+export default FooterHeadCam;

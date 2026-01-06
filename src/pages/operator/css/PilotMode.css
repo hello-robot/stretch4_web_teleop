@@ -1,5 +1,12 @@
-.head-cam-wrapper {
+.pilot-mode-wrapper {
     display: flex;
     flex-direction: column;
     height: 100%;
+    /* Hide scrollbar on iOS */
+    overflow: hidden;
+
+    /* Hide scrollbar on Chrome, Edge, Opera */
+    ::-webkit-scrollbar {
+        display: none;
+    }
 }
