@@ -7,6 +7,7 @@ import {
     ComponentType,
     MapDefinition,
     LayoutDefinition,
+    PilotButtonPadType,
 } from "./utils/component_definitions";
 import {
     className,
@@ -27,11 +28,11 @@ import {
 } from "./function_providers/ButtonFunctionProvider";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import HeadCam from "./layout_components/HeadCam";
+import PilotMode from "./layout_components/PilotMode";
 import "operator/css/MobileOperator.css";
 import { SimpleCameraView } from "./layout_components/SimpleCameraView";
 import { SharedState } from "./layout_components/CustomizableComponent";
-import FooterHeadCam from "./layout_components/FooterHeadCam";
+import FooterPilotMode from "./layout_components/FooterPilotMode";
 import { ButtonPad } from "./layout_components/ButtonPad";
 // import Swipe from "./static_components/Swipe";
 import { Map } from "./layout_components/Map";
@@ -104,8 +105,7 @@ export const MobileOperator = (props: {
 
     const layout = React.useRef<LayoutDefinition>(props.layout);
     FunctionProvider.actionMode = layout.current.actionMode;
-    const actionModes = Object.values(ActionModeType);
-    const actionModesIdx = actionModes.indexOf(layout.current.actionMode);
+
     /** Rerenders the operator */
     function updateLayout() {
         console.log("update layout");
@@ -120,9 +120,14 @@ export const MobileOperator = (props: {
         layout.current.actionMode = actionMode;
         FunctionProvider.actionMode = actionMode;
         props.storageHandler.saveCurrentLayout(layout.current);
-        // updateLayout();
     }
-    // onChange={(idx) => setActionMode(actionModes[idx])}
+
+    function setPilotControlsCurrent(pilotControlsCurrent: string) {
+        layout.current.pilotControlsCurrent = pilotControlsCurrent;
+        FunctionProvider.pilotControlsCurrent =
+            pilotControlsCurrent as PilotButtonPadType;
+        props.storageHandler.saveCurrentLayout(layout.current);
+    }
 
     // Just used as a flag to force the operator to rerender when the tablet orientation
     // changes.
@@ -138,7 +143,7 @@ export const MobileOperator = (props: {
     underMapFunctionProvider.setOperatorCallback(moveBaseStateCallback);
     let moveBaseAlertTimeout: NodeJS.Timeout;
     React.useEffect(() => {
-        if (moveBaseState && moveBaseState.alertType != "info") {
+        if (moveBaseState && moveBaseState.alert_type != "info") {
             if (moveBaseAlertTimeout) clearTimeout(moveBaseAlertTimeout);
             moveBaseAlertTimeout = setTimeout(() => {
                 setMoveBaseState(undefined);
@@ -161,9 +166,10 @@ export const MobileOperator = (props: {
         buttonStateMap: buttonStateMap.current,
         hideLabels: false,
         stretchTool: stretchTool,
+        robotNotHomed: true,
     };
 
-    const driveMode = (show: boolean) => {
+    const buttonPad = (show: boolean) => {
         return show ? (
             <React.Fragment key={"drive-mode"}>
                 <ButtonPad
@@ -177,50 +183,8 @@ export const MobileOperator = (props: {
                         overlay: false,
                         aspectRatio: 3.35,
                         isCameraVeilVisible: isCameraVeilVisible,
-                    }}
-                />
-            </React.Fragment>
-        ) : (
-            <></>
-        );
-    };
-
-    const armMode = (show: boolean) => {
-        return show ? (
-            <React.Fragment key={"arm-mode"}>
-                <ButtonPad
-                    {...{
-                        path: "",
-                        definition: {
-                            type: ComponentType.ButtonPad,
-                            id: ButtonPadIdMobile.Arm,
-                        },
-                        sharedState: sharedState,
-                        overlay: false,
-                        aspectRatio: 3.35,
-                        isCameraVeilVisible: isCameraVeilVisible,
-                    }}
-                />
-            </React.Fragment>
-        ) : (
-            <></>
-        );
-    };
-
-    const gripperMode = (show: boolean) => {
-        return show ? (
-            <React.Fragment key={"gripper-mode"}>
-                <ButtonPad
-                    {...{
-                        path: "",
-                        definition: {
-                            type: ComponentType.ButtonPad,
-                            id: ButtonPadIdMobile.Gripper,
-                        },
-                        sharedState: sharedState,
-                        overlay: false,
-                        aspectRatio: 3.35,
-                        isCameraVeilVisible: isCameraVeilVisible,
+                        pilotControlsCurrent:
+                            FunctionProvider.pilotControlsCurrent,
                     }}
                 />
             </React.Fragment>
@@ -233,10 +197,8 @@ export const MobileOperator = (props: {
         return (
             <>
                 <TabGroup
-                    // tabLabels={["Drive", "Arm", "Gripper"]}
-                    // tabContent={[driveMode, armMode, gripperMode]}
-                    tabLabels={["Drive"]}
-                    tabContent={[driveMode]}
+                    tabLabels={[""]}
+                    tabContent={[buttonPad]}
                     startIdx={activeControlTab}
                     onChange={(index: number) => setActiveControlTab(index)}
                     pill={true}
@@ -314,17 +276,18 @@ export const MobileOperator = (props: {
                 >
                     <div
                         style={swipeableViewsStyles[0]}
-                        className="head-cam-wrapper"
+                        className="pilot-mode-wrapper"
                     >
-                        <HeadCam
+                        <PilotMode
                             cameraID={cameraID}
-                            isCameraVeilVisible={isCameraVeilVisible}
                             remoteStreams={remoteStreams}
+                            isCameraVeilVisible={isCameraVeilVisible}
                             tabContent={[controlModes, recordingList]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
                             setVelocityScale={setVelocityScale}
                             setActionMode={setActionMode}
+                            setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
                         />

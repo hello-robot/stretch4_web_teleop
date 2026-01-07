@@ -121,7 +121,7 @@
         width: var(--header-btn-width-med);
     }
 
-    #operator-header>*,
+    #operator-header > *,
     #operator-header button {
         height: 3rem;
     }
@@ -258,7 +258,7 @@
     transition: filter 0.5s ease-out;
 }
 
-.head-cam-wrapper,
+.pilot-mode-wrapper,
 .auto-nav-wrapper {
     height: 100%;
 }

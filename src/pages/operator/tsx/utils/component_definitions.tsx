@@ -9,6 +9,13 @@ export enum ActionModeType {
     ClickClick = "Tap-Tap",
 }
 
+/** Enumerator for the Pilot's ButtonPad types */
+export enum PilotButtonPadType {
+    BaseDrive = "Drive",
+    ArmGripper = "Arm + Gripper",
+    Wrist = "Wrist",
+}
+
 /**
  * High-level type of the component
  */
@@ -88,6 +95,7 @@ export type LayoutDefinition = ComponentDefinition & {
     displayLabels: boolean;
     actionMode: ActionModeType;
     children: LayoutGridDefinition[];
+    pilotControlsCurrent: string;
 };
 
 export type LayoutGridDefinition = ComponentDefinition & {

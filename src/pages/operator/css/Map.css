@@ -8,7 +8,7 @@
     justify-items: center;
     max-height: 100%;
     aspect-ratio: 9 / 16;
-    background: #475F6F;
+    background: #475f6f;
     grid-template-columns: auto;
     object-fit: cover;
     justify-content: center;
@@ -153,7 +153,6 @@
     display: flex;
     /* font-size: 45px; */
 }
-
 
 .mobile-map-container .back-button-wrapper {
     position: absolute;

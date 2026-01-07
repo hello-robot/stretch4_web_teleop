@@ -297,7 +297,11 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
  */
 function renderOperator(storageHandler: StorageHandler) {
     const layout = storageHandler.loadCurrentLayoutOrDefault();
-    FunctionProvider.initialize(DEFAULT_VELOCITY_SCALE, layout.actionMode);
+    FunctionProvider.initialize(
+        DEFAULT_VELOCITY_SCALE,
+        layout.actionMode,
+        layout.pilotControlsCurrent
+    );
 
     !isMobile
         ? root.render(

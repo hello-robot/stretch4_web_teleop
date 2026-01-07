@@ -1,0 +1,166 @@
+.menu-pilot-controls {
+    display: flex;
+    flex-direction: row-reverse;
+}
+
+.menu-pilot-controls > button {
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    background-color: transparent;
+}
+
+.menu-pilot-controls button img.icon {
+    display: inline-block;
+    width: 35px;
+    height: 35px;
+    filter: brightness(1);
+    transition: filter 200ms ease-out;
+}
+
+.menu-pilot-controls button:active img.icon {
+    filter: brightness(1.5);
+}
+
+/* START Menu Pilot Controls Options */
+.menu-pilot-controls-options {
+    display: flex;
+    margin: 0px 20px;
+    flex: 1;
+    border-radius: 20px;
+    overflow: hidden;
+    font-family: sans-serif;
+}
+
+.menu-pilot-controls-options > button {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    min-height: 70px;
+    border: none;
+    background-color: hsl(205, 61%, 10%);
+    cursor: pointer;
+    transition: background-color 200ms ease;
+    border-radius: 0px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 250ms ease-out;
+}
+
+.menu-pilot-controls-labels .menu-pilot-controls-label.selected {
+    color: hsl(204deg 100% 57.78%);
+}
+
+.menu-pilot-controls-options button + button {
+    border-left: 1px solid hsl(204, 51%, 14%);
+}
+
+@media (hover: hover) {
+    .menu-pilot-controls-options button:hover {
+        box-shadow: 0px 0px 30px hsla(204, 100%, 70%, 1) inset;
+        background-color: hsl(204 55% 10% / 1);
+    }
+}
+
+.menu-pilot-controls-options button:active,
+.menu-pilot-controls-options button:focus,
+.menu-pilot-controls-options button.selected {
+    box-shadow:
+        0px 0px 25px -7px hsl(0 0% 0% / 0.6),
+        0px 0px 50px hsl(204deg 96% 38% / 50%) inset;
+    background-color: hsl(205deg 88.54% 11.52%);
+}
+
+.menu-pilot-controls-options button img.option-icon {
+    height: 40px;
+    width: auto;
+}
+
+/* END Menu Pilot Controls Options */
+
+/* START Menu Pilot Controls Labels */
+.menu-pilot-controls-labels {
+    display: flex;
+    margin: 20px 20px 0;
+}
+
+.menu-pilot-controls-labels .menu-pilot-controls-label {
+    flex: 1;
+    text-align: center;
+    font-weight: 700;
+}
+
+/* END Menu Pilot Controls Labels */
+
+.menu-pilot-controls-content {
+    background-color: hsl(204, 50%, 15%);
+    padding: 0px 0px 30px;
+}
+
+.grab-assist {
+    padding: 20px;
+    background-color: hsla(204, 50%, 14%, 0.85);
+    backdrop-filter: blur(5px);
+}
+
+.grab-assist .grab-assist-button {
+    display: flex;
+    padding: 13px 20px;
+    gap: 35px;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid hsla(204, 60%, 25%, 50%);
+    border-radius: 20px;
+    background: transparent;
+    box-shadow: none;
+    user-select: none;
+    outline: none;
+    transition: border 150ms ease-out;
+}
+
+.grab-assist .grab-assist-button:active {
+    border: 1px solid hsla(204, 60%, 45%, 100%);
+}
+
+.grab-assist .grab-assist-button div:first-child {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.grab-assist .grab-assist-button img.icon {
+    width: 40px;
+    height: 40px;
+}
+
+.grab-assist .grab-assist-button .copy {
+    flex: 1;
+}
+
+.grab-assist .grab-assist-button .copy .heading {
+    color: hsl(162, 45%, 64%);
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 140%;
+    /* 19.6px */
+}
+
+.grab-assist .grab-assist-button .copy .subheading {
+    color: hsl(162, 16%, 78%);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 15px;
+    letter-spacing: 0.25px;
+    margin-top: 3px;
+    text-align: left;
+}
+
+.grab-assist .grab-assist-button .arrow-forward {
+    fill: hsl(162, 25%, 43%);
+    transition: fill 250ms ease-out;
+}
+
+.grab-assist .grab-assist-button:active .arrow-forward {
+    fill: hsl(162, 100%, 50%);
+}

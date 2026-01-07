@@ -3,6 +3,9 @@ import ModalMobile from '../basic_components/ModalMobile';
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionSpeed.css";
 import { buttonFunctionProvider } from "..";
+import speedSlowIcon from "operator/icons/Speed_Slow.svg";
+import speedMediumIcon from "operator/icons/Speed_Medium.svg";
+import speedFastIcon from "operator/icons/Speed_Fast.svg";
 
 /**Details of a velocity setting */
 type ActionSpeedDetails = {
@@ -53,6 +56,17 @@ const getLabelBySpeed = (speed: number): string | undefined => {
     return VELOCITY_SCALE.find(item => item.speed === speed)?.label;
 };
 
+const SPEED_ICONS: Record<string, string> = {
+    slow: speedSlowIcon,
+    medium: speedMediumIcon,
+    fast: speedFastIcon,
+};
+
+const getIconBySpeed = (speed: number): string => {
+    const label = getLabelBySpeed(speed);
+    return label ? SPEED_ICONS[label] : speedMediumIcon;
+};
+
 /**The speed the interface should initialize with */
 export const DEFAULT_VELOCITY_SCALE: number = VELOCITY_SCALE[1].speed;
 
@@ -78,10 +92,14 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
                         props.setCameraVeilCallback(!isModalOpen)
                         buttonFunctionProvider.disableActiveButton()
                     }}
-                    aria-label="Change action speed"
+                    aria-label="Change action speed"
                     aria-hidden={props.isCameraVeilVisible}
                 >
-                    <span className={`action-speed-icon ${getLabelBySpeed(props.speed)}`}></span>
+                    <img
+                        src={getIconBySpeed(props.speed)}
+                        alt={`Speed: ${getLabelBySpeed(props.speed)}`}
+                        className="action-speed-icon"
+                    />
                 </button>
             </MagneticWrapper>
         </div>

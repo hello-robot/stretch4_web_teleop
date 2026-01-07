@@ -18,7 +18,10 @@
     aspect-ratio: 1 / 1;
 }
 
-.gripper-cam-pip-wrapper .simple-video-container .simple-video-area video.simple-video-canvas {
+.gripper-cam-pip-wrapper
+    .simple-video-container
+    .simple-video-area
+    video.simple-video-canvas {
     width: 100%;
     height: 100%;
     scale: 2.3;

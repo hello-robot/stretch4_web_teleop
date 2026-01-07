@@ -1,8 +1,14 @@
 import { RemoteRobot } from "shared/remoterobot";
 import { VelocityCommand } from "shared/commands";
 import { ValidJoints } from "shared/util";
-import { ActionModeType } from "../utils/component_definitions";
+import {
+    ActionModeType,
+    PilotButtonPadType,
+} from "../utils/component_definitions";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
+import { PilotButtonPads } from "../static_components/MenuPilotControls";
+
+const x = PilotButtonPads;
 
 /**
  * Provides logic to connect the {@link RemoteRobot} and the components in the
@@ -12,6 +18,7 @@ export abstract class FunctionProvider {
     protected static remoteRobot?: RemoteRobot;
     public static velocityScale: number;
     public static actionMode: ActionModeType;
+    public static pilotControlsCurrent: PilotButtonPadType;
     public activeButtonPadFunction: ButtonPadButton;
     public activeVelocityAction?: VelocityCommand;
     public velocityExecutionHeartbeat?: number; // ReturnType<typeof setInterval>
@@ -28,22 +35,32 @@ export abstract class FunctionProvider {
     }
 
     /**
-     * Sets the initial values for the velocity scale and action mode
+     * Sets the initial values for the velocity scale, action mode, and pilot controls
      *
      * @param velocityScale initial velocity scale
      * @param actionMode initial action mode
+     * @param pilotControlsCurrent initial pilot controls current value
      */
-    static initialize(velocityScale: number, actionMode: ActionModeType) {
+    static initialize(
+        velocityScale: number,
+        actionMode: ActionModeType,
+        pilotControlsCurrent: string
+    ) {
         this.velocityScale = velocityScale;
         this.actionMode = actionMode;
+        this.pilotControlsCurrent = pilotControlsCurrent ?? PilotButtonPads[0];
     }
 
-    public incrementalBaseDrive(linVelX: number, linVelY: number, angVel: number) {
+    public incrementalBaseDrive(
+        linVelX: number,
+        linVelY: number,
+        angVel: number
+    ) {
         this.stopCurrentAction();
         this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
             linVelX,
             linVelY,
-            angVel,
+            angVel
         );
     }
 
@@ -53,18 +70,22 @@ export abstract class FunctionProvider {
             FunctionProvider.remoteRobot?.incrementalMove(jointName, increment);
     }
 
-    public continuousBaseDrive(linVelX: number, linVelY: number, angVel: number) {
+    public continuousBaseDrive(
+        linVelX: number,
+        linVelY: number,
+        angVel: number
+    ) {
         this.stopCurrentAction();
         this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
             linVelX,
             linVelY,
-            angVel,
+            angVel
         );
         this.velocityExecutionHeartbeat = window.setInterval(() => {
             this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
                 linVelX,
                 linVelY,
-                angVel,
+                angVel
             );
         }, 150);
     }
@@ -77,7 +98,7 @@ export abstract class FunctionProvider {
             this.activeVelocityAction =
                 FunctionProvider.remoteRobot?.incrementalMove(
                     jointName,
-                    increment,
+                    increment
                 );
         }, 150);
     }

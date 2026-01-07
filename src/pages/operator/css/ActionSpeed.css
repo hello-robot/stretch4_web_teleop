@@ -8,7 +8,6 @@
     font-family: sans-serif;
 }
 
-
 .action-speed-options button {
     flex: 1;
     padding: 0.5rem 1rem;
@@ -26,7 +25,7 @@
     color: hsl(204deg 100% 57.78%);
 }
 
-.action-speed-options button+button {
+.action-speed-options button + button {
     border-left: 1px solid hsl(204, 51%, 14%);
 }
 
@@ -39,7 +38,9 @@
 
 .action-speed-options button:active,
 .action-speed-options button.selected {
-    box-shadow: 0px 0px 25px -7px hsl(0 0% 0% / 0.6), 0px 0px 50px hsl(204deg 96% 38% / 50%) inset;
+    box-shadow:
+        0px 0px 25px -7px hsl(0 0% 0% / 0.6),
+        0px 0px 50px hsl(204deg 96% 38% / 50%) inset;
     background-color: hsl(205deg 88.54% 11.52%);
 }
 
