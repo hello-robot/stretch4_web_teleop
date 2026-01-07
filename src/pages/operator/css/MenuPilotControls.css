@@ -3,7 +3,7 @@
     flex-direction: row-reverse;
 }
 
-.menu-pilot-controls>button {
+.menu-pilot-controls > button {
     margin: 0;
     padding: 0;
     box-shadow: none;
@@ -32,7 +32,7 @@
     font-family: sans-serif;
 }
 
-.menu-pilot-controls-options>button {
+.menu-pilot-controls-options > button {
     flex: 1;
     padding: 0.5rem 1rem;
     min-height: 70px;
@@ -51,7 +51,7 @@
     color: hsl(204deg 100% 57.78%);
 }
 
-.menu-pilot-controls-options button+button {
+.menu-pilot-controls-options button + button {
     border-left: 1px solid hsl(204, 51%, 14%);
 }
 

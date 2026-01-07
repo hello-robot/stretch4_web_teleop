@@ -9,7 +9,11 @@
     top: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(to bottom, var(--shadow-bg-color, #ffffff) 0%, transparent 100%);
+    background: linear-gradient(
+        to bottom,
+        var(--shadow-bg-color, #ffffff) 0%,
+        transparent 100%
+    );
     z-index: 10;
     pointer-events: none;
     transition: opacity 200ms ease-in-out;
@@ -25,7 +29,11 @@
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(to top, var(--shadow-bg-color, #ffffff) 0%, transparent 100%);
+    background: linear-gradient(
+        to top,
+        var(--shadow-bg-color, #ffffff) 0%,
+        transparent 100%
+    );
     z-index: 10;
     pointer-events: none;
     transition: opacity 200ms ease-in-out;
@@ -65,13 +73,16 @@
     background-color: #9ca3af;
 }
 
-.scrollable-list li {}
+.scrollable-list li {
+}
 
-.scrollable-list li:last-child {}
+.scrollable-list li:last-child {
+}
 
-.scrollable-list li:hover {}
+.scrollable-list li:hover {
+}
 
-.scrollable-container>button.scrollable-list-scroll-btn {
+.scrollable-container > button.scrollable-list-scroll-btn {
     position: absolute;
     width: 100%;
     background-color: hsl(204 30% 20% / 1);
@@ -83,19 +94,25 @@
     transition: all 200ms ease-in-out;
 }
 
-.scrollable-container>button.scrollable-list-scroll-btn:disabled {
+.scrollable-container > button.scrollable-list-scroll-btn:disabled {
     background-color: hsl(204.32deg 50.68% 14.31%);
     color: hsl(203 30% 27% / 1);
-    background-image: repeating-radial-gradient(circle, hsl(204 25% 15% / 1) 0px, hsl(204 35% 25% / 1) 1px, transparent 1px, transparent 6px);
+    background-image: repeating-radial-gradient(
+        circle,
+        hsl(204 25% 15% / 1) 0px,
+        hsl(204 35% 25% / 1) 1px,
+        transparent 1px,
+        transparent 6px
+    );
     background-size: 4px 4px;
 }
 
-.scrollable-container>button.scrollable-list-scroll-btn.up {
+.scrollable-container > button.scrollable-list-scroll-btn.up {
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
 }
 
-.scrollable-container>button.scrollable-list-scroll-btn.down {
+.scrollable-container > button.scrollable-list-scroll-btn.down {
     border-bottom-left-radius: 10px;
     border-bottom-right-radius: 10px;
 }

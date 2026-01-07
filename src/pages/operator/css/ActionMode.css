@@ -1,91 +1,90 @@
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  vertical-align: middle;
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    vertical-align: middle;
 }
 
 /* Styling for the radio button options within ModalActionMode */
 .action-mode-options {
-  display: flex;
-  flex-direction: column;
-  /* Container for radio groups if needed */
-  gap: 0.5rem;
-  ;
+    display: flex;
+    flex-direction: column;
+    /* Container for radio groups if needed */
+    gap: 0.5rem;
 }
 
 .radio-group {
-  display: block;
-  padding: 15px 15px 15px 5px;
-  /* Original padding */
-  cursor: pointer;
-  border-radius: 10px;
-  transition: background-color 0.2s ease-in-out;
+    display: block;
+    padding: 15px 15px 15px 5px;
+    /* Original padding */
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background-color 0.2s ease-in-out;
 }
 
 .radio-group.selected,
 .radio-group:hover {
-  background: #091c28;
+    background: #091c28;
 }
 
 .radio-label {
-  position: relative;
-  top: -6px;
-  padding: 0px 0px 0px 10px;
-  font-size: 16px;
-  font-weight: 600;
-  vertical-align: middle;
+    position: relative;
+    top: -6px;
+    padding: 0px 0px 0px 10px;
+    font-size: 16px;
+    font-weight: 600;
+    vertical-align: middle;
 }
 
 .radio-desc {
-  /* Original background */
-  border-radius: 8px;
-  margin: 0px 0px 0px 41px;
-  /* Adjusted margin to align with radio + margin-right */
-  font-size: 14px;
-  opacity: 0.8;
-  /* Slightly increased opacity for readability */
+    /* Original background */
+    border-radius: 8px;
+    margin: 0px 0px 0px 41px;
+    /* Adjusted margin to align with radio + margin-right */
+    font-size: 14px;
+    opacity: 0.8;
+    /* Slightly increased opacity for readability */
 }
 
 /* If you have other button types like btn-outline or btn-icon, keep their styles here if specific to this modal's content */
 .btn-outline {
-  background: transparent;
-  border: 1px solid #666;
-  color: #fff;
+    background: transparent;
+    border: 1px solid #666;
+    color: #fff;
 }
 
 /* Example of using the optional className for very specific overrides if needed */
 .action-mode-specific-modal .modal-footer {
-  /* Custom footer style for only this modal type if generic isn't enough */
-  /* For example, if this modal always needs its button full width */
-  padding: 0;
-  /* Remove generic footer padding if button has its own */
+    /* Custom footer style for only this modal type if generic isn't enough */
+    /* For example, if this modal always needs its button full width */
+    padding: 0;
+    /* Remove generic footer padding if button has its own */
 }
 
 .action-mode-specific-modal .modal-body {
-  margin: 10px 0px;
-  /* Slightly reduce vertical margin for body */
+    margin: 10px 0px;
+    /* Slightly reduce vertical margin for body */
 }
 
 /* Hide the default radio input */
 input[type="radio"] {
-  margin: 0px 0px 0px 10px;
-  width: 21px;
-  height: 21px;
+    margin: 0px 0px 0px 10px;
+    width: 21px;
+    height: 21px;
 }
 
 input[type="radio"]:focus {
-  outline: none;
+    outline: none;
 }
 
 /**
@@ -95,31 +94,31 @@ input[type="radio"]:focus {
 
 /* Target iOS devices */
 @supports (-webkit-touch-callout: none) {
-  input[type="radio"] {
-    position: relative;
-    padding: 11px;
-    width: 0px;
-    height: 0px;
-    cursor: pointer;
-    display: inline-block;
-    line-height: 20px;
-    box-shadow: none;
-    outline: none;
-  }
+    input[type="radio"] {
+        position: relative;
+        padding: 11px;
+        width: 0px;
+        height: 0px;
+        cursor: pointer;
+        display: inline-block;
+        line-height: 20px;
+        box-shadow: none;
+        outline: none;
+    }
 }
 
 /* Target non-iOS devices */
 @supports not (-webkit-touch-callout: none) {
-  input[type="radio"] {
-    position: relative;
-    padding-left: 30px;
-    /* Space for the custom radio */
-    cursor: pointer;
-    display: inline-block;
-    line-height: 20px;
-    box-shadow: none;
-    outline: none;
-  }
+    input[type="radio"] {
+        position: relative;
+        padding-left: 30px;
+        /* Space for the custom radio */
+        cursor: pointer;
+        display: inline-block;
+        line-height: 20px;
+        box-shadow: none;
+        outline: none;
+    }
 }
 
 /**
@@ -129,31 +128,31 @@ input[type="radio"]:focus {
 
 /* Create a custom radio button using ::before */
 input[type="radio"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 20px;
-  height: 20px;
-  border: 1px solid #0077FF;
-  background-color: #122837;
-  border-radius: 50%;
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 20px;
+    height: 20px;
+    border: 1px solid #0077ff;
+    background-color: #122837;
+    border-radius: 50%;
 }
 
 /* Style for the checked state */
 input[type="radio"]:checked::before {
-  background-color: #122837;
-  border-color: #0077FF;
+    background-color: #122837;
+    border-color: #0077ff;
 }
 
 /* Optional: Add a dot in the center for the checked state */
 input[type="radio"]:checked::after {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 2px;
-  width: 18px;
-  height: 18px;
-  background-color: #0077FF;
-  border-radius: 50%;
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    width: 18px;
+    height: 18px;
+    background-color: #0077ff;
+    border-radius: 50%;
 }
