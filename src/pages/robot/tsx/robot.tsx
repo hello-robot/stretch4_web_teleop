@@ -1,5 +1,15 @@
 import React from "react";
-import { Ros, ActionClient, Goal, Topic, Service, TFClient, Transform, Param, Message, ServiceRequest } from "roslib";
+import {
+    Ros,
+    ActionClient,
+    Goal,
+    Topic,
+    Service,
+    TFClient,
+    Transform,
+    Param,
+    Message,
+} from "roslib";
 import {
     ROSJointState,
     ROSCompressedImage,
@@ -190,23 +200,28 @@ export class Robot extends React.Component {
         console.log("Checking ROS connection...");
         return new Promise(async (resolve) => {
             if (this.ros.isConnected) {
-                this.ros.getTopics((result: {topics: string[], types: string[]}) => {
-                    for (let required_topic of required_topics) {
-                        if (!result.topics.includes(required_topic)) {
-                            console.log("Required topic not found:", required_topic);
-                            isResolved = true;
-                            resolve(false);
+                this.ros.getTopics(
+                    (result: { topics: string[]; types: string[] }) => {
+                        for (let required_topic of required_topics) {
+                            if (!result.topics.includes(required_topic)) {
+                                console.log(
+                                    "Required topic not found:",
+                                    required_topic
+                                );
+                                isResolved = true;
+                                resolve(false);
+                            }
                         }
+                        console.log("All required topics found.");
+                        isResolved = true;
+                        resolve(true);
+                    },
+                    (error) => {
+                        console.log("Error in getting topics:", error);
+                        isResolved = true;
+                        resolve(false);
                     }
-                    console.log("All required topics found.");
-                    isResolved = true;
-                    resolve(true);
-                },
-                (error) => {
-                    console.log("Error in getting topics:", error);
-                    isResolved = true;
-                    resolve(false);
-                });
+                );
 
                 resolve(
                     await new Promise<boolean>((resolve) =>
@@ -346,12 +361,11 @@ export class Robot extends React.Component {
     }
 
     subscribeToBatteryState() {
-        const batteryStateTopic: Topic<ROSBatteryState> =
-            new Topic({
-                ros: this.ros,
-                name: "/battery",
-                messageType: "sensor_msgs/msg/BatteryState",
-            });
+        const batteryStateTopic: Topic<ROSBatteryState> = new Topic({
+            ros: this.ros,
+            name: "/battery",
+            messageType: "sensor_msgs/msg/BatteryState",
+        });
         this.subscriptions.push(batteryStateTopic);
 
         batteryStateTopic.subscribe((msg: ROSBatteryState) => {
@@ -446,7 +460,7 @@ export class Robot extends React.Component {
             serviceType: "nav2_msgs/srv/GetMap",
         });
 
-        var request = new ServiceRequest({});
+        var request = {};
         getMapService?.callService(
             request,
             (response: { map: ROSOccupancyGrid }) => {
@@ -464,7 +478,7 @@ export class Robot extends React.Component {
             serviceType: "std_srvs/Trigger",
         });
 
-        var request = new ServiceRequest({});
+        var request = {};
         getJointLimitsService.callService(
             request,
             () => {
@@ -790,7 +804,7 @@ export class Robot extends React.Component {
      * velocity commands to the base.
      */
     switchToNavigationMode() {
-        var request = new ServiceRequest({});
+        var request = {};
         if (robotMode !== "navigation") {
             this.switchToNavigationService!.callService(request, () => {
                 robotMode = "navigation";
@@ -805,7 +819,7 @@ export class Robot extends React.Component {
      * web interface.
      */
     switchToPositionMode = () => {
-        var request = new ServiceRequest({});
+        var request = {};
         if (robotMode !== "position") {
             this.switchToPositionService!.callService(request, () => {
                 robotMode = "position";
@@ -818,7 +832,7 @@ export class Robot extends React.Component {
      * Ask the robot to home itself.
      */
     homeTheRobot() {
-        var request = new ServiceRequest({});
+        var request = {};
         this.homeTheRobotService!.callService(request, () => {
             robotMode = "unknown"; // returns to whatever mode the robot was in before this service was called
             console.log("Homing complete");
@@ -907,7 +921,7 @@ export class Robot extends React.Component {
                     },
                     pose: pose,
                 },
-            }
+            },
         });
 
         return newGoal;
@@ -941,7 +955,7 @@ export class Robot extends React.Component {
             goalMessage: {
                 // TODO: Update once we have a finalized interface!
                 number_of_pose_estimates: 10,
-            }
+            },
         });
 
         return newGoal;
@@ -960,7 +974,7 @@ export class Robot extends React.Component {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         let newGoal = new Goal({
             actionClient: this.trajectoryClient,
-            goalMessage:{
+            goalMessage: {
                 trajectory: {
                     header: {
                         stamp: {
@@ -980,7 +994,7 @@ export class Robot extends React.Component {
                         },
                     ],
                 },
-            }
+            },
         });
 
         return newGoal;
@@ -1022,7 +1036,7 @@ export class Robot extends React.Component {
                     joint_names: jointNames,
                     points: points,
                 },
-            }
+            },
         });
 
         return newGoal;
@@ -1086,8 +1100,7 @@ export class Robot extends React.Component {
     stopTrajectoryClient() {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         if (this.poseGoal) {
-            if (this.stretchModel === StretchModel.SE3)
-                this.poseGoal.cancel()
+            if (this.stretchModel === StretchModel.SE3) this.poseGoal.cancel();
             this.poseGoal = undefined;
         }
     }
@@ -1095,7 +1108,7 @@ export class Robot extends React.Component {
     stopMoveBaseClient() {
         if (!this.moveBaseClient) throw "moveBaseClient is undefined";
         if (this.moveBaseGoal) {
-            this.moveBaseGoal.cancel()
+            this.moveBaseGoal.cancel();
             this.moveBaseGoal = undefined;
         }
     }
