@@ -25,7 +25,6 @@
 /* START Menu Pilot Controls Options */
 .menu-pilot-controls-options {
     display: flex;
-    margin: 0px 20px;
     flex: 1;
     border-radius: 20px;
     overflow: hidden;
@@ -81,7 +80,7 @@
 /* START Menu Pilot Controls Labels */
 .menu-pilot-controls-labels {
     display: flex;
-    margin: 20px 20px 0;
+    margin: 20px 0 0;
 }
 
 .menu-pilot-controls-labels .menu-pilot-controls-label {
@@ -94,11 +93,11 @@
 
 .menu-pilot-controls-content {
     background-color: hsl(204, 50%, 15%);
-    padding: 0px 0px 30px;
+    padding: 0px 0px 10px;
 }
 
 .grab-assist {
-    padding: 20px;
+    margin: 20px 0 0;
     background-color: hsla(204, 50%, 14%, 0.85);
     backdrop-filter: blur(5px);
 }

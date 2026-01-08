@@ -16,6 +16,9 @@ import pilotOptionDrive from "operator/icons/Pilot_Option_Drive.svg";
 import pilotOptionArmGripper from "operator/icons/Pilot_Option_ArmGripper.svg";
 import pilotOptionWrist from "operator/icons/Pilot_Option_Wrist.svg";
 
+// Grab Assist icon
+import grabAssistIcon from "operator/icons/Grab_Assist.svg";
+
 /**
  * The pilot button pad options available.
  */
@@ -163,7 +166,7 @@ const ModalMenuPilotControls: React.FC<ModalMenuPilotControlsProps> = ({
                         return (
                             <button
                                 key={buttonPad}
-                                className={`option-button ${pilotControlsCurrent === buttonPad ? "selected" : ""}`}
+                                className={`${buttonPad} ${pilotControlsCurrent === buttonPad ? "selected" : ""}`}
                                 aria-label={ariaLabel}
                                 aria-hidden={!isOpen}
                                 onPointerDown={() =>
@@ -194,6 +197,31 @@ const ModalMenuPilotControls: React.FC<ModalMenuPilotControlsProps> = ({
                         ))}
                     </div>
                 </div>
+            </div>
+            <div className="grab-assist">
+                <button
+                    className="grab-assist-button"
+                    onPointerDown={() => {
+                        // TODO: Add grab assist functionality
+                        console.log("Grab Assist");
+                    }}
+                >
+                    <div>
+                        <img
+                            src={grabAssistIcon}
+                            alt="Grab Assist"
+                            className="icon"
+                        />
+                        <div className="copy">
+                            <div className="heading">Use Grab Assist</div>
+                            <div className="subheading">
+                                Stretch will align its gripper with the object
+                                you want to grab.
+                            </div>
+                        </div>
+                    </div>
+                    <ArrowForwardIcon className="arrow-forward" />
+                </button>
             </div>
         </ModalMobile>
     );

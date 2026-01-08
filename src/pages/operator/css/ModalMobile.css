@@ -49,7 +49,7 @@
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-    padding: 20px 20px 40px;
+    padding: 20px;
     /* General padding */
     box-sizing: border-box;
 
@@ -143,7 +143,7 @@
 }
 
 .modal-body {
-    margin: 20px 0;
+    margin: 20px 0 0;
 }
 
 .modal-footer {
