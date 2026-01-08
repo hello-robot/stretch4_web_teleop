@@ -6,6 +6,7 @@ export type AnimationState = '' | 'enter' | 'exit';
 interface ModalMobileProps {
     isOpen: boolean;
     title: string;
+    handleClose?: () => void;
     onClose?: () => void;
     subtitle?: string;
     children: ReactNode;
@@ -13,6 +14,7 @@ interface ModalMobileProps {
     modalClassName?: string;
     overlayClassName?: string;
     HeaderControls?: React.ReactNode; // Optional node for header controls
+    hasCloseButton?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ interface ModalMobileProps {
 const ModalMobile: React.FC<ModalMobileProps> = ({
     isOpen,
     title,
+    handleClose,
     onClose = () => { },
     subtitle,
     children,
@@ -41,6 +44,7 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
     modalClassName = '',
     overlayClassName = '',
     HeaderControls,
+    hasCloseButton = false,
 }) => {
     const [visible, setVisible] = useState<boolean>(isOpen);
     const [animState, setAnimState] = useState<AnimationState>('');
@@ -77,6 +81,31 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
     };
     if (!visible) return null
 
+    const CloseButton = () => (
+        <button
+            className="modal-close-button"
+            onClick={handleClose}
+            aria-label="Close modal"
+            type="button"
+        >
+            <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <path
+                    d="M18 6L6 18M6 6L18 18"
+                    stroke="hsl(204, 95%, 80%)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+            </svg>
+        </button>
+    );
+
     return (
         <dialog
             className={`modal-overlay ${animState} ${overlayClassName}`}
@@ -98,7 +127,7 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
                             {title && <h2 className="modal-title" aria-hidden="true">{title}</h2>}
                         </div>
                         <div>
-                            {HeaderControls}
+                            {HeaderControls || (hasCloseButton && CloseButton())}
                         </div>
                     </div>
                 )}

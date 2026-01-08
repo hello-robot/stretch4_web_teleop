@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import ModalMobile from '../basic_components/ModalMobile';
+import ModalMobile from "../basic_components/ModalMobile";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionSpeed.css";
 import { buttonFunctionProvider } from "..";
@@ -49,11 +49,11 @@ export const VELOCITY_SCALE: ActionSpeedDetails[] = [
 ];
 
 const getSpeedByLabel = (label: string): number | undefined => {
-    return VELOCITY_SCALE.find(item => item.label === label)?.speed;
+    return VELOCITY_SCALE.find((item) => item.label === label)?.speed;
 };
 
 const getLabelBySpeed = (speed: number): string | undefined => {
-    return VELOCITY_SCALE.find(item => item.speed === speed)?.label;
+    return VELOCITY_SCALE.find((item) => item.speed === speed)?.label;
 };
 
 const SPEED_ICONS: Record<string, string> = {
@@ -79,18 +79,21 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
 
     return (
         <div className="action-speed">
-            <ModalActionSpeed isOpen={isModalOpen} handleClose={(newSpeedLabel: string) => {
-                setIsModalOpen(false);
-                props.setCameraVeilCallback(false);
-                props.onChange(getSpeedByLabel(newSpeedLabel))
-            }} />
+            <ModalActionSpeed
+                isOpen={isModalOpen}
+                handleClose={(newSpeedLabel: string) => {
+                    setIsModalOpen(false);
+                    props.setCameraVeilCallback(false);
+                    props.onChange(getSpeedByLabel(newSpeedLabel));
+                }}
+            />
             <MagneticWrapper>
                 <button
                     className="button-action-speed"
                     onPointerDown={() => {
                         setIsModalOpen(!isModalOpen);
-                        props.setCameraVeilCallback(!isModalOpen)
-                        buttonFunctionProvider.disableActiveButton()
+                        props.setCameraVeilCallback(!isModalOpen);
+                        buttonFunctionProvider.disableActiveButton();
                     }}
                     aria-label="Change action speed"
                     aria-hidden={props.isCameraVeilVisible}
@@ -119,16 +122,26 @@ interface OptionItem {
     value: string;
 }
 
-const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({ isOpen, handleClose }) => {
-    const [selectedSpeed, setSelectedSpeed] = useState<string>(VELOCITY_SCALE[1].label);
+const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
+    isOpen,
+    handleClose,
+}) => {
+    const [selectedSpeed, setSelectedSpeed] = useState<string>(
+        VELOCITY_SCALE[1].label
+    );
 
-    const options: OptionItem[] = VELOCITY_SCALE.map(item => ({
-        value: item.label
+    const options: OptionItem[] = VELOCITY_SCALE.map((item) => ({
+        value: item.label,
     }));
 
     const handleSpeedSelection = (speed: string) => {
         setSelectedSpeed(speed);
-        setTimeout(() => handleClose(speed), 500)
+        setTimeout(() => handleClose(speed), 500);
+    };
+
+    const close = () => {
+        // Close without selecting a new button pad
+        setTimeout(() => handleClose(selectedSpeed), 500);
     };
 
     return (
@@ -136,35 +149,40 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({ isOpen, handleClose
             isOpen={isOpen}
             title="Action Speed"
             subtitle="NAVIGATE"
+            handleClose={close}
+            hasCloseButton
             modalClassName="action-speed-modal"
         >
             <div className="action-speed-options">
-                {options.map(opt => {
+                {options.map((opt) => {
                     const ariaLabel = `Select \"${opt.value}\" speed`;
 
                     return (
                         <button
                             key={opt.value}
-                            className={`${opt.value} ${selectedSpeed === opt.value ? 'selected' : ''}`}
+                            className={`${opt.value} ${selectedSpeed === opt.value ? "selected" : ""}`}
                             aria-label={ariaLabel}
                             aria-hidden={!isOpen}
-                            onPointerDown={() => handleSpeedSelection(opt.value)}
+                            onPointerDown={() =>
+                                handleSpeedSelection(opt.value)
+                            }
                         >
                             {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
                             <span className="aria-inviz"></span>
                         </button>
-                    )
+                    );
                 })}
             </div>
             <div>
                 <div className="action-speed-labels">
-                    {options.map(opt => (
+                    {options.map((opt) => (
                         <div
                             key={`label-${opt.value}`}
-                            className={`speed-label ${selectedSpeed === opt.value ? 'selected' : ''}`}
+                            className={`speed-label ${selectedSpeed === opt.value ? "selected" : ""}`}
                             aria-hidden="true"
                         >
-                            {opt.value.charAt(0).toUpperCase() + opt.value.slice(1)}
+                            {opt.value.charAt(0).toUpperCase() +
+                                opt.value.slice(1)}
                         </div>
                     ))}
                 </div>
