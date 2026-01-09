@@ -16,6 +16,10 @@ import StopCircleIcon from '@mui/icons-material/StopCircle';
 import ModeEditIcon from '@mui/icons-material/ModeEdit';
 import { set } from 'firebase/database';
 
+import StartNavIcon from '../../icons/StartNavIcon.svg';
+import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
+import AddLocationIcon from '../../icons/AddLocationIcon.svg';
+
 interface FooterAutoNavProps {
     handleSelectGoal: (selectGoal: boolean) => void;
     functs: AutoNavFunctions;
@@ -580,7 +584,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                     }}
                     className="locations-menu"
                 >
-                    <span className="locations-menu-icon" />
+                    <img src={LocationsMenuIcon} className="locations-menu-icon" alt="" />
                 </button>
             </div>
             {/* </LocationsMenu> */}
@@ -608,7 +612,8 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         style={{ overflow: 'hidden', display: 'inline-flex', alignItems: 'center' }}
                     >
                         <span>Start</span>
-                        <motion.span
+                        <motion.img
+                            src={StartNavIcon}
                             className="auto-nav-button-icon"
                             initial={{ x: -40, opacity: 0, filter: 'brightness(1)' }}
                             animate={goalPosition || selectedLocationMenuItem
@@ -671,7 +676,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                     }}
                     className="add-location"
                 >
-                    <span className="add-location-icon" />
+                    <img src={AddLocationIcon} className="add-location-icon" alt="" />
                 </button>
             </div>
             {/* </AddLocationButton> */}

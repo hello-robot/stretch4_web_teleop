@@ -26,6 +26,11 @@ import {
 import { isMobile } from "react-device-detect";
 import "operator/css/ButtonPad.css";
 import DirectionalPad from "../static_components/DirectionalPad";
+import chevronIcon from "operator/icons/Chevron.svg";
+import rotateLeftIcon from "operator/icons/RotateLeft.svg";
+import rotateRightIcon from "operator/icons/RotateRight.svg";
+import gripperCloseIcon from "operator/icons/GripperClose.svg";
+import gripperOpenIcon from "operator/icons/GripperOpen.svg";
 
 /** Properties for {@link ButtonPad} */
 type ButtonPadProps = CustomizableComponentProps & {
@@ -48,6 +53,20 @@ const notHomedDisabledFunctions = new Set<ButtonPadButton>([
     ButtonPadButton.GripperOpen,
     ButtonPadButton.GripperClose,
 ]);
+
+/** Helper function to get the appropriate rotate icon based on pilot controls and direction */
+const getRotateIcon = (
+    pilotControlsCurrent: string,
+    direction: string
+): string => {
+    const isGripper = pilotControlsCurrent === "Arm + Gripper";
+    if (direction === "rotate-left") {
+        return isGripper ? gripperCloseIcon : rotateLeftIcon;
+    } else {
+        return isGripper ? gripperOpenIcon : rotateRightIcon;
+    }
+};
+
 /**
  * A set of buttons which can be overlaid as a child of a camera view or
  * standalone.
@@ -107,8 +126,8 @@ export const ButtonPad = (props: ButtonPadProps): React.JSX.Element => {
     const selectProp =
         customizing && !overlay
             ? {
-                  onClick: onSelect,
-              }
+                onClick: onSelect,
+            }
             : {};
 
     /**
@@ -239,11 +258,10 @@ export const ButtonPad = (props: ButtonPadProps): React.JSX.Element => {
             <div className="button-pad">
                 <svg
                     ref={svgRef}
-                    viewBox={`0 0 ${SVG_RESOLUTION} ${
-                        props.aspectRatio
+                    viewBox={`0 0 ${SVG_RESOLUTION} ${props.aspectRatio
                             ? SVG_RESOLUTION / props.aspectRatio
                             : SVG_RESOLUTION
-                    }`}
+                        }`}
                     preserveAspectRatio="none"
                     className={className("button-pads", {
                         customizing,
@@ -279,11 +297,11 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
     const clickProps = props.sharedState.customizing
         ? {}
         : {
-              onPointerDown: functs.onClick,
-              onPointerUp: functs.onRelease,
-              onPointerCancel: functs.onRelease,
-              onPointerLeave: functs.onLeave,
-          };
+            onPointerDown: functs.onClick,
+            onPointerUp: functs.onRelease,
+            onPointerCancel: functs.onRelease,
+            onPointerLeave: functs.onLeave,
+        };
     const buttonState: ButtonState =
         props.sharedState.buttonStateMap?.get(props.funct) ||
         ButtonState.Inactive;
@@ -404,6 +422,12 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     disabled={isDisabled}
                     {...clickProps}
                 >
+                    <img
+                        src={chevronIcon}
+                        alt=""
+                        className="chevron-icon"
+                        aria-hidden="true"
+                    />
                     {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
                     <span className="aria-inviz">••</span>
                 </button>
@@ -427,6 +451,12 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     tabIndex={0}
                     {...clickProps}
                 >
+                    <img
+                        src={getRotateIcon(pilotControlsCurrent, props.direction)}
+                        alt=""
+                        className="turn-icon"
+                        aria-hidden="true"
+                    />
                     {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
                     <span className="aria-inviz"></span>
                 </button>
@@ -455,10 +485,10 @@ const SingleButton = (props: SingleButtonProps) => {
     const clickProps = props.sharedState.customizing
         ? {}
         : {
-              onMouseDown: functs.onClick,
-              onMouseUp: functs.onRelease,
-              onMouseLeave: functs.onLeave,
-          };
+            onMouseDown: functs.onClick,
+            onMouseUp: functs.onRelease,
+            onMouseLeave: functs.onLeave,
+        };
     const buttonState: ButtonState =
         props.sharedState.buttonStateMap?.get(props.funct) ||
         ButtonState.Inactive;

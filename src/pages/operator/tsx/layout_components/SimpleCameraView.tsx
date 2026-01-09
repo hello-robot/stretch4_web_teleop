@@ -2,7 +2,6 @@ import React from "react";
 import { className, RemoteStream } from "shared/util";
 import { CameraViewId } from "../utils/component_definitions";
 import "operator/css/SimpleCameraView.css";
-import DeviceVisualOverlay from "../static_components/DeviceVisualOverlay";
 
 /**
  * Displays a video stream with an optional button pad overlay
@@ -86,7 +85,6 @@ export const SimpleCameraView = (props: {
                 <div
                     className="simple-realsense"
                 >
-                    <DeviceVisualOverlay />
                     <div
                         className="simple-video-area"
                         style={{ gridRow: 2, gridColumn: 1 }}
