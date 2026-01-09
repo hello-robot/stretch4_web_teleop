@@ -49,7 +49,7 @@
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-    padding: 20px 20px 40px;
+    padding: 20px;
     /* General padding */
     box-sizing: border-box;
 
@@ -103,7 +103,6 @@
     /* From original */
     font-size: 12px;
     text-transform: uppercase;
-    margin-bottom: 4px;
     font-weight: 800;
     letter-spacing: 1px;
 }
@@ -113,8 +112,38 @@
     margin: 0;
 }
 
+.modal-close-button {
+    width: 60px;
+    height: 40px;
+    background-color: hsl(204, 50%, 10%);
+    box-shadow: none;
+    outline: none;
+    user-select: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close-button:hover {
+    background-color: hsl(204, 50%, 20%);
+}
+
+.modal-close-button:active {
+    background-color: hsl(204, 50%, 5%);
+}
+
+.modal-close-button svg {
+    display: block;
+}
+
+.modal-close-button svg path {
+    stroke: hsl(204, 95%, 80%);
+}
+
 .modal-body {
-    margin: 20px 0;
+    margin: 20px 0 0;
 }
 
 .modal-footer {
