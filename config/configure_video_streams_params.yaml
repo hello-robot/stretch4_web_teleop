@@ -1,7 +1,8 @@
 {
     # Images published to /navigation_camera/image_raw
     # Image size is 1024 x 768
-    "overhead": { "wide_angle_cam": {
+    "overhead": {
+            "wide_angle_cam": {
                     # The mask contain params to make a circular mask over the image
                     # Pass "mask": null to not create mask
                     "mask": null,
@@ -13,34 +14,67 @@
                     # Pass "rotate": null to not rotate
                     # "rotate": null,
                     "rotate": "ROTATE_90_CLOCKWISE",
-                } },
+                },
+            # 1920 x 1200 image from left camera
+            "left": {
+                    # The mask contain params to make a circular mask over the image
+                    # Pass "mask": null to not create mask
+                    "mask": null,
+                    # The crop contain params to crop the image
+                    # x_max - x_min = mask_width and y_max - y_min = mask_height
+                    # Pass "crop": null to not crop image
+                    # No crop: [0, width, 0, height] = [0, 1200, 0, 1920]
+                    "crop":
+                        {
+                            "y_min": 250,
+                            "y_max": 1050,
+                            "x_min": 50,
+                            "x_max": 1895,
+                        },
+                    # Number of degrees to rotate video stream clockwise
+                    # Pass "rotate": null to not rotate
+                    # "rotate": null,
+                    "rotate": "ROTATE_90_CLOCKWISE",
+                },
+            # 1920 x 1200 image from left camera
+            "right": {
+                    # The mask contain params to make a circular mask over the image
+                    # Pass "mask": null to not create mask
+                    "mask": null,
+                    # The crop contain params to crop the image
+                    # x_max - x_min = mask_width and y_max - y_min = mask_height
+                    # Pass "crop": null to not crop image
+                    # No crop: [0, width, 0, height] = [0, 1200, 0, 1920]
+                    "crop":
+                        {
+                            "y_min": 275,
+                            "y_max": 1075,
+                            "x_min": 0,
+                            "x_max": 1845,
+                        },
+                    # Number of degrees to rotate video stream clockwise
+                    # Pass "rotate": null to not rotate
+                    # "rotate": null,
+                    "rotate": "ROTATE_90_COUNTERCLOCKWISE",
+                },
+        },
     "realsense":
         {
             "default":
                 { "mask": null, "crop": null, "rotate": "ROTATE_90_CLOCKWISE" },
         },
     # Images published to /gripper_camera/cropped/image_raw
-    # D405 is 480 x 270
+    # D405 is 424 x 240
     "gripper": { "d405": {
                     # The mask contain params to make a circular mask over the image
                     # Pass "mask": null to not create mask
-                    "mask":
-                        {
-                            "width": 270,
-                            "height": 270,
-                            "radius": null,
-                            "center": null,
-                        },
+                    "mask": null,
                     # The crop contain params to crop the image
                     # x_max - x_min = mask_width and y_max - y_min = mask_height
                     # Pass "crop": null to not crop image
+                    # No crop: [0, height, 0, width] = [0, 240, 0, 424]
                     "crop":
-                        {
-                            "y_min": 0,
-                            "y_max": 270,
-                            "x_min": 125,
-                            "x_max": 395,
-                        },
+                        { "y_min": 0, "y_max": 240, "x_min": 48, "x_max": 424 },
                     "rotate": null,
                 } },
     # Images published to /gripper_camera/expanded/image_raw

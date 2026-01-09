@@ -184,7 +184,7 @@ export class Robot extends React.Component {
             // "/camera/color/image_raw/rotated/compressed",
             "/gripper_camera/image_raw/cropped/compressed",
             "/navigation_camera/image_raw/rotated/compressed",
-            "/stretch/joint_states",
+            // "/stretch/joint_states",
         ],
         timeout_ms: number = 5000
     ): Promise<boolean> {

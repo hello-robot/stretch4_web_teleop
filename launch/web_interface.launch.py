@@ -13,7 +13,6 @@ from launch.actions import (
     GroupAction,
     IncludeLaunchDescription,
 )
-from launch.conditions import LaunchConfigurationNotEquals
 from launch.launch_description_sources import (
     FrontendLaunchDescriptionSource,
     PythonLaunchDescriptionSource,
@@ -53,21 +52,7 @@ def map_configuration_to_drivers(model, tool, has_nav_head_cam):
           add_gripper_driver (True or False),
           add_head_nav_driver (True or False)
     """
-    # Stretch 3
-    if model == "SE3" and tool == "eoa_wrist_dw3_tool_sg3" and has_nav_head_cam is True:
-        return "both", False, True
-    elif (
-        model == "SE3" and tool == "eoa_wrist_dw3_tool_nil" and has_nav_head_cam is True
-    ):
-        return "both", False, True
-    elif (
-        model == "SE3"
-        and tool == "eoa_wrist_dw3_tool_tablet_12in"
-        and has_nav_head_cam is True
-    ):
-        return "both", False, True
-    # Stretch
-    elif (
+    if (
         model == "SE4" and tool == "eoa_wrist_dw4_tool_sg4" and has_nav_head_cam is True
     ):
         return "d405-only", False, True
@@ -82,10 +67,10 @@ def generate_launch_description():
     teleop_interface_package = str(get_package_share_path("stretch4_web_teleop"))
     core_package = str(get_package_share_path("stretch_core"))
     rosbridge_package = str(get_package_share_path("rosbridge_server"))
-    stretch_core_path = str(get_package_share_directory("stretch_core"))
+    # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
 
-    stretch_serial_no = 'stretch-se4-4013' #robot_params["robot"]["serial_no"]
+    stretch_serial_no = 'stretch-se4-4013'  # robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
     stretch_has_nav_head_cam = symlinks_to_has_nav_head_cam()
@@ -121,26 +106,15 @@ def generate_launch_description():
     keyfile_arg = DeclareLaunchArgument(
         "keyfile", default_value=stretch_serial_no + "+6-key.pem"
     )
-    if stretch_model == "SE4":
-        nav2_params_file_param = DeclareLaunchArgument(
-            "nav2_params_file",
-            default_value=os.path.join(
-                stretch_navigation_path,
-                "config",
-                "nav2_params_switch_controller.yaml",
-            ),
-            description="Full path to the ROS2 parameters file to use for all launched nodes",
-        )
-    else:
-        nav2_params_file_param = DeclareLaunchArgument(
-            "nav2_params_file",
-            default_value=os.path.join(
-                stretch_navigation_path,
-                "config",
-                "nav2_params.yaml",
-            ),
-            description="Full path to the ROS2 parameters file to use for all launched nodes",
-        )
+    nav2_params_file_param = DeclareLaunchArgument(
+        "nav2_params_file",
+        default_value=os.path.join(
+            stretch_navigation_path,
+            "config",
+            "nav2_params_switch_controller.yaml",
+        ),
+        description="Full path to the ROS2 parameters file to use for all launched nodes",
+    )
 
     bt_param = DeclareLaunchArgument(
         "bt_tree_path",
@@ -162,121 +136,24 @@ def generate_launch_description():
         ]
     )
 
-    if drivers_realsense == "d405-only":
-        # Launch only D435i if there is no D405
-        ld.add_action(
-            GroupAction(
-                actions=[
-                    IncludeLaunchDescription(
-                        PythonLaunchDescriptionSource(
-                            PathJoinSubstitution(
-                                [
-                                    core_package,
-                                    "launch",
-                                    "d405_basic.launch.py",
-                                ]
-                            )
-                        )
-                    )
-                ]
-            )
-        )
-    elif drivers_realsense == "both":
-        # Launch both D435i and D405
-        ld.add_action(
-            GroupAction(
-                actions=[
-                    IncludeLaunchDescription(
-                        PythonLaunchDescriptionSource(
-                            PathJoinSubstitution(
-                                [
-                                    teleop_interface_package,
-                                    "launch",
-                                    "multi_camera.launch.py",
-                                ]
-                            )
-                        )
-                    )
-                ]
-            )
-        )
-
-    # if driver_nav_head_cam is True and stretch_model == "SE3":
-    #     # Nav Head Wide Angle Camera
-    #     ld.add_action(
-    #         GroupAction(
-    #             actions=[
-    #                 IncludeLaunchDescription(
-    #                     PythonLaunchDescriptionSource(
-    #                         PathJoinSubstitution(
-    #                             [
-    #                                 teleop_interface_package,
-    #                                 "launch",
-    #                                 "navigation_camera.launch.py",
-    #                             ]
-    #                         )
-    #                     )
-    #                 )
-    #             ]
-    #         )
-    #     )
-    # elif driver_nav_head_cam is True and stretch_model == "SE4":
-    #     # Nav Head Wide Angle Camera
-    #     ld.add_action(
-    #         GroupAction(
-    #             actions=[
-    #                 IncludeLaunchDescription(
-    #                     PythonLaunchDescriptionSource(
-    #                         PathJoinSubstitution(
-    #                             [
-    #                                 core_package,
-    #                                 "launch",
-    #                                 "luxonis.launch.py",
-    #                             ]
-    #                         )
-    #                     )
-    #                 )
-    #             ]
-    #         )
-    #     )
-
-    # if driver_nav_head_cam is False:
-    # Blank Navigation Camera Node
-    # Publish blank image if no navigation camera exists
+    # Launch only D435i if there is no D405
     ld.add_action(
-        Node(
-            package="image_publisher",
-            executable="image_publisher_node",
-            name="navigation_camera_node",
-            output="screen",
-            parameters=[{"publish_rate": 15.0}],
-            remappings=[("image_raw", "/navigation_camera/image_raw")],
-            arguments=[
-                PathJoinSubstitution(
-                    [teleop_interface_package, "nodes", "blank_image.png"]
+        GroupAction(
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        PathJoinSubstitution(
+                            [
+                                core_package,
+                                "launch",
+                                "d405_basic.launch.py",
+                            ]
+                        )
+                    )
                 )
-            ],
+            ]
         )
     )
-
-    if drivers_realsense == "d405-only":
-        # Blank Gripper Camera Node
-        # Publish blank image if there is no gripper camera exists
-        ld.add_action(
-            Node(
-                package="image_publisher",
-                executable="image_publisher_node",
-                name="gripper_camera_node",
-                output="screen",
-                parameters=[{"publish_rate": 15.0}],
-                remappings=[("image_raw", "/gripper_camera/color/image_rect_raw")],
-                arguments=[
-                    PathJoinSubstitution(
-                        [teleop_interface_package, "nodes", "blank_image.png"]
-                    )
-                ],
-            )
-        )
 
     tf2_web_republisher_node = Node(
         package="tf2_web_republisher",
@@ -354,74 +231,43 @@ def generate_launch_description():
         )
         ld.add_action(configure_video_streams_node)
 
-    if stretch_model == "SE4":
-        navigation_bringup_launch = GroupAction(
-            condition=LaunchConfigurationNotEquals("map_yaml", ""),
-            actions=[
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        [stretch_navigation_path, "/launch/bringup_launch.py"]
-                    ),
-                    launch_arguments={
-                        "use_sim_time": "false",
-                        "autostart": "true",
-                        "map": PathJoinSubstitution(
-                            [
-                                teleop_interface_package,
-                                "maps",
-                                LaunchConfiguration("map_yaml"),
-                            ]
-                        ),
-                        "params_file": LaunchConfiguration("nav2_params_file"),
-                        "use_rviz": "false",
-                    }.items(),
-                ),
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        [stretch_core_path, "/launch/airy_rslidar.launch.py"]
-                    )
-                ),
-            ],
-        )
+    # navigation_bringup_launch = GroupAction(
+    #     condition=LaunchConfigurationNotEquals("map_yaml", ""),
+    #     actions=[
+    #         IncludeLaunchDescription(
+    #             PythonLaunchDescriptionSource(
+    #                 [stretch_navigation_path, "/launch/bringup_launch.py"]
+    #             ),
+    #             launch_arguments={
+    #                 "use_sim_time": "false",
+    #                 "autostart": "true",
+    #                 "map": PathJoinSubstitution(
+    #                     [
+    #                         teleop_interface_package,
+    #                         "maps",
+    #                         LaunchConfiguration("map_yaml"),
+    #                     ]
+    #                 ),
+    #                 "params_file": LaunchConfiguration("nav2_params_file"),
+    #                 "use_rviz": "false",
+    #             }.items(),
+    #         ),
+    #         IncludeLaunchDescription(
+    #             PythonLaunchDescriptionSource(
+    #                 [stretch_core_path, "/launch/airy_rslidar.launch.py"]
+    #             )
+    #         ),
+    #     ],
+    # )
 
-        switch_controller_config = Node(
-            package="stretch_nav2",
-            executable="switch_controller_config.py",
-            name="switch_controller_config",
-            output="screen",
-        )
+    # switch_controller_config = Node(
+    #     package="stretch_nav2",
+    #     executable="switch_controller_config.py",
+    #     name="switch_controller_config",
+    #     output="screen",
+    # )
 
-        # ld.add_action(switch_controller_config)
-    else:
-        navigation_bringup_launch = GroupAction(
-            condition=LaunchConfigurationNotEquals("map_yaml", ""),
-            actions=[
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        [stretch_navigation_path, "/launch/bringup_launch.py"]
-                    ),
-                    launch_arguments={
-                        "use_sim_time": "false",
-                        "autostart": "true",
-                        "map": PathJoinSubstitution(
-                            [
-                                teleop_interface_package,
-                                "maps",
-                                LaunchConfiguration("map_yaml"),
-                            ]
-                        ),
-                        "params_file": LaunchConfiguration("nav2_params_file"),
-                        "use_rviz": "false",
-                    }.items(),
-                ),
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        [stretch_core_path, "/launch/rplidar.launch.py"]
-                    )
-                ),
-            ],
-        )
-    # ld.add_action(navigation_bringup_launch)
+    # ld.add_action(switch_controller_config)
 
     ld.add_action(
         ExecuteProcess(
