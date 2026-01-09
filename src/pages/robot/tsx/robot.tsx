@@ -1,11 +1,11 @@
 import React from "react";
 import {
     Ros,
-    ActionClient,
+    Action,
     Goal,
     Topic,
     Service,
-    TFClient,
+    ROS2TFClient,
     Transform,
     Param,
     Message,
@@ -50,12 +50,12 @@ export class Robot extends React.Component {
     private poseGoalComplete?: boolean;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
-    private trajectoryClient?: ActionClient;
-    private moveBaseClient?: ActionClient;
+    private trajectoryClient?: Action;
+    private moveBaseClient?: Action;
     private moveToPregraspGoal?: Goal;
     private showTabletGoal?: Goal;
-    private moveToPregraspClient?: ActionClient;
-    private showTabletClient?: ActionClient;
+    private moveToPregraspClient?: Action;
+    private showTabletClient?: Action;
     private cmdVelTopic?: Topic;
     private switchToNavigationService?: Service;
     private switchToPositionService?: Service;
@@ -66,8 +66,8 @@ export class Robot extends React.Component {
     private setRealsenseShowBodyPoseService?: Service;
     private setComputeBodyPoseService?: Service;
     private setRunStopService?: Service;
-    private robotFrameTfClient?: TFClient;
-    private mapFrameTfClient?: TFClient;
+    private robotFrameTfClient?: ROS2TFClient;
+    private mapFrameTfClient?: ROS2TFClient;
     private linkGripperFingerLeftTF?: Transform;
     private linkTabletTF?: Transform;
     private linkWristYawTF?: Transform;
@@ -184,7 +184,7 @@ export class Robot extends React.Component {
             // "/camera/color/image_raw/rotated/compressed",
             "/gripper_camera/image_raw/cropped/compressed",
             "/navigation_camera/image_raw/rotated/compressed",
-            // "/stretch/joint_states",
+            "/stretch/joint_states",
         ],
         timeout_ms: number = 5000
     ): Promise<boolean> {
@@ -290,10 +290,10 @@ export class Robot extends React.Component {
         this.createRealsenseShowBodyPoseService();
         this.createComputeBodyPoseService();
         this.createRunStopService();
-        this.createRobotFrameTFClient();
-        this.createMapFrameTFClient();
-        this.subscribeToHeadTiltTF();
-        this.subscribeToMapTF();
+        // this.createRobotFrameTFClient();
+        // this.createMapFrameTFClient();
+        // this.subscribeToHeadTiltTF();
+        // this.subscribeToMapTF();
         this.createHomeTheRobotService();
         this.initStretchParams();
 
@@ -439,11 +439,11 @@ export class Robot extends React.Component {
     }
 
     getStretchTool() {
-        if (this.stretchTool == StretchTool.TABLET) {
-            this.subscribeToTabletTF();
-        } else {
-            this.subscribeToGripperFingerTF();
-        }
+        // if (this.stretchTool == StretchTool.TABLET) {
+        //     this.subscribeToTabletTF();
+        // } else {
+        //     this.subscribeToGripperFingerTF();
+        // }
         if (this.stretchToolCallback)
             this.stretchToolCallback(this.stretchTool);
     }
@@ -542,15 +542,15 @@ export class Robot extends React.Component {
     }
 
     createTrajectoryClient() {
-        this.trajectoryClient = new ActionClient({
+        this.trajectoryClient = new Action({
             ros: this.ros,
-            serverName: "/stretch_controller/follow_joint_trajectory",
-            actionName: "control_msgs/action/FollowJointTrajectory",
+            name: "/stretch_controller/follow_joint_trajectory",
+            actionType: "control_msgs/action/FollowJointTrajectory",
         });
     }
 
     createMoveBaseClient() {
-        this.moveBaseClient = new ActionClient({
+        this.moveBaseClient = new Action({
             ros: this.ros,
             serverName: moveBaseActionName,
             actionName: "nav2_msgs/action/NavigateToPose",
@@ -559,7 +559,7 @@ export class Robot extends React.Component {
     }
 
     createMoveToPregraspClient() {
-        this.moveToPregraspClient = new ActionClient({
+        this.moveToPregraspClient = new Action({
             ros: this.ros,
             serverName: moveToPregraspActionName,
             actionName: "stretch4_web_teleop/action/MoveToPregrasp",
@@ -567,7 +567,7 @@ export class Robot extends React.Component {
     }
 
     createShowTabletClient() {
-        this.showTabletClient = new ActionClient({
+        this.showTabletClient = new Action({
             ros: this.ros,
             serverName: showTabletActionName,
             actionName: "stretch_show_tablet_interfaces/action/ShowTablet",
@@ -655,7 +655,7 @@ export class Robot extends React.Component {
     }
 
     createRobotFrameTFClient() {
-        this.robotFrameTfClient = new TFClient({
+        this.robotFrameTfClient = new ROS2TFClient({
             ros: this.ros,
             fixedFrame: "base_link",
             angularThres: 0.001,
@@ -665,7 +665,7 @@ export class Robot extends React.Component {
     }
 
     createMapFrameTFClient() {
-        this.mapFrameTfClient = new TFClient({
+        this.mapFrameTfClient = new ROS2TFClient({
             ros: this.ros,
             fixedFrame: "map",
             angularThres: 0.001,
@@ -711,7 +711,7 @@ export class Robot extends React.Component {
     }
 
     setRealsenseDepthSensing(toggle: boolean) {
-        var request = new ServiceRequest({ data: toggle });
+        var request = { data: toggle };
         this.setRealsenseDepthSensingService?.callService(
             request,
             (response: boolean) => {
@@ -729,7 +729,7 @@ export class Robot extends React.Component {
     }
 
     setGripperDepthSensing(toggle: boolean) {
-        var request = new ServiceRequest({ data: toggle });
+        var request = { data: toggle };
         this.setGripperDepthSensingService?.callService(
             request,
             (response: boolean) => {
@@ -747,7 +747,7 @@ export class Robot extends React.Component {
     }
 
     setExpandedGripper(toggle: boolean) {
-        var request = new ServiceRequest({ data: toggle });
+        var request = { data: toggle };
         this.setExpandedGripperService?.callService(
             request,
             (response: boolean) => {
@@ -762,7 +762,7 @@ export class Robot extends React.Component {
     }
 
     setRealsenseShowBodyPose(toggle: boolean) {
-        var request = new ServiceRequest({ data: toggle });
+        var request = { data: toggle };
         this.setRealsenseShowBodyPoseService?.callService(
             request,
             (response: boolean) => {
@@ -780,7 +780,7 @@ export class Robot extends React.Component {
     }
 
     setComputeBodyPose(toggle: boolean) {
-        var request = new ServiceRequest({ data: toggle });
+        var request = { data: toggle };
         this.setComputeBodyPoseService?.callService(
             request,
             (response: boolean) => {
@@ -795,7 +795,7 @@ export class Robot extends React.Component {
     }
 
     setRunStop(toggle: boolean) {
-        var request = new ServiceRequest({ data: toggle });
+        var request = { data: toggle };
         this.setRunStopService?.callService(request, (response: boolean) => {});
     }
 
@@ -846,7 +846,7 @@ export class Robot extends React.Component {
     }): void => {
         // this.switchToNavigationMode();
         this.stopExecution();
-        let twist = new Message({
+        let twist = {
             linear: {
                 x: props.linVelX,
                 y: props.linVelY,
@@ -857,7 +857,7 @@ export class Robot extends React.Component {
                 y: 0,
                 z: props.angVel,
             },
-        });
+        };
 
         if (!this.cmdVelTopic) throw "cmdVelTopic is undefined";
         console.log("Publishing base velocity twist message");
@@ -912,17 +912,14 @@ export class Robot extends React.Component {
     makeMoveBaseGoal(pose: ROSPose) {
         if (!this.moveBaseClient) throw "moveBaseClient is undefined";
 
-        let newGoal = new Goal({
-            actionClient: this.moveBaseClient,
-            goalMessage: {
-                pose: {
-                    header: {
-                        frame_id: "map",
-                    },
-                    pose: pose,
+        let newGoal = {
+            pose: {
+                header: {
+                    frame_id: "map",
                 },
+                pose: pose,
             },
-        });
+        };
 
         return newGoal;
     }
@@ -935,14 +932,11 @@ export class Robot extends React.Component {
         if (!this.moveToPregraspClient)
             throw "moveToPregraspClient is undefined";
 
-        let newGoal = new Goal({
-            actionClient: this.moveToPregraspClient,
-            goalMessage: {
-                scaled_u: scaled_x,
-                scaled_v: scaled_y,
-                pregrasp_direction: horizontal ? 1 : 2,
-            },
-        });
+        let newGoal = {
+            scaled_u: scaled_x,
+            scaled_v: scaled_y,
+            pregrasp_direction: horizontal ? 1 : 2,
+        };
 
         return newGoal;
     }
@@ -950,13 +944,10 @@ export class Robot extends React.Component {
     makeShowTabletGoal() {
         if (!this.showTabletClient) throw "showTabletClient is undefined";
 
-        let newGoal = new Goal({
-            actionClient: this.showTabletClient,
-            goalMessage: {
-                // TODO: Update once we have a finalized interface!
-                number_of_pose_estimates: 10,
-            },
-        });
+        let newGoal = {
+            // TODO: Update once we have a finalized interface!
+            number_of_pose_estimates: 10,
+        };
 
         return newGoal;
     }
@@ -969,33 +960,29 @@ export class Robot extends React.Component {
             jointPositions.push(pose[key as ValidJoints]!);
         }
 
-        console.log(this.trajectoryClient);
-
+        console.log(jointNames, jointPositions);
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = new Goal({
-            actionClient: this.trajectoryClient,
-            goalMessage: {
-                trajectory: {
-                    header: {
-                        stamp: {
-                            secs: 0,
+        let newGoal = {
+            trajectory: {
+                header: {
+                    stamp: {
+                        secs: 0,
+                        nsecs: 0,
+                    },
+                },
+                joint_names: jointNames,
+                points: [
+                    {
+                        positions: jointPositions,
+                        // The following might causing the jumpiness in continuous motions
+                        time_from_start: {
+                            secs: 1,
                             nsecs: 0,
                         },
                     },
-                    joint_names: jointNames,
-                    points: [
-                        {
-                            positions: jointPositions,
-                            // The following might causing the jumpiness in continuous motions
-                            time_from_start: {
-                                secs: 1,
-                                nsecs: 0,
-                            },
-                        },
-                    ],
-                },
+                ],
             },
-        });
+        };
 
         return newGoal;
     }
@@ -1023,54 +1010,71 @@ export class Robot extends React.Component {
         });
 
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = new Goal({
-            actionClient: this.trajectoryClient,
-            goalMessage: {
-                trajectory: {
-                    header: {
-                        stamp: {
-                            secs: 0,
-                            nsecs: 0,
-                        },
+        let newGoal = {
+            trajectory: {
+                header: {
+                    stamp: {
+                        secs: 0,
+                        nsecs: 0,
                     },
-                    joint_names: jointNames,
-                    points: points,
                 },
+                joint_names: jointNames,
+                points: points,
             },
-        });
+        };
 
         return newGoal;
     }
 
     executePoseGoal(pose: RobotPose) {
-        this.switchToNavigationMode();
+        // this.switchToNavigationMode();
         this.stopExecution();
         this.poseGoal = this.makePoseGoal(pose);
-        this.poseGoal.send();
+        console.log("execute: ", pose);
+        this.trajectoryClient.sendGoal(this.poseGoal);
     }
 
     async executePoseGoals(poses: RobotPose[], index: number) {
-        this.switchToNavigationMode();
+        // this.switchToNavigationMode();
         this.stopExecution();
         this.poseGoal = this.makePoseGoals(poses);
-        this.poseGoal.send();
+        this.trajectoryClient.sendGoal(this.poseGoal);
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
-        this.switchToNavigationMode();
+        // this.switchToNavigationMode();
         // this.stopExecution()
         this.moveBaseGoal = this.makeMoveBaseGoal(pose);
-        this.moveBaseGoal.send();
+        this.moveBaseClient.sendGoal(this.moveBaseGoal);
 
         // An autonomous client may change the robot's mode.
         robotMode = "unknown";
     }
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        this.switchToNavigationMode();
-        this.stopAutonomousClients();
+        // this.switchToNavigationMode();
+        // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
-        this.poseGoal?.send();
+        console.log("incremental: ", jointName, increment, this.poseGoal);
+        this.trajectoryClient.sendGoal(
+            this.poseGoal,
+            (result) => {
+                console.log(
+                    "Result for action goal on " +
+                        this.trajectoryClient.name +
+                        ": " +
+                        result.error_string
+                );
+            },
+            (feedback) => {
+                console.log(
+                    "Feedback for action on " +
+                        this.trajectoryClient.name +
+                        ": " +
+                        feedback
+                );
+            }
+        );
     }
 
     // NOTE: When we undo this temp fix (of not stopping the
@@ -1100,7 +1104,8 @@ export class Robot extends React.Component {
     stopTrajectoryClient() {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         if (this.poseGoal) {
-            if (this.stretchModel === StretchModel.SE3) this.poseGoal.cancel();
+            if (this.stretchModel === StretchModel.SE3)
+                this.trajectoryClient.cancelGoal();
             this.poseGoal = undefined;
         }
     }
@@ -1108,7 +1113,7 @@ export class Robot extends React.Component {
     stopMoveBaseClient() {
         if (!this.moveBaseClient) throw "moveBaseClient is undefined";
         if (this.moveBaseGoal) {
-            this.moveBaseGoal.cancel();
+            this.moveBaseClient.cancelGoal();
             this.moveBaseGoal = undefined;
         }
     }
@@ -1141,7 +1146,7 @@ export class Robot extends React.Component {
             scaled_y,
             horizontal
         );
-        this.moveToPregraspGoal.send();
+        this.moveToPregraspClient.sendGoal(this.moveToPregraspGoal);
 
         // An autonomous client may change the robot's mode.
         robotMode = "unknown";
@@ -1151,14 +1156,14 @@ export class Robot extends React.Component {
         if (!this.moveToPregraspClient)
             throw "moveToPregraspClient is undefined";
         if (this.moveToPregraspGoal) {
-            this.moveToPregraspGoal.cancel();
+            this.moveToPregraspClient.cancelGoal();
             this.moveToPregraspGoal = undefined;
         }
     }
 
     executeShowTabletGoal() {
         this.showTabletGoal = this.makeShowTabletGoal();
-        this.showTabletGoal.send();
+        this.showTabletClient.sendGoal(this.showTabletGoal);
 
         // An autonomous client may change the robot's mode.
         robotMode = "unknown";
@@ -1167,7 +1172,7 @@ export class Robot extends React.Component {
     stopShowTabletClient() {
         if (!this.showTabletClient) throw "showTabletClient is undefined";
         if (this.showTabletGoal) {
-            this.showTabletGoal.cancel();
+            this.showTabletClient.cancelGoal();
             this.showTabletGoal = undefined;
         }
     }
@@ -1326,9 +1331,7 @@ export class Robot extends React.Component {
             serviceType: "rosapi_msgs/srv/Publishers",
         });
 
-        var request = new ServiceRequest({
-            topic: topic,
-        });
+        var request = { topic: topic };
         if (typeof failedCallback === "function") {
             publishersClient.callService(
                 request,
