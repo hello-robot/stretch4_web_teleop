@@ -167,6 +167,12 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
                                 handleSpeedSelection(opt.value)
                             }
                         >
+                            <img
+                                src={SPEED_ICONS[opt.value]}
+                                alt=""
+                                className="speed-option-icon"
+                                aria-hidden="true"
+                            />
                             {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
                             <span className="aria-inviz"></span>
                         </button>
