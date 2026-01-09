@@ -271,8 +271,8 @@ def generate_launch_description():
         )
 
     tf2_web_republisher_node = Node(
-        package="tf2_web_republisher_py",
-        executable="tf2_web_republisher",
+        package="tf2_web_republisher",
+        executable="tf2_web_republisher_node",
         name="tf2_web_republisher_node",
     )
     ld.add_action(tf2_web_republisher_node)
