@@ -208,11 +208,10 @@ def generate_launch_description():
     ld.add_action(rosbridge_launch)
 
     # Configure Video Streams
-    labels = ["overhead", "realsense", "gripper"]
+    labels = ["overhead", "gripper"]
     for i in range(len(labels)):
-        bools = ["False", "False", "False"]
-        if labels[i] != "realsense":
-            bools[i] = "True"
+        bools = ["False", "False"]
+        bools[i] = "True"
         label = labels[i]
         configure_video_streams_node = Node(
             package="stretch4_web_teleop",
