@@ -1,10 +1,10 @@
 import fnmatch
 import os
 
-from stretch_body_ii.robot.robot_params_SE4 import nominal_params as robot_params
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
 from launch_ros.actions import Node
+from stretch_body_ii.robot.robot_params_SE4 import nominal_params as robot_params
 
 from launch import LaunchDescription
 from launch.actions import (
@@ -52,9 +52,7 @@ def map_configuration_to_drivers(model, tool, has_nav_head_cam):
           add_gripper_driver (True or False),
           add_head_nav_driver (True or False)
     """
-    if (
-        model == "SE4" and tool == "eoa_wrist_dw4_tool_sg4" and has_nav_head_cam is True
-    ):
+    if model == "SE4" and tool == "eoa_wrist_dw4_tool_sg4" and has_nav_head_cam is True:
         return "d405-only", False, True
 
     raise ValueError(
@@ -70,7 +68,7 @@ def generate_launch_description():
     # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
 
-    stretch_serial_no = 'stretch-se4-4013'  # robot_params["robot"]["serial_no"]
+    stretch_serial_no = "stretch-se4-4013"  # robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
     stretch_has_nav_head_cam = symlinks_to_has_nav_head_cam()

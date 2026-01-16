@@ -406,8 +406,8 @@ class ConfigureVideoStreams(Node):
         # if self.gripper_depth_ar:
         #     with self.latest_gripper_realsense_depth_image_lock:
         #         depth_msg = self.latest_gripper_realsense_depth_image
-            # if depth_msg is not None:
-            #     image = self.overlay_gripper_depth_ar(image, depth_msg)
+        #     if depth_msg is not None:
+        #         image = self.overlay_gripper_depth_ar(image, depth_msg)
 
         if self.expanded_gripper:
             # Compute and publish the expanded gripper image
