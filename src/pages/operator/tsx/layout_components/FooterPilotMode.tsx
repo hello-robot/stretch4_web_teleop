@@ -19,6 +19,8 @@ interface FooterControlsProps {
     isCameraVeilVisible: boolean;
     isCameraVeilVisibleSet: React.Dispatch<React.SetStateAction<boolean>>;
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
+    sceneSelected: string;
+    onSceneSelectedChange: React.Dispatch<React.SetStateAction<string>>;
 }
 
 const FooterHeadCam: React.FC<FooterControlsProps> = ({
@@ -31,6 +33,8 @@ const FooterHeadCam: React.FC<FooterControlsProps> = ({
     isCameraVeilVisibleSet,
     isCameraVeilVisible,
     swipeableViewsIdxSet,
+    sceneSelected,
+    onSceneSelectedChange,
 }) => {
     const [isStopped, isStoppedSet] = useState<boolean>(false);
 
@@ -58,9 +62,11 @@ const FooterHeadCam: React.FC<FooterControlsProps> = ({
                     setPilotControlsCurrent={setPilotControlsCurrent}
                 />
             </div>
-            <div className="footer-row">
-                <FooterGlobal />
-            </div>
+            <FooterGlobal
+                swipeableViewsIdxSet={swipeableViewsIdxSet}
+                sceneSelected={sceneSelected}
+                onSceneSelectedChange={onSceneSelectedChange}
+            />
         </div>
     );
 };

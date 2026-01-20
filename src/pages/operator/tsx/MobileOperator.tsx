@@ -71,13 +71,19 @@ export const MobileOperator = (props: {
     const [isRecording, setIsRecording] = React.useState<boolean>();
     const [depthSensing, setDepthSensing] = React.useState<boolean>(false);
     const [showAlert, setShowAlert] = React.useState<boolean>(true);
+
     // Manage the blurring+darkening of the camera feed
     const [isCameraVeilVisible, isCameraVeilVisibleSet] = useState(false);
+
+    // State for swipeable views
     const [swipeableViewsIdx, swipeableViewsIdxSet] = useState<number>(0);
     const [swipeableViewsStyles, swipeableViewsStylesSet] = useState([
         { filter: "brightness(1) blur(0px)" },
         { filter: "brightness(1) blur(0px)" },
     ]);
+
+    // State for selected scene
+    const [sceneSelected, setSceneSelected] = useState<string>("pilot-mode");
 
     React.useEffect(() => {
         setTimeout(function () {
@@ -156,11 +162,11 @@ export const MobileOperator = (props: {
     /** State passed from the operator and shared by all components */
     const sharedState: SharedState = {
         customizing: false,
-        onSelect: () => {},
+        onSelect: () => { },
         remoteStreams: remoteStreams,
         selectedPath: "deselected",
         dropZoneState: {
-            onDrop: () => {},
+            onDrop: () => { },
             selectedDefinition: undefined,
         },
         buttonStateMap: buttonStateMap.current,
@@ -290,6 +296,8 @@ export const MobileOperator = (props: {
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
+                            sceneSelected={sceneSelected}
+                            onSceneSelectedChange={setSceneSelected}
                         />
                         <GripperCamPIP
                             cameraID={CameraViewId.gripper}
@@ -305,6 +313,8 @@ export const MobileOperator = (props: {
                             sharedState={sharedState}
                             swipeableViewsIdx={swipeableViewsIdx}
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
+                            sceneSelected={sceneSelected}
+                            onSceneSelectedChange={setSceneSelected}
                         />
                     </div>
                 </SwipeableViews>

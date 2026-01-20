@@ -1,5 +1,4 @@
 import React, { useEffect, useState, Dispatch, SetStateAction } from 'react'
-
 import { Canvas } from "../static_components/Canvas";
 import { Map } from './Map';
 import { ComponentType, MapDefinition } from '../utils/component_definitions';
@@ -23,6 +22,8 @@ interface AutoNavProps {
     sharedState: SharedState;
     swipeableViewsIdx: number;
     swipeableViewsIdxSet: Dispatch<SetStateAction<number>>;
+    sceneSelected: string;
+    onSceneSelectedChange: Dispatch<SetStateAction<string>>;
 }
 
 export enum MapFunction {
@@ -84,6 +85,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
     sharedState,
     swipeableViewsIdx,
     swipeableViewsIdxSet,
+    sceneSelected,
+    onSceneSelectedChange,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -328,6 +331,9 @@ const AutoNav: React.FC<AutoNavProps> = ({
                 selectedLocationMenuItemSet={selectedLocationMenuItemSet}
                 goalPosition={goalPosition}
                 addToast={addToast}
+                swipeableViewsIdxSet={swipeableViewsIdxSet}
+                sceneSelected={sceneSelected}
+                onSceneSelectedChange={onSceneSelectedChange}
             />
             <Toasts toasts={toasts} toastsSet={toastsSet} />
         </div>

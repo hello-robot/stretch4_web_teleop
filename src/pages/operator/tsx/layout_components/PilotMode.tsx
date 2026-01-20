@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { Dispatch, useCallback, SetStateAction } from "react";
 import { SimpleCameraView } from "./SimpleCameraView";
 import { TabGroup } from "../basic_components/TabGroup";
 import FooterPilotMode from "./FooterPilotMode";
@@ -19,6 +19,8 @@ interface PilotModeProps {
     setActionMode: (mode: string) => void;
     setPilotControlsCurrent: (pilotControlsCurrent: string) => void;
     swipeableViewsIdxSet: (idx: number) => void;
+    sceneSelected: string;
+    onSceneSelectedChange: Dispatch<SetStateAction<string>>;
 }
 
 const PilotMode: React.FC<PilotModeProps> = ({
@@ -33,6 +35,8 @@ const PilotMode: React.FC<PilotModeProps> = ({
     setActionMode,
     setPilotControlsCurrent,
     swipeableViewsIdxSet,
+    sceneSelected,
+    onSceneSelectedChange,
 }) => {
     const onActionSpeedChange = useCallback(
         (newSpeed: number) => {
@@ -97,6 +101,9 @@ const PilotMode: React.FC<PilotModeProps> = ({
                 isCameraVeilVisibleSet={isCameraVeilVisibleSet}
                 // Swipeable Views
                 swipeableViewsIdxSet={swipeableViewsIdxSet}
+                // Scene Selection
+                sceneSelected={sceneSelected}
+                onSceneSelectedChange={onSceneSelectedChange}
             />
         </div>
     );
