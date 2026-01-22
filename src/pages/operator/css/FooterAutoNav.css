@@ -1,11 +1,12 @@
 .footer-auto-nav {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 10px 20px 40px;
-    background-color: #000000;
-    --button-wrapper-width: 80px;
-    --button-width: 35px;
+    flex-direction: column;
+    /* Height will likely need to be
+    more fluid in the future */
+    height: 131px;
+    --button-wrapper-width: 40px;
+    --button-width: 40px;
 }
 
 @media (min-width: 900px) {
@@ -19,14 +20,13 @@ button.auto-nav-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 42px;
     background: transparent;
     border: 1px solid hsl(0deg 0% 100% / 10%);
     box-shadow: none;
     white-space: nowrap;
     color: #ffffff;
     font-weight: 700;
-    padding: 10px 9px 10px 14px;
+    padding: 6px 14px;
     border-radius: 10px;
 }
 
@@ -66,9 +66,11 @@ button.auto-nav-button .auto-nav-button-icon {
 }
 
 .locations-menu-wrapper button.locations-menu .locations-menu-icon {
+    position: relative;
+    left: -3px;
     display: inline-block;
-    width: var(--button-width);
-    height: var(--button-width);
+    width: 36px;
+    height: 36px;
 }
 
 .locations-menu-wrapper button.locations-menu:active span.locations-menu-icon {
@@ -92,9 +94,11 @@ button.auto-nav-button .auto-nav-button-icon {
 }
 
 .add-location-wrapper button.add-location .add-location-icon {
+    position: relative;
+    left: 7px;
     display: inline-block;
-    width: 27px;
-    height: 27px;
+    width: 35px;
+    height: 35px;
 }
 
 /* .add-location-wrapper button.add-location:active span.add-location-icon {
@@ -289,14 +293,13 @@ button.cancel-auto-nav-button {
     align-items: center;
     justify-content: center;
     gap: 5px;
-    height: 42px;
     background: hsl(0 30% 17% / 1);
     border: none;
     box-shadow: 0px 2px 5px -2px hsl(0 100% 30% / 1);
     white-space: nowrap;
     color: hsl(0 100% 50%);
     font-weight: 700;
-    padding: 10px 9px 10px 14px;
+    padding: 6px 14px;
     border-radius: 10px;
 }
 

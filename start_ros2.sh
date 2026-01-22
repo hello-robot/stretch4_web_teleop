@@ -56,5 +56,5 @@ sudo udevadm control --reload-rules && sudo udevadm trigger &>> $REDIRECT_LOGFIL
 
 echo "Start ROS2..."
 sleep 2;
-screen -dm -S "web_teleop_ros" ros2 launch stretch4_web_teleop SE3_web_interface.launch.py $MAP_ARG $TTS_ARG &>> $REDIRECT_LOGFILE
+screen -dm -S "web_teleop_ros" ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG $TTS_ARG &>> $REDIRECT_LOGFILE
 sleep 3;

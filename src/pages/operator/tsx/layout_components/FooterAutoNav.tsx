@@ -14,6 +14,7 @@ import ScrollableList from '../static_components/ScrollableList';
 import DeleteIcon from '@mui/icons-material/Delete';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import ModeEditIcon from '@mui/icons-material/ModeEdit';
+import FooterGlobal from './FooterGlobal';
 import { set } from 'firebase/database';
 
 import StartNavIcon from '../../icons/StartNavIcon.svg';
@@ -36,6 +37,8 @@ interface FooterAutoNavProps {
     goalPosition: ROSPoint | undefined; // Assuming goalPosition is a Vector3
     addToast: (type: "success" | "error" | "info", message: string, duration?: number) => void;
     swipeableViewsIdxSet?: Dispatch<SetStateAction<number>>;
+    sceneSelected?: string;
+    onSceneSelectedChange?: Dispatch<SetStateAction<string>>;
 }
 
 interface ModalAddLocationProps {
@@ -500,6 +503,8 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     swipeableViewsIdxSet,
     goalPosition,
     addToast,
+    sceneSelected,
+    onSceneSelectedChange,
 }) => {
 
     React.useEffect(() => {
@@ -566,121 +571,127 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
 
     return (
         <div className="footer-auto-nav">
-            {/* <LocationsMenu> */}
-            <div className="locations-menu-wrapper">
-                <ModalLocationsMenu
-                    poses={poses}
-                    posesSet={posesSet}
-                    selectedLocationMenuItemSet={selectedLocationMenuItemSet}
-                    functs={functs}
-                    isModalLocationsMenuVisible={isModalLocationsMenuVisible}
-                    isModalLocationsMenuVisibleSet={isModalLocationsMenuVisibleSet}
-                    getPosesLatest={getPosesLatest}
-                    addToast={addToast}
-                />
-                <button
-                    onClick={() => {
-                        isModalLocationsMenuVisibleSet(true);
-                    }}
-                    className="locations-menu"
-                >
-                    <img src={LocationsMenuIcon} className="locations-menu-icon" alt="" />
-                </button>
-            </div>
-            {/* </LocationsMenu> */}
-
-            {/* <StartNavButton> */}
-            {!isCurrentlyMoving
-                ? (
-                    <motion.button
-                        onClick={handleStartAutoNav}
-                        disabled={!goalPosition && !selectedLocationMenuItem}
-                        className="auto-nav-button"
-                        initial={false}
-                        animate={
-                            goalPosition || selectedLocationMenuItem
-                                ? { width: 100 }
-                                : { width: 70 }
-                        }
-                        transition={{
-                            type: 'spring',
-                            stiffness: 300,
-                            damping: 20,
-                            mass: 0.7,
-                            bounce: 0.6,
+            <div className="footer-row">
+                {/* <LocationsMenu> */}
+                <div className="locations-menu-wrapper">
+                    <ModalLocationsMenu
+                        poses={poses}
+                        posesSet={posesSet}
+                        selectedLocationMenuItemSet={selectedLocationMenuItemSet}
+                        functs={functs}
+                        isModalLocationsMenuVisible={isModalLocationsMenuVisible}
+                        isModalLocationsMenuVisibleSet={isModalLocationsMenuVisibleSet}
+                        getPosesLatest={getPosesLatest}
+                        addToast={addToast}
+                    />
+                    <button
+                        onClick={() => {
+                            isModalLocationsMenuVisibleSet(true);
                         }}
-                        style={{ overflow: 'hidden', display: 'inline-flex', alignItems: 'center' }}
+                        className="locations-menu"
                     >
-                        <span>Start</span>
-                        <motion.img
-                            src={StartNavIcon}
-                            className="auto-nav-button-icon"
-                            initial={{ x: -40, opacity: 0, filter: 'brightness(1)' }}
-                            animate={goalPosition || selectedLocationMenuItem
-                                ? { x: 0, opacity: 1, filter: ['brightness(1)', 'brightness(1.7)', 'brightness(1)'] }
-                                : { x: 20, opacity: 0, filter: 'brightness(1)' }
+                        <img src={LocationsMenuIcon} className="locations-menu-icon" alt="" />
+                    </button>
+                </div>
+                {/* </LocationsMenu> */}
+                {/* <StartNavButton> */}
+                {!isCurrentlyMoving
+                    ? (
+                        <motion.button
+                            onClick={handleStartAutoNav}
+                            disabled={!goalPosition && !selectedLocationMenuItem}
+                            className="auto-nav-button"
+                            initial={false}
+                            animate={
+                                goalPosition || selectedLocationMenuItem
+                                    ? { width: 100 }
+                                    : { width: 70 }
                             }
-                            transition={goalPosition || selectedLocationMenuItem
-                                ? {
-                                    type: 'spring',
-                                    stiffness: 400,
-                                    damping: 12,
-                                    mass: 0.6,
-                                    bounce: 0.7,
-                                    filter: {
-                                        duration: 2,
-                                        repeat: Infinity,
-                                        repeatType: 'loop',
-                                        ease: 'easeInOut',
-                                    },
+                            transition={{
+                                type: 'spring',
+                                stiffness: 300,
+                                damping: 20,
+                                mass: 0.7,
+                                bounce: 0.6,
+                            }}
+                            style={{ overflow: 'hidden', display: 'inline-flex', alignItems: 'center' }}
+                        >
+                            <span>Start</span>
+                            <motion.img
+                                src={StartNavIcon}
+                                className="auto-nav-button-icon"
+                                initial={{ x: -40, opacity: 0, filter: 'brightness(1)' }}
+                                animate={goalPosition || selectedLocationMenuItem
+                                    ? { x: 0, opacity: 1, filter: ['brightness(1)', 'brightness(1.7)', 'brightness(1)'] }
+                                    : { x: 20, opacity: 0, filter: 'brightness(1)' }
                                 }
-                                : {
-                                    type: 'spring',
-                                    stiffness: 400,
-                                    damping: 12,
-                                    mass: 0.6,
-                                    bounce: 0.7,
+                                transition={goalPosition || selectedLocationMenuItem
+                                    ? {
+                                        type: 'spring',
+                                        stiffness: 400,
+                                        damping: 12,
+                                        mass: 0.6,
+                                        bounce: 0.7,
+                                        filter: {
+                                            duration: 2,
+                                            repeat: Infinity,
+                                            repeatType: 'loop',
+                                            ease: 'easeInOut',
+                                        },
+                                    }
+                                    : {
+                                        type: 'spring',
+                                        stiffness: 400,
+                                        damping: 12,
+                                        mass: 0.6,
+                                        bounce: 0.7,
+                                    }
                                 }
-                            }
-                            style={{ display: 'inline-block', marginLeft: 8 }}
-                        />
-                    </motion.button>
-                )
-                : (<button
-                    className="cancel-auto-nav-button"
-                    onClick={() => {
-                        functs.CancelGoal();
-                        isCurrentlyMovingSet(!isCurrentlyMoving);
-                        isSelectingGoalSet(true);
-                    }}
-                >
-                    <span>Stop</span>
-                    <StopCircleIcon className="cancel-auto-nav-icon" />
-                </button>)}
-            {/* </AutoNavMainButton> */}
-
-            {/* <AddLocationButton> */}
-            <div className="add-location-wrapper">
-                <ModalAddLocation
-                    functs={functs}
-                    poses={poses}
-                    posesSet={posesSet}
-                    isModalAddLocationVisible={isModalAddLocationVisible}
-                    isModalAddLocationVisibleSet={isModalAddLocationVisibleSet}
-                    getPosesLatest={getPosesLatest}
-                    addToast={addToast}
-                />
-                <button
-                    onClick={() => {
-                        isModalAddLocationVisibleSet(true);
-                    }}
-                    className="add-location"
-                >
-                    <img src={AddLocationIcon} className="add-location-icon" alt="" />
-                </button>
+                                style={{ display: 'inline-block', marginLeft: 8 }}
+                            />
+                        </motion.button>
+                    )
+                    : (<button
+                        className="cancel-auto-nav-button"
+                        onClick={() => {
+                            functs.CancelGoal();
+                            isCurrentlyMovingSet(!isCurrentlyMoving);
+                            isSelectingGoalSet(true);
+                        }}
+                    >
+                        <span>Stop</span>
+                        <StopCircleIcon className="cancel-auto-nav-icon" />
+                    </button>)}
+                {/* </AutoNavMainButton> */}
+                {/* <AddLocationButton> */}
+                <div className="add-location-wrapper">
+                    <ModalAddLocation
+                        functs={functs}
+                        poses={poses}
+                        posesSet={posesSet}
+                        isModalAddLocationVisible={isModalAddLocationVisible}
+                        isModalAddLocationVisibleSet={isModalAddLocationVisibleSet}
+                        getPosesLatest={getPosesLatest}
+                        addToast={addToast}
+                    />
+                    <button
+                        onClick={() => {
+                            isModalAddLocationVisibleSet(true);
+                        }}
+                        className="add-location"
+                    >
+                        <img src={AddLocationIcon} className="add-location-icon" alt="" />
+                    </button>
+                </div>
+                {/* </AddLocationButton> */}
             </div>
-            {/* </AddLocationButton> */}
-        </div >
+            <FooterGlobal
+                swipeableViewsIdxSet={swipeableViewsIdxSet}
+                sceneSelected={sceneSelected}
+                onSceneSelectedChange={onSceneSelectedChange}
+            />
+
+        </div>
     );
 };
 
