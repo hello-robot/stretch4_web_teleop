@@ -10,9 +10,9 @@
 # realsense nodes.
 screen -S "web_teleop_ros" -X stuff '^C'
 t1=$?
-sleep 3;
+sleep 3
 if [[ $t1 -ne 0 ]]; then
-    echo "Using pkill"
-    sudo pkill screen
+	echo "Using pkill"
+	sudo pkill screen
 fi
 pm2 kill

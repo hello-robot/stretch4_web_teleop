@@ -50,13 +50,10 @@ repos:
                     --ignore-missing-imports,
                 ]
 
-    - repo: https://github.com/lovesegfault/beautysh
-      rev: v6.2.1
+    - repo: https://github.com/scop/pre-commit-shfmt
+      rev: v3.12.0-2
       hooks:
-          - id: beautysh
-            args: ["--check"]
-            additional_dependencies:
-              - setuptools
+        - id: shfmt
 
     - repo: https://github.com/executablebooks/mdformat
       rev: 0.7.16
