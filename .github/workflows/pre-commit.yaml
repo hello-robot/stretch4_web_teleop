@@ -18,7 +18,7 @@ concurrency:
 
 # Global env vars
 env:
-  PYTHON_VERSION: "3.10"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   pre-commit:
@@ -50,7 +50,6 @@ jobs:
           key: ${{ runner.os }}-npm-
           restore-keys: |
             ${{ runner.os }}-npm-
-
       # Cache pip for Python hook installs
       - name: Cache pip
         uses: actions/cache@v3
@@ -59,10 +58,12 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-
       # Install JS devDependencies
       - name: Install devDependencies
         run: npm install --legacy-peer-deps
+
+      - name: Install specific setuptools version
+        run: pip install setuptools==81.0.0
 
       # Run pre-commit in check-only mode (fail on any diffs)
       - name: Run pre-commit (check-only)

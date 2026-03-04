@@ -60,8 +60,7 @@ export interface setRobotModeCommand {
 
 export interface CameraPerspectiveCommand {
     type: "setCameraPerspective";
-    camera: "overhead" | "realsense" | "gripper";
-    perspective: string;
+    perspective: "left" | "center" | "right";
 }
 
 export interface ToggleCommand {

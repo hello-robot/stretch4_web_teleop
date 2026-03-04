@@ -162,11 +162,11 @@ export const MobileOperator = (props: {
     /** State passed from the operator and shared by all components */
     const sharedState: SharedState = {
         customizing: false,
-        onSelect: () => { },
+        onSelect: () => {},
         remoteStreams: remoteStreams,
         selectedPath: "deselected",
         dropZoneState: {
-            onDrop: () => { },
+            onDrop: () => {},
             selectedDefinition: undefined,
         },
         buttonStateMap: buttonStateMap.current,

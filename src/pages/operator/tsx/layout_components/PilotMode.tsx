@@ -1,11 +1,21 @@
-import React, { Dispatch, useCallback, SetStateAction } from "react";
+import React, { Dispatch, useCallback, SetStateAction, useState } from "react";
 import { SimpleCameraView } from "./SimpleCameraView";
 import { TabGroup } from "../basic_components/TabGroup";
 import FooterPilotMode from "./FooterPilotMode";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { CameraViewId } from "../utils/component_definitions";
+import cameraIcon from "operator/icons/Camera_Icon.svg";
+import cameraLeft from "operator/icons/Camera_Left.svg";
+import cameraCenter from "operator/icons/Camera_Center.svg";
+import cameraRight from "operator/icons/Camera_Right.svg";
+import {
+    RadialCornerMenu,
+    RadialCornerMenuOption,
+} from "../basic_components/RadialCornerMenu";
+import { pilotModeFunctionProvider } from "..";
 import { AnimatePresence, motion } from "framer-motion";
 import "../../css/PilotMode.css";
+import { PilotModeFunctions } from "../function_providers/PilotModeFunctionProvider";
 
 interface PilotModeProps {
     cameraID: CameraViewId;
@@ -46,6 +56,49 @@ const PilotMode: React.FC<PilotModeProps> = ({
         [setVelocityScale]
     );
 
+    const [isRadialCornerMenuOpen, setIsRadialCornerMenuOpen] = useState(false);
+    const [activeCameraIcon, setActiveCameraIcon] = useState(cameraRight);
+
+    // Options for the corner menu
+    const menuOptions: RadialCornerMenuOption[] = [
+        {
+            iconSrc: cameraRight,
+            label: "R",
+            onClick: () => {
+                pilotModeFunctionProvider.provideFunctions(
+                    PilotModeFunctions.SetCameraRight
+                )();
+                setActiveCameraIcon(cameraRight);
+                setIsRadialCornerMenuOpen(false);
+                isCameraVeilVisibleSet(false);
+            },
+        },
+        {
+            iconSrc: cameraCenter,
+            label: "C",
+            onClick: () => {
+                pilotModeFunctionProvider.provideFunctions(
+                    PilotModeFunctions.SetCameraCenter
+                )();
+                setActiveCameraIcon(cameraCenter);
+                setIsRadialCornerMenuOpen(false);
+                isCameraVeilVisibleSet(false);
+            },
+        },
+        {
+            iconSrc: cameraLeft,
+            label: "L",
+            onClick: () => {
+                pilotModeFunctionProvider.provideFunctions(
+                    PilotModeFunctions.SetCameraLeft
+                )();
+                setActiveCameraIcon(cameraLeft);
+                setIsRadialCornerMenuOpen(false);
+                isCameraVeilVisibleSet(false);
+            },
+        },
+    ];
+
     return (
         <div className="pilot-mode-wrapper">
             <div className="controls">
@@ -85,6 +138,41 @@ const PilotMode: React.FC<PilotModeProps> = ({
                         </motion.div>
                     )}
                 </AnimatePresence>
+                {activeMainGroupTab === 0 && !isCameraVeilVisible && (
+                    <>
+                        {/* Camera Button (Left) */}
+                        <div className="switch-camera-btn-container">
+                            <button
+                                className="switch-camera-btn"
+                                type="button"
+                                onClick={() => {
+                                    setIsRadialCornerMenuOpen(true);
+                                    isCameraVeilVisibleSet(true);
+                                }}
+                            >
+                                <img src={activeCameraIcon} alt="Camera Menu" />
+                            </button>
+                        </div>
+                    </>
+                )}
+                {/* Corner Menu - Outside the visibility check but controlled by its own state */}
+                <RadialCornerMenu
+                    isOpen={isRadialCornerMenuOpen}
+                    onClose={() => {
+                        setIsRadialCornerMenuOpen(false);
+                        isCameraVeilVisibleSet(false);
+                    }}
+                    options={menuOptions}
+                    selectedLabel={
+                        activeCameraIcon === cameraLeft
+                            ? "L"
+                            : activeCameraIcon === cameraCenter
+                              ? "C"
+                              : activeCameraIcon === cameraRight
+                                ? "R"
+                                : undefined
+                    }
+                />
             </div>
             <FooterPilotMode
                 // Pilot Controls

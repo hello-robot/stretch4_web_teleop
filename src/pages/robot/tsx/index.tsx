@@ -267,10 +267,9 @@ function handleMessage(message: WebRTCMessage) {
                 : robot.switchToPositionMode();
             break;
         case "setCameraPerspective":
-            robot.setCameraPerspective({
-                camera: message.camera,
-                perspective: message.perspective,
-            });
+            if (message.perspective == "left") robot.useLeftCamera();
+            else if (message.perspective == "right") robot.useRightCamera();
+            else if (message.perspective == "center") robot.useCenterCamera();
             break;
         case "setRobotPose":
             robot.executePoseGoal(message.pose);

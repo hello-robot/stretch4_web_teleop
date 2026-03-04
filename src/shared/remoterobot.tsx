@@ -125,13 +125,9 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
-    setCameraPerspective(
-        camera: "overhead" | "realsense" | "gripper",
-        perspective: string
-    ) {
+    setCameraPerspective(perspective: "left" | "center" | "right") {
         let cmd: CameraPerspectiveCommand = {
             type: "setCameraPerspective",
-            camera: camera,
             perspective: perspective,
         };
         this.robotChannel(cmd);

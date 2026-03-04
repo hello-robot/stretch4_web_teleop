@@ -57,9 +57,11 @@ export class Robot extends React.Component {
     private moveToPregraspClient?: Action;
     private showTabletClient?: Action;
     private cmdVelTopic?: Topic;
+    private useCenterCameraService?: Service;
+    private useLeftCameraService?: Service;
+    private useRightCameraService?: Service;
     private switchToNavigationService?: Service;
     private switchToPositionService?: Service;
-    private setCameraPerspectiveService?: Service;
     private setRealsenseDepthSensingService?: Service;
     private setGripperDepthSensingService?: Service;
     private setExpandedGripperService?: Service;
@@ -282,6 +284,9 @@ export class Robot extends React.Component {
         this.createMoveToPregraspClient();
         this.createShowTabletClient();
         this.createCmdVelTopic();
+        this.createUseCenterCameraService();
+        this.createUseLeftCameraService();
+        this.createUseRightCameraService();
         this.createSwitchToNavigationService();
         this.createSwitchToPositionService();
         this.createRealsenseDepthSensingService();
@@ -582,6 +587,30 @@ export class Robot extends React.Component {
         });
     }
 
+    createUseLeftCameraService() {
+        this.useLeftCameraService = new Service({
+            ros: this.ros,
+            name: "/use_left_camera",
+            serviceType: "std_srvs/Trigger",
+        });
+    }
+
+    createUseRightCameraService() {
+        this.useRightCameraService = new Service({
+            ros: this.ros,
+            name: "/use_right_camera",
+            serviceType: "std_srvs/Trigger",
+        });
+    }
+
+    createUseCenterCameraService() {
+        this.useCenterCameraService = new Service({
+            ros: this.ros,
+            name: "/use_center_camera",
+            serviceType: "std_srvs/Trigger",
+        });
+    }
+
     createSwitchToNavigationService() {
         this.switchToNavigationService = new Service({
             ros: this.ros,
@@ -797,6 +826,33 @@ export class Robot extends React.Component {
     setRunStop(toggle: boolean) {
         var request = { data: toggle };
         this.setRunStopService?.callService(request, (response: boolean) => {});
+    }
+
+    useLeftCamera() {
+        var request = {};
+        this.useLeftCameraService?.callService(request, (response: boolean) => {
+            console.log("Using left camera");
+        });
+    }
+
+    useRightCamera() {
+        var request = {};
+        this.useRightCameraService?.callService(
+            request,
+            (response: boolean) => {
+                console.log("Using right camera");
+            }
+        );
+    }
+
+    useCenterCamera() {
+        var request = {};
+        this.useCenterCameraService?.callService(
+            request,
+            (response: boolean) => {
+                console.log("Using center camera");
+            }
+        );
     }
 
     /**

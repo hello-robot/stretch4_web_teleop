@@ -16,7 +16,7 @@
                     "rotate": "ROTATE_90_CLOCKWISE",
                 },
             # 1920 x 1200 image from left camera
-            "left": {
+            "right": {
                     # The mask contain params to make a circular mask over the image
                     # Pass "mask": null to not create mask
                     "mask": null,
@@ -37,7 +37,7 @@
                     "rotate": "ROTATE_90_CLOCKWISE",
                 },
             # 1920 x 1200 image from left camera
-            "right": {
+            "left": {
                     # The mask contain params to make a circular mask over the image
                     # Pass "mask": null to not create mask
                     "mask": null,
@@ -56,6 +56,27 @@
                     # Pass "rotate": null to not rotate
                     # "rotate": null,
                     "rotate": "ROTATE_90_COUNTERCLOCKWISE",
+                },
+            # 3040 x 4056 image from left camera
+            "center": {
+                    # The mask contain params to make a circular mask over the image
+                    # Pass "mask": null to not create mask
+                    "mask": null,
+                    # The crop contain params to crop the image
+                    # x_max - x_min = mask_width and y_max - y_min = mask_height
+                    # Pass "crop": null to not crop image
+                    # No crop: [0, width, 0, height] = [0, 1200, 0, 1920]
+                    "crop":
+                        {
+                            "y_min": 720,
+                            "y_max": 2320,
+                            "x_min": 0,
+                            "x_max": 3690,
+                        },
+                    # Number of degrees to rotate video stream clockwise
+                    # Pass "rotate": null to not rotate
+                    # "rotate": null,
+                    "rotate": "ROTATE_90_CLOCKWISE",
                 },
         },
     "realsense":

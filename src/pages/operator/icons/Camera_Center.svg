@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="203.2mm"
+   height="152.40001mm"
+   viewBox="0 0 203.2 152.40001"
+   version="1.1"
+   id="svg1"
+   xml:space="preserve"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+     id="defs1" /><g
+     id="layer1"
+     transform="translate(-2.7104182,-67.659474)"><g
+       id="g3"><g
+         style="overflow:hidden;fill:#1b90e5;fill-opacity:1"
+         id="g1"
+         transform="matrix(0.26458333,0,0,0.26458333,-31.156248,8.3928044)"><path
+           d="m 512,550 m -115,0 a 115,115 0 1 0 230,0 115,115 0 1 0 -230,0 z"
+           fill=""
+           id="path1"
+           style="fill:#1b90e5;fill-opacity:1" /><path
+           d="M 835,320 H 726 c -9.2,0 -17.8,-4 -24,-10.8 C 645.2,245.6 623.8,224 600.6,224 h -171 c -23.4,0 -46.4,21.6 -103.4,85.4 -6,6.8 -14.8,10.6 -23.8,10.6 h -8.2 v -16 c 0,-8.8 -7.2,-16 -16,-16 h -52 c -8.8,0 -16,7.2 -16,16 v 16 h -15 c -35.4,0 -67.2,26.4 -67.2,61.4 v 352 c 0,35 31.8,66.6 67,66.6 h 640 c 35.2,0 61,-31.6 61,-66.6 v -352 C 896,346.4 870.2,320 835,320 Z M 520,720.8 C 419.4,725.4 336.6,642.6 341.2,542 c 4,-87.8 75,-158.8 162.8,-162.8 100.6,-4.6 183.4,78.2 178.8,178.8 -4,87.8 -75,158.8 -162.8,162.8 z M 704,436 c -14.4,0 -26,-11.6 -26,-26 0,-14.4 11.6,-26 26,-26 14.4,0 26,11.6 26,26 0,14.4 -11.6,26 -26,26 z"
+           fill=""
+           id="path2"
+           style="fill:#1b90e5;fill-opacity:1" /></g><rect
+         style="fill:#1b90e5;fill-opacity:1;stroke:#ffffff;stroke-width:1.03717;stroke-opacity:0"
+         id="rect3"
+         width="135.59895"
+         height="101.69922"
+         x="36.510941"
+         y="101.69922" /></g><text
+       xml:space="preserve"
+       style="font-size:122.287px;text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#cdcdcd;stroke:#ffffff;stroke-width:2.24704;stroke-opacity:0"
+       x="101.47417"
+       y="194.81001"
+       id="text1"><tspan
+         id="tspan1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:122.287px;font-family:Arial;-inkscape-font-specification:'Arial Bold';fill:#f9f9f9;stroke-width:2.24704"
+         x="101.47417"
+         y="194.81001">C</tspan></text></g></svg>
