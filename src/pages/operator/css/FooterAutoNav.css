@@ -11,7 +11,11 @@
 
 @media (min-width: 900px) {
     .footer-auto-nav {
-        width: 54%;
+        width: 100%;
+        margin: 0 auto;
+    }
+    .footer-auto-nav .footer-row {
+        width: calc(100vh * 0.5);
         margin: 0 auto;
     }
 }
@@ -109,20 +113,6 @@ button.auto-nav-button .auto-nav-button-icon {
 }
 
 /* END Add Location */
-
-.locations-menu-list {
-}
-
-/* .locations-menu-list::after {
-  content: '';
-  position: fixed;
-  bottom: 59px;
-  left: 0;
-  right: 0;
-  height: 20px;
-  background: linear-gradient(to bottom, hsl(204.32deg 50.68% 14.31% / 0%) 0%, hsl(204.32deg 50.68% 14.31%) 100%);
-  pointer-events: none;
-} */
 
 .locations-menu-list-item {
     display: flex;

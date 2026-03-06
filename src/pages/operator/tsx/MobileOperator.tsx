@@ -234,7 +234,10 @@ export const MobileOperator = (props: {
                     className="swipeable-views"
                     index={swipeableViewsIdx}
                     onChangeIndex={(idx: number) => swipeableViewsIdxSet(idx)}
-                    enableMouseEvents={true}
+                    // Disable touch events. Scenes are always programmatically changed.
+                    disabled
+                    // Disable mouse events. Scenes are always programmatically changed.
+                    enableMouseEvents={false}
                     containerStyle={{ height: "100%" }}
                     slideStyle={{ overflowX: "hidden", position: "relative" }}
                     springConfig={{

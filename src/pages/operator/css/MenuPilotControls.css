@@ -108,6 +108,7 @@
     gap: 35px;
     justify-content: space-between;
     align-items: center;
+    width: 100%;
     border: 1px solid hsla(204, 60%, 25%, 50%);
     border-radius: 20px;
     background: transparent;

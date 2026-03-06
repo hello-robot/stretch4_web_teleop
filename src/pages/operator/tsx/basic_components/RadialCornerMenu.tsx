@@ -200,7 +200,9 @@ export const RadialCornerMenu: React.FC<RadialCornerMenuProps> = ({
                 {/* Close button */}
                 <div
                     className="radial-sector-hit radial-close-hit"
-                    style={{ clipPath: CLOSE_CLIP_PATH }}
+                    style={{
+                        clipPath: CLOSE_CLIP_PATH,
+                    }}
                     onClick={onClose}
                 >
                     <img

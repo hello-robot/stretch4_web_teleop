@@ -28,8 +28,8 @@
 .modal-overlay.enter {
     animation: modal-fade-in 150ms var(--animation-timing-function-modal)
         forwards;
-    animation-delay: 200ms;
     /* Delay fade-in of overlay slightly less or same as modal */
+    animation-delay: 200ms;
 }
 
 .modal-overlay.exit {
@@ -52,30 +52,6 @@
     padding: 20px;
     /* General padding */
     box-sizing: border-box;
-
-    /* top: 100%); /`
-  position: relative;
-  top: 100%;
-
-
-  /* Start off-screen */
-    /* transition: transform 300ms 200ms var(--animation-timing-function-modal); */
-}
-
-@media (min-width: 600px) {
-    /* On larger screens, it might not be full width */
-    .modal-content-wrapper {
-        width: 90%;
-        margin-bottom: 20px;
-        /* Example: give some space from bottom */
-        border-radius: 16px;
-        /* All corners rounded */
-    }
-
-    .modal-overlay {
-        justify-content: center;
-        /* Center vertically on larger screens */
-    }
 }
 
 .modal-content-wrapper.enter {

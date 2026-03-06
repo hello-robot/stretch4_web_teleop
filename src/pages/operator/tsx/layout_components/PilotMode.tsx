@@ -1,4 +1,4 @@
-import React, { Dispatch, useCallback, SetStateAction, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { SimpleCameraView } from "./SimpleCameraView";
 import { TabGroup } from "../basic_components/TabGroup";
 import FooterPilotMode from "./FooterPilotMode";
@@ -32,6 +32,12 @@ interface PilotModeProps {
     sceneSelected: string;
     onSceneSelectedChange: Dispatch<SetStateAction<string>>;
 }
+
+const cameraLabelMap: Record<string, string> = {
+    cameraLeft: "L",
+    cameraCenter: "C",
+    cameraRight: "R",
+};
 
 const PilotMode: React.FC<PilotModeProps> = ({
     cameraID,
@@ -118,7 +124,13 @@ const PilotMode: React.FC<PilotModeProps> = ({
                                 filter: "blur(10px)",
                                 y: 3,
                             }}
-                            animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+                            animate={{
+                                zIndex: 2,
+                                position: "relative",
+                                opacity: 1,
+                                filter: "blur(0px)",
+                                y: 0,
+                            }}
                             exit={{ opacity: 0, filter: "blur(10px)", y: 3 }}
                             transition={{
                                 type: "spring",
@@ -138,41 +150,47 @@ const PilotMode: React.FC<PilotModeProps> = ({
                         </motion.div>
                     )}
                 </AnimatePresence>
-                {activeMainGroupTab === 0 && !isCameraVeilVisible && (
-                    <>
-                        {/* Camera Button (Left) */}
-                        <div className="switch-camera-btn-container">
-                            <button
-                                className="switch-camera-btn"
-                                type="button"
-                                onClick={() => {
-                                    setIsRadialCornerMenuOpen(true);
-                                    isCameraVeilVisibleSet(true);
-                                }}
-                            >
-                                <img src={activeCameraIcon} alt="Camera Menu" />
-                            </button>
-                        </div>
-                    </>
-                )}
-                {/* Corner Menu - Outside the visibility check but controlled by its own state */}
-                <RadialCornerMenu
-                    isOpen={isRadialCornerMenuOpen}
-                    onClose={() => {
-                        setIsRadialCornerMenuOpen(false);
-                        isCameraVeilVisibleSet(false);
+                <div
+                    className="radial-corner-menu"
+                    style={{
+                        // This math calculates the main <video> area's
+                        // `width` and `height` values, which ensures the
+                        // RadialCornerMenu is positioned correctly.
+                        width: 'calc(((100vh - 151px) * 9) / 16)',
+                        height: 'calc(100vh - 151px)'
                     }}
-                    options={menuOptions}
-                    selectedLabel={
-                        activeCameraIcon === cameraLeft
-                            ? "L"
-                            : activeCameraIcon === cameraCenter
-                              ? "C"
-                              : activeCameraIcon === cameraRight
-                                ? "R"
-                                : undefined
-                    }
-                />
+                >
+                    {activeMainGroupTab === 0 && !isCameraVeilVisible && (
+                        <>
+                            {/* Camera Button (Left) */}
+                            <div className="switch-camera-btn-container">
+                                <button
+                                    className="switch-camera-btn"
+                                    type="button"
+                                    onClick={() => {
+                                        setIsRadialCornerMenuOpen(true);
+                                        isCameraVeilVisibleSet(true);
+                                    }}
+                                >
+                                    <img
+                                        src={activeCameraIcon}
+                                        alt="Camera Menu"
+                                    />
+                                </button>
+                            </div>
+                        </>
+                    )}
+                    {/* Corner Menu - Outside the visibility check but controlled by its own state */}
+                    <RadialCornerMenu
+                        isOpen={isRadialCornerMenuOpen}
+                        onClose={() => {
+                            setIsRadialCornerMenuOpen(false);
+                            isCameraVeilVisibleSet(false);
+                        }}
+                        options={menuOptions}
+                        selectedLabel={cameraLabelMap[cameraID]}
+                    />
+                </div>
             </div>
             <FooterPilotMode
                 // Pilot Controls

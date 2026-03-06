@@ -17,8 +17,12 @@
 }
 
 @media (min-width: 900px) {
-    .footer-row {
-        width: 54%;
+    .footer-pilot-mode {
+        width: 100%;
+        margin: 0 auto;
+    }
+    .footer-pilot-mode .footer-row {
+        width: calc(100vh * 0.5);
         margin: 0 auto;
     }
 }
@@ -28,6 +32,16 @@
     max-height: 50px;
     border-radius: 5px;
     width: var(--button-width);
+}
+
+/*  */
+.menu-pilot-controls button.menu-pilot-controls-btn {
+    position: relative;
+    left: 7px;
+    margin: 0 50%;
+    padding: 0;
+    box-shadow: none;
+    background-color: transparent;
 }
 
 /* START ActionSpeed */
@@ -108,12 +122,6 @@
 .menu-pilot-controls {
     display: flex;
     flex-direction: row-reverse;
-}
-
-.menu-pilot-controls button {
-    margin: 0;
-    padding: 0;
-    box-shadow: none;
 }
 
 .menu-pilot-controls button .icon {

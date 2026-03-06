@@ -111,6 +111,7 @@ export const MenuPilotControls: React.FC<MenuPilotControlsProps> = ({
                     }}
                     aria-label="Change button pad"
                     aria-hidden={isCameraVeilVisible}
+                    className="menu-pilot-controls-btn"
                 >
                     <img
                         src={getButtonIcon(buttonPad)}

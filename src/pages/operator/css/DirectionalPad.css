@@ -12,8 +12,8 @@
 
 .base-movement-controls {
     position: relative;
-    bottom: 72px;
-    --size: 174px;
+    bottom: 7vh;
+    --size: 18vh;
     --border-width: 1px;
     --size-icon: calc(var(--size) * 0.19);
     --width-turn-button: calc((var(--size) - (var(--border-width) * 2)) / 2);

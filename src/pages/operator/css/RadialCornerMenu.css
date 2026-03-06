@@ -1,4 +1,54 @@
 /* Container — positioned at bottom-left of the parent */
+.radial-corner-menu {
+    /* z-index: 2;
+    position: absolute;
+    left: calc(50% + 4px);
+    bottom: 0px;
+    translate: -50% 0%;
+    width: auto;
+    height: stretch;
+    aspect-ratio: 9 / 16;
+    pointer-events: none; */
+    z-index: 2;
+    position: absolute;
+    left: calc(50% - 1px);
+    bottom: 0px;
+    translate: -50% 0%;
+    /* width: 466.3125px; */
+    /* height: 829px; */
+    aspect-ratio: 9 / 16;
+    pointer-events: none;
+}
+
+.switch-camera-btn-container {
+    position: absolute;
+    bottom: 20px;
+    left: 10px;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.switch-camera-btn {
+    background-color: transparent;
+    box-shadow: none;
+    border: 1px solid hsla(0deg 0% 100% / 0.4);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    cursor: pointer;
+}
+
+.switch-camera-btn img {
+    padding: 5px;
+    width: 80%;
+    height: 80%;
+    object-fit: contain;
+}
+
 .radial-corner-menu-container {
     position: absolute;
     bottom: 10px;
@@ -68,6 +118,7 @@
 /* Close button hit-area */
 .radial-close-hit {
     cursor: pointer;
+    background-color: hsla(204deg, 100%, 50%, 100%);
 }
 
 /* Icon overlays — positioned at pre-computed centres */
