@@ -344,8 +344,7 @@ input[type="checkbox"] {
 }
 
 /* Add a background color to the button if it is clicked on (add the .active class with JS), and when you move the mouse over it (hover) */
-.accordion:hover,
-.active {
+.accordion:hover {
     background-image: linear-gradient(rgba(0, 0, 0, 0.05) 0 0);
 }
 

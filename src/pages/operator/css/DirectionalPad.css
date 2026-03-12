@@ -197,13 +197,11 @@
     left: 0px;
     rotate: 0deg;
 }
-
 .button-wrapper.west button.button-chevron {
     top: 0px;
     left: calc(var(--size) * -0.9);
     rotate: 90deg;
 }
-
 .button-wrapper.north button.button-chevron {
     top: calc(var(--size) * -0.9);
     left: calc(var(--size-icon) * -1);
@@ -211,6 +209,58 @@
 }
 
 /* END Chevron icon */
+
+/* START Bespoke Arm+Gripper dpad */
+
+/* Resting state */
+.button-wrapper button.button-arm-gripper {
+    z-index: 0;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    padding: 0px;
+    filter: saturate(0) brightness(3);
+    transition: filter 300ms ease-out;
+    background-color: transparent;
+    box-shadow: none;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    touch-action: none;
+}
+
+/* Emulated :active */
+.button-wrapper.active button.button-arm-gripper {
+    filter: saturate(1) brightness(1);
+}
+
+.button-wrapper button.button-arm-gripper img {
+    width: calc(var(--size-icon) * 1.4);
+    height: calc(var(--size-icon) * 1.4);
+    pointer-events: none;
+}
+
+.button-wrapper.north button.button-arm-gripper {
+    top: calc(var(--size) * -0.65);
+}
+.button-wrapper.south button.button-arm-gripper {
+    top: calc(var(--size) * 0.8);
+    left: 0px;
+}
+.button-wrapper.east button.button-arm-gripper {
+    top: 0;
+    left: calc(var(--size) * 0.9 - var(--size-icon));
+}
+.button-wrapper.west button.button-arm-gripper {
+    top: 0px;
+    left: calc(var(--size) * -0.75);
+}
+
+button.Arm.\+.Gripper.button-turn img {
+    width: 40px;
+    height: 40px;
+}
+
+/* END Bespoke Arm+Gripper dpad */
 
 /* START Button turn */
 

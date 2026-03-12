@@ -29,8 +29,13 @@ import DirectionalPad from "../static_components/DirectionalPad";
 import chevronIcon from "operator/icons/Chevron.svg";
 import rotateLeftIcon from "operator/icons/RotateLeft.svg";
 import rotateRightIcon from "operator/icons/RotateRight.svg";
+
 import gripperCloseIcon from "operator/icons/GripperClose.svg";
 import gripperOpenIcon from "operator/icons/GripperOpen.svg";
+import armUpIcon from "operator/icons/ArmUp.svg";
+import armDownIcon from "operator/icons/ArmDown.svg";
+import armExtendIcon from "operator/icons/ArmExtend.svg";
+import armRetractIcon from "operator/icons/ArmRetract.svg";
 
 /** Properties for {@link ButtonPad} */
 type ButtonPadProps = CustomizableComponentProps & {
@@ -59,11 +64,11 @@ const getRotateIcon = (
     pilotControlsCurrent: string,
     direction: string
 ): string => {
-    const isGripper = pilotControlsCurrent === "Arm + Gripper";
+    const isArmElevatorIcons = pilotControlsCurrent === "Arm + Gripper";
     if (direction === "rotate-left") {
-        return isGripper ? gripperCloseIcon : rotateLeftIcon;
+        return isArmElevatorIcons ? armUpIcon : rotateLeftIcon;
     } else {
-        return isGripper ? gripperOpenIcon : rotateRightIcon;
+        return isArmElevatorIcons ? armDownIcon : rotateRightIcon;
     }
 };
 
@@ -169,17 +174,17 @@ export const ButtonPad = (props: ButtonPadProps): React.JSX.Element => {
         else if (pilotControlsCurrent === PilotButtonPadType.ArmGripper) {
             switch (direction) {
                 case "north":
-                    return B.ArmLift;
-                case "south":
-                    return B.ArmLower;
-                case "west":
-                    return B.ArmRetract;
-                case "east":
                     return B.ArmExtend;
-                case "rotate-left":
-                    return B.GripperClose;
-                case "rotate-right":
+                case "south":
+                    return B.ArmRetract;
+                case "west":
                     return B.GripperOpen;
+                case "east":
+                    return B.GripperClose;
+                case "rotate-left":
+                    return B.ArmLift;
+                case "rotate-right":
+                    return B.ArmLower;
                 default:
                     return functions[0]; // Fallback
             }
@@ -259,8 +264,8 @@ export const ButtonPad = (props: ButtonPadProps): React.JSX.Element => {
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${SVG_RESOLUTION} ${props.aspectRatio
-                            ? SVG_RESOLUTION / props.aspectRatio
-                            : SVG_RESOLUTION
+                        ? SVG_RESOLUTION / props.aspectRatio
+                        : SVG_RESOLUTION
                         }`}
                     preserveAspectRatio="none"
                     className={className("button-pads", {
@@ -341,17 +346,17 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
         else if (pilotControlsCurrent === PilotButtonPadType.ArmGripper) {
             switch (direction) {
                 case "north":
-                    return "Raise arm";
-                case "south":
-                    return "Lower arm";
-                case "west":
-                    return "Retract arm";
-                case "east":
                     return "Extend arm";
-                case "rotate-left":
-                    return "Close gripper";
-                case "rotate-right":
+                case "south":
+                    return "Retract arm";
+                case "west":
                     return "Open gripper";
+                case "east":
+                    return "Close gripper";
+                case "rotate-left":
+                    return "Raise arm";
+                case "rotate-right":
+                    return "Lower arm";
                 default:
                     console.warn(`Unknown direction: ${direction}`);
                     return "Unknown action";
@@ -399,11 +404,27 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
         }
     };
     const ariaLabel = getAriaLabel(props.direction);
-    const isCardinal = cardinalDirections.includes(props.direction);
-    const isRotate = rotateDirections.includes(props.direction);
     const pilotControlsCurrent = props.pilotControlsCurrent;
+    const isArmGripperButtons = pilotControlsCurrent === PilotButtonPadType.ArmGripper;
+    const isChevronButtons = !isArmGripperButtons && cardinalDirections.includes(props.direction);
+    const isRotate = rotateDirections.includes(props.direction);
+    const armGripperIconCalc = (direction: string): string => {
+        switch (direction) {
+            case "north":
+                return armExtendIcon;
+            case "south":
+                return armRetractIcon;
+            case "west":
+                return gripperOpenIcon;
+            case "east":
+                return gripperCloseIcon;
+            default:
+                return chevronIcon;
+        }
+    }
 
-    if (isCardinal) {
+    // Renders standard "chevron" style dpad
+    if (isChevronButtons) {
         return (
             <div
                 className={`button-wrapper ${props.direction} ${buttonState}`}
@@ -433,6 +454,8 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                 </button>
             </div>
         );
+        // Both of the buttons in the center of dpad
+
     } else if (isRotate) {
         return (
             <div
@@ -459,6 +482,36 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     />
                     {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
                     <span className="aria-inviz"></span>
+                </button>
+            </div>
+        );
+        // Renders a bespoke Arm+Gripper dpad
+    } else if (isArmGripperButtons) {
+        return (
+            <div
+                className={`button-wrapper ${props.direction} ${buttonState}`}
+                key={props.direction}
+                role="none"
+                {...clickProps}
+            >
+                <div className={`button-cardinal ${buttonState}`}>
+                    <span className="synthetic-bottom-border"></span>
+                </div>
+                <button
+                    type="button"
+                    className={`button-arm-gripper ${buttonState}`}
+                    aria-label={ariaLabel}
+                    tabIndex={0}
+                    disabled={isDisabled}
+                    {...clickProps}
+                >
+                    <img
+                        src={armGripperIconCalc(props.direction)}
+                        alt=""
+                        aria-hidden="true"
+                    />
+                    {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
+                    <span className="aria-inviz">••</span>
                 </button>
             </div>
         );

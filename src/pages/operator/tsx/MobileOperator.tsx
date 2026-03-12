@@ -162,17 +162,17 @@ export const MobileOperator = (props: {
     /** State passed from the operator and shared by all components */
     const sharedState: SharedState = {
         customizing: false,
-        onSelect: () => {},
+        onSelect: () => { },
         remoteStreams: remoteStreams,
         selectedPath: "deselected",
         dropZoneState: {
-            onDrop: () => {},
+            onDrop: () => { },
             selectedDefinition: undefined,
         },
         buttonStateMap: buttonStateMap.current,
         hideLabels: false,
         stretchTool: stretchTool,
-        robotNotHomed: true,
+        robotNotHomed: false,
     };
 
     const buttonPad = (show: boolean) => {
@@ -289,6 +289,7 @@ export const MobileOperator = (props: {
                     >
                         <PilotMode
                             cameraID={cameraID}
+                            setCameraID={setCameraID}
                             remoteStreams={remoteStreams}
                             isCameraVeilVisible={isCameraVeilVisible}
                             tabContent={[controlModes, recordingList]}
