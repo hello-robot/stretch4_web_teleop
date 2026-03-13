@@ -37,10 +37,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       # Setup Node.js for JS hooks
-      - name: Use Node.js 21.x
+      - name: Use Node.js 24.x
         uses: actions/setup-node@v3
         with:
-          node-version: "21.x"
+          node-version: "24.x"
 
       # Cache NPM deps
       - name: Cache NPM

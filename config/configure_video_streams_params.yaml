@@ -97,7 +97,21 @@
                     "crop":
                         { "y_min": 0, "y_max": 240, "x_min": 48, "x_max": 424 },
                     "rotate": null,
-                } },
+                },
+                # 400 x 640
+                "oak": {
+                    # The mask contain params to make a circular mask over the image
+                    # Pass "mask": null to not create mask
+                    "mask": null,
+                    # The crop contain params to crop the image
+                    # x_max - x_min = mask_width and y_max - y_min = mask_height
+                    # Pass "crop": null to not crop image
+                    # No crop: [0, height, 0, width] = [0, 270, 0, 480]
+                    "crop":
+                        { "y_min": 0, "y_max": 400, "x_min": 80, "x_max": 480 },
+                    "rotate": null,
+                }
+            },
     # Images published to /gripper_camera/expanded/image_raw
     # D405 is 480 x 270.
     "expandedGripper": { "d405": {

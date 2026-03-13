@@ -61,9 +61,14 @@ export abstract class FunctionProvider {
     }
 
     public incrementalJointMovement(jointName: ValidJoints, velocity: number) {
-        this.stopCurrentAction();
+        this.stopCurrentAction(true);
         this.activeVelocityAction =
             FunctionProvider.remoteRobot?.setJointVelocity(jointName, velocity);
+        if (jointName === "joint_arm" || jointName === "joint_lift") {
+            setTimeout(() => {
+                this.stopCurrentAction(true);
+            }, 500);
+        }
     }
 
     public continuousJointMovement(jointName: ValidJoints, velocity: number) {

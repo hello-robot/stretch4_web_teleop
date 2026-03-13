@@ -325,21 +325,21 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     joint_wrist_roll: 0.1,
     joint_wrist_pitch: 0.1,
     joint_wrist_yaw: 0.4,
-    translate_mobile_base: 0.1,
-    rotate_mobile_base: 0.1,
+    translate_mobile_base: 0.2,
+    rotate_mobile_base: 0.3,
 };
 
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     joint_head_tilt: 0.1,
     joint_head_pan: 0.1,
     joint_gripper: 0.1,
-    joint_arm: 0.05,
-    joint_lift: 0.05,
+    joint_arm: 0.15,
+    joint_lift: 0.15,
     joint_wrist_roll: 0.1,
     joint_wrist_pitch: 0.1,
     joint_wrist_yaw: 0.1,
-    translate_mobile_base: 0.1,
-    rotate_mobile_base: 0.2,
+    translate_mobile_base: 0.2,
+    rotate_mobile_base: 0.5,
 };
 
 export const navigationProps = {

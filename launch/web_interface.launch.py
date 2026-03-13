@@ -10,7 +10,6 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
-    GroupAction,
     IncludeLaunchDescription,
 )
 from launch.launch_description_sources import (
@@ -68,7 +67,7 @@ def generate_launch_description():
     # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
 
-    stretch_serial_no = "stretch-se4-4013"  # robot_params["robot"]["serial_no"]
+    stretch_serial_no = "stretch-se4-4023"  # robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
     stretch_has_nav_head_cam = symlinks_to_has_nav_head_cam()
@@ -134,25 +133,6 @@ def generate_launch_description():
         ]
     )
 
-    # Launch only D435i if there is no D405
-    ld.add_action(
-        GroupAction(
-            actions=[
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        PathJoinSubstitution(
-                            [
-                                core_package,
-                                "launch",
-                                "d405_basic.launch.py",
-                            ]
-                        )
-                    )
-                )
-            ]
-        )
-    )
-
     tf2_web_republisher_node = Node(
         package="tf2_web_republisher",
         executable="tf2_web_republisher_node",
@@ -170,7 +150,7 @@ def generate_launch_description():
             "mode": "velocity",
             "broadcast_odom_tf": "True",
             "fail_out_of_range_goal": "False",
-            "log_level": "debug",
+            "log_level": "info",
         }.items(),
     )
     ld.add_action(stretch_driver_launch)
@@ -228,44 +208,6 @@ def generate_launch_description():
             ],
         )
         ld.add_action(configure_video_streams_node)
-
-    # navigation_bringup_launch = GroupAction(
-    #     condition=LaunchConfigurationNotEquals("map_yaml", ""),
-    #     actions=[
-    #         IncludeLaunchDescription(
-    #             PythonLaunchDescriptionSource(
-    #                 [stretch_navigation_path, "/launch/bringup_launch.py"]
-    #             ),
-    #             launch_arguments={
-    #                 "use_sim_time": "false",
-    #                 "autostart": "true",
-    #                 "map": PathJoinSubstitution(
-    #                     [
-    #                         teleop_interface_package,
-    #                         "maps",
-    #                         LaunchConfiguration("map_yaml"),
-    #                     ]
-    #                 ),
-    #                 "params_file": LaunchConfiguration("nav2_params_file"),
-    #                 "use_rviz": "false",
-    #             }.items(),
-    #         ),
-    #         IncludeLaunchDescription(
-    #             PythonLaunchDescriptionSource(
-    #                 [stretch_core_path, "/launch/airy_rslidar.launch.py"]
-    #             )
-    #         ),
-    #     ],
-    # )
-
-    # switch_controller_config = Node(
-    #     package="stretch_nav2",
-    #     executable="switch_controller_config.py",
-    #     name="switch_controller_config",
-    #     output="screen",
-    # )
-
-    # ld.add_action(switch_controller_config)
 
     ld.add_action(
         ExecuteProcess(

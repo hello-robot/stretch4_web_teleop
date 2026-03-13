@@ -133,7 +133,7 @@ class ConfigureVideoStreams(Node):
         if self.use_overhead:
             self.overhead_camera_perspective = "right"
         if self.use_gripper:
-            self.gripper_camera_perspective = "d405"
+            self.gripper_camera_perspective = "oak"
 
         # Subscribers
         if self.use_overhead:
@@ -178,7 +178,7 @@ class ConfigureVideoStreams(Node):
             # Subscribe to the RGB ompressed image topic
             self.gripper_camera_rgb_subscriber = self.create_subscription(
                 CompressedImage if use_compressed_image else Image,
-                "/gripper_camera/color/image_rect_raw"
+                "/oak/right/image_raw"
                 + ("/compressed" if use_compressed_image else ""),
                 self.gripper_realsense_rgb_cb,
                 QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
