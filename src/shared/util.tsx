@@ -4,7 +4,7 @@ import { cmd } from "./commands";
 export type ValidJoints =
     | "joint_head_tilt"
     | "joint_head_pan"
-    | "joint_gripper_finger_left"
+    | "joint_gripper"
     | "joint_arm"
     | "wrist_extension"
     | "joint_lift"
@@ -32,7 +32,7 @@ export type RemoteStream = {
 export const AllJoints: ValidJoints[] = [
     "joint_head_tilt",
     "joint_head_pan",
-    "joint_gripper_finger_left",
+    "joint_gripper",
     "joint_arm",
     "wrist_extension",
     "joint_lift",
@@ -305,14 +305,14 @@ export const REALSENSE_GRIPPER_POSE: RobotPose = {
 };
 
 export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
-    wrist_extension: [0.001, 0.518],
+    joint_arm: [0.001, 0.518],
     joint_wrist_roll: [-2.95, 2.94],
     joint_wrist_pitch: [-1.57, 0.57],
     joint_wrist_yaw: [-1.37, 4.41],
     joint_lift: [0.001, 1.1],
     translate_mobile_base: [-30.0, 30.0],
     rotate_mobile_base: [-3.14, 3.14],
-    joint_gripper_finger_left: [-0.37, 0.17],
+    joint_gripper: [-0.37, 0.17],
     joint_head_tilt: [-1.6, 0.3],
     joint_head_pan: [-3.95, 1.7],
 };
@@ -320,7 +320,7 @@ export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     joint_head_tilt: 0.3,
     joint_head_pan: 0.3,
-    wrist_extension: 0.04,
+    joint_arm: 0.04,
     joint_lift: 0.04,
     joint_wrist_roll: 0.1,
     joint_wrist_pitch: 0.1,
@@ -332,12 +332,12 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     joint_head_tilt: 0.1,
     joint_head_pan: 0.1,
-    joint_gripper_finger_left: 0.075,
-    wrist_extension: 0.075,
-    joint_lift: 0.075,
-    joint_wrist_roll: 0.2,
-    joint_wrist_pitch: 0.2,
-    joint_wrist_yaw: 0.2,
+    joint_gripper: 0.1,
+    joint_arm: 0.05,
+    joint_lift: 0.05,
+    joint_wrist_roll: 0.1,
+    joint_wrist_pitch: 0.1,
+    joint_wrist_yaw: 0.1,
     translate_mobile_base: 0.1,
     rotate_mobile_base: 0.2,
 };

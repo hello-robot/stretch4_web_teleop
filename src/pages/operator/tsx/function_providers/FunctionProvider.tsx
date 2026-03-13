@@ -44,18 +44,14 @@ export abstract class FunctionProvider {
     static initialize(
         velocityScale: number,
         actionMode: ActionModeType,
-        pilotControlsCurrent: string
+        pilotControlsCurrent: PilotButtonPadType
     ) {
         this.velocityScale = velocityScale;
         this.actionMode = actionMode;
         this.pilotControlsCurrent = pilotControlsCurrent ?? PilotButtonPads[0];
     }
 
-    public incrementalBaseDrive(
-        linVelX: number,
-        linVelY: number,
-        angVel: number
-    ) {
+    public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {
         this.stopCurrentAction();
         this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
             linVelX,
@@ -64,43 +60,21 @@ export abstract class FunctionProvider {
         );
     }
 
-    public incrementalJointMovement(jointName: ValidJoints, increment: number) {
+    public incrementalJointMovement(jointName: ValidJoints, velocity: number) {
         this.stopCurrentAction();
         this.activeVelocityAction =
-            FunctionProvider.remoteRobot?.incrementalMove(jointName, increment);
+            FunctionProvider.remoteRobot?.setJointVelocity(jointName, velocity);
     }
 
-    public continuousBaseDrive(
-        linVelX: number,
-        linVelY: number,
-        angVel: number
-    ) {
+    public continuousJointMovement(jointName: ValidJoints, velocity: number) {
         this.stopCurrentAction();
-        this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
-            linVelX,
-            linVelY,
-            angVel
-        );
-        this.velocityExecutionHeartbeat = window.setInterval(() => {
-            this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
-                linVelX,
-                linVelY,
-                angVel
-            );
-        }, 150);
-    }
-
-    public continuousJointMovement(jointName: ValidJoints, increment: number) {
-        this.stopCurrentAction();
-        this.activeVelocityAction =
-            FunctionProvider.remoteRobot?.incrementalMove(jointName, increment);
         this.velocityExecutionHeartbeat = window.setInterval(() => {
             this.activeVelocityAction =
-                FunctionProvider.remoteRobot?.incrementalMove(
+                FunctionProvider.remoteRobot?.setJointVelocity(
                     jointName,
-                    increment
+                    velocity
                 );
-        }, 150);
+        }, 25);
     }
 
     // NOTE: When we undo this temp fix (of not stopping the

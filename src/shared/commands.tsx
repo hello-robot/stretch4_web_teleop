@@ -4,6 +4,7 @@ import { ValidJoints } from "./util";
 
 export type cmd =
     | DriveCommand
+    | SetJointVelocityCommand
     | IncrementalMove
     | setRobotModeCommand
     | CameraPerspectiveCommand
@@ -35,6 +36,12 @@ export interface DriveCommand {
         linVelY: number;
         angVel: number;
     };
+}
+
+export interface SetJointVelocityCommand {
+    type: "setJointVelocity";
+    jointName: ValidJoints;
+    velocity: number;
 }
 
 export interface IncrementalMove {

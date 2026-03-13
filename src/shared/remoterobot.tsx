@@ -17,6 +17,7 @@ import {
     GetHasBetaTeleopKit,
     GetStretchTool,
     GetStretchModel,
+    SetJointVelocityCommand,
 } from "shared/commands";
 import {
     ValidJointStateDict,
@@ -95,6 +96,29 @@ export class RemoteRobot extends React.Component<{}, any> {
                     },
                 };
                 this.robotChannel(affirmEvent);
+            },
+        };
+    }
+
+    setJointVelocity(
+        jointName: ValidJoints,
+        velocity: number
+    ): VelocityCommand {
+        let cmd: SetJointVelocityCommand = {
+            type: "setJointVelocity",
+            jointName: jointName,
+            velocity: velocity,
+        };
+        this.robotChannel(cmd);
+
+        return {
+            stop: () => {
+                let stopEvent: SetJointVelocityCommand = {
+                    type: "setJointVelocity",
+                    jointName: jointName,
+                    velocity: 0,
+                };
+                this.robotChannel(stopEvent);
             },
         };
     }
@@ -462,7 +486,7 @@ class RobotSensors extends React.Component {
             filteredPose["joint_head_pan"] = this.robotPose["joint_head_pan"];
         }
         if (arm) {
-            filteredPose["wrist_extension"] = this.robotPose["wrist_extension"];
+            filteredPose["joint_arm"] = this.robotPose["joint_arm"];
         }
         if (lift) {
             filteredPose["joint_lift"] = this.robotPose["joint_lift"];
@@ -479,8 +503,7 @@ class RobotSensors extends React.Component {
             filteredPose["joint_wrist_yaw"] = this.robotPose["joint_wrist_yaw"];
         }
         if (gripper) {
-            filteredPose["joint_gripper_finger_left"] =
-                this.robotPose["joint_gripper_finger_left"];
+            filteredPose["joint_gripper"] = this.robotPose["joint_gripper"];
         }
         return filteredPose;
     }

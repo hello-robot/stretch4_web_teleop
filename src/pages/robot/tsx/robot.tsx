@@ -57,6 +57,7 @@ export class Robot extends React.Component {
     private moveToPregraspClient?: Action;
     private showTabletClient?: Action;
     private cmdVelTopic?: Topic;
+    private jointVelTopic?: Topic;
     private useCenterCameraService?: Service;
     private useLeftCameraService?: Service;
     private useRightCameraService?: Service;
@@ -284,6 +285,7 @@ export class Robot extends React.Component {
         this.createMoveToPregraspClient();
         this.createShowTabletClient();
         this.createCmdVelTopic();
+        this.createJointVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
         this.createUseRightCameraService();
@@ -319,7 +321,7 @@ export class Robot extends React.Component {
     subscribeToJointState() {
         const jointStateTopic: Topic<ROSJointState> = new Topic({
             ros: this.ros,
-            name: "/stretch/joint_states",
+            name: "/joint_states",
             messageType: "sensor_msgs/msg/JointState",
         });
         this.subscriptions.push(jointStateTopic);
@@ -359,7 +361,7 @@ export class Robot extends React.Component {
                     msg.position[idx],
                     msg.velocity[idx]
                 );
-                if (name == "joint_arm") name = "wrist_extension";
+                // if (name == "joint_arm") name = "wrist_extension";
                 this.jointLimits[name] = [msg.position[idx], msg.velocity[idx]];
             });
         });
@@ -549,9 +551,10 @@ export class Robot extends React.Component {
     createTrajectoryClient() {
         this.trajectoryClient = new Action({
             ros: this.ros,
-            name: "/stretch_controller/follow_joint_trajectory",
+            name: "/follow_joint_trajectory",
             actionType: "control_msgs/action/FollowJointTrajectory",
         });
+        console.log("created trajectory client");
     }
 
     createMoveBaseClient() {
@@ -582,8 +585,16 @@ export class Robot extends React.Component {
     createCmdVelTopic() {
         this.cmdVelTopic = new Topic({
             ros: this.ros,
-            name: "/stretch/cmd_vel",
+            name: "/cmd_vel",
             messageType: "geometry_msgs/Twist",
+        });
+    }
+
+    createJointVelTopic() {
+        this.jointVelTopic = new Topic({
+            ros: this.ros,
+            name: "/joint_vel",
+            messageType: "control_msgs/JointJog",
         });
     }
 
@@ -920,6 +931,16 @@ export class Robot extends React.Component {
         this.cmdVelTopic.publish(twist);
     };
 
+    setJointVelocity(jointName: ValidJoints, velocity: number) {
+        this.stopExecution();
+        let jointVelocities = {
+            joint_names: [jointName],
+            velocities: [velocity],
+        };
+        if (!this.jointVelTopic) throw "jointVelTopic is undefined";
+        this.jointVelTopic.publish(jointVelocities);
+    }
+
     makeIncrementalMoveGoal(
         jointName: ValidJoints,
         jointValueInc: number
@@ -935,30 +956,30 @@ export class Robot extends React.Component {
             newJointValue = 0;
         }
 
-        let collision = this.inCollision({
-            jointStateMessage: this.jointState,
-            jointName: jointName,
-        });
-        let collisionIndex = jointValueInc <= 0 ? 0 : 1;
-        if (jointName === "joint_wrist_yaw") {
-            collisionIndex = jointValueInc <= 0 ? 1 : 0;
-        }
+        // let collision = this.inCollision({
+        //     jointStateMessage: this.jointState,
+        //     jointName: jointName,
+        // });
+        // let collisionIndex = jointValueInc <= 0 ? 0 : 1;
+        // if (jointName === "joint_wrist_yaw") {
+        //     collisionIndex = jointValueInc <= 0 ? 1 : 0;
+        // }
         // Negative joint increment is for lower/retract/wrist out
         // Positive joint increment is for lift/extend/wrist in
-        let index = jointValueInc <= 0 ? 0 : 1;
+        // let index = jointValueInc <= 0 ? 0 : 1;
         // If request to move the joint in the direction of collision, cancel movement
-        if (collision[collisionIndex]) return;
+        // if (collision[collisionIndex]) return;
 
         newJointValue = newJointValue + jointValueInc;
 
         // Make sure new joint value is within limits
-        if (jointName in this.jointLimits) {
-            let inLimits = this.inJointLimitsHelper(newJointValue, jointName);
-            if (!inLimits) throw "invalid joint name";
-            // console.log(newJointValue, this.jointLimits[jointName]![index], inLimits[index])
-            if (!inLimits[index])
-                newJointValue = this.jointLimits[jointName]![index];
-        }
+        // if (jointName in this.jointLimits) {
+        //     let inLimits = this.inJointLimitsHelper(newJointValue, jointName);
+        //     if (!inLimits) throw "invalid joint name";
+        //     // console.log(newJointValue, this.jointLimits[jointName]![index], inLimits[index])
+        //     if (!inLimits[index])
+        //         newJointValue = this.jointLimits[jointName]![index];
+        // }
 
         let pose = { [jointName]: newJointValue };
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";

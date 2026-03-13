@@ -252,6 +252,9 @@ function handleMessage(message: WebRTCMessage) {
         case "driveBase":
             robot.executeBaseVelocity(message.modifier);
             break;
+        case "setJointVelocity":
+            robot.setJointVelocity(message.jointName, message.velocity);
+            break;
         case "incrementalMove":
             robot.executeIncrementalMove(message.jointName, message.increment);
             break;
