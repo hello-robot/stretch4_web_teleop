@@ -130,6 +130,8 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
                         disabled={locationName.length === 0}
                         className="btn btn-primary"
                         onClick={handleAccept}
+                        aria-label="Add location"
+                        aria-disabled={locationName.length === 0}
                     >
                         Add Location
                     </button>
@@ -138,6 +140,7 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
                     <button
                         className="btn btn-tertiary"
                         onClick={closeModal}
+                        aria-label="Close modal"
                     >
                         Close
                     </button>
@@ -279,9 +282,9 @@ const LocationsMenuListItem: React.FC<{
                 e.preventDefault();
                 handleSelect(refInput.current.value);
             },
-            'tab-index': 0,
+            tabIndex: 0,
             role: "button",
-            'aria-label': `Select: ${pose}`,
+            "aria-label": `Select ${pose}`,
         }
 
         return (
@@ -308,7 +311,7 @@ const LocationsMenuListItem: React.FC<{
                             <>
                                 <button
                                     className={`locations-menu-list-item-edit-button ${isEditing ? 'editing' : ''}`}
-                                    aria-label={`Edit: ${pose}`}
+                                    aria-label={`Edit ${pose}`}
                                     onClick={activateEditMode}
                                 >
                                     <ModeEditIcon role="img" aria-hidden="true" fontSize="small" />
@@ -317,7 +320,7 @@ const LocationsMenuListItem: React.FC<{
                                 <button
                                     onClick={handleDelete}
                                     className="locations-menu-list-item-delete-button"
-                                    aria-label={`Delete: ${pose}`}
+                                    aria-label={`Delete ${pose}`}
                                 >
                                     <DeleteIcon role="img" aria-hidden="true" fontSize="small" />
                                 </button>
@@ -328,7 +331,7 @@ const LocationsMenuListItem: React.FC<{
                                 onClick={handleSave}
                                 className="btn btn-primary btn-sm"
                                 disabled={!poseNew || poseNew.trim() === pose}
-                                aria-label={`Save as: ${poseNew}`}
+                                aria-label={`Save as ${poseNew}`}
                             >
                                 Save
                             </button>
@@ -585,12 +588,14 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         addToast={addToast}
                     />
                     <button
+                        type="button"
                         onClick={() => {
                             isModalLocationsMenuVisibleSet(true);
                         }}
                         className="locations-menu"
+                        aria-label="Open locations menu"
                     >
-                        <img src={LocationsMenuIcon} className="locations-menu-icon" alt="" />
+                        <img src={LocationsMenuIcon} className="locations-menu-icon" alt="" aria-hidden="true" />
                     </button>
                 </div>
                 {/* </LocationsMenu> */}
@@ -675,22 +680,18 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         addToast={addToast}
                     />
                     <button
+                        type="button"
                         onClick={() => {
                             isModalAddLocationVisibleSet(true);
                         }}
                         className="add-location"
+                        aria-label="Add location"
                     >
-                        <img src={AddLocationIcon} className="add-location-icon" alt="" />
+                        <img src={AddLocationIcon} className="add-location-icon" alt="" aria-hidden="true" />
                     </button>
                 </div>
                 {/* </AddLocationButton> */}
             </div>
-            <FooterGlobal
-                swipeableViewsIdxSet={swipeableViewsIdxSet}
-                sceneSelected={sceneSelected}
-                onSceneSelectedChange={onSceneSelectedChange}
-            />
-
         </div>
     );
 };

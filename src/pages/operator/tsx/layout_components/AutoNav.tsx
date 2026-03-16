@@ -311,10 +311,9 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     return (
         <div className='auto-nav'>
+            <Toasts toasts={toasts} toastsSet={toastsSet} />
             <div className="map-wrapper">
-                <Map
-                    swipeableViewsIdxSet={swipeableViewsIdxSet}
-                />
+                <Map />
             </div>
             <FooterAutoNav
                 handleSelectGoal={handleSelectGoal}
@@ -335,7 +334,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
                 sceneSelected={sceneSelected}
                 onSceneSelectedChange={onSceneSelectedChange}
             />
-            <Toasts toasts={toasts} toastsSet={toastsSet} />
         </div>
     );
 };

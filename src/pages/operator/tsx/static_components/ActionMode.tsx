@@ -156,8 +156,7 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({
                             checked={selectedMode === opt.mode}
                             onChange={() => setSelectedMode(opt.mode)}
                             disabled={loading}
-                            aria-label={`Use \"${opt.mode}\" `}
-                            aria-checked={selectedMode === opt.mode}
+                            aria-label={`Use \"${opt.mode}\" mode`}
                         />
                         <span className="radio-label" aria-hidden="true">
                             {opt.mode}

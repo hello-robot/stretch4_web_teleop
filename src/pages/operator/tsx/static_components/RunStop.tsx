@@ -14,11 +14,15 @@ export const RunStopButton = (props: CustomizableComponentProps) => {
 
     return (
         <div className="runStopContainer">
-            <img
-                src={runStopButton}
+            <button
+                type="button"
                 onClick={functs.onClick}
                 className={className("run-stop-button", { enabled })}
-            />
+                aria-label={enabled ? "Disable run stop" : "Enable run stop"}
+                aria-pressed={enabled}
+            >
+                <img src={runStopButton} alt="" aria-hidden="true" />
+            </button>
             {enabled ? (
                 <span>Run Stop: Enabled</span>
             ) : (

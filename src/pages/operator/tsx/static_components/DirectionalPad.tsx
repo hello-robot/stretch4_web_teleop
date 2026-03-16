@@ -31,7 +31,6 @@ const DirectionalPad: React.FC<DirectionalPadProps> = ({
         return (
             <div
                 className={`base-movement-controls ${isCameraVeilVisible ? "display-none" : "display-block"}`}
-                tabIndex={0}
             >
                 <svg className="mask">
                     <clipPath id="clip-path" clipPathUnits="objectBoundingBox">

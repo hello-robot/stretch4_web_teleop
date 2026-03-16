@@ -155,7 +155,7 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
         >
             <div className="action-speed-options">
                 {options.map((opt) => {
-                    const ariaLabel = `Select \"${opt.value}\" speed`;
+                    const ariaLabel = `Select \"${opt.value}\" speed`;
 
                     return (
                         <button
@@ -174,7 +174,7 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
                                 aria-hidden="true"
                             />
                             {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
-                            <span className="aria-inviz"></span>
+                            <span className="aria-inviz" aria-hidden="true"></span>
                         </button>
                     );
                 })}

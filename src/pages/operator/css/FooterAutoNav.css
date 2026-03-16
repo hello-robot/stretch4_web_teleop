@@ -4,9 +4,17 @@
     flex-direction: column;
     /* Height will likely need to be
     more fluid in the future */
-    height: 131px;
+    height: 65.67px;
     --button-wrapper-width: 40px;
     --button-width: 40px;
+}
+
+.footer-auto-nav .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 0px;
+    background-color: #000000;
 }
 
 @media (min-width: 900px) {
@@ -51,16 +59,22 @@ button.auto-nav-button .auto-nav-button-icon {
 
 .locations-menu-wrapper,
 .add-location-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: var(--button-wrapper-width);
+    flex: 0 0 var(--button-wrapper-width);
 }
 
 /* START Location Menu */
 .locations-menu-wrapper {
-    display: flex;
     flex-direction: row;
 }
 
 .locations-menu-wrapper button.locations-menu {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 0;
     padding: 0;
     width: var(--button-width);
@@ -84,11 +98,13 @@ button.auto-nav-button .auto-nav-button-icon {
 
 /* START Add Location */
 .add-location-wrapper {
-    display: flex;
     flex-direction: row-reverse;
 }
 
 .add-location-wrapper button.add-location {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 0;
     padding: 0;
     width: var(--button-width);

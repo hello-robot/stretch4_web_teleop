@@ -29,8 +29,9 @@ interface PilotModeProps {
     setActionMode: (mode: string) => void;
     setPilotControlsCurrent: (pilotControlsCurrent: string) => void;
     swipeableViewsIdxSet: (idx: number) => void;
+    setCameraID: (id: CameraViewId) => void;
     sceneSelected: string;
-    onSceneSelectedChange: Dispatch<SetStateAction<string>>;
+    onSceneSelectedChange: (scene: string) => void
 }
 
 const cameraLabelMap: Record<string, string> = {
@@ -51,6 +52,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
     setActionMode,
     setPilotControlsCurrent,
     swipeableViewsIdxSet,
+    setCameraID,
     sceneSelected,
     onSceneSelectedChange,
 }) => {
@@ -120,18 +122,33 @@ const PilotMode: React.FC<PilotModeProps> = ({
                         <motion.div
                             key="main-group"
                             initial={{
+                                position: 'absolute',
+                                top: 0,
+                                width: '100%',
+                                height: '100%',
                                 opacity: 0,
                                 filter: "blur(10px)",
                                 y: 3,
                             }}
                             animate={{
                                 zIndex: 2,
-                                position: "relative",
+                                position: 'absolute',
+                                top: 0,
+                                width: '100%',
+                                height: '100%',
                                 opacity: 1,
                                 filter: "blur(0px)",
-                                y: 0,
+                                y: 0
                             }}
-                            exit={{ opacity: 0, filter: "blur(10px)", y: 3 }}
+                            exit={{
+                                position: 'absolute',
+                                top: 0,
+                                width: '100%',
+                                height: '100%',
+                                opacity: 0,
+                                filter: "blur(10px)",
+                                y: 3
+                            }}
                             transition={{
                                 type: "spring",
                                 duration: 1,
@@ -156,8 +173,8 @@ const PilotMode: React.FC<PilotModeProps> = ({
                         // This math calculates the main <video> area's
                         // `width` and `height` values, which ensures the
                         // RadialCornerMenu is positioned correctly.
-                        width: 'calc(((100vh - 151px) * 9) / 16)',
-                        height: 'calc(100vh - 151px)'
+                        width: 'calc(((100dvh - 151px) * 9) / 16)',
+                        height: 'calc(100dvh - 151px)'
                     }}
                 >
                     {activeMainGroupTab === 0 && !isCameraVeilVisible && (
@@ -211,7 +228,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
                 sceneSelected={sceneSelected}
                 onSceneSelectedChange={onSceneSelectedChange}
             />
-        </div>
+        </div >
     );
 };
 

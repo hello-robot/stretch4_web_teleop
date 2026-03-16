@@ -370,9 +370,9 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                 case "south":
                     return "Pitch wrist down";
                 case "west":
-                    return "Yaw wrist right";
-                case "east":
                     return "Yaw wrist left";
+                case "east":
+                    return "Yaw wrist right";
                 case "rotate-left":
                     return "Rotate wrist counter-clockwise";
                 case "rotate-right":
@@ -450,7 +450,7 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                         aria-hidden="true"
                     />
                     {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
-                    <span className="aria-inviz">••</span>
+                    <span className="aria-inviz" aria-hidden="true">••</span>
                 </button>
             </div>
         );
@@ -481,7 +481,37 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                         aria-hidden="true"
                     />
                     {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
-                    <span className="aria-inviz"></span>
+                    <span className="aria-inviz" aria-hidden="true"></span>
+                </button>
+            </div>
+        );
+        // Renders a bespoke Arm+Gripper dpad
+    } else if (isArmGripperButtons) {
+        return (
+            <div
+                className={`button-wrapper ${props.direction} ${buttonState}`}
+                key={props.direction}
+                role="none"
+                {...clickProps}
+            >
+                <div className={`button-cardinal ${buttonState}`}>
+                    <span className="synthetic-bottom-border"></span>
+                </div>
+                <button
+                    type="button"
+                    className={`button-arm-gripper ${buttonState}`}
+                    aria-label={ariaLabel}
+                    tabIndex={0}
+                    disabled={isDisabled}
+                    {...clickProps}
+                >
+                    <img
+                        src={armGripperIconCalc(props.direction)}
+                        alt=""
+                        aria-hidden="true"
+                    />
+                    {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
+                    <span className="aria-inviz">••</span>
                 </button>
             </div>
         );

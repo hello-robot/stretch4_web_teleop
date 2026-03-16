@@ -12,7 +12,7 @@
     --btn-red: hsl(0, 70%, 70%);
     --btn-turquoise: hsl(171, 32%, 46%);
     --shadow-color: rgba(112, 112, 112, 0.196);
-    --background-color: hsl(0, 0%, 98%);
+    --background-color: hsl(0, 0%, 0%);
     --gray-bg: hsl(0, 0%, 88%);
     --shadow: 3px 3px 2px var(--shadow-color);
     --tab-inactive: hsl(200, 20%, 85%);
@@ -170,6 +170,7 @@ input {
     background-color: hsl(204deg 100% 4%);
     color: #ffffff;
     border: none;
+    width: 100%;
 }
 
 /* Input focus state */

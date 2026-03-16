@@ -48,6 +48,7 @@ import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvide
 import { Alert } from "./basic_components/Alert";
 import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
 import GripperCamPIP from "./layout_components/GripperCamPIP";
+import FooterGlobal from "./layout_components/FooterGlobal";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -290,6 +291,7 @@ export const MobileOperator = (props: {
                     <div
                         style={swipeableViewsStyles[0]}
                         className="pilot-mode-wrapper"
+                        aria-hidden={swipeableViewsIdx !== 0}
                     >
                         <PilotMode
                             cameraID={cameraID}
@@ -320,6 +322,7 @@ export const MobileOperator = (props: {
                     <div
                         style={swipeableViewsStyles[1]}
                         className="auto-nav-wrapper"
+                        aria-hidden={swipeableViewsIdx !== 1}
                     >
                         <AutoNav
                             sharedState={sharedState}
@@ -330,6 +333,11 @@ export const MobileOperator = (props: {
                         />
                     </div>
                 </SwipeableViews>
+                <FooterGlobal
+                    swipeableViewsIdxSet={swipeableViewsIdxSet}
+                    sceneSelected={sceneSelected}
+                    onSceneSelectedChange={setSceneSelected}
+                />
             </div>
         </div>
     );

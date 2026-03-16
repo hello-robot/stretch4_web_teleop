@@ -6,7 +6,6 @@ import {
     PilotButtonPadType,
 } from "../utils/component_definitions";
 import { ActionMode } from "../static_components/ActionMode";
-import FooterGlobal from "./FooterGlobal";
 import "operator/css/FooterPilotMode.css";
 
 interface FooterControlsProps {
@@ -62,11 +61,6 @@ const FooterHeadCam: React.FC<FooterControlsProps> = ({
                     setPilotControlsCurrent={setPilotControlsCurrent}
                 />
             </div>
-            <FooterGlobal
-                swipeableViewsIdxSet={swipeableViewsIdxSet}
-                sceneSelected={sceneSelected}
-                onSceneSelectedChange={onSceneSelectedChange}
-            />
         </div>
     );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import "operator/css/ModalMobile.css"
 
 export type AnimationState = '' | 'enter' | 'exit';
@@ -79,7 +80,7 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
             onClose();
         }
     };
-    if (!visible) return null
+    if (!visible || typeof document === 'undefined') return null
 
     const CloseButton = () => (
         <button
@@ -106,7 +107,7 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
         </button>
     );
 
-    return (
+    const modal = (
         <dialog
             className={`modal-overlay ${animState} ${overlayClassName}`}
             onClick={handleOverlayClick}
@@ -142,6 +143,8 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
             </div>
         </dialog>
     );
+
+    return createPortal(modal, document.body);
 };
 
 export default ModalMobile;

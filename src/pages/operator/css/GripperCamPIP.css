@@ -1,16 +1,16 @@
 .gripper-cam-pip-wrapper {
+    z-index: 3;
     position: absolute;
     left: 50%;
     margin: 10px 0 0;
-    width: max-content;
-
     /******************************************************
     * Rules used to calculate GripperPIP position:        *
     *                                                    *
     * > Assumes main <video> area has 9:16 aspect-ratio. *
     * > 131px is the fixed height of the footer *        *
     ******************************************************/
-    height: calc((9 * (100vh - 131px)) / 16);
+    width: calc((9 * (100vh - 131px)) / 16);
+    height: 30vh;
     border-radius: 20px;
     translate: -50% 0;
     transform: translate(0%, 0);
@@ -51,7 +51,7 @@
     right: 24px;
     /* Takes up 35% of the main video area */
     width: 35%;
-    height: 35%;
+    height: auto;
     border-radius: 21px;
     overflow: hidden;
     outline: 2px solid hsla(0, 0%, 0%, 0.1);
@@ -60,7 +60,7 @@
 
 .gripper-cam-pip-wrapper.large .simple-video-container .simple-video-area {
     width: 50%;
-    height: 50%;
+    height: auto;
 }
 
 .gripper-cam-pip-wrapper

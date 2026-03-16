@@ -4,11 +4,11 @@
     flex-direction: column;
     /* Height will likely need to be
     more fluid in the future */
-    height: 131px;
+    height: 65.67px;
     --button-width: 80px;
 }
 
-.footer-row {
+.footer-pilot-mode .footer-row {
     display: flex;
     justify-content: space-between;
     align-items: center;

@@ -1,21 +1,10 @@
 /* Container — positioned at bottom-left of the parent */
 .radial-corner-menu {
-    /* z-index: 2;
-    position: absolute;
-    left: calc(50% + 4px);
-    bottom: 0px;
-    translate: -50% 0%;
-    width: auto;
-    height: stretch;
-    aspect-ratio: 9 / 16;
-    pointer-events: none; */
     z-index: 2;
     position: absolute;
     left: calc(50% - 1px);
     bottom: 0px;
     translate: -50% 0%;
-    /* width: 466.3125px; */
-    /* height: 829px; */
     aspect-ratio: 9 / 16;
     pointer-events: none;
 }
@@ -53,8 +42,8 @@
     position: absolute;
     bottom: 10px;
     left: 0;
-    width: 250px;
-    height: 250px;
+    width: 150px;
+    height: 150px;
     pointer-events: none;
     z-index: 20;
     overflow: hidden;
@@ -69,7 +58,7 @@
     width: 150px;
     height: 150px;
     pointer-events: all;
-    /* GPU-accelerated: framer-motion drives scale + opacity via transform */
+    /* Framer-motion drives open/close state via transform + opacity. */
     transform-origin: 0% 100%;
     will-change: transform, opacity;
     /* Flatten child layers into one compositing surface before animating */
@@ -105,13 +94,10 @@
     transition: opacity 0.2s ease;
 }
 
-/* Sector hit-area — matches the sector shape via clip-path */
+/* Sector hit-area — tightly sized per-sector so iOS Voice Control
+   places labels at the visual centre of each sector. */
 .radial-sector-hit {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 150px;
-    height: 150px;
     cursor: pointer;
 }
 
@@ -126,4 +112,26 @@
     position: absolute;
     pointer-events: none;
     transform: translate(-50%, -50%);
+}
+
+.radial-icon-button {
+    position: absolute;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 50%;
+    pointer-events: all;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow: none;
+}
+
+.radial-close-button {
+    background: transparent;
+    border-bottom-left-radius: 21px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
 }

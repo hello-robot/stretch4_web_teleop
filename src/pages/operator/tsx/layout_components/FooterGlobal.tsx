@@ -103,7 +103,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     )?.name;
 
     return (
-        <div className="footer-row">
+        <div className="footer-global">
             <div className="battery-container">
                 <img src={batteryIcon} alt="Battery" className="battery" />
             </div>
@@ -209,11 +209,14 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             <div className="run-stop-container">
                 <button
                     onClick={() => isStoppedSet(!isStopped)}
+                    type="button"
                     className={`run-stop-button ${isStopped ? "stopped" : "running"}`}
+                    aria-label={isStopped ? "Run" : "Stop"}
                 >
                     <img
                         src={isStopped ? runStopStopIcon : runStopRunIcon}
-                        alt={isStopped ? "Stop" : "Run"}
+                        alt=""
+                        aria-hidden="true"
                         className="icon"
                     />
                 </button>

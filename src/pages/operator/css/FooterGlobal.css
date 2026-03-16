@@ -1,5 +1,21 @@
+.footer-global {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 10px;
+    background-color: #000000;
+}
+
+/* Tablet + Desktop styles */
+@media (min-width: 900px) {
+    .footer-global {
+        width: calc(100vh * 0.5);
+        margin: 0 auto;
+    }
+}
+
 /* START Battery */
-.footer-row .battery-container .battery {
+.footer-global .battery-container .battery {
     display: inline-block;
     width: 32px;
     height: 18px;
@@ -10,23 +26,28 @@
 /* END Battery */
 
 /* START RunStop Button */
-.footer-row .run-stop-container {
-    justify-content: flex-end;
+.footer-global .run-stop-container {
     display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 32px;
+    flex: 0 0 32px;
 }
 
-.footer-row .run-stop-container .run-stop-button {
+.footer-global .run-stop-container .run-stop-button {
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 0px;
+    width: 32px;
+    height: 32px;
     background: transparent;
     border: none;
     outline: none;
     box-shadow: none;
 }
 
-.footer-row .run-stop-container .run-stop-button .icon {
+.footer-global .run-stop-container .run-stop-button .icon {
     display: inline-block;
     width: 30px;
     height: 30px;
@@ -37,11 +58,11 @@
 /* END RunStop Button */
 
 /* START Scene Menu Button */
-.footer-row .scene-menu-button-container {
+.footer-global .scene-menu-button-container {
     width: 50%;
 }
 
-.footer-row .scene-menu-button-container .scene-menu-button {
+.footer-global .scene-menu-button-container .scene-menu-button {
     z-index: 1;
     position: relative;
     display: flex;
@@ -62,11 +83,11 @@
     transition: background-color 150ms ease-out;
 }
 
-.footer-row .scene-menu-button-container .scene-menu-button:active {
+.footer-global .scene-menu-button-container .scene-menu-button:active {
     background-color: hsl(204 100% 50% / 1);
 }
 
-.footer-row .scene-menu-button-container .scene-menu-button .fancy-border {
+.footer-global .scene-menu-button-container .scene-menu-button .fancy-border {
     position: absolute;
     bottom: 0px;
     left: -4px;
@@ -82,7 +103,7 @@
     transition: filter 150ms 100ms ease-out;
 }
 
-.footer-row
+.footer-global
     .scene-menu-button-container
     .scene-menu-button:active
     .fancy-border {
