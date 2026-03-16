@@ -138,10 +138,13 @@
     transform: translate(calc(-100% + (50px - 10px)), 0%);
     transition: transform 300ms ease-out;
     box-shadow: none;
+    opacity: 1;
+    transition: opacity 300ms ease-out;
 }
 
 .gripper-cam-pip-wrapper.hidden
     .button-grippercampip-wrapper
     .button-grippercampip-size-toggle {
     transform: translate(0, 0);
+    opacity: 0;
 }

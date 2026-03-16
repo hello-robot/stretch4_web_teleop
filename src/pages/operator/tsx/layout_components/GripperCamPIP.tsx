@@ -51,6 +51,7 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
                 <button
                     className="button-grippercampip-size-toggle"
                     onPointerDown={() => isGripperCamLargeSet(!isGripperCamLarge)}
+                    disabled={!isGripperCamPIPViz}
                     aria-label="Change size"
                 >
                     {
