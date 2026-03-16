@@ -85,6 +85,10 @@ export const MobileOperator = (props: {
     // State for selected scene
     const [sceneSelected, setSceneSelected] = useState<string>("pilot-mode");
 
+    // GripperPIP
+    const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
+    const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
+
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
@@ -307,6 +311,10 @@ export const MobileOperator = (props: {
                             cameraID={CameraViewId.gripper}
                             remoteStreams={remoteStreams}
                             isCameraVeilVisible={isCameraVeilVisible}
+                            isGripperCamPIPViz={isGripperCamPIPViz}
+                            isGripperCamPIPVizSet={isGripperCamPIPVizSet}
+                            isGripperCamLarge={isGripperCamLarge}
+                            isGripperCamLargeSet={isGripperCamLargeSet}
                         />
                     </div>
                     <div

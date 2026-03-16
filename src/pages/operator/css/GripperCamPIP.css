@@ -11,9 +11,28 @@
     * > 131px is the fixed height of the footer *        *
     ******************************************************/
     height: calc((9 * (100vh - 131px)) / 16);
-    overflow: hidden;
     border-radius: 20px;
     translate: -50% 0;
+    transform: translate(0%, 0);
+    transition: transform 300ms ease-out;
+}
+
+/* Overwrite `transform` rule when .hidden */
+.gripper-cam-pip-wrapper.hidden {
+    transform: translate(100%, 0);
+}
+
+.gripper-cam-pip-wrapper .controls {
+    opacity: 1;
+    filter: blur(0px);
+    transition:
+        filter 300ms ease-out,
+        opacity 300ms ease-out;
+}
+
+.gripper-cam-pip-wrapper.hidden .controls {
+    opacity: 0;
+    filter: blur(50px);
 }
 
 .gripper-cam-pip-wrapper .simple-video-container {
@@ -35,8 +54,13 @@
     height: 35%;
     border-radius: 21px;
     overflow: hidden;
-    outline: 3px solid hsla(0, 0%, 100%, 0.05);
-    box-shadow: 0px 2px 13px 0px hsla(0, 0%, 0%, 0.6);
+    outline: 2px solid hsla(0, 0%, 0%, 0.1);
+    transition: all 300ms ease-out;
+}
+
+.gripper-cam-pip-wrapper.large .simple-video-container .simple-video-area {
+    width: 50%;
+    height: 50%;
 }
 
 .gripper-cam-pip-wrapper
@@ -48,4 +72,76 @@
     height: 100%;
     scale: 1.4;
     aspect-ratio: 1 /1;
+}
+
+.gripper-cam-pip-wrapper .button-grippercampip-wrapper {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    width: 35%;
+    height: 35%;
+    transform: translate(-100%, 0%);
+    transition: transform 300ms ease-out;
+}
+
+.gripper-cam-pip-wrapper.large .button-grippercampip-wrapper {
+    transform: translate(calc(-100% - 45%), 0%);
+}
+
+.gripper-cam-pip-wrapper.hidden .button-grippercampip-wrapper {
+    transform: translate(calc(-290%), 0%);
+}
+
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-toggle {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    padding: 4px 0 0 1px;
+    width: 50px;
+    height: 50px;
+    background-color: hsla(0, 0%, 0%, 25%);
+    outline: 1px solid hsla(0, 0%, 0%, 30%);
+    color: #ffffff;
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transform: translate(calc(-100% + (50px - 10px)), 0%);
+    transition: transform 300ms ease-out;
+    box-shadow: none;
+}
+
+.gripper-cam-pip-wrapper.hidden
+    .button-grippercampip-wrapper
+    .button-grippercampip-toggle {
+    transform: translate(0, 0);
+}
+
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-size-toggle {
+    position: absolute;
+    top: calc(50px + 10px);
+    right: 0px;
+    padding: 4px 0 0 1px;
+    width: 50px;
+    height: 50px;
+    background-color: hsla(0, 0%, 0%, 25%);
+    outline: 1px solid hsla(0, 0%, 0%, 30%);
+    color: #ffffff;
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transform: translate(calc(-100% + (50px - 10px)), 0%);
+    transition: transform 300ms ease-out;
+    box-shadow: none;
+}
+
+.gripper-cam-pip-wrapper.hidden
+    .button-grippercampip-wrapper
+    .button-grippercampip-size-toggle {
+    transform: translate(0, 0);
 }
