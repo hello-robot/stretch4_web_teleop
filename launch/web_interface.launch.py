@@ -161,7 +161,7 @@ def generate_launch_description():
             PathJoinSubstitution([core_package, "launch", "luxonis.launch.py"])
         ),
         launch_arguments={
-            "use_center": "True",
+            "use_center": "true",
         }.items(),
     )
     ld.add_action(luxonis_launch)
