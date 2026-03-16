@@ -155,6 +155,25 @@ def generate_launch_description():
     )
     ld.add_action(stretch_driver_launch)
 
+    # Head Cameras
+    luxonis_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([core_package, "launch", "luxonis.launch.py"])
+        ),
+        launch_arguments={
+            "use_center": "True",
+        }.items(),
+    )
+    ld.add_action(luxonis_launch)
+
+    # Gripper Camera
+    gripper_camera_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([core_package, "launch", "gripper_camera.launch.py"])
+        ),
+    )
+    ld.add_action(gripper_camera_launch)
+
     # Rosbridge Websocket
     rosbridge_launch = IncludeLaunchDescription(
         FrontendLaunchDescriptionSource(
