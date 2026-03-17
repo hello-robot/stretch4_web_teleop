@@ -18,7 +18,9 @@
   <depend>imu_filter_madgwick</depend>
   <depend>geometry_msgs</depend>
   <depend>usb_cam</depend>
-  <!-- <build_depend>tf2_web_republisher</build_depend> -->
+  <build_depend>ament_cmake_mypy</build_depend>
+  <exec_depend>tf2_web_republisher</exec_depend>
+  <exec_depend>rosbridge_suite</exec_depend>
   <exec_depend>tf2_sensor_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>compressed_image_transport</exec_depend>
