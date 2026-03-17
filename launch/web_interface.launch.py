@@ -67,7 +67,7 @@ def generate_launch_description():
     # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
 
-    stretch_serial_no = "stretch-se4-4023"  # robot_params["robot"]["serial_no"]
+    stretch_serial_no = robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
     stretch_has_nav_head_cam = symlinks_to_has_nav_head_cam()
