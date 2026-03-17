@@ -4,7 +4,7 @@ import os
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
 from launch_ros.actions import Node
-from stretch_body_ii.robot.robot_params_SE4 import nominal_params as robot_params
+from stretch_body_ii.core.robot_params import RobotParams
 
 from launch import LaunchDescription
 from launch.actions import (
@@ -67,6 +67,7 @@ def generate_launch_description():
     # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
 
+    robot_params = RobotParams().get_params()[1]
     stretch_serial_no = robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
