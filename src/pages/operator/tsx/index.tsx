@@ -293,6 +293,40 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
 }
 
 /**
+ * Periodic check of the WebRTC connection state.
+ * Shows "Reconnecting..." loading spinner if connection drops.
+*/
+function initConnectionStateCheck() {
+    // 100%x100% black backdrop
+    var loadingBackground = document.createElement("div");
+    loadingBackground.className = "loader-background";
+
+    // Loading spinner
+    var loader = document.createElement("div");
+    loader.className = "loader";
+
+    // "Reconnecting..." text inside the spinner
+    var loaderText = document.createElement("div");
+    loaderText.className = "loading-text";
+    var text = document.createElement("p");
+    text.textContent = "Reconnecting...";
+    loaderText.appendChild(text);
+
+    setInterval(async () => {
+        let connected = await connection.isConnected();
+        if (!connected && !window.document.body.contains(loader)) {
+            window.document.body.appendChild(loaderText);
+            window.document.body.appendChild(loader);
+            window.document.body.appendChild(loadingBackground);
+        } else if (connected && window.document.body.contains(loader)) {
+            window.document.body.removeChild(loaderText);
+            window.document.body.removeChild(loader);
+            window.document.body.removeChild(loadingBackground);
+        }
+    }, 1000);
+}
+
+/**
  * Renders the operator browser.
  *
  * @param storageHandler the storage handler
@@ -305,46 +339,17 @@ function renderOperator(storageHandler: StorageHandler) {
         layout.pilotControlsCurrent
     );
 
-    !isMobile
-        ? root.render(
-              <MobileOperator
-                  remoteStreams={allRemoteStreams}
-                  layout={layout}
-                  storageHandler={storageHandler}
-              />
-          )
-        : root.render(
-              <MobileOperator
-                  remoteStreams={allRemoteStreams}
-                  layout={layout}
-                  storageHandler={storageHandler}
-              />
-          );
+    // The Mobile teleoperation UI
+    root.render(
+        <MobileOperator
+            remoteStreams={allRemoteStreams}
+            layout={layout}
+            storageHandler={storageHandler}
+        />
+    )
 
-    if (!isMobile) {
-        var loader = document.createElement("div");
-        loader.className = "loader";
-        var loaderText = document.createElement("div");
-        loaderText.className = "reconnecting-text";
-        var text = document.createElement("p");
-        text.textContent = "Reconnecting...";
-        loaderText.appendChild(text);
-        var loaderBackground = document.createElement("div");
-        loaderBackground.className = "loader-background";
-
-        setInterval(async () => {
-            let connected = await connection.isConnected();
-            if (!connected && !window.document.body.contains(loader)) {
-                window.document.body.appendChild(loaderBackground);
-                window.document.body.appendChild(loaderText);
-                window.document.body.appendChild(loader);
-            } else if (connected && window.document.body.contains(loader)) {
-                window.document.body.removeChild(loaderBackground);
-                window.document.body.removeChild(loaderText);
-                window.document.body.removeChild(loader);
-            }
-        }, 1000);
-    }
+    // Periodic check of the WebRTC connection state
+    initConnectionStateCheck();
 }
 
 function disconnectFromRobot() {

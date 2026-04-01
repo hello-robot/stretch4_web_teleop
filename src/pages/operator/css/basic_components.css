@@ -80,8 +80,7 @@
 }
 
 /* Dark background behind popup */
-#popup-background,
-.loader-background {
+#popup-background {
     position: fixed;
     top: 0;
     left: 0;

@@ -53,22 +53,19 @@ export abstract class FunctionProvider {
 
     public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {
         this.stopCurrentAction();
-        this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
-            linVelX,
-            linVelY,
-            angVel
-        );
+        this.velocityExecutionHeartbeat = window.setInterval(() => {
+            this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
+                linVelX,
+                linVelY,
+                angVel
+            );
+        }, 25);
     }
 
     public incrementalJointMovement(jointName: ValidJoints, velocity: number) {
         this.stopCurrentAction(true);
         this.activeVelocityAction =
             FunctionProvider.remoteRobot?.setJointVelocity(jointName, velocity);
-        if (jointName === "joint_arm" || jointName === "joint_lift") {
-            setTimeout(() => {
-                this.stopCurrentAction(true);
-            }, 500);
-        }
     }
 
     public continuousJointMovement(jointName: ValidJoints, velocity: number) {
@@ -94,6 +91,12 @@ export abstract class FunctionProvider {
             if (send_stop_command) this.activeVelocityAction.stop();
             this.activeVelocityAction = undefined;
         }
+
+        if (this.velocityExecutionTimeout) {
+            clearTimeout(this.velocityExecutionTimeout);
+            this.velocityExecutionTimeout = undefined;
+        }
+
         if (this.velocityExecutionHeartbeat) {
             clearInterval(this.velocityExecutionHeartbeat);
             this.velocityExecutionHeartbeat = undefined;
