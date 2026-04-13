@@ -6,15 +6,12 @@ export type AnimationState = "" | "enter" | "exit";
 
 interface MainMenuProps {
     isOpen: boolean;
-    title: string;
-    handleClose?: () => void;
+    title: string
     onClose?: () => void;
     children: ReactNode;
     footer?: ReactNode;
     modalClassName?: string;
     overlayClassName?: string;
-    HeaderControls?: React.ReactNode; // Optional node for header controls
-    hasCloseButton?: boolean;
     hasBgColor?: boolean;
 }
 
@@ -26,14 +23,11 @@ interface MainMenuProps {
 const MainMenu: React.FC<MainMenuProps> = ({
     isOpen,
     title,
-    handleClose,
     onClose = () => { },
     children,
     footer,
     modalClassName = "",
     overlayClassName = "",
-    HeaderControls,
-    hasCloseButton = false,
     hasBgColor = false,
 }) => {
     const [visible, setVisible] = useState<boolean>(isOpen);
@@ -75,31 +69,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
         }
     };
     if (!visible) return null;
-
-    const CloseButton = () => (
-        <button
-            className="main-menu-modal-close-button"
-            onClick={handleClose}
-            aria-label="Close Main Menu"
-            type="button"
-        >
-            <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <path
-                    d="M18 6L6 18M6 6L18 18"
-                    stroke="hsl(204, 95%, 80%)"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
-            </svg>
-        </button>
-    );
 
     return (
         <dialog

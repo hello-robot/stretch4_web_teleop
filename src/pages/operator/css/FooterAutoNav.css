@@ -262,7 +262,7 @@ button.locations-menu-search-btn {
     font-weight: 400;
     padding: 8px 10px;
     color: hsl(204 100% 50% / 1);
-    border-radius: 7px;
+    border-radius: 4px;
     line-height: 140%;
     animation: brightnessPulse 1s infinite alternate;
 }

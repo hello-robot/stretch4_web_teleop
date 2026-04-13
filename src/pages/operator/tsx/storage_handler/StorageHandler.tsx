@@ -134,6 +134,28 @@ export abstract class StorageHandler {
     public abstract deleteRecording(recordingName: string): void;
 
     /**
+     * Ordered list of pinned recording names (newest pin first). Only names
+     * that still exist in {@link getRecordingNames} are returned.
+     */
+    public abstract getPinnedRecordingNames(): string[];
+
+    /**
+     * Persist the ordered pinned list. Implementations should ignore or drop
+     * names not present in {@link getRecordingNames}.
+     */
+    public abstract setPinnedRecordingNames(names: string[]): void;
+
+    /**
+     * Replace a pinned name after a recording rename. Reads/writes the raw pin
+     * list so the old name is still found after `getRecordingNames` no longer
+     * includes it.
+     */
+    public abstract renamePinnedRecording(
+        oldName: string,
+        newName: string,
+    ): void;
+
+    /**
      * Gets all the text to speech messages saved by the user.
      * @returns list of all saved text to speech messages
      */

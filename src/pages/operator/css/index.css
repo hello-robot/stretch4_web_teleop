@@ -1,15 +1,21 @@
 :root {
+    /* Color scheme */
+    color-scheme: dark;
+
     /* Button style variables */
     --btn-brdr-radius: 0.4rem;
     --btn-padding: 0.5em 1em;
     --btn-padding-med: 0.4rem 0.5rem;
 
     /* Color variables */
+    --blue: hsl(204 100% 50% / 1);
+    --green: hsl(171 77% 54% / 1);
+    --red: hsl(0deg, 100%, 50%);
     --selected-color: hsl(33, 95%, 63%);
     --btn-gray: #f0f0f0;
-    --btn-blue: hsl(204deg 83.23% 22.29%);
+    --btn-blue: hsl(204 100% 50% / 1);
     --btn-green: hsl(171, 55%, 68%);
-    --btn-red: hsl(0, 70%, 70%);
+    --btn-red: hsl(0, 100%, 50%);
     --btn-turquoise: hsl(171, 32%, 46%);
     --shadow-color: rgba(112, 112, 112, 0.196);
     --background-color: hsl(0, 0%, 0%);
@@ -20,9 +26,9 @@
     --path-blue: hsl(171, 37%, 53%);
     --shadow-bottom: 3px 0px 0px var(--shadow-color);
 
-    /* Color variables XP */
-    --blue: hsl(204 100% 50% / 1);
-    --green: hsl(171 77% 54% / 1);
+    /* Animation timing function variables */
+    --anim-timing-ease-out-silky: cubic-bezier(0.4, 0, 0.2, 1);
+    --anim-timing-rubberband: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Reset box model and font inheritance for all elements */
@@ -103,19 +109,12 @@ button {
     cursor: pointer;
 }
 
-/* Button hover effect */
-@media (hover: hover) and (pointer: fine) {
-    button:hover {
-        filter: brightness(90%);
-        box-shadow: none;
-    }
-}
-
 /* Disabled button styles */
 button:disabled {
-    background-color: lightgray;
+    background-color: hsl(204 20% 20% / 1);
     pointer-events: none;
     box-shadow: none;
+    cursor: not-allowed;
 }
 
 /* Adjust icon spacing inside buttons */
@@ -190,7 +189,6 @@ input:focus {
     cursor: pointer;
     border: none;
     font-weight: 600;
-    filter: brightness(100%);
 }
 
 .btn:active {
@@ -199,31 +197,75 @@ input:focus {
 
 /* Primary action button in modal footer */
 .btn-primary {
-    background: hsl(204 100% 50% / 1);
+    position: relative;
+    background: hsl(204 100% 50% / 1) !important;
     color: #fff;
     width: 100%;
     padding: 15px 20px;
     font-size: 16px;
     transition: background 250ms ease-out;
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+
+.btn-primary:hover {
+    background: hsl(204 100% 40% / 1);
+}
+
+.btn-primary:active {
+    background: hsl(204 100% 60% / 1);
+}
+
+.btn-primary.glow {
+    background: hsl(204 100% 50% / 0.4);
+}
+
+.btn-primary.glow::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: hsl(204deg 100% 50% / 100%);
+    border-radius: 8px;
+    z-index: -1;
+    filter: blur(10px);
+    animation: pulse-glow 3s ease-out infinite;
+}
+
+/* Glow effect */
+@keyframes pulse-glow {
+    0%,
+    100% {
+        opacity: 0.2;
+    }
+    50% {
+        opacity: 0;
+    }
 }
 
 /* Disabled state for primary button */
 .btn-primary:disabled {
-    background: hsl(204 50% 10% / 1) !important;
-    opacity: 0.95;
+    background: hsl(204 100% 2.5% / 0.25) !important;
     cursor: not-allowed;
 }
 
 /* Tertiary action button in modal footer */
 .btn-tertiary {
-    background: hsl(204 30% 20% / 1);
+    background-color: hsl(204 50% 20% / 1) !important;
     color: #ffffff;
     width: 100%;
     padding: 15px 20px;
     font-size: 16px;
-    transition: background 250ms ease-out;
+    border: 1px solid hsl(204deg 30% 30% / 30%);
     box-shadow: none;
-    transition: filter 150ms ease-out;
+    transition: background 250ms ease-out;
+}
+
+.btn-tertiary:hover {
+    background-color: hsl(204 50% 30% / 1);
+}
+
+.btn-tertiary:active {
+    background-color: hsl(204 50% 35% / 1);
 }
 
 /* Ghost-y translucent oval button */
@@ -236,8 +278,4 @@ input:focus {
 
 .btn-sm {
     padding: 8px 14px;
-    /* font-size: 16px;
-    text-transform: uppercase;
-    font-weight: 800;
-    letter-spacing: -0.3px; */
 }

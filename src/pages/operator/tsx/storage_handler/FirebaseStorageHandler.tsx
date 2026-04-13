@@ -83,7 +83,7 @@ export class FirebaseStorageHandler extends StorageHandler {
                     this.currentLayout = userData.currentLayout;
                     this.mapPoses = userData.map_poses;
                     this.mapPoseTypes = userData.map_pose_types;
-                    this.recordings = userData.recordings;
+                    this.recordings = userData.recordings ?? {};
 
                     this.onReadyCallback();
                 })
@@ -245,5 +245,16 @@ export class FirebaseStorageHandler extends StorageHandler {
             throw Error(`Could not delete recording ${recordingName}`);
         delete this.recordings[recordingName];
         this.writeRecordings(this.recordings);
+    }
+
+    /** Pin order is not persisted for Firebase storage (local-only feature). */
+    public getPinnedRecordingNames(): string[] {
+        return [];
+    }
+
+    public setPinnedRecordingNames(_names: string[]): void {
+    }
+
+    public renamePinnedRecording(_oldName: string, _newName: string): void {
     }
 }

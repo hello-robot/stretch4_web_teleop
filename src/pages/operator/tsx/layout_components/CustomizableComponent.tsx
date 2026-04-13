@@ -11,6 +11,7 @@ import { ButtonStateMap } from "../function_providers/ButtonFunctionProvider";
 import { Map } from "./Map";
 import { RunStopButton } from "../static_components/RunStop";
 import { BatteryGauge } from "../static_components/BatteryGauge";
+import { MovementRecorder } from "./MovementRecorder";
 
 /** State required for all elements */
 export type SharedState = {
@@ -31,6 +32,15 @@ export type SharedState = {
     stretchTool: StretchTool;
     /** Whether or not robot has been homed */
     robotNotHomed: boolean;
+    /** Movement recorder's playback state  */
+    playbackPosesState?: undefined | {
+        state: string;
+        alert_type: string;
+    };
+    /** Index of the recording in LocalStorage that's being played back */
+    idxFixedRecordingPlaying: number;
+    /** Set value of "idxFixedRecordingPlaying" */
+    idxFixedRecordingPlayingSet: React.Dispatch<React.SetStateAction<number>>;
 };
 
 /** Properties for any of the customizable components: tabs, video streams, or
@@ -74,6 +84,8 @@ export const CustomizableComponent = (props: CustomizableComponentProps) => {
             return <RunStopButton {...props} />;
         case ComponentType.BatteryGauge:
             return <BatteryGauge {...props} />;
+        case ComponentType.MovementRecorder:
+            return <MovementRecorder {...props} />;
         default:
             throw Error(
                 `CustomizableComponent cannot render component of unknown type: ${props.definition.type}\nYou may need to add a case for this component in the switch statement in CustomizableComponent.`

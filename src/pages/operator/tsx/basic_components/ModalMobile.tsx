@@ -80,7 +80,6 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
             onClose();
         }
     };
-    if (!visible || typeof document === 'undefined') return null
 
     const CloseButton = () => (
         <button
@@ -107,7 +106,7 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
         </button>
     );
 
-    const modal = (
+    return createPortal(
         <dialog
             className={`modal-overlay ${animState} ${overlayClassName}`}
             onClick={handleOverlayClick}
@@ -115,7 +114,8 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
             role="dialog"
             aria-modal="true"
             aria-hidden={!visible}
-            tabIndex={0}
+            tabIndex={-1}
+            style={{ visibility: visible ? 'visible' : 'hidden' }}
         >
             <div
                 className={`modal-content-wrapper ${animState} ${modalClassName}`}
@@ -141,10 +141,9 @@ const ModalMobile: React.FC<ModalMobileProps> = ({
                     </div>
                 )}
             </div>
-        </dialog>
+        </dialog>,
+        document.body,
     );
-
-    return createPortal(modal, document.body);
 };
 
 export default ModalMobile;

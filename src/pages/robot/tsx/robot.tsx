@@ -34,10 +34,29 @@ import {
 export var robotMode: "navigation" | "position" | "unknown" = "position";
 export var rosConnected = false;
 
+// Constants for movement states
+export enum MovementState {
+    Executing = "movement executing!",
+    Success = "movement successful!",
+    Cancel = "movement canceled!",
+    Fail = "movement failed!",
+}
+
+// Enum for movement states
+export const movementStatesTerminal: MovementState[] = [
+    MovementState.Success,
+    MovementState.Cancel,
+    MovementState.Fail,
+];
+export const movementStatesTransitory: MovementState[] = [MovementState.Executing];
+
+export const movementStatesAll = Object.values(MovementState);
+
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const moveToPregraspActionName = "/move_to_pregrasp";
 const showTabletActionName = "/show_tablet";
+const followJointTrajectoryActionName = "/stretch_controller/follow_joint_trajectory";
 
 export class Robot extends React.Component {
     private ros: Ros;
@@ -47,7 +66,8 @@ export class Robot extends React.Component {
     private jointLimits: { [key in ValidJoints]?: [number, number] } = {};
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
-    private poseGoalComplete?: boolean;
+    private poseGoalID?: string;
+    private poseGoalComplete: boolean = true;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
     private trajectoryClient?: Action;
@@ -61,8 +81,6 @@ export class Robot extends React.Component {
     private useCenterCameraService?: Service;
     private useLeftCameraService?: Service;
     private useRightCameraService?: Service;
-    private switchToNavigationService?: Service;
-    private switchToPositionService?: Service;
     private setRealsenseDepthSensingService?: Service;
     private setGripperDepthSensingService?: Service;
     private setExpandedGripperService?: Service;
@@ -85,6 +103,7 @@ export class Robot extends React.Component {
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private moveToPregraspResultCallback: (goalState: ActionState) => void;
     private showTabletResultCallback: (goalState: ActionState) => void;
+    private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
     private modeCallback: (mode: string) => void;
     private isHomedCallback: (isHomed: boolean) => void;
@@ -94,6 +113,7 @@ export class Robot extends React.Component {
     private lookAtGripperInterval?: number; // ReturnType<typeof setInterval>
     private subscriptions: Topic[] = [];
     private stretchToolParam: Param;
+    private modeParam: Param;
     private homeTheRobotService?: Service;
     private stretchTool: StretchTool;
     private stretchModel: StretchModel;
@@ -109,6 +129,7 @@ export class Robot extends React.Component {
         moveBaseResultCallback: (goalState: ActionState) => void;
         moveToPregraspResultCallback: (goalState: ActionState) => void;
         showTabletResultCallback: (goalState: ActionState) => void;
+        playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
         modeCallback: (mode: string) => void;
         isHomedCallback: (isHomed: boolean) => void;
@@ -123,6 +144,7 @@ export class Robot extends React.Component {
         this.moveBaseResultCallback = props.moveBaseResultCallback;
         this.moveToPregraspResultCallback = props.moveToPregraspResultCallback;
         this.showTabletResultCallback = props.showTabletResultCallback;
+        this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
         this.modeCallback = props.modeCallback;
         this.isHomedCallback = props.isHomedCallback;
@@ -280,6 +302,7 @@ export class Robot extends React.Component {
             "Show Tablet succeeded!",
             "Show Tablet failed!"
         );
+
         this.createTrajectoryClient();
         this.createMoveBaseClient();
         this.createMoveToPregraspClient();
@@ -289,8 +312,6 @@ export class Robot extends React.Component {
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
         this.createUseRightCameraService();
-        this.createSwitchToNavigationService();
-        this.createSwitchToPositionService();
         this.createRealsenseDepthSensingService();
         this.createGripperDepthSensingService();
         this.createExpandedGripperService();
@@ -443,6 +464,10 @@ export class Robot extends React.Component {
         this.stretchTool === StretchTool.DW4
             ? (this.stretchModel = StretchModel.SE4)
             : (this.stretchModel = StretchModel.SE3);
+        this.modeParam = new Param({
+            ros: this.ros,
+            name: "/stretch_driver:mode"
+        });
     }
 
     getStretchTool() {
@@ -500,11 +525,15 @@ export class Robot extends React.Component {
     subscribeToActionResult(
         actionName: string,
         callback?: (goalState: ActionState) => void,
+        executingMsg?: string,
         cancelMsg?: string,
         successMsg?: string,
         failureMsg?: string
     ) {
         // Get the messages
+        if (!executingMsg) {
+            executingMsg = "Action " + actionName + "executing!";
+        }
         if (!cancelMsg) {
             cancelMsg = "Action " + actionName + "canceled!";
         }
@@ -529,15 +558,20 @@ export class Robot extends React.Component {
             let status = msg.status_list.pop()?.status;
             console.log("For action ", actionName, "got status ", status);
             if (callback) {
-                if (status == 5)
+                if (status == 2)
                     callback({
-                        state: cancelMsg,
-                        alert_type: "error",
+                        state: executingMsg,
+                        alert_type: "info",
                     });
                 else if (status == 4)
                     callback({
                         state: successMsg,
                         alert_type: "success",
+                    });
+                else if (status == 5)
+                    callback({
+                        state: cancelMsg,
+                        alert_type: "error",
                     });
                 else if (status == 6)
                     callback({
@@ -618,22 +652,6 @@ export class Robot extends React.Component {
         this.useCenterCameraService = new Service({
             ros: this.ros,
             name: "/use_center_camera",
-            serviceType: "std_srvs/Trigger",
-        });
-    }
-
-    createSwitchToNavigationService() {
-        this.switchToNavigationService = new Service({
-            ros: this.ros,
-            name: "/switch_to_navigation_mode",
-            serviceType: "std_srvs/Trigger",
-        });
-    }
-
-    createSwitchToPositionService() {
-        this.switchToPositionService = new Service({
-            ros: this.ros,
-            name: "/switch_to_position_mode",
             serviceType: "std_srvs/Trigger",
         });
     }
@@ -757,13 +775,13 @@ export class Robot extends React.Component {
             (response: boolean) => {
                 response
                     ? console.log(
-                          "Successfully set realsense depth sensing to",
-                          toggle
-                      )
+                        "Successfully set realsense depth sensing to",
+                        toggle
+                    )
                     : console.log(
-                          "Failed to set realsense depth sensing to",
-                          toggle
-                      );
+                        "Failed to set realsense depth sensing to",
+                        toggle
+                    );
             }
         );
     }
@@ -775,13 +793,13 @@ export class Robot extends React.Component {
             (response: boolean) => {
                 response
                     ? console.log(
-                          "Successfully set gripper depth sensing to",
-                          toggle
-                      )
+                        "Successfully set gripper depth sensing to",
+                        toggle
+                    )
                     : console.log(
-                          "Failed to set gripper depth sensing to",
-                          toggle
-                      );
+                        "Failed to set gripper depth sensing to",
+                        toggle
+                    );
             }
         );
     }
@@ -793,9 +811,9 @@ export class Robot extends React.Component {
             (response: boolean) => {
                 response
                     ? console.log(
-                          "Successfully set expanded gripper to",
-                          toggle
-                      )
+                        "Successfully set expanded gripper to",
+                        toggle
+                    )
                     : console.log("Failed to set expanded gripper to", toggle);
             }
         );
@@ -808,13 +826,13 @@ export class Robot extends React.Component {
             (response: boolean) => {
                 response
                     ? console.log(
-                          "Successfully set realsense depth sensing to",
-                          toggle
-                      )
+                        "Successfully set realsense depth sensing to",
+                        toggle
+                    )
                     : console.log(
-                          "Failed to set realsense depth sensing to",
-                          toggle
-                      );
+                        "Failed to set realsense depth sensing to",
+                        toggle
+                    );
             }
         );
     }
@@ -826,9 +844,9 @@ export class Robot extends React.Component {
             (response: boolean) => {
                 response
                     ? console.log(
-                          "Successfully set compute body pose to",
-                          toggle
-                      )
+                        "Successfully set compute body pose to",
+                        toggle
+                    )
                     : console.log("Failed to set compute body pose to", toggle);
             }
         );
@@ -836,7 +854,7 @@ export class Robot extends React.Component {
 
     setRunStop(toggle: boolean) {
         var request = { data: toggle };
-        this.setRunStopService?.callService(request, (response: boolean) => {});
+        this.setRunStopService?.callService(request, (response: boolean) => { });
     }
 
     useLeftCamera() {
@@ -871,28 +889,28 @@ export class Robot extends React.Component {
      * velocity commands to the base.
      */
     switchToNavigationMode() {
-        var request = {};
-        if (robotMode !== "navigation") {
-            this.switchToNavigationService!.callService(request, () => {
-                robotMode = "navigation";
-                console.log("Switched to navigation mode");
-            });
-        }
+        this.modeParam.set("navigation", () => {
+            console.log("Switched to navigation mode");
+        });
     }
 
     /**
      * In position mode, you can send position commands to the arm and
-     * position commands to the base. This mode is no longer used in the
-     * web interface.
+     * position commands to the base.
      */
     switchToPositionMode = () => {
-        var request = {};
-        if (robotMode !== "position") {
-            this.switchToPositionService!.callService(request, () => {
-                robotMode = "position";
-                console.log("Switched to position mode");
-            });
-        }
+        this.modeParam.set("position", () => {
+            console.log("Switched to position mode");
+        });
+    };
+
+    /**
+     * In velocity mode, you can send velocity commands to the arm and base.
+     */
+    switchToVelocityMode = () => {
+        this.modeParam.set("velocity", () => {
+            console.log("Switched to velocity mode");
+        });
     };
 
     /**
@@ -911,7 +929,7 @@ export class Robot extends React.Component {
         linVelY: number;
         angVel: number;
     }): void => {
-        // this.switchToNavigationMode();
+        this.switchToVelocityMode();
         this.stopExecution();
         let twist = {
             linear: {
@@ -932,6 +950,7 @@ export class Robot extends React.Component {
     };
 
     setJointVelocity(jointName: ValidJoints, velocity: number) {
+        this.switchToVelocityMode();
         this.stopExecution();
         let jointVelocities = {
             joint_names: [jointName],
@@ -1104,18 +1123,112 @@ export class Robot extends React.Component {
     }
 
     executePoseGoal(pose: RobotPose) {
-        // this.switchToNavigationMode();
+        console.log("executing pose goal");
+        this.switchToNavigationMode();
         this.stopExecution();
         this.poseGoal = this.makePoseGoal(pose);
         console.log("execute: ", pose);
-        this.trajectoryClient.sendGoal(this.poseGoal);
+        this.poseGoalID = this.trajectoryClient.sendGoal(
+            this.poseGoal,
+            (result) => {
+                console.log(
+                    "Result for action goal on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    result.error_code
+                );
+                if (result.error_code == 0) {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Success,
+                        alert_type: "info",
+                    });
+                }
+            },
+            (feedback) => {
+                console.log(
+                    "Feedback for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    feedback
+                );
+            },
+            (error) => {
+                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                console.log(
+                    "Error for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    error
+                );
+                if (error_code == 0) {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Cancel,
+                        alert_type: "error",
+                    });
+                } else if (error_code == -4) {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Fail,
+                        alert_type: "error",
+                    });
+                }
+            }
+        );
     }
 
     async executePoseGoals(poses: RobotPose[], index: number) {
-        // this.switchToNavigationMode();
-        this.stopExecution();
+        this.switchToNavigationMode();
+        // this.stopExecution();
         this.poseGoal = this.makePoseGoals(poses);
-        this.trajectoryClient.sendGoal(this.poseGoal);
+        this.playbackPosesResultCallback({
+            state: MovementState.Executing,
+            alert_type: "info",
+        })
+
+        this.poseGoalID = this.trajectoryClient.sendGoal(
+            this.poseGoal,
+            (result) => {
+                console.log(
+                    "Result for action goal on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    result.error_code
+                );
+                if (result.error_code == 0) {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Success,
+                        alert_type: "info",
+                    });
+                }
+            },
+            (feedback) => {
+                console.log(
+                    "Feedback for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    feedback
+                );
+            },
+            (error) => {
+                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                console.log(
+                    "Error for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    error
+                );
+                if (error_code == 0) {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Cancel,
+                        alert_type: "error",
+                    });
+                } else if (error_code == -4) {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Fail,
+                        alert_type: "error",
+                    });
+                }
+            }
+        );
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
@@ -1138,17 +1251,17 @@ export class Robot extends React.Component {
             (result) => {
                 console.log(
                     "Result for action goal on " +
-                        this.trajectoryClient.name +
-                        ": " +
-                        result.error_string
+                    this.trajectoryClient.name +
+                    ": " +
+                    result.error_string
                 );
             },
             (feedback) => {
                 console.log(
                     "Feedback for action on " +
-                        this.trajectoryClient.name +
-                        ": " +
-                        feedback
+                    this.trajectoryClient.name +
+                    ": " +
+                    feedback
                 );
             }
         );
@@ -1181,9 +1294,12 @@ export class Robot extends React.Component {
     stopTrajectoryClient() {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         if (this.poseGoal) {
-            if (this.stretchModel === StretchModel.SE3)
-                this.trajectoryClient.cancelGoal();
+            this.trajectoryClient.cancelGoal(this.poseGoalID);
             this.poseGoal = undefined;
+            this.playbackPosesResultCallback({
+                state: MovementState.Cancel,
+                alert_type: "error",
+            });
         }
     }
 

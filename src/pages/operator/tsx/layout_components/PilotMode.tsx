@@ -14,6 +14,8 @@ import {
 } from "../basic_components/RadialCornerMenu";
 import { pilotModeFunctionProvider } from "..";
 import { AnimatePresence, motion } from "framer-motion";
+import { MovementRecorder } from "./MovementRecorder";
+import { SharedState } from "./CustomizableComponent";
 import "../../css/PilotMode.css";
 import { PilotModeFunctions } from "../function_providers/PilotModeFunctionProvider";
 
@@ -55,7 +57,9 @@ const PilotMode: React.FC<PilotModeProps> = ({
     setCameraID,
     sceneSelected,
     onSceneSelectedChange,
+    sharedState
 }) => {
+    const [isRecording, isRecordingSet] = React.useState<boolean>(false);
     const onActionSpeedChange = useCallback(
         (newSpeed: number) => {
             setVelocityScale(newSpeed);
@@ -108,7 +112,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
     ];
 
     return (
-        <div className="pilot-mode-wrapper">
+        <div className={`pilot-mode-wrapper ${isRecording ? 'is-recording' : ''}`}>
             <div className="controls">
                 <div className="simple-camera-view-wrapper_XP">
                     <SimpleCameraView
@@ -167,6 +171,14 @@ const PilotMode: React.FC<PilotModeProps> = ({
                         </motion.div>
                     )}
                 </AnimatePresence>
+                {/* Movement Recorder button <MovementRecordButton */}
+                <MovementRecorder
+                    sharedState={sharedState}
+                    isCameraVeilVisible={isCameraVeilVisible}
+                    setCameraVeilCallback={isCameraVeilVisibleSet}
+                    isRecording={isRecording}
+                    isRecordingSet={isRecordingSet}
+                />
                 <div
                     className="radial-corner-menu"
                     style={{

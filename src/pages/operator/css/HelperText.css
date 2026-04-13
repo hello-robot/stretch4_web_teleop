@@ -1,0 +1,61 @@
+.helper-text-anchor {
+    position: relative;
+    width: 100%;
+    height: 0%;
+    padding: 0.5rem 0 0;
+    overflow: visible;
+}
+
+.helper-text--info {
+    color: hsl(204, 90%, 70%);
+    --helper-text-scan-edge: hsl(204, 100%, 14%);
+    --helper-text-scan-mid: hsl(204, 100%, 30%);
+}
+
+.helper-text--warning {
+    color: hsl(42, 95%, 58%);
+    --helper-text-scan-edge: hsl(40, 85%, 18%);
+    --helper-text-scan-mid: hsl(40, 95%, 30%);
+}
+
+.helper-text--error {
+    color: hsl(330, 85%, 65%);
+    --helper-text-scan-edge: hsl(330, 70%, 18%);
+    --helper-text-scan-mid: hsl(330, 85%, 30%);
+}
+
+.helper-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
+    overflow: hidden;
+    font-weight: 500;
+    line-height: 133%;
+}
+
+.helper-text__text {
+    position: relative;
+    z-index: 1;
+}
+
+.helper-text__scan {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 42%;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 3px;
+    transform: translateZ(0);
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--helper-text-scan-edge) 35%,
+        var(--helper-text-scan-mid) 52%,
+        var(--helper-text-scan-edge) 68%,
+        transparent 100%
+    );
+}

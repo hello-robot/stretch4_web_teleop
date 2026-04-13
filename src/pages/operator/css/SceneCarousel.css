@@ -88,10 +88,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin: 0px 20px 20px;
+    margin: 10px 0 0;
+    padding: 2px;
     gap: 50px;
-    width: 100%;
-    background: hsl(204 100% 5% / 1);
+    background: hsl(204 80% 10% / 0.5);
     border-radius: 14px;
 }
 
@@ -102,7 +102,7 @@
     justify-content: center;
     gap: 8px;
     padding: 8px 20px;
-    background-color: hsl(204deg 100% 7%);
+    background-color: hsl(204deg 30% 20%);
     border: 1px solid hsl(204deg 100% 7%);
     border-radius: 12px;
     color: hsl(204deg 100% 50%);
@@ -118,11 +118,6 @@
     border-color: hsl(204, 100%, 50%);
 }
 
-.scene-carousel-footer-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
 .scene-carousel-footer-button svg {
     flex-shrink: 0;
 }
@@ -136,15 +131,16 @@
 }
 
 .scene-carousel-dot {
-    width: 1px;
-    height: 10px;
-    border-radius: 0px;
-    background-color: hsl(204, 100%, 50%, 1);
-    transition: all 200ms ease-out;
+    width: 3px;
+    height: 12px;
+    border-radius: 3px;
+    background-color: hsl(204, 75%, 75%, 0.5);
+    transition: width 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .scene-carousel-dot.active {
-    width: 10px;
+    width: 15px;
+    box-shadow: inset 0px 0px 13px -1px hsl(204, 100%, 50%, 1);
 }
 
 @media (max-width: 600px) {

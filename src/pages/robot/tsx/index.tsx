@@ -41,11 +41,14 @@ export const robot = new Robot({
         forwardActionState(goalState, "moveToPregraspState"),
     showTabletResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "showTabletState"),
+    playbackPosesResultCallback: (goalState: ActionState) =>
+        forwardActionState(goalState, "playbackPosesState"),
     amclPoseCallback: forwardAMCLPose,
     modeCallback: forwardMode,
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
+    stretchModelCallback: (value: string) => { },
 });
 
 export let connection: WebRTCConnection;
@@ -132,13 +135,6 @@ function handleSessionStart() {
 
 function forwardActionState(state: ActionState, type: string) {
     if (!connection) throw "WebRTC connection undefined!";
-
-    if (state.alert_type != "info") {
-        connection.sendData({
-            type: "goalStatus",
-            message: state,
-        } as GoalStatusMessage);
-    }
 
     connection.sendData({
         type: type,

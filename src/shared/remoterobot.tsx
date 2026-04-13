@@ -294,11 +294,11 @@ class RobotSensors extends React.Component {
 
     constructor(props: {}) {
         super(props);
-        this.functionProviderCallback = () => {};
-        this.batteryFunctionProviderCallback = () => {};
-        this.modeFunctionProviderCallback = () => {};
-        this.isHomedFunctionProviderCallback = () => {};
-        this.runStopFunctionProviderCallback = () => {};
+        this.functionProviderCallback = () => { };
+        this.batteryFunctionProviderCallback = () => { };
+        this.modeFunctionProviderCallback = () => { };
+        this.isHomedFunctionProviderCallback = () => { };
+        this.runStopFunctionProviderCallback = () => { };
         this.setFunctionProviderCallback =
             this.setFunctionProviderCallback.bind(this);
         this.setBatteryFunctionProviderCallback =
@@ -340,7 +340,7 @@ class RobotSensors extends React.Component {
             const same =
                 key in this.inJointLimits
                     ? jointValues[key]![0] == this.inJointLimits[key]![0] &&
-                      jointValues[key]![1] == this.inJointLimits[key]![1]
+                    jointValues[key]![1] == this.inJointLimits[key]![1]
                     : false;
             // If same value, remove from dict so not passed to callback
             if (same) delete jointValues[key];
@@ -354,7 +354,7 @@ class RobotSensors extends React.Component {
             const same =
                 key in this.inCollision
                     ? effortValues[key]![0] == this.inCollision[key]![0] &&
-                      effortValues[key]![1] == this.inCollision[key]![1]
+                    effortValues[key]![1] == this.inCollision[key]![1]
                     : false;
             // If same value, remove from dict so not passed to callback
             if (same) delete effortValues[key];
@@ -472,7 +472,6 @@ class RobotSensors extends React.Component {
      * @returns current robot pose
      */
     getRobotPose(
-        head: boolean,
         arm: boolean,
         lift: boolean,
         wrist_roll: boolean,
@@ -481,10 +480,6 @@ class RobotSensors extends React.Component {
         gripper: boolean
     ): RobotPose {
         let filteredPose: RobotPose = {};
-        if (head) {
-            filteredPose["joint_head_tilt"] = this.robotPose["joint_head_tilt"];
-            filteredPose["joint_head_pan"] = this.robotPose["joint_head_pan"];
-        }
         if (arm) {
             filteredPose["joint_arm"] = this.robotPose["joint_arm"];
         }

@@ -1,8 +1,4 @@
 /* Generic Modal Styles */
-:root {
-    --animation-timing-function-modal: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 .modal-overlay {
     position: absolute;
     bottom: 0;
@@ -21,20 +17,18 @@
     z-index: 1000;
     opacity: 0;
     /* --animation-timing-function is defined in ActionMode.css, ensure it's accessible or redefine here */
-    transition: opacity 300ms 200ms var(--animation-timing-function-modal);
+    transition: opacity 300ms 200ms var(--anim-timing-ease-out-silky);
     backdrop-filter: blur(5px);
 }
 
 .modal-overlay.enter {
-    animation: modal-fade-in 150ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-fade-in 150ms var(--anim-timing-ease-out-silky) forwards;
     /* Delay fade-in of overlay slightly less or same as modal */
     animation-delay: 200ms;
 }
 
 .modal-overlay.exit {
-    animation: modal-fade-out 150ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-fade-out 150ms var(--anim-timing-ease-out-silky) forwards;
 }
 
 .modal-content-wrapper {
@@ -55,14 +49,12 @@
 }
 
 .modal-content-wrapper.enter {
-    animation: modal-slide-up 400ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-slide-up 400ms var(--anim-timing-ease-out-silky) forwards;
     animation-delay: 200ms;
 }
 
 .modal-content-wrapper.exit {
-    animation: modal-slide-down 250ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-slide-down 250ms var(--anim-timing-ease-out-silky) forwards;
 }
 
 .modal-header {

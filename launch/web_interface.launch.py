@@ -54,6 +54,13 @@ def map_configuration_to_drivers(model, tool, has_nav_head_cam):
     if model == "SE4" and tool == "eoa_wrist_dw4_tool_sg4" and has_nav_head_cam is True:
         return "d405-only", False, True
 
+    elif (
+        model == "SE4"
+        and tool == "eoa_wrist_dw4_tool_tablet"
+        and has_nav_head_cam is True
+    ):
+        return "d405-only", False, True
+
     raise ValueError(
         f"cannot find valid configuration for model={model}, tool={tool}, "
         f"has_nav_head_cam={has_nav_head_cam}"

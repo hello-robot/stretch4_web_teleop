@@ -10,6 +10,7 @@ import {
     PilotButtonPadType,
 } from "./utils/component_definitions";
 import {
+    ActionState,
     className,
     ActionState as MoveBaseState,
     RemoteStream,
@@ -60,6 +61,7 @@ export const MobileOperator = (props: {
         ButtonPadButton[]
     >([]);
     const [moveBaseState, setMoveBaseState] = React.useState<MoveBaseState>();
+    const [playbackPosesState, setPlaybackPosesState] = React.useState<ActionState>(undefined);
     const [cameraID, setCameraID] = React.useState<CameraViewId>(
         CameraViewId.overhead
     );
@@ -69,9 +71,9 @@ export const MobileOperator = (props: {
     const [activeMainGroupTab, setActiveMainGroupTab] =
         React.useState<number>(0);
     const [activeControlTab, setActiveControlTab] = React.useState<number>(0);
-    const [isRecording, setIsRecording] = React.useState<boolean>();
     const [depthSensing, setDepthSensing] = React.useState<boolean>(false);
     const [showAlert, setShowAlert] = React.useState<boolean>(true);
+    const [idxFixedRecordingPlaying, idxFixedRecordingPlayingSet] = React.useState<number>(-1);
 
     // Manage the blurring+darkening of the camera feed
     const [isCameraVeilVisible, isCameraVeilVisibleSet] = useState(false);
@@ -90,6 +92,7 @@ export const MobileOperator = (props: {
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
 
+    const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
@@ -162,6 +165,22 @@ export const MobileOperator = (props: {
         }
     }, [moveBaseState]);
 
+    // Callback for when the move base state is updated (e.g., the ROS2 action returns)
+    // Used to render alerts to the operator.
+    function playbackPosesCallback(state: ActionState) {
+        setPlaybackPosesState(state);
+    }
+    movementRecorderFunctionProvider.setOperatorCallback(playbackPosesCallback);
+    let playbackPosesAlertTimeout: NodeJS.Timeout;
+    React.useEffect(() => {
+        if (playbackPosesState && playbackPosesState.alert_type != "info") {
+            if (playbackPosesAlertTimeout) clearTimeout(playbackPosesAlertTimeout);
+            playbackPosesAlertTimeout = setTimeout(() => {
+                setPlaybackPosesState(undefined);
+            }, alertTimeoutDuration);
+        }
+    }, [playbackPosesState]);
+
     let remoteStreams = props.remoteStreams;
 
     /** State passed from the operator and shared by all components */
@@ -177,7 +196,10 @@ export const MobileOperator = (props: {
         buttonStateMap: buttonStateMap.current,
         hideLabels: false,
         stretchTool: stretchTool,
-        robotNotHomed: false,
+        robotNotHomed: true,
+        playbackPosesState: playbackPosesState,
+        idxFixedRecordingPlaying: idxFixedRecordingPlaying,
+        idxFixedRecordingPlayingSet: idxFixedRecordingPlayingSet,
     };
 
     const buttonPad = (show: boolean) => {
@@ -221,15 +243,6 @@ export const MobileOperator = (props: {
 
     const controlModes = (show: boolean) => {
         return show ? <ControlModes key={"control-modes"} /> : <></>;
-    };
-    const recordingList = (show: boolean) => {
-        return (
-            <MovementRecorder
-                globalRecord={show}
-                hideLabels={false}
-                isRecording={isRecording}
-            />
-        );
     };
 
     return (
@@ -298,7 +311,7 @@ export const MobileOperator = (props: {
                             setCameraID={setCameraID}
                             remoteStreams={remoteStreams}
                             isCameraVeilVisible={isCameraVeilVisible}
-                            tabContent={[controlModes, recordingList]}
+                            tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
                             setVelocityScale={setVelocityScale}
@@ -308,6 +321,7 @@ export const MobileOperator = (props: {
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
+                            sharedState={sharedState}
                         />
                         <GripperCamPIP
                             cameraID={CameraViewId.gripper}

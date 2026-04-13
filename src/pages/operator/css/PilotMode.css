@@ -4,6 +4,7 @@
     height: 100%;
     /* Hide scrollbar on iOS */
     overflow: hidden;
+    justify-content: space-between;
 
     /* Hide scrollbar on Chrome, Edge, Opera */
     ::-webkit-scrollbar {

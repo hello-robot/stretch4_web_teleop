@@ -1,7 +1,13 @@
 import { StorageHandler } from "./StorageHandler";
 import { LayoutDefinition } from "../utils/component_definitions";
-import { ArucoMarkersInfo, RobotPose } from "shared/util";
+import { RobotPose } from "shared/util";
 import ROSLIB from "roslib";
+
+/** One row in `user_pose_recording_names` (localStorage JSON array). */
+export type RecordingListEntry = {
+    recording: string;
+    isPinned: boolean,
+};
 
 /** Uses browser local storage to store data. */
 export class LocalStorageHandler extends StorageHandler {
@@ -170,12 +176,58 @@ export class LocalStorageHandler extends StorageHandler {
         localStorage.setItem("map_" + poseNameNew, JSON.stringify(pose));
     }
 
-    public getRecordingNames(): string[] {
+    private readRecordingEntries(): RecordingListEntry[] {
         const storedJson = localStorage.getItem(
-            LocalStorageHandler.POSE_RECORDING_NAMES_KEY
+            LocalStorageHandler.POSE_RECORDING_NAMES_KEY,
         );
         if (!storedJson) return [];
-        return JSON.parse(storedJson);
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(storedJson);
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(parsed) || parsed.length === 0) return [];
+
+        if (typeof parsed[0] === "string") {
+            const migrated: RecordingListEntry[] = (parsed as string[]).map(
+                (recording) => ({
+                    recording,
+                    isPinned: false,
+                }),
+            );
+            this.writeRecordingEntries(migrated);
+            return migrated;
+        }
+
+        const entries: RecordingListEntry[] = [];
+        for (const item of parsed) {
+            if (
+                item
+                && typeof item === "object"
+                && "recording" in item
+                && typeof (item as RecordingListEntry).recording === "string"
+            ) {
+                const r = item as RecordingListEntry;
+                entries.push({
+                    recording: r.recording,
+                    isPinned: r.isPinned === true,
+                });
+            }
+        }
+
+        return entries;
+    }
+
+    private writeRecordingEntries(entries: RecordingListEntry[]): void {
+        localStorage.setItem(
+            LocalStorageHandler.POSE_RECORDING_NAMES_KEY,
+            JSON.stringify(entries),
+        );
+    }
+
+    public getRecordingNames(): string[] {
+        return this.readRecordingEntries().map((e) => e.recording);
     }
 
     public getRecording(recordingName: string): RobotPose[] {
@@ -186,28 +238,57 @@ export class LocalStorageHandler extends StorageHandler {
     }
 
     public savePoseRecording(recordingName: string, poses: RobotPose[]): void {
-        const recordingNames = this.getRecordingNames();
-        if (!recordingNames.includes(recordingName))
-            recordingNames.push(recordingName);
-        localStorage.setItem(
-            LocalStorageHandler.POSE_RECORDING_NAMES_KEY,
-            JSON.stringify(recordingNames)
-        );
+        const entries = this.readRecordingEntries();
+        if (!entries.some((e) => e.recording === recordingName)) {
+            entries.unshift({
+                recording: recordingName,
+                isPinned: false,
+            });
+        }
+        this.writeRecordingEntries(entries);
         localStorage.setItem(
             "recording_" + recordingName,
-            JSON.stringify(poses)
+            JSON.stringify(poses),
         );
     }
 
     public deleteRecording(recordingName: string): void {
-        const recordingNames = this.getRecordingNames();
-        if (!recordingNames.includes(recordingName)) return;
+        const entries = this.readRecordingEntries();
+        if (!entries.some((e) => e.recording === recordingName)) return;
         localStorage.removeItem("recording_" + recordingName);
-        const index = recordingNames.indexOf(recordingName);
-        recordingNames.splice(index, 1);
-        localStorage.setItem(
-            LocalStorageHandler.POSE_RECORDING_NAMES_KEY,
-            JSON.stringify(recordingNames)
+        const next = entries.filter((e) => e.recording !== recordingName);
+        this.writeRecordingEntries(next);
+    }
+
+    public getPinnedRecordingNames(): string[] {
+        const valid = new Set(this.getRecordingNames());
+        const names = this.readRecordingEntries()
+            .filter(
+                (e) => e.isPinned && valid.has(e.recording),
+            )
+            .map((e) => e.recording);
+        return names.sort((a, b) => a.localeCompare(b));
+    }
+
+    public setPinnedRecordingNames(names: string[]): void {
+        const valid = new Set(this.getRecordingNames());
+        const pinnedSet = new Set(
+            names.filter((n) => typeof n === "string" && valid.has(n)),
         );
+        const entries = this.readRecordingEntries();
+        for (const e of entries) {
+            e.isPinned = pinnedSet.has(e.recording);
+        }
+        this.writeRecordingEntries(entries);
+    }
+
+    public renamePinnedRecording(oldName: string, newName: string): void {
+        if (oldName === newName) return;
+        const entries = this.readRecordingEntries();
+        const e = entries.find((x) => x.recording === oldName);
+        if (e) {
+            e.recording = newName;
+            this.writeRecordingEntries(entries);
+        }
     }
 }

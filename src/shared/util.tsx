@@ -125,6 +125,7 @@ export type WebRTCMessage =
     | IsHomedMessage
     | IsRunStoppedMessage
     | StretchToolMessage
+    | ActionStateMessage
     | cmd;
 
 interface StopTrajectoryMessage {

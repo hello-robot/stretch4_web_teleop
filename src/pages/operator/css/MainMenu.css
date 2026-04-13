@@ -1,8 +1,3 @@
-/* Generic Modal Styles */
-:root {
-    --animation-timing-function-modal: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 .main-menu-modal-overlay {
     position: absolute;
     bottom: 0;
@@ -21,20 +16,18 @@
     z-index: 1000;
     opacity: 0;
     /* --animation-timing-function is defined in ActionMode.css, ensure it's accessible or redefine here */
-    transition: opacity 300ms 200ms var(--animation-timing-function-modal);
+    transition: opacity 300ms 200ms var(--anim-timing-ease-out-silky);
     backdrop-filter: blur(2px);
 }
 
 .main-menu-modal-overlay.enter {
-    animation: modal-fade-in 150ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-fade-in 150ms var(--anim-timing-ease-out-silky) forwards;
     animation-delay: 200ms;
     /* Delay fade-in of overlay slightly less or same as modal */
 }
 
 .main-menu-modal-overlay.exit {
-    animation: modal-fade-out 150ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-fade-out 150ms var(--anim-timing-ease-out-silky) forwards;
 }
 
 .main-menu-modal-content-wrapper {
@@ -51,14 +44,12 @@
 }
 
 .main-menu-modal-content-wrapper.enter {
-    animation: modal-slide-up 400ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-slide-up 400ms var(--anim-timing-ease-out-silky) forwards;
     animation-delay: 200ms;
 }
 
 .main-menu-modal-content-wrapper.exit {
-    animation: modal-slide-down 250ms var(--animation-timing-function-modal)
-        forwards;
+    animation: modal-slide-down 250ms var(--anim-timing-ease-out-silky) forwards;
 }
 
 .main-menu-modal-header {
@@ -149,7 +140,7 @@
 }
 
 .main-menu-modal-body {
-    /* margin: 10px 0; */
+    padding: 0 20px 20px;
 }
 
 .main-menu-modal-footer {

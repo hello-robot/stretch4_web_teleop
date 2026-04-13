@@ -12,13 +12,13 @@ screen -dmS $SESSION1 bash -c "ros2 run rmw_zenoh_cpp rmw_zenohd; exec bash"
 # Start stretch_body_server.py in its own screen session
 screen -dmS $SESSION2 bash -c "stretch_body_server.py --launch; exec bash"
 
-screen -dmS $SESSION3 bash -c "ros2 launch stretch_core gripper_camera.launch.py; exec bash"
+# screen -dmS $SESSION3 bash -c "ros2 launch stretch_core gripper_camera.launch.py; exec bash"
 
-screen -dmS $SESSION4 bash -c "ros2 launch stretch_core luxonis.launch.py use_center:=true; exec bash"
+# screen -dmS $SESSION4 bash -c "ros2 launch stretch_core luxonis.launch.py use_center:=true; exec bash"
 
 echo "Started:"
 echo " - $SESSION1 (ros2 zenoh daemon)"
 echo " - $SESSION2 (stretch body server)"
-echo " - $SESSION3 (oak camera)"
-echo " - $SESSION4 (luxonis)"
+# echo " - $SESSION3 (oak camera)"
+# echo " - $SESSION4 (luxonis)"
 echo ""

@@ -1,8 +1,206 @@
-#movement-recorder-container {
+.mrecord {
+    z-index: 2;
+    position: absolute;
+    left: calc(50% - 1px);
+    bottom: 0px;
+    translate: -50% 0%;
+    aspect-ratio: 9 / 16;
+    pointer-events: none;
+    width: calc(((100dvh - 151px) * 9) / 16);
+    height: calc(-151px + 100dvh);
+}
+
+/* START Button to toggle modal */
+.mrecord-button-wrapper {
+    z-index: 2;
+    position: absolute;
+    right: 12px;
+    bottom: 22px;
     display: flex;
-    gap: 15px;
+    justify-content: center;
+    align-items: center;
+}
+
+.mrecord-button-wrapper--inert {
+    pointer-events: none;
+}
+
+button.mrecord-button {
+    width: 50px;
+    height: 50px;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    box-shadow: none;
+    user-select: none;
+    pointer-events: auto;
+}
+
+button.mrecord-button {
+    background: transparent;
+}
+
+button.mrecord-button.visible {
+    opacity: 1;
+}
+button.mrecord-button.hidden {
+    opacity: 0;
+}
+
+button.mrecord-button:focus {
+    outline: none;
+}
+
+button.mrecord-button .mrecord-button-border {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 50px;
+    height: 50px;
+    box-sizing: border-box;
+    mix-blend-mode: soft-light;
+    border: 1px solid hsl(0deg 0% 100% / 30%);
+    border-radius: 50%;
+}
+
+button.mrecord-button:hover .mrecord-button-border {
+    border-color: transparent;
+}
+
+button.mrecord-button:active .mrecord-button-border {
+    border: 25px solid hsla(-25deg, 100%, 50%, 50%);
+}
+
+button.mrecord-button .mrecord-button-background {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 50px;
+    height: 50px;
+    box-sizing: border-box;
+    mix-blend-mode: soft-light;
+    background-color: hsl(204, 100%, 50%);
+    border-radius: 50%;
+    opacity: 0;
+}
+
+button.mrecord-button:hover .mrecord-button-background {
+    opacity: 0.5;
+}
+
+button.mrecord-button:active .mrecord-button-background {
+    opacity: 0;
+}
+
+button.mrecord-button img {
+    position: absolute;
+    left: 11px;
+    top: 11px;
+    width: 28px;
+    height: 28px;
+}
+
+button.mrecord-button img:nth-of-type(1) {
+    opacity: 0;
+}
+
+button.mrecord-button:hover img:nth-of-type(1) {
+    opacity: 1;
+}
+
+button.mrecord-button:active img:nth-of-type(1) {
+    opacity: 1;
+}
+
+button.mrecord-button img:nth-of-type(2) {
+    opacity: 1;
+}
+
+button.mrecord-button:hover img:nth-of-type(2) {
+    opacity: 0;
+}
+
+button.mrecord-button:active img:nth-of-type(2) {
+    opacity: 0;
+}
+/* END Button to toggle modal */
+
+button.mrecord-stop-button {
+    display: flex;
     align-items: center;
     justify-content: center;
+    width: 50px;
+    height: 50px;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    box-shadow: none;
+    user-select: none;
+    background-color: hsla(0, 0%, 0%, 0.5);
+    backdrop-filter: blur(10px);
+    pointer-events: auto;
+}
+
+button.mrecord-stop-button .stop-button-red-square {
+    display: flex;
+    width: 20px;
+    height: 20px;
+    background-color: hsl(0, 100%, 60%);
+    border-radius: 6px;
+}
+
+/* Blinking animation for recording indicator */
+.recording-icon-blink {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: red;
+    animation: blink-animation 2s ease-in-out infinite;
+}
+
+.mrecord-modal-cta-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.mrecord-modal-cta-btn:disabled .mrecord-modal-cta-icon {
+    opacity: 0.5;
+}
+
+.mrecord-modal-cta-icon {
+    display: flex;
+}
+
+.mrecord-statusbar-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.mrecord-statusbar-row--loose {
+    gap: 6px;
+}
+
+.mrecord-statusbar-muted {
+    opacity: 0.8;
+}
+
+@keyframes blink-animation {
+    0%,
+    49% {
+        opacity: 1;
+    }
+    50%,
+    100% {
+        opacity: 0;
+    }
 }
 
 /* The below buttons' CSS likely gets overridden by the TextToSpeech CSS
@@ -16,12 +214,12 @@
 }
 
 .save-btn {
-    background-color: var(--btn-turquoise);
+    background-color: var(--blue);
     display: flex;
 }
 
 .delete-btn {
-    background-color: var(--btn-red);
+    background-color: transparent;
     display: flex;
 }
 
@@ -56,4 +254,459 @@
     vertical-align: middle;
     display: flex;
     justify-content: center;
+}
+
+/**********
+ * New UX *
+ **********/
+
+#movement-recorder-container {
+    flex-direction: column;
+    position: relative;
+    align-self: flex-start;
+    height: 100%;
+    --footer-height: 60px;
+}
+
+#movement-recorder-container button {
+    display: flex;
+    align-items: center;
+}
+
+.recordings-list {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.recordings-list.hidden {
+    display: none;
+}
+
+.recordings-list.empty {
+    padding: 30px 0;
+    background-color: hsl(0deg 0% 0% / 10%);
+    border-radius: 21px;
+    border: 1px solid hsl(0deg 0% 0% / 7%);
+}
+
+.recordings-list .recording-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0px;
+}
+
+.recordings-list .helper-text-empty-state {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 0 auto;
+    max-width: 200px;
+    height: 100%;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    line-height: 130%;
+}
+
+.recordings-list .helper-text-empty-state .copy {
+    opacity: 0.5;
+}
+
+#movement-recorder-container .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px;
+    width: 100%;
+    height: var(--footer-height);
+    background: hsl(204, 51%, 14%);
+}
+
+#movement-recorder-container .footer button.button-record {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 8px 8px 16px;
+    font-weight: 600;
+}
+
+#movement-recorder-container
+    .footer
+    button.button-record.button-record-record
+    svg {
+    color: var(--red);
+}
+
+#movement-recorder-container
+    .footer
+    button.button-record.button-record-start:disabled
+    svg {
+    color: rgba(16, 16, 16, 0.3);
+}
+
+#movement-recorder-container
+    .footer
+    button.button-record.button-record-start
+    svg {
+    color: var(--red);
+}
+
+#movement-recorder-container
+    .footer
+    button.button-record.button-record-stop
+    svg {
+    color: var(--red);
+}
+
+.joints-list {
+    width: 100%;
+    overflow-x: hidden;
+    background-color: hsl(204, 51%, 14%);
+}
+
+.joints-list ul.checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 10px 0 0;
+}
+
+.joints-list ul.checkboxes li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    list-style: none;
+}
+
+.joints-list ul.checkboxes.nested li {
+    display: flex;
+    list-style: none;
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0 0.8rem 0 0.3rem;
+    font: inherit;
+    background-color: hsl(204, 100%, 10%);
+    color: hsl(204, 29%, 30%);
+    width: 2.3rem;
+    height: 2rem;
+    outline: 1px solid hsl(204deg 50% 25% / 100%);
+    border: none;
+    border-radius: 10px;
+    transform: translateY(-0.075em);
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"]:hover {
+    background-color: hsl(204, 50%, 30%);
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"]::before {
+    content: "";
+    width: 0.85em;
+    height: 0.85em;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    transform: scale(0);
+    transform-origin: bottom center;
+    transition: transform 120ms ease-out;
+    /* Check mark's color */
+    box-shadow: inset 1rem 1rem hsl(204, 51%, 14%);
+    /* Account for High Contrast mode on Windows */
+    background-color: CanvasText;
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"]:focus {
+    outline: 2px solid hsl(190, 100%, 50%);
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"]:checked {
+    /* Bg */
+    background-color: hsl(204, 100%, 50%);
+    /* Border */
+    color: transparent;
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"]:checked::before {
+    /* Animate the checkmark icon */
+    transform: scale(1);
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"]:indeterminate {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0 0.8rem 0 0.3rem;
+    font: inherit;
+    background-color: hsl(204, 100%, 10%);
+    color: hsl(204, 29%, 30%);
+    width: 2.3rem;
+    height: 2rem;
+    outline: 1px solid hsl(0deg 0% 100% / 10%);
+    border: none;
+    border-radius: 10px;
+    transform: translateY(-0.075em);
+    display: grid;
+    place-content: center;
+}
+
+.joints-list ul.checkboxes li input[type="checkbox"]:indeterminate::before {
+    /* Minus icon */
+    clip-path: polygon(10% 40%, 90% 40%, 90% 60%, 10% 60%);
+    /* Minus icon's color */
+    box-shadow: inset 1rem 1rem hsl(204, 100%, 50%);
+    /* Animate the minus icon */
+    transform: scale(1);
+}
+
+.joints-list ul.checkboxes li label {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.joints-list ul.checkboxes.nested {
+    flex: 0 0 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin: 0px;
+    padding: 0.6rem 0 0 2.7rem;
+}
+
+.naming-modal {
+    background-color: hsl(204, 51%, 14%);
+}
+
+.naming-modal input {
+    width: 100%;
+}
+
+.joints-list .heading,
+.naming-modal .heading {
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.joints-list .subheading {
+    margin: 7px 0 0;
+    max-width: 227px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 133%;
+}
+
+.naming-modal button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    height: 100%;
+    font-weight: 600;
+}
+
+.recording-name-input {
+    box-sizing: border-box;
+    margin: 0.5rem 5px 0 0;
+    padding: 1px 5px 0px;
+    width: calc(100% - 10px);
+    height: 31px;
+    line-height: 28px;
+    font-size: 16px;
+    font-weight: 600;
+    background: transparent;
+    user-select: none !important;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* Allow highlighting while editing */
+    user-select: unset !important;
+    -webkit-user-select: unset !important;
+    -moz-user-select: unset !important;
+    -ms-user-select: unset !important;
+}
+
+.recording-name-input:disabled {
+    color: #ffffff;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    pointer-events: none !important;
+    -webkit-touch-callout: none !important;
+}
+
+.recording-name-input:disabled::selection {
+    background-color: transparent;
+}
+
+.recording-name-input:focus {
+    background-color: var(--blue);
+    color: #ffffff;
+    border: none;
+    outline: none;
+}
+
+.recording-name-input::selection {
+    background-color: hsl(204 100% 35% / 1);
+}
+
+.recording-item-buttons {
+    --button-width: 20px;
+    --transition: all 250ms ease-out;
+}
+
+.recording-item-buttons button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+    aspect-ratio: 1 / 1;
+    width: var(--button-width) !important;
+    min-width: var(--button-width) !important;
+    max-width: var(--button-width) !important;
+    height: var(--button-width);
+    color: hsl(204 100% 50% / 1);
+    border-radius: 4px;
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    outline: none;
+}
+
+.recording-item-buttons button.button-recording-save,
+.recording-item-buttons button.button-recording-cancel {
+    width: auto !important;
+    min-width: auto !important;
+    max-width: none !important;
+    aspect-ratio: unset;
+    height: auto;
+    padding: 7px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+button.button-playback {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    background: hsl(204, 100%, 50%);
+    border-radius: 50%;
+    box-shadow: none;
+    border: none;
+    outline: none;
+    display: 0;
+}
+
+button.button-playback {
+    transition: var(--transition);
+}
+
+button.button-playback.visible,
+button.button-edit.visible {
+    opacity: 1;
+}
+
+button.button-pin.hidden,
+button.button-edit.hidden {
+    opacity: 0;
+}
+
+.recording-item-buttons button.button-edit.editing {
+    color: #ffffff;
+    background-color: none;
+    border: none;
+}
+
+.recording-item-buttons button.button-edit.editing::before {
+    z-index: -1;
+    position: absolute;
+    content: "";
+    min-width: 30px;
+    min-height: 30px;
+    background: var(--blue);
+    border-radius: 50%;
+}
+
+/*
+Filter
+ */
+
+.mrecord-search-controls {
+    display: flex;
+    gap: 5px;
+    max-width: var(--max-width);
+    transition: transform var(--animation-ms) ease-out;
+    --max-width: 150px;
+    --animation-ms: 250ms;
+    --locations-menu-scroll-btn-wrapper-width: 81px;
+}
+
+button.mrecord-search-btn {
+    background-color: transparent;
+    box-shadow: none;
+    color: hsl(204 100% 50% / 1);
+    padding: 0;
+}
+
+.mrecord-search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+}
+
+@keyframes brightnessPulse {
+    from {
+        filter: brightness(1);
+    }
+
+    to {
+        filter: brightness(1.7);
+    }
+}
+
+.mrecord-search-input-wrapper input.mrecord-search-input {
+    max-width: var(--max-width);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 10px;
+    color: hsl(204 100% 50% / 1);
+    border-radius: 4px;
+    line-height: 140%;
+    animation: brightnessPulse 1s infinite alternate;
+}
+
+.mrecord-search-input-wrapper button.mrecord-search-close-btn {
+    display: flex;
+    padding: 0px;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.mrecord-search-input-wrapper button.mrecord-search-close-btn svg {
+    fill: hsl(204 100% 50% / 1);
+}
+
+.mrecord-search-input-wrapper
+    button.locations-menu-search-close-btn.active
+    svg {
+    fill: hsl(204 100% 50% / 1);
+}
+
+/* Modal footer */
+.mrecord-modal-footer.children-limit-width > * {
+    flex: 0 0 auto;
+    flex-basis: max-content;
 }

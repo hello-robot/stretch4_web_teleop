@@ -515,36 +515,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                 </button>
             </div>
         );
-        // Renders a bespoke Arm+Gripper dpad
-    } else if (isArmGripperButtons) {
-        return (
-            <div
-                className={`button-wrapper ${props.direction} ${buttonState}`}
-                key={props.direction}
-                role="none"
-                {...clickProps}
-            >
-                <div className={`button-cardinal ${buttonState}`}>
-                    <span className="synthetic-bottom-border"></span>
-                </div>
-                <button
-                    type="button"
-                    className={`button-arm-gripper ${buttonState}`}
-                    aria-label={ariaLabel}
-                    tabIndex={0}
-                    disabled={isDisabled}
-                    {...clickProps}
-                >
-                    <img
-                        src={armGripperIconCalc(props.direction)}
-                        alt=""
-                        aria-hidden="true"
-                    />
-                    {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
-                    <span className="aria-inviz">••</span>
-                </button>
-            </div>
-        );
     }
 };
 
