@@ -130,7 +130,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     aria-label={isStopped ? "Run" : "Stop"}
                 >
                     <img
-                        src={isStopped ? runStopStopIcon : runStopRunIcon}
+                        src={!isStopped ? runStopStopIcon : runStopRunIcon}
                         alt=""
                         aria-hidden="true"
                         className="icon"

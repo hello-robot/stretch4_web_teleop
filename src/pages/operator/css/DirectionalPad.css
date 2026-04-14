@@ -1,23 +1,31 @@
-/*
-
-  140px;
-
-  border width is 1px
-  border width is 0.5px
-
-  138px
-
-
- */
-
 .base-movement-controls {
+    /* Manual positioning of ButtonPad */
     position: relative;
     bottom: 7vh;
+
+    /* This defines the size of ButtonPad */
     --size: 18vh;
-    --border-width: 1px;
-    --size-icon: calc(var(--size) * 0.19);
-    --width-turn-button: calc((var(--size) - (var(--border-width) * 2)) / 2);
-    --height-turn-button: calc(var(--size) - (var(--border-width) * 2));
+
+    /* This defines the width of ButtonPad's borders */
+    --border-width: 4px;
+
+    /* This defines the style of ButtonPad's borders */
+    --border-style: ridge;
+
+    /* Size of the icon */
+    --size-icon: calc(var(--size) * 0.25);
+
+    /* Box size for turn button */
+    --width-turn-button: calc(var(--size) / 2);
+    --height-turn-button: var(--size);
+
+    /* Border-color's opacity */
+    --border-color-opacity: 75%;
+    /* This is the border-color */
+    --border-color: hsl(0deg 0% 100% / var(--border-color-opacity));
+
+    /* This provides the "glow" effect around the edges of the buttons*/
+    --box-shadow: 0px 0px calc(var(--size) / 10) 0px hsl(204deg 100% 98% / 30%);
 }
 
 .base-movement-controls .dbutton-pad {
@@ -43,18 +51,15 @@
     padding: 0px;
     transform-origin: 0 0;
     mix-blend-mode: soft-light;
-    border-color: hsl(0deg 0% 100% / 33%);
-    border-right-width: 1px;
-    border-bottom-width: 1px;
-    border-top-width: 0.5px;
-    border-left-width: 0.5px;
-    border-style: solid;
-    transition-property:
-        border-color,
-        background-color background-size,
-        background-position,
-        box-shadow,
-        backdrop-filter;
+    box-shadow: inset var(--box-shadow);
+    border-color: var(--border-color);
+    border-right-width: var(--border-width);
+    border-bottom-width: var(--border-width);
+    border-top-width: calc(var(--border-width) * (2 / 3));
+    border-left-width: calc(var(--border-width) * (2 / 3));
+    border-style: var(--border-style);
+    transition-property: border-color, background-color, background-size,
+        background-position, box-shadow, backdrop-filter;
     transition-duration: 500ms;
     transition-timing-function: ease-out;
     rotate: -45deg;
@@ -127,16 +132,13 @@
     width: calc(var(--size) / 2);
     height: calc(var(--size) / 2);
     border-radius: 0 0 var(--size) 0;
-    border-color: hsl(0deg 0% 100% / 50%);
-    border-right-width: 2px;
-    border-bottom-width: 2px;
-    border-style: solid;
-    transition-property:
-        border-color,
-        background-color background-size,
-        background-position,
-        box-shadow,
-        backdrop-filter;
+    border-color: var(--border-color);
+    border-right-width: var(--border-width);
+    border-bottom-width: var(--border-width);
+    border-style: var(--border-style);
+    box-shadow: var(--box-shadow);
+    transition-property: border-color, background-color, background-size,
+        background-position, box-shadow, backdrop-filter;
     transition-duration: 500ms;
     transition-timing-function: ease-out;
 }
@@ -176,9 +178,9 @@
     touch-action: none;
 }
 
-.button-wrapper button.button-chevron .chevron-icon {
-    width: 40px;
-    height: 40px;
+.button-wrapper button.button-chevron img.chevron-icon {
+    width: 60px;
+    height: 60px;
     pointer-events: none;
 }
 
@@ -188,7 +190,7 @@
 
 .button-wrapper.east button.button-chevron {
     top: calc(var(--size-icon) * -1);
-    left: calc(var(--size) * 0.9 - var(--size-icon));
+    left: calc(var(--size) * 0.98 - var(--size-icon));
     rotate: -90deg;
 }
 
@@ -199,12 +201,12 @@
 }
 .button-wrapper.west button.button-chevron {
     top: 0px;
-    left: calc(var(--size) * -0.9);
+    left: calc(var(--size) * -0.98);
     rotate: 90deg;
 }
 .button-wrapper.north button.button-chevron {
-    top: calc(var(--size) * -0.9);
-    left: calc(var(--size-icon) * -1);
+    top: calc(var(--size) * -0.98);
+    left: calc(var(--size-icon) * -1.1);
     rotate: -180deg;
 }
 
@@ -234,9 +236,8 @@
 }
 
 .button-wrapper button.button-arm-gripper img {
-    width: calc(var(--size-icon) * 1.4);
-    height: calc(var(--size-icon) * 1.4);
-    pointer-events: none;
+    width: var(--size-icon);
+    height: var(--size-icon);
 }
 
 .button-wrapper.north button.button-arm-gripper {
@@ -248,11 +249,19 @@
 }
 .button-wrapper.east button.button-arm-gripper {
     top: 0;
-    left: calc(var(--size) * 0.9 - var(--size-icon));
+    left: calc(var(--size) * 0.98 - var(--size-icon));
+}
+.button-wrapper.east button.button-arm-gripper img {
+    position: relative;
+    top: calc(var(--size) / 12);
 }
 .button-wrapper.west button.button-arm-gripper {
     top: 0px;
-    left: calc(var(--size) * -0.75);
+    left: calc(var(--size) * -0.725);
+}
+.button-wrapper.west button.button-arm-gripper img {
+    position: relative;
+    top: calc(var(--size) / 12);
 }
 
 button.Arm.\+.Gripper.button-turn img {
@@ -273,6 +282,7 @@ button.Arm.\+.Gripper.button-turn img {
 
 .base-movement-controls .rbutton-pad .button-turn-wrapper {
     position: relative;
+    top: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -399,10 +409,10 @@ button.Arm.\+.Gripper.button-turn img {
 .base-movement-controls .rbutton-pad .line {
     position: absolute;
     top: 0;
-    left: 50%;
-    width: 1px;
+    left: calc(50% - (var(--border-width) / 2));
+    width: 0px;
     height: var(--height-turn-button);
-    background-color: hsl(0deg 0% 100% / 33%);
+    border-left: var(--border-width) var(--border-style) var(--border-color);
     mix-blend-mode: soft-light;
 }
 

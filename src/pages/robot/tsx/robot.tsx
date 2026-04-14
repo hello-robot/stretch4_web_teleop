@@ -857,33 +857,6 @@ export class Robot extends React.Component {
         this.setRunStopService?.callService(request, (response: boolean) => { });
     }
 
-    useLeftCamera() {
-        var request = {};
-        this.useLeftCameraService?.callService(request, (response: boolean) => {
-            console.log("Using left camera");
-        });
-    }
-
-    useRightCamera() {
-        var request = {};
-        this.useRightCameraService?.callService(
-            request,
-            (response: boolean) => {
-                console.log("Using right camera");
-            }
-        );
-    }
-
-    useCenterCamera() {
-        var request = {};
-        this.useCenterCameraService?.callService(
-            request,
-            (response: boolean) => {
-                console.log("Using center camera");
-            }
-        );
-    }
-
     /**
      * In navigation mode, you can send position commands to the arm and
      * velocity commands to the base.

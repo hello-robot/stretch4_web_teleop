@@ -12,7 +12,7 @@ export enum ActionModeType {
 /** Enumerator for the Pilot's ButtonPad types */
 export enum PilotButtonPadType {
     BaseDrive = "Drive",
-    ArmGripper = "Arm + Gripper",
+    ArmGripper = "Arm + Hand",
     Wrist = "Wrist",
 }
 

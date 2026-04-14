@@ -64,7 +64,7 @@ const getRotateIcon = (
     pilotControlsCurrent: string,
     direction: string
 ): string => {
-    const isArmElevatorIcons = pilotControlsCurrent === "Arm + Gripper";
+    const isArmElevatorIcons = pilotControlsCurrent === PilotButtonPadType.ArmGripper;
     if (direction === "rotate-left") {
         return isArmElevatorIcons ? armUpIcon : rotateLeftIcon;
     } else {

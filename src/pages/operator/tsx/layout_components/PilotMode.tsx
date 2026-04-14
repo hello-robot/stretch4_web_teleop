@@ -33,7 +33,9 @@ interface PilotModeProps {
     swipeableViewsIdxSet: (idx: number) => void;
     setCameraID: (id: CameraViewId) => void;
     sceneSelected: string;
-    onSceneSelectedChange: (scene: string) => void
+    onSceneSelectedChange: React.Dispatch<React.SetStateAction<string>>;
+    globalRecord?: boolean;
+    sharedState?: SharedState;
 }
 
 const cameraLabelMap: Record<string, string> = {
