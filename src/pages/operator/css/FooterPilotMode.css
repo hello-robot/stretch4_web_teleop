@@ -51,10 +51,12 @@
 }
 
 .action-speed button.button-action-speed {
-    position: relative;
-    left: -7px;
-    width: 60px;
-    height: 34px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    width: 46px;
+    height: 44px;
     border-radius: 10px;
     padding: 0;
     background-color: transparent;
@@ -63,12 +65,15 @@
 
 .action-speed button.button-action-speed .action-speed-icon {
     display: inline-block;
-    width: 60px;
-    height: 34px;
-    object-fit: cover;
-    object-position: -2px center;
+    min-width: 46px;
+    max-width: 46px;
+    min-height: 44px;
+    max-height: 44px;
+    object-fit: contain;
+    object-position: center -1px;
     filter: brightness(1);
     transition: filter 200ms ease-out;
+    overflow: visible;
 }
 
 .action-speed button.button-action-speed:active .action-speed-icon {

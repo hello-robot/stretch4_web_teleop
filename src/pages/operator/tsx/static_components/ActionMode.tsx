@@ -4,7 +4,6 @@ import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionMode.css";
 import { ActionModeType } from "../utils/component_definitions";
 import { buttonFunctionProvider } from "operator/tsx/index";
-import actionModeIcon from "operator/icons/Action_Mode.svg";
 
 /**Details of the action modes */
 type ActionModeDetails = {
@@ -66,11 +65,6 @@ export const ActionMode = (props: ActionModeProps) => {
                     aria-label="Change action mode"
                     aria-hidden={props.isCameraVeilVisible}
                 >
-                    <img
-                        src={actionModeIcon}
-                        alt="Action mode"
-                        className="action-mode-icon"
-                    />
                     <div>{props.mode}</div>
                 </button>
             </MagneticWrapper>

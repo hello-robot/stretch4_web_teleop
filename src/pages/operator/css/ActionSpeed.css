@@ -34,8 +34,9 @@
 }
 
 .action-speed-options button .speed-option-icon {
-    width: 74px;
-    height: 41px;
+    width: 61px;
+    height: auto;
+    object-position: center 4px;
     pointer-events: none;
 }
 
@@ -57,8 +58,8 @@
 .action-speed-options button:active,
 .action-speed-options button.selected {
     box-shadow:
-        0px 0px 25px -7px hsl(0 0% 0% / 0.6),
-        0px 0px 50px hsl(204deg 96% 38% / 50%) inset;
+        0px 0px 25px -7px hsl(205deg 88.54% 11.52%),
+        0px 0px 25px hsl(204deg 70% 55% / 75%) inset;
     background-color: hsl(205deg 88.54% 11.52%);
 }
 
@@ -71,3 +72,4 @@
     text-align: center;
     font-weight: 700;
 }
+font-weight: 700;

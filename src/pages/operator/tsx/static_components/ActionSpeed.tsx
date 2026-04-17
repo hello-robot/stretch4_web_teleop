@@ -6,6 +6,9 @@ import { buttonFunctionProvider } from "..";
 import speedSlowIcon from "operator/icons/Speed_Slow.svg";
 import speedMediumIcon from "operator/icons/Speed_Medium.svg";
 import speedFastIcon from "operator/icons/Speed_Fast.svg";
+import speedSlowIconWithoutText from "operator/icons/Speed_Slow_Without_Text.svg";
+import speedMediumIconWithoutText from "operator/icons/Speed_Medium_Without_Text.svg";
+import speedFastIconWithoutText from "operator/icons/Speed_Fast_Without_Text.svg";
 
 /**Details of a velocity setting */
 type ActionSpeedDetails = {
@@ -60,6 +63,12 @@ const SPEED_ICONS: Record<string, string> = {
     slow: speedSlowIcon,
     medium: speedMediumIcon,
     fast: speedFastIcon,
+};
+
+const SPEED_ICONS_WITHOUT_TEXT: Record<string, string> = {
+    slow: speedSlowIconWithoutText,
+    medium: speedMediumIconWithoutText,
+    fast: speedFastIconWithoutText,
 };
 
 const getIconBySpeed = (speed: number): string => {
@@ -168,7 +177,7 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
                             }
                         >
                             <img
-                                src={SPEED_ICONS[opt.value]}
+                                src={SPEED_ICONS_WITHOUT_TEXT[opt.value]}
                                 alt=""
                                 className="speed-option-icon"
                                 aria-hidden="true"
