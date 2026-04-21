@@ -31,7 +31,7 @@ import {
     IsRunStoppedMessage,
 } from "../../../shared/util";
 
-export var robotMode: "navigation" | "position" | "unknown" = "position";
+export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
 export var rosConnected = false;
 
 // Constants for movement states
@@ -880,7 +880,9 @@ export class Robot extends React.Component {
      * velocity commands to the base.
      */
     switchToNavigationMode() {
+        if (robotMode === "navigation") return;
         this.modeParam.set("navigation", () => {
+            robotMode = "navigation";
             console.log("Switched to navigation mode");
         });
     }
@@ -890,7 +892,9 @@ export class Robot extends React.Component {
      * position commands to the base.
      */
     switchToPositionMode = () => {
+        if (robotMode === "position") return;
         this.modeParam.set("position", () => {
+            robotMode = "position";
             console.log("Switched to position mode");
         });
     };
@@ -899,7 +903,9 @@ export class Robot extends React.Component {
      * In velocity mode, you can send velocity commands to the arm and base.
      */
     switchToVelocityMode = () => {
+        if (robotMode === "velocity") return;
         this.modeParam.set("velocity", () => {
+            robotMode = "velocity";
             console.log("Switched to velocity mode");
         });
     };
@@ -910,7 +916,6 @@ export class Robot extends React.Component {
     homeTheRobot() {
         var request = {};
         this.homeTheRobotService!.callService(request, () => {
-            robotMode = "unknown"; // returns to whatever mode the robot was in before this service was called
             console.log("Homing complete");
         });
     }
@@ -1227,9 +1232,6 @@ export class Robot extends React.Component {
         // this.stopExecution()
         this.moveBaseGoal = this.makeMoveBaseGoal(pose);
         this.moveBaseClient.sendGoal(this.moveBaseGoal);
-
-        // An autonomous client may change the robot's mode.
-        robotMode = "unknown";
     }
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
@@ -1331,9 +1333,6 @@ export class Robot extends React.Component {
             horizontal
         );
         this.moveToPregraspClient.sendGoal(this.moveToPregraspGoal);
-
-        // An autonomous client may change the robot's mode.
-        robotMode = "unknown";
     }
 
     stopMoveToPregraspClient() {
@@ -1348,9 +1347,6 @@ export class Robot extends React.Component {
     executeShowTabletGoal() {
         this.showTabletGoal = this.makeShowTabletGoal();
         this.showTabletClient.sendGoal(this.showTabletGoal);
-
-        // An autonomous client may change the robot's mode.
-        robotMode = "unknown";
     }
 
     stopShowTabletClient() {
