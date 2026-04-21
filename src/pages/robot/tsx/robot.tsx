@@ -732,6 +732,24 @@ export class Robot extends React.Component {
         });
     }
 
+    useLeftCamera() {
+        this.useLeftCameraService?.callService({}, () => { 
+            console.log("Successfully switched to left camera")
+        });
+    }
+
+    useRightCamera() {
+        this.useRightCameraService?.callService({}, () => { 
+            console.log("Successfully switched to right camera")
+        });
+    }
+
+    useCenterCamera() {
+        this.useCenterCameraService?.callService({}, () => { 
+            console.log("Successfully switched to center camera")
+        });
+    }
+
     subscribeToGripperFingerTF() {
         this.robotFrameTfClient?.subscribe(
             "link_gripper_finger_left",
