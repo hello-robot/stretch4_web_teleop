@@ -56,7 +56,7 @@ export const movementStatesAll = Object.values(MovementState);
 const moveBaseActionName = "/navigate_to_pose";
 const moveToPregraspActionName = "/move_to_pregrasp";
 const showTabletActionName = "/show_tablet";
-const followJointTrajectoryActionName = "/stretch_controller/follow_joint_trajectory";
+const followJointTrajectoryActionName = "/follow_joint_trajectory";
 
 export class Robot extends React.Component {
     private ros: Ros;
@@ -585,7 +585,7 @@ export class Robot extends React.Component {
     createTrajectoryClient() {
         this.trajectoryClient = new Action({
             ros: this.ros,
-            name: "/follow_joint_trajectory",
+            name: followJointTrajectoryActionName,
             actionType: "control_msgs/action/FollowJointTrajectory",
         });
         console.log("created trajectory client");
@@ -733,19 +733,19 @@ export class Robot extends React.Component {
     }
 
     useLeftCamera() {
-        this.useLeftCameraService?.callService({}, () => { 
+        this.useLeftCameraService?.callService({}, () => {
             console.log("Successfully switched to left camera")
         });
     }
 
     useRightCamera() {
-        this.useRightCameraService?.callService({}, () => { 
+        this.useRightCameraService?.callService({}, () => {
             console.log("Successfully switched to right camera")
         });
     }
 
     useCenterCamera() {
-        this.useCenterCameraService?.callService({}, () => { 
+        this.useCenterCameraService?.callService({}, () => {
             console.log("Successfully switched to center camera")
         });
     }

@@ -6,7 +6,7 @@ import {
     PilotButtonPadType,
 } from "../utils/component_definitions";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
-import { PilotButtonPads } from "../static_components/MenuPilotControls";
+import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 
 const x = PilotButtonPads;
 
@@ -48,7 +48,7 @@ export abstract class FunctionProvider {
     ) {
         this.velocityScale = velocityScale;
         this.actionMode = actionMode;
-        this.pilotControlsCurrent = pilotControlsCurrent ?? PilotButtonPads[0];
+        this.pilotControlsCurrent = pilotControlsCurrent as PilotButtonPadType ?? PilotButtonPads[0];
     }
 
     public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {

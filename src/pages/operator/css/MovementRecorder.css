@@ -26,20 +26,20 @@
 }
 
 button.mrecord-button {
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
     width: 50px;
     height: 50px;
-    border: none;
     border-radius: 50%;
-    padding: 0;
-    margin: 0;
+    background: hsla(204, 0%, 2%, 60%);
+    outline: 1px solid hsla(204, 100%, 100%, 2%);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    box-shadow: none;
-    user-select: none;
     pointer-events: auto;
-}
-
-button.mrecord-button {
-    background: transparent;
 }
 
 button.mrecord-button.visible {
@@ -61,7 +61,6 @@ button.mrecord-button .mrecord-button-border {
     height: 50px;
     box-sizing: border-box;
     mix-blend-mode: soft-light;
-    border: 1px solid hsl(0deg 0% 100% / 30%);
     border-radius: 50%;
 }
 

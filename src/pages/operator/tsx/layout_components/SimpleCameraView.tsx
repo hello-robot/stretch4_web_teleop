@@ -79,8 +79,7 @@ export const SimpleCameraView = (props: {
     }, []);
 
     const videoComponent =
-        props.id === CameraViewId.realsense ||
-            props.id === CameraViewId.overhead ? (
+        props.id === CameraViewId.overhead ? (
             <>
                 <div
                     className="simple-realsense"
@@ -148,9 +147,6 @@ function getStream(
     switch (id) {
         case CameraViewId.overhead:
             streamName = "overhead";
-            break;
-        case CameraViewId.realsense:
-            streamName = "realsense";
             break;
         case CameraViewId.gripper:
             streamName = "gripper";

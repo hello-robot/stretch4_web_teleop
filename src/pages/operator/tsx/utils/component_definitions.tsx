@@ -36,10 +36,14 @@ export enum ComponentType {
  */
 export enum CameraViewId {
     overhead = "Overhead",
-    realsense = "Realsense",
     gripper = "Gripper",
 }
 
+export enum OverheadCameraID {
+    left = "Left",
+    center = "Center",
+    right = "Right",
+}
 /**
  * ID for a button pad describes the shape and button functions of the button pad
  */

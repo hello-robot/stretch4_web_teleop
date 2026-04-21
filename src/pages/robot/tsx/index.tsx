@@ -73,12 +73,6 @@ robot.setOnRosConnectCallback(async () => {
     navigationStream.start();
 
     robot.subscribeToVideo({
-        topicName: "/camera/color/image_raw/rotated/compressed",
-        callback: realsenseStream.updateImage,
-    });
-    realsenseStream.start();
-
-    robot.subscribeToVideo({
         topicName: "/gripper_camera/image_raw/cropped/compressed",
         callback: gripperStream.updateImage,
     });
@@ -114,11 +108,6 @@ function handleSessionStart() {
     stream
         .getTracks()
         .forEach((track) => connection.addTrack(track, stream, "overhead"));
-
-    stream = realsenseStream.outputVideoStream!;
-    stream
-        .getTracks()
-        .forEach((track) => connection.addTrack(track, stream, "realsense"));
 
     stream = gripperStream.outputVideoStream!;
     stream

@@ -1,16 +1,16 @@
-import React, { useState } from "react";
+import React from "react";
 import { ActionSpeed } from "../static_components/ActionSpeed";
-import { MenuPilotControls } from "../static_components/MenuPilotControls";
 import {
     ActionModeType,
-    PilotButtonPadType,
+    CameraViewId,
 } from "../utils/component_definitions";
 import { ActionMode } from "../static_components/ActionMode";
+import { CameraSwitcher } from "../static_components/CameraSwitcher";
 import "operator/css/FooterPilotMode.css";
 
 interface FooterControlsProps {
-    pilotControlsCurrent: PilotButtonPadType;
-    setPilotControlsCurrent: (value: string) => void;
+    cameraID: CameraViewId;
+    setCameraID: (id: CameraViewId) => void;
     actionSpeedCurrent?: number;
     onActionSpeedChange: (newSpeed: number) => void;
     actionModeCurrent?: ActionModeType;
@@ -23,20 +23,15 @@ interface FooterControlsProps {
 }
 
 const FooterHeadCam: React.FC<FooterControlsProps> = ({
-    pilotControlsCurrent,
-    setPilotControlsCurrent,
+    cameraID,
+    setCameraID,
     actionSpeedCurrent,
     onActionSpeedChange,
     actionModeCurrent,
     onActionModeChange,
     isCameraVeilVisibleSet,
     isCameraVeilVisible,
-    swipeableViewsIdxSet,
-    sceneSelected,
-    onSceneSelectedChange,
 }) => {
-    const [isStopped, isStoppedSet] = useState<boolean>(false);
-
     return (
         <div className="footer-pilot-mode">
             <div className="footer-row">
@@ -52,13 +47,10 @@ const FooterHeadCam: React.FC<FooterControlsProps> = ({
                     isCameraVeilVisible={isCameraVeilVisible}
                     setCameraVeilCallback={isCameraVeilVisibleSet}
                 />
-                <MenuPilotControls
-                    buttonPad={pilotControlsCurrent}
-                    onChange={setPilotControlsCurrent}
+
+                <CameraSwitcher
                     isCameraVeilVisible={isCameraVeilVisible}
                     setCameraVeilCallback={isCameraVeilVisibleSet}
-                    pilotControlsCurrent={pilotControlsCurrent}
-                    setPilotControlsCurrent={setPilotControlsCurrent}
                 />
             </div>
         </div>

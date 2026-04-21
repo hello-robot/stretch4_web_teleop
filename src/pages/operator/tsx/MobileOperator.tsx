@@ -100,7 +100,8 @@ export const MobileOperator = (props: {
     }, []);
 
     // Just used as a flag to force the operator to rerender when the button state map
-    // has been updated
+    // has been updated. This is a React anti-pattern that prob should be addressed
+    // at some point.
     const [buttonStateMapRerender, setButtonStateMapRerender] =
         React.useState<boolean>(false);
     const buttonStateMap = React.useRef<ButtonStateMap>();
@@ -141,6 +142,7 @@ export const MobileOperator = (props: {
         FunctionProvider.pilotControlsCurrent =
             pilotControlsCurrent as PilotButtonPadType;
         props.storageHandler.saveCurrentLayout(layout.current);
+        setButtonStateMapRerender(!buttonStateMapRerender);
     }
 
     // Just used as a flag to force the operator to rerender when the tablet orientation

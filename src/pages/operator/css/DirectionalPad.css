@@ -1,7 +1,6 @@
 .base-movement-controls {
     /* Manual positioning of ButtonPad */
     position: relative;
-    bottom: 7vh;
 
     /* This defines the size of ButtonPad */
     --size: 18vh;
@@ -27,6 +26,20 @@
     /* This provides the "glow" effect around the edges of the buttons*/
     --box-shadow: 0px 0px calc(var(--size) / 10) 0px hsl(204deg 100% 98% / 30%);
 }
+
+/* START More fine-grained control for buttonpad positioning */
+@media (min-height: 0px) and (max-height: 1000px) {
+    .base-movement-controls {
+        top: -11vh;
+    }
+}
+
+@media (min-height: 1001px) {
+    .base-movement-controls {
+        top: -12.5vh;
+    }
+}
+/* END More fine-grained control for buttonpad positioning */
 
 .base-movement-controls .dbutton-pad {
     position: relative;

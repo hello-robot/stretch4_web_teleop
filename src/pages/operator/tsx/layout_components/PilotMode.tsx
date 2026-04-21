@@ -1,23 +1,14 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback } from "react";
 import { SimpleCameraView } from "./SimpleCameraView";
 import { TabGroup } from "../basic_components/TabGroup";
 import FooterPilotMode from "./FooterPilotMode";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { CameraViewId } from "../utils/component_definitions";
-import cameraIcon from "operator/icons/Camera_Icon.svg";
-import cameraLeft from "operator/icons/Camera_Left.svg";
-import cameraCenter from "operator/icons/Camera_Center.svg";
-import cameraRight from "operator/icons/Camera_Right.svg";
-import {
-    RadialCornerMenu,
-    RadialCornerMenuOption,
-} from "../basic_components/RadialCornerMenu";
-import { pilotModeFunctionProvider } from "..";
 import { AnimatePresence, motion } from "framer-motion";
 import { MovementRecorder } from "./MovementRecorder";
 import { SharedState } from "./CustomizableComponent";
+import { PilotControlsToggle } from "../static_components/PilotControlsToggle";
 import "../../css/PilotMode.css";
-import { PilotModeFunctions } from "../function_providers/PilotModeFunctionProvider";
 
 interface PilotModeProps {
     cameraID: CameraViewId;
@@ -38,12 +29,6 @@ interface PilotModeProps {
     sharedState?: SharedState;
 }
 
-const cameraLabelMap: Record<string, string> = {
-    cameraLeft: "L",
-    cameraCenter: "C",
-    cameraRight: "R",
-};
-
 const PilotMode: React.FC<PilotModeProps> = ({
     cameraID,
     remoteStreams,
@@ -59,7 +44,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
     setCameraID,
     sceneSelected,
     onSceneSelectedChange,
-    sharedState
+    sharedState,
 }) => {
     const [isRecording, isRecordingSet] = React.useState<boolean>(false);
     const onActionSpeedChange = useCallback(
@@ -70,55 +55,12 @@ const PilotMode: React.FC<PilotModeProps> = ({
         [setVelocityScale]
     );
 
-    const [isRadialCornerMenuOpen, setIsRadialCornerMenuOpen] = useState(false);
-    const [activeCameraIcon, setActiveCameraIcon] = useState(cameraRight);
-
-    // Options for the corner menu
-    const menuOptions: RadialCornerMenuOption[] = [
-        {
-            iconSrc: cameraRight,
-            label: "R",
-            onClick: () => {
-                pilotModeFunctionProvider.provideFunctions(
-                    PilotModeFunctions.SetCameraRight
-                )();
-                setActiveCameraIcon(cameraRight);
-                setIsRadialCornerMenuOpen(false);
-                isCameraVeilVisibleSet(false);
-            },
-        },
-        {
-            iconSrc: cameraCenter,
-            label: "C",
-            onClick: () => {
-                pilotModeFunctionProvider.provideFunctions(
-                    PilotModeFunctions.SetCameraCenter
-                )();
-                setActiveCameraIcon(cameraCenter);
-                setIsRadialCornerMenuOpen(false);
-                isCameraVeilVisibleSet(false);
-            },
-        },
-        {
-            iconSrc: cameraLeft,
-            label: "L",
-            onClick: () => {
-                pilotModeFunctionProvider.provideFunctions(
-                    PilotModeFunctions.SetCameraLeft
-                )();
-                setActiveCameraIcon(cameraLeft);
-                setIsRadialCornerMenuOpen(false);
-                isCameraVeilVisibleSet(false);
-            },
-        },
-    ];
-
     return (
         <div className={`pilot-mode-wrapper ${isRecording ? 'is-recording' : ''}`}>
             <div className="controls">
                 <div className="simple-camera-view-wrapper_XP">
                     <SimpleCameraView
-                        id={cameraID}
+                        id={CameraViewId.overhead}
                         remoteStreams={remoteStreams}
                         isCameraVeilVisible={isCameraVeilVisible}
                     />
@@ -181,52 +123,18 @@ const PilotMode: React.FC<PilotModeProps> = ({
                     isRecording={isRecording}
                     isRecordingSet={isRecordingSet}
                 />
-                <div
-                    className="radial-corner-menu"
-                    style={{
-                        // This math calculates the main <video> area's
-                        // `width` and `height` values, which ensures the
-                        // RadialCornerMenu is positioned correctly.
-                        width: 'calc(((100dvh - 151px) * 9) / 16)',
-                        height: 'calc(100dvh - 151px)'
-                    }}
-                >
-                    {activeMainGroupTab === 0 && !isCameraVeilVisible && (
-                        <>
-                            {/* Camera Button (Left) */}
-                            <div className="switch-camera-btn-container">
-                                <button
-                                    className="switch-camera-btn"
-                                    type="button"
-                                    onClick={() => {
-                                        setIsRadialCornerMenuOpen(true);
-                                        isCameraVeilVisibleSet(true);
-                                    }}
-                                >
-                                    <img
-                                        src={activeCameraIcon}
-                                        alt="Camera Menu"
-                                    />
-                                </button>
-                            </div>
-                        </>
-                    )}
-                    {/* Corner Menu - Outside the visibility check but controlled by its own state */}
-                    <RadialCornerMenu
-                        isOpen={isRadialCornerMenuOpen}
-                        onClose={() => {
-                            setIsRadialCornerMenuOpen(false);
-                            isCameraVeilVisibleSet(false);
-                        }}
-                        options={menuOptions}
-                        selectedLabel={cameraLabelMap[cameraID]}
-                    />
-                </div>
+
+                <PilotControlsToggle
+                    onChange={setPilotControlsCurrent}
+                    isCameraVeilVisible={isCameraVeilVisible}
+                    pilotControlsCurrent={
+                        FunctionProvider.pilotControlsCurrent
+                    }
+                />
             </div>
             <FooterPilotMode
-                // Pilot Controls
-                pilotControlsCurrent={FunctionProvider.pilotControlsCurrent}
-                setPilotControlsCurrent={setPilotControlsCurrent}
+                cameraID={cameraID}
+                setCameraID={setCameraID}
                 // Action Speed
                 actionSpeedCurrent={FunctionProvider.velocityScale}
                 onActionSpeedChange={onActionSpeedChange}

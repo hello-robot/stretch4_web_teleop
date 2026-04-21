@@ -1,30 +1,30 @@
 import { FunctionProvider } from "./FunctionProvider";
 
-export enum PilotModeFunctions {
+export enum CameraSwitcherFunctions {
     SetCameraLeft,
     SetCameraCenter,
     SetCameraRight,
 }
 
-export class PilotModeFunctionProvider extends FunctionProvider {
+export class CameraSwitcherFunctionProvider extends FunctionProvider {
     constructor() {
         super();
         this.provideFunctions = this.provideFunctions.bind(this);
     }
 
-    public provideFunctions(functionName: PilotModeFunctions) {
+    public provideFunctions(functionName: CameraSwitcherFunctions) {
         switch (functionName) {
-            case PilotModeFunctions.SetCameraLeft:
+            case CameraSwitcherFunctions.SetCameraLeft:
                 return () => {
                     FunctionProvider.remoteRobot?.setCameraPerspective("left");
                 };
-            case PilotModeFunctions.SetCameraCenter:
+            case CameraSwitcherFunctions.SetCameraCenter:
                 return () => {
                     FunctionProvider.remoteRobot?.setCameraPerspective(
                         "center"
                     );
                 };
-            case PilotModeFunctions.SetCameraRight:
+            case CameraSwitcherFunctions.SetCameraRight:
                 return () => {
                     FunctionProvider.remoteRobot?.setCameraPerspective("right");
                 };
