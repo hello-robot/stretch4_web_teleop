@@ -5,7 +5,6 @@ import { Robot } from "../../robot/tsx/robot";
 import { WebRTCConnection } from "../../../shared/webrtcconnections";
 import {
     navigationProps,
-    realsenseProps,
     gripperProps,
     audioProps,
     WebRTCMessage,
@@ -49,7 +48,6 @@ export const robot = new Robot({
 
 export let connection: WebRTCConnection;
 export let navigationStream = new VideoStream(navigationProps);
-export let realsenseStream = new VideoStream(realsenseProps);
 export let gripperStream = new VideoStream(gripperProps);
 export let audioStream = new AudioStream(audioProps);
 // let occupancyGrid: ROSOccupancyGrid | undefined;
@@ -264,27 +262,11 @@ function handleMessage(message: WebRTCMessage) {
         case "moveBase":
             robot.executeMoveBaseGoal(message.pose);
             break;
-        case "setFollowGripper":
-            robot.setPanTiltFollowGripper(message.toggle);
-            break;
-        case "setRealsenseDepthSensing":
-            robot.setRealsenseDepthSensing(message.toggle);
-            break;
-        case "setGripperDepthSensing":
-            robot.setGripperDepthSensing(message.toggle);
-            break;
         case "setExpandedGripper":
             robot.setExpandedGripper(message.toggle);
             break;
-        case "setRealsenseBodyPoseEstimate":
-            robot.setComputeBodyPose(message.toggle);
-            robot.setRealsenseShowBodyPose(message.toggle);
-            break;
         case "setRunStop":
             robot.setRunStop(message.toggle);
-            break;
-        case "lookAtGripper":
-            robot.lookAtGripper(0, 0);
             break;
         case "getOccupancyGrid":
             robot.getOccupancyGrid();
@@ -313,6 +295,6 @@ const container = document.getElementById("root");
 const root = createRoot(container!); // createRoot(container!) if you use TypeScript
 root.render(
     <AllVideoStreamComponent
-        streams={[navigationStream, realsenseStream, gripperStream]}
+        streams={[navigationStream, gripperStream]}
     />
 );

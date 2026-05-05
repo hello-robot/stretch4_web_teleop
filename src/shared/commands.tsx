@@ -10,7 +10,6 @@ export type cmd =
     | CameraPerspectiveCommand
     | RobotPoseCommand
     | ToggleCommand
-    | LookAtGripper
     | GetOccupancyGrid
     | MoveBaseCommand
     | StopTrajectoryCommand
@@ -67,17 +66,8 @@ export interface CameraPerspectiveCommand {
 }
 
 export interface ToggleCommand {
-    type:
-        | "setFollowGripper"
-        | "setRealsenseDepthSensing"
-        | "setGripperDepthSensing"
-        | "setRealsenseBodyPoseEstimate"
-        | "setRunStop";
+    type: "setRunStop";
     toggle: boolean;
-}
-
-export interface LookAtGripper {
-    type: "lookAtGripper";
 }
 
 export interface GetOccupancyGrid {

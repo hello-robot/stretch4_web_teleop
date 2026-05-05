@@ -65,7 +65,6 @@ export class Robot extends React.Component {
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
     private poseGoalID?: string;
-    private poseGoalComplete: boolean = true;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
     private trajectoryClient?: Action;
@@ -75,11 +74,7 @@ export class Robot extends React.Component {
     private useCenterCameraService?: Service;
     private useLeftCameraService?: Service;
     private useRightCameraService?: Service;
-    private setRealsenseDepthSensingService?: Service;
-    private setGripperDepthSensingService?: Service;
     private setExpandedGripperService?: Service;
-    private setRealsenseShowBodyPoseService?: Service;
-    private setComputeBodyPoseService?: Service;
     private setRunStopService?: Service;
     private robotFrameTfClient?: ROS2TFClient;
     private mapFrameTfClient?: ROS2TFClient;
@@ -102,7 +97,6 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private stretchModelCallback: (value: string) => void;
-    private lookAtGripperInterval?: number; // ReturnType<typeof setInterval>
     private subscriptions: Topic[] = [];
     private stretchToolParam: Param;
     private modeParam: Param;
@@ -194,7 +188,6 @@ export class Robot extends React.Component {
 
     async checkROSConnection(
         required_topics: string[] = [
-            // "/camera/color/image_raw/rotated/compressed",
             "/gripper_camera/image_raw/cropped/compressed",
             "/navigation_camera/image_raw/rotated/compressed",
             // "/stretch/joint_states",
@@ -283,11 +276,7 @@ export class Robot extends React.Component {
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
         this.createUseRightCameraService();
-        this.createRealsenseDepthSensingService();
-        this.createGripperDepthSensingService();
         this.createExpandedGripperService();
-        this.createRealsenseShowBodyPoseService();
-        this.createComputeBodyPoseService();
         this.createRunStopService();
         // this.createRobotFrameTFClient();
         // this.createMapFrameTFClient();
@@ -619,42 +608,10 @@ export class Robot extends React.Component {
         });
     }
 
-    createRealsenseDepthSensingService() {
-        this.setRealsenseDepthSensingService = new Service({
-            ros: this.ros,
-            name: "/realsense_depth_ar",
-            serviceType: "std_srvs/srv/SetBool",
-        });
-    }
-
-    createGripperDepthSensingService() {
-        this.setGripperDepthSensingService = new Service({
-            ros: this.ros,
-            name: "/gripper_depth_ar",
-            serviceType: "std_srvs/srv/SetBool",
-        });
-    }
-
     createExpandedGripperService() {
         this.setExpandedGripperService = new Service({
             ros: this.ros,
             name: "/expanded_gripper",
-            serviceType: "std_srvs/srv/SetBool",
-        });
-    }
-
-    createRealsenseShowBodyPoseService() {
-        this.setRealsenseShowBodyPoseService = new Service({
-            ros: this.ros,
-            name: "/realsense_body_pose_ar",
-            serviceType: "std_srvs/srv/SetBool",
-        });
-    }
-
-    createComputeBodyPoseService() {
-        this.setComputeBodyPoseService = new Service({
-            ros: this.ros,
-            name: "/toggle_body_pose_estimator",
             serviceType: "std_srvs/srv/SetBool",
         });
     }
@@ -714,15 +671,6 @@ export class Robot extends React.Component {
         );
     }
 
-    subscribeToTabletTF() {
-        this.robotFrameTfClient?.subscribe(
-            "link_DW3_tablet_12in",
-            (transform) => {
-                this.linkTabletTF = transform;
-            }
-        );
-    }
-
     subscribeToWristYawTF() {
         this.robotFrameTfClient?.subscribe("link_wrist_yaw", (transform) => {
             this.linkWristYawTF = transform;
@@ -741,42 +689,6 @@ export class Robot extends React.Component {
         });
     }
 
-    setRealsenseDepthSensing(toggle: boolean) {
-        var request = { data: toggle };
-        this.setRealsenseDepthSensingService?.callService(
-            request,
-            (response: boolean) => {
-                response
-                    ? console.log(
-                        "Successfully set realsense depth sensing to",
-                        toggle
-                    )
-                    : console.log(
-                        "Failed to set realsense depth sensing to",
-                        toggle
-                    );
-            }
-        );
-    }
-
-    setGripperDepthSensing(toggle: boolean) {
-        var request = { data: toggle };
-        this.setGripperDepthSensingService?.callService(
-            request,
-            (response: boolean) => {
-                response
-                    ? console.log(
-                        "Successfully set gripper depth sensing to",
-                        toggle
-                    )
-                    : console.log(
-                        "Failed to set gripper depth sensing to",
-                        toggle
-                    );
-            }
-        );
-    }
-
     setExpandedGripper(toggle: boolean) {
         var request = { data: toggle };
         this.setExpandedGripperService?.callService(
@@ -788,39 +700,6 @@ export class Robot extends React.Component {
                         toggle
                     )
                     : console.log("Failed to set expanded gripper to", toggle);
-            }
-        );
-    }
-
-    setRealsenseShowBodyPose(toggle: boolean) {
-        var request = { data: toggle };
-        this.setRealsenseShowBodyPoseService?.callService(
-            request,
-            (response: boolean) => {
-                response
-                    ? console.log(
-                        "Successfully set realsense depth sensing to",
-                        toggle
-                    )
-                    : console.log(
-                        "Failed to set realsense depth sensing to",
-                        toggle
-                    );
-            }
-        );
-    }
-
-    setComputeBodyPose(toggle: boolean) {
-        var request = { data: toggle };
-        this.setComputeBodyPoseService?.callService(
-            request,
-            (response: boolean) => {
-                response
-                    ? console.log(
-                        "Successfully set compute body pose to",
-                        toggle
-                    )
-                    : console.log("Failed to set compute body pose to", toggle);
             }
         );
     }
@@ -1188,19 +1067,6 @@ export class Robot extends React.Component {
         );
     }
 
-    // NOTE: When we undo this temp fix (of not stopping the
-    // trajectory client) we also need to undo it in FunctionProvider.jsx
-    // `stopCurrentAction()`.
-    // However, we should consider not stopping the trajectory client here,
-    // regardless, because:
-    //   (1) there is a race condition where ROS can receive the cancellation
-    //       request *after* the new goal, and thus cancel the new goal (e.g.,
-    //       this occurs often when toggling the tablet between portrait and
-    //       landscape mode);
-    //   (2) the trajectory client smoothly interpolates between goals anyway,
-    //       so there is no need to stop it.
-    // If we premanently don't stop the trajectory client here, then
-    // `stopExecution` should just be replaced with `stopAutonomousClients`.
     stopExecution(stop_trajectory_client: boolean = false) {
         if (stop_trajectory_client) this.stopTrajectoryClient();
         this.stopAutonomousClients();
@@ -1228,77 +1094,6 @@ export class Robot extends React.Component {
             this.moveBaseClient.cancelGoal();
             this.moveBaseGoal = undefined;
         }
-    }
-
-
-    setPanTiltFollowGripper(followGripper: boolean) {
-        if (this.lookAtGripperInterval && followGripper) return;
-
-        if (followGripper) {
-            let panOffset = 0;
-            let tiltOffset = 0;
-            let lookIfReadyAndRepeat = () => {
-                if (
-                    (this.linkGripperFingerLeftTF ||
-                        this.linkTabletTF ||
-                        this.linkWristYawTF) &&
-                    this.linkHeadTiltTF
-                ) {
-                    this.lookAtGripper(panOffset, tiltOffset);
-                }
-                this.lookAtGripperInterval = window.setTimeout(
-                    lookIfReadyAndRepeat,
-                    500
-                );
-            };
-            lookIfReadyAndRepeat();
-        } else {
-            this.stopExecution();
-            clearTimeout(this.lookAtGripperInterval);
-            this.lookAtGripperInterval = undefined;
-        }
-    }
-
-    lookAtGripper(panOffset: number, tiltOffset: number) {
-        // If there is a gripper, follow its TF frame. Else, if there is a tablet, follow its TF frame.
-        // Else, follow the quick connect TF frame.
-        let transform: Transform | undefined =
-            this.linkGripperFingerLeftTF ||
-            this.linkTabletTF ||
-            this.linkWristYawTF;
-        if (!transform)
-            throw "linkGripperFingerLeftTF, linkTabletTF, and linkWristYawTF are all undefined";
-        if (!this.linkHeadTiltTF) throw "linkHeadTiltTF is undefined";
-        let posDifference = {
-            x: transform.translation.x - this.linkHeadTiltTF.translation.x,
-            y: transform.translation.y - this.linkHeadTiltTF.translation.y,
-            z: transform.translation.z - this.linkHeadTiltTF.translation.z,
-        };
-
-        // Normalize posDifference
-        const scalar = Math.sqrt(
-            posDifference.x ** 2 + posDifference.y ** 2 + posDifference.z ** 2
-        );
-        posDifference.x /= scalar;
-        posDifference.y /= scalar;
-        posDifference.z /= scalar;
-
-        const pan = Math.atan2(posDifference.y, posDifference.x) + panOffset;
-        const tilt = Math.atan2(posDifference.z, -posDifference.y) + tiltOffset;
-
-        // Goals really close to current state cause some whiplash in these joints in simulation.
-        // Ignoring small goals is a temporary fix
-        if (!this.jointState) throw "jointState is undefined";
-        let panDiff = Math.abs(this.getJointValue("joint_head_pan") - pan);
-        let tiltDiff = Math.abs(this.getJointValue("joint_head_tilt") - tilt);
-        if (panDiff < 0.02 && tiltDiff < 0.02) {
-            return;
-        }
-
-        this.executePoseGoal({
-            joint_head_pan: pan + panOffset,
-            joint_head_tilt: tilt + tiltOffset,
-        });
     }
 
     getJointValue(jointName: ValidJoints): number {

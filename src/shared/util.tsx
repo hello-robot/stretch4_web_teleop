@@ -54,21 +54,17 @@ export interface ROSJointState extends Message {
 
 export enum StretchTool {
     DW4 = "eoa_wrist_dw4_tool_sg4",
-    DW3 = "eoa_wrist_dw3_tool_sg3",
     TABLET = "eoa_wrist_dw3_tool_tablet_12in",
     UNKNOWN = "unknown",
 }
 
 export enum StretchModel {
-    SE3 = "SE3",
     SE4 = "SE4",
 }
 
 export function getStretchTool(stretchTool: string) {
-    if (stretchTool === "eoa_wrist_dw3_tool_tablet_12in") {
+    if (stretchTool === "eoa_wrist_dw3_tool_tablet") {
         return StretchTool.TABLET;
-    } else if (stretchTool === "eoa_wrist_dw3_tool_sg3") {
-        return StretchTool.DW3;
     } else if (stretchTool === "eoa_wrist_dw4_tool_sg4") {
         return StretchTool.DW4;
     } else {
@@ -282,29 +278,6 @@ export const CENTER_WRIST: RobotPose = {
     joint_wrist_yaw: 0.0,
 };
 
-export const TABLET_ORIENTATION_LANDSCAPE: RobotPose = {
-    joint_wrist_roll: 0.0,
-};
-
-export const TABLET_ORIENTATION_PORTRAIT: RobotPose = {
-    joint_wrist_roll: Math.PI / 2.0,
-};
-
-export const REALSENSE_FORWARD_POSE: RobotPose = {
-    joint_head_pan: 0.075,
-    joint_head_tilt: 0.0,
-};
-
-export const REALSENSE_BASE_POSE: RobotPose = {
-    joint_head_pan: 0.075,
-    joint_head_tilt: -1.1,
-};
-
-export const REALSENSE_GRIPPER_POSE: RobotPose = {
-    joint_head_pan: -1.7,
-    joint_head_tilt: -1.35,
-};
-
 export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
     joint_arm: [0.001, 0.518],
     joint_wrist_roll: [-2.95, 2.94],
@@ -349,14 +322,6 @@ export const navigationProps = {
     scale: 1,
     fps: 6.0,
     streamName: "navigation",
-};
-
-export const realsenseProps = {
-    width: 360,
-    height: 640,
-    scale: 1,
-    fps: 6.0,
-    streamName: "realsense",
 };
 
 export const gripperProps = {
