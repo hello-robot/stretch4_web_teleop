@@ -2,19 +2,6 @@
     # Images published to /navigation_camera/image_raw
     # Image size is 1024 x 768
     "overhead": {
-            "wide_angle_cam": {
-                    # The mask contain params to make a circular mask over the image
-                    # Pass "mask": null to not create mask
-                    "mask": null,
-                    # The crop contain params to crop the image
-                    # x_max - x_min = mask_width and y_max - y_min = mask_height
-                    # Pass "crop": null to not crop image
-                    "crop": null,
-                    # Number of degrees to rotate video stream clockwise
-                    # Pass "rotate": null to not rotate
-                    # "rotate": null,
-                    "rotate": "ROTATE_90_CLOCKWISE",
-                },
             # 1920 x 1200 image from left camera
             "right": {
                     # The mask contain params to make a circular mask over the image
@@ -79,63 +66,21 @@
                     "rotate": "ROTATE_90_CLOCKWISE",
                 },
         },
-    "realsense":
-        {
-            "default":
-                { "mask": null, "crop": null, "rotate": "ROTATE_90_CLOCKWISE" },
-        },
     # Images published to /gripper_camera/cropped/image_raw
-    # D405 is 424 x 240
-    "gripper": { "d405": {
-                    # The mask contain params to make a circular mask over the image
-                    # Pass "mask": null to not create mask
-                    "mask": null,
-                    # The crop contain params to crop the image
-                    # x_max - x_min = mask_width and y_max - y_min = mask_height
-                    # Pass "crop": null to not crop image
-                    # No crop: [0, height, 0, width] = [0, 240, 0, 424]
-                    "crop":
-                        { "y_min": 0, "y_max": 240, "x_min": 48, "x_max": 424 },
-                    "rotate": null,
-                },
-                # 400 x 640
-                "oak": {
-                    # The mask contain params to make a circular mask over the image
-                    # Pass "mask": null to not create mask
-                    "mask": null,
-                    # The crop contain params to crop the image
-                    # x_max - x_min = mask_width and y_max - y_min = mask_height
-                    # Pass "crop": null to not crop image
-                    # No crop: [0, height, 0, width] = [0, 270, 0, 480]
-                    "crop":
-                        { "y_min": 0, "y_max": 400, "x_min": 80, "x_max": 480 },
-                    "rotate": null,
-                }
-            },
-    # Images published to /gripper_camera/expanded/image_raw
-    # D405 is 480 x 270.
-    "expandedGripper": { "d405": {
-                    # The mask contain params to make a circular mask over the image.
-                    # For the mask the be circumscribed, its width/height must be:
-                    # ((480**2) + (270**2))**0.5
-                    # Pass "mask": null to not create mask
-                    "mask":
-                        {
-                            "width": 550,
-                            "height": 550,
-                            "radius": null,
-                            "center": null,
-                        },
-                    # The crop contain params to crop the image
-                    # x_max - x_min = mask_width and y_max - y_min = mask_height
-                    # Pass "crop": null to not crop image
-                    "crop":
-                        {
-                            "y_min": -140,
-                            "y_max": 410,
-                            "x_min": -35,
-                            "x_max": 515,
-                        },
-                    "rotate": null,
-                } },
+    # D405 is 400 x 640
+    "gripper": { 
+        # 400 x 640
+        "oak": {
+            # The mask contain params to make a circular mask over the image
+            # Pass "mask": null to not create mask
+            "mask": null,
+            # The crop contain params to crop the image
+            # x_max - x_min = mask_width and y_max - y_min = mask_height
+            # Pass "crop": null to not crop image
+            # No crop: [0, height, 0, width] = [0, 270, 0, 480]
+            "crop":
+                { "y_min": 0, "y_max": 400, "x_min": 80, "x_max": 480 },
+            "rotate": null,
+        }
+    }
 }

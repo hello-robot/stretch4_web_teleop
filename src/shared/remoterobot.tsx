@@ -178,17 +178,9 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
-    showTablet() {
-        this.robotChannel({ type: "showTablet" });
-    }
 
     setToggle(
-        type:
-            | "setFollowGripper"
-            | "setRealsenseDepthSensing"
-            | "setGripperDepthSensing"
-            | "setRealsenseBodyPoseEstimate"
-            | "setRunStop",
+        type: "setRunStop",
         toggle: boolean
     ) {
         let cmd: ToggleCommand = {
@@ -198,12 +190,6 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
-    lookAtGripper(type: "lookAtGripper") {
-        let cmd: LookAtGripper = {
-            type: type,
-        };
-        this.robotChannel(cmd);
-    }
 
     getOccupancyGrid(type: "getOccupancyGrid") {
         let cmd: GetOccupancyGrid = {

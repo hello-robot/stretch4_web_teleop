@@ -17,7 +17,6 @@ import {
     ROSOccupancyGrid,
     OccupancyGridMessage,
     MapPoseMessage,
-    GoalStatusMessage,
     ActionState,
     ActionStateMessage,
     ROSBatteryState,
@@ -43,7 +42,6 @@ export const robot = new Robot({
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
-    stretchModelCallback: (value: string) => { },
 });
 
 export let connection: WebRTCConnection;

@@ -58,9 +58,7 @@ export enum StretchTool {
     UNKNOWN = "unknown",
 }
 
-export enum StretchModel {
-    SE4 = "SE4",
-}
+
 
 export function getStretchTool(stretchTool: string) {
     if (stretchTool === "eoa_wrist_dw3_tool_tablet") {
@@ -72,10 +70,7 @@ export function getStretchTool(stretchTool: string) {
     }
 }
 
-export enum TabletOrientation {
-    PORTRAIT = "portrait",
-    LANDSCAPE = "landscape",
-}
+
 
 export interface ROSBatteryState extends Message {
     voltage: number;
@@ -251,24 +246,6 @@ export interface ROSOccupancyGrid {
     info: ROSMapMetaData;
     data: number[];
 }
-
-export const STOW_WRIST_GRIPPER: RobotPose = {
-    joint_wrist_roll: 0.0,
-    joint_wrist_pitch: -0.497,
-    joint_wrist_yaw: 3.19579,
-};
-
-export const STOW_WRIST_TABLET: RobotPose = {
-    joint_wrist_roll: Math.PI / 2.0,
-    joint_wrist_pitch: 0.0,
-    joint_wrist_yaw: Math.PI / 2.0,
-};
-
-export const CENTER_WRIST: RobotPose = {
-    joint_wrist_roll: 0.0,
-    joint_wrist_pitch: 0.0,
-    joint_wrist_yaw: 0.0,
-};
 
 export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
     joint_arm: [0.001, 0.518],

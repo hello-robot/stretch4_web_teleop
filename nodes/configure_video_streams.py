@@ -29,26 +29,13 @@ from stretch4_web_teleop_helpers.conversions import (
 
 
 class ConfigureVideoStreams(Node):
-    # Define constant colors and alpha values for the depth AR overlay
     BACKGROUND_COLOR = (200, 200, 200)
-    GRIPPER_DEPTH_AR_COLOR = np.array((255, 0, 191), dtype=np.uint8)  # pink
-    GRIPPER_DEPTH_AR_ALPHA = 0.6
-
-    # Define constants related to downsampling the pointcloud. Combine pixels
-    # within the downsampling distance, and expand overlaid pixels by the kernel size
-    # (to fill downsampling gaps)
-    GRIPPER_DEPTH_AR_DOWNSAMPLE_DISTANCE = 0.0019  # m
-    GRIPPER_DEPTH_AR_EXPANSION_KERNEL_SIZE = 3
-
+    
     def __init__(
         self,
         params_file,
         use_overhead: bool = True,
         use_gripper: bool = True,
-        # Even with the aligned depth compression parameter set to 1 (fastest),
-        # we are seeing that the aligned depth data is received 2-4x later than
-        # pointclouds (pointclouds are sub-1s between the realsense header stamp
-        # and when we receive it, whereas aligned depth images are up to 0.4s)
         use_pointcloud: bool = True,
         use_compressed_image: bool = True,
         target_fps: float = 15.0,
@@ -180,7 +167,7 @@ class ConfigureVideoStreams(Node):
                 CompressedImage if use_compressed_image else Image,
                 "/cameras_gripper/right/image_raw"
                 + ("/compressed" if use_compressed_image else ""),
-                self.gripper_realsense_rgb_cb,
+                self.gripper_camera_rgb_cb,
                 QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
                 callback_group=MutuallyExclusiveCallbackGroup(),
             )
@@ -191,13 +178,13 @@ class ConfigureVideoStreams(Node):
             )
 
             # Subscribe to the depth image topic
-            self.latest_gripper_realsense_depth_image = None
-            self.latest_gripper_realsense_depth_image_lock = threading.Lock()
+            self.latest_gripper_camera_depth_image = None
+            self.latest_gripper_camera_depth_image_lock = threading.Lock()
             if use_pointcloud:
                 self.gripper_depth_subscriber = self.create_subscription(
                     PointCloud2,
                     "/gripper_camera/depth/color/points",
-                    self.gripper_realsense_depth_cb,
+                    self.gripper_camera_depth_cb,
                     QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
                     callback_group=MutuallyExclusiveCallbackGroup(),
                 )
@@ -206,7 +193,7 @@ class ConfigureVideoStreams(Node):
                     CompressedImage if use_compressed_image else Image,
                     "/gripper_camera/aligned_depth_to_color/image_raw"
                     + ("/compressedDepth" if use_compressed_image else ""),
-                    self.gripper_realsense_depth_cb,
+                    self.gripper_camera_depth_cb,
                     QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
                     callback_group=MutuallyExclusiveCallbackGroup(),
                 )
@@ -224,11 +211,6 @@ class ConfigureVideoStreams(Node):
                 1,
                 callback_group=MutuallyExclusiveCallbackGroup(),
             )
-        if self.use_gripper:
-            self.gripper_depth_ar_service = self.create_service(
-                SetBool, "gripper_depth_ar", self.gripper_depth_ar_callback
-            )
-            self.gripper_depth_ar = False
 
         self.roll_value = 0.0
 
@@ -277,12 +259,6 @@ class ConfigureVideoStreams(Node):
     def use_center_camera_callback(self, req, res):
         self.get_logger().info("Use center camera service")
         self.overhead_camera_perspective = "center"
-        res.success = True
-        return res
-
-    def gripper_depth_ar_callback(self, req, res):
-        self.get_logger().info(f"Gripper depth AR service: {req.data}")
-        self.gripper_depth_ar = req.data
         res.success = True
         return res
 
@@ -400,7 +376,7 @@ class ConfigureVideoStreams(Node):
         with self.latest_gripper_camera_rgb_image_lock:
             self.latest_gripper_camera_rgb_image = ros_image
 
-    def gripper_realsense_depth_cb(
+    def gripper_camera_depth_cb(
         self,
         depth_msg: Union[CompressedImage, Image, PointCloud2],
     ):
@@ -414,10 +390,10 @@ class ConfigureVideoStreams(Node):
                 throttle_duration_sec=1.0,
             )
 
-        with self.latest_gripper_realsense_depth_image_lock:
-            self.latest_gripper_realsense_depth_image = depth_msg
+        with self.latest_gripper_camera_depth_image_lock:
+            self.latest_gripper_camera_depth_image = depth_msg
 
-    def gripper_realsense_rgb_cb(
+    def gripper_camera_rgb_cb(
         self,
         ros_image: Union[CompressedImage, Image],
     ):
@@ -443,12 +419,6 @@ class ConfigureVideoStreams(Node):
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         else:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        # if self.gripper_depth_ar:
-        #     with self.latest_gripper_realsense_depth_image_lock:
-        #         depth_msg = self.latest_gripper_realsense_depth_image
-        #     if depth_msg is not None:
-        #         image = self.overlay_gripper_depth_ar(image, depth_msg)
 
         if self.expanded_gripper:
             # Compute and publish the expanded gripper image
