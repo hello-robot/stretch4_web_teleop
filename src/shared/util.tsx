@@ -19,29 +19,14 @@ export type ValidJoints =
     | "joint_arm_l2"
     | "joint_arm_l3";
 
-export type VelocityGoalArray = [
-    { [key in ValidJoints]?: number },
-    { [key in ValidJoints]?: number },
-];
+
 
 export type RemoteStream = {
     stream: MediaStream;
     track: MediaStreamTrack;
 };
 
-export const AllJoints: ValidJoints[] = [
-    "joint_head_tilt",
-    "joint_head_pan",
-    "joint_gripper",
-    "joint_arm",
-    "wrist_extension",
-    "joint_lift",
-    "joint_wrist_roll",
-    "joint_wrist_pitch",
-    "joint_wrist_yaw",
-    "translate_mobile_base",
-    "rotate_mobile_base",
-];
+
 
 export type ValidJointStateDict = { [key in ValidJoints]?: [boolean, boolean] };
 
@@ -102,7 +87,7 @@ export type WebRTCMessage =
     | MapPoseMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
-    | FollowJointTrajectoryActionResultMessage
+
     | BatteryVoltageMessage
     | ModeMessage
     | IsHomedMessage
@@ -148,30 +133,7 @@ export interface StretchToolMessage {
     value: string;
 }
 
-export interface FollowJointTrajectoryActionResultMessage {
-    type: "goalStatus";
-    message: FollowJointTrajectoryActionResult;
-}
 
-export interface FollowJointTrajectoryActionResult {
-    header: string;
-    status: GoalStatus;
-    result: string;
-}
-
-export interface ActionStatusList {
-    status_list: ActionStatus[];
-}
-
-export interface ActionStatus {
-    status: number;
-}
-
-export interface GoalStatus {
-    goal_id: string;
-    status: number;
-    text: string;
-}
 
 export interface ActionState {
     state: string;
@@ -181,6 +143,10 @@ export interface ActionState {
 export interface ActionStateMessage {
     type: string;
     message: ActionState;
+}
+
+export interface ActionStatusList {
+    status_list: { status: number }[];
 }
 
 export interface OccupancyGridMessage {
@@ -198,22 +164,7 @@ export interface BatteryVoltageMessage {
     message: number;
 }
 
-export interface AMCLPose extends Message {
-    header: string;
-    pose: {
-        pose: ROSPose;
-        covariance: number[];
-    };
-}
 
-export interface MarkerArray {
-    markers: Marker[];
-}
-
-export interface Marker {
-    text: string;
-    id: number;
-}
 
 export interface ROSPoint extends Message {
     x: number;
