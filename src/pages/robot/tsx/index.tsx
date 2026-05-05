@@ -37,10 +37,6 @@ export const robot = new Robot({
     occupancyGridCallback: forwardOccupancyGrid,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
-    moveToPregraspResultCallback: (goalState: ActionState) =>
-        forwardActionState(goalState, "moveToPregraspState"),
-    showTabletResultCallback: (goalState: ActionState) =>
-        forwardActionState(goalState, "showTabletState"),
     playbackPosesResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "playbackPosesState"),
     amclPoseCallback: forwardAMCLPose,
@@ -293,24 +289,8 @@ function handleMessage(message: WebRTCMessage) {
         case "getOccupancyGrid":
             robot.getOccupancyGrid();
             break;
-        case "moveToPregrasp":
-            robot.executeMoveToPregraspGoal(
-                message.scaled_x,
-                message.scaled_y,
-                message.horizontal
-            );
-            break;
-        case "stopMoveToPregrasp":
-            robot.stopMoveToPregraspClient();
-            break;
         case "getStretchTool":
             robot.getStretchTool();
-            break;
-        case "showTablet":
-            robot.executeShowTabletGoal();
-            break;
-        case "stopShowTablet":
-            robot.stopShowTabletClient();
             break;
         case "homeTheRobot":
             robot.homeTheRobot();

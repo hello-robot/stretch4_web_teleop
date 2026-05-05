@@ -54,8 +54,6 @@ export const movementStatesAll = Object.values(MovementState);
 
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
-const moveToPregraspActionName = "/move_to_pregrasp";
-const showTabletActionName = "/show_tablet";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
 
 export class Robot extends React.Component {
@@ -72,10 +70,6 @@ export class Robot extends React.Component {
     private moveBaseGoal?: Goal;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
-    private moveToPregraspGoal?: Goal;
-    private showTabletGoal?: Goal;
-    private moveToPregraspClient?: Action;
-    private showTabletClient?: Action;
     private cmdVelTopic?: Topic;
     private jointVelTopic?: Topic;
     private useCenterCameraService?: Service;
@@ -101,8 +95,6 @@ export class Robot extends React.Component {
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
-    private moveToPregraspResultCallback: (goalState: ActionState) => void;
-    private showTabletResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
     private modeCallback: (mode: string) => void;
@@ -127,8 +119,6 @@ export class Robot extends React.Component {
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
-        moveToPregraspResultCallback: (goalState: ActionState) => void;
-        showTabletResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
         modeCallback: (mode: string) => void;
@@ -142,8 +132,6 @@ export class Robot extends React.Component {
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
         this.moveBaseResultCallback = props.moveBaseResultCallback;
-        this.moveToPregraspResultCallback = props.moveToPregraspResultCallback;
-        this.showTabletResultCallback = props.showTabletResultCallback;
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
         this.modeCallback = props.modeCallback;
@@ -288,25 +276,8 @@ export class Robot extends React.Component {
             "Navigation succeeded!",
             "Navigation failed!"
         );
-        this.subscribeToActionResult(
-            moveToPregraspActionName,
-            this.moveToPregraspResultCallback,
-            "Move To Pre-grasp canceled!",
-            "Move To Pre-grasp succeeded!",
-            "Move To Pre-grasp failed!"
-        );
-        this.subscribeToActionResult(
-            showTabletActionName,
-            this.showTabletResultCallback,
-            "Show Tablet canceled!",
-            "Show Tablet succeeded!",
-            "Show Tablet failed!"
-        );
-
         this.createTrajectoryClient();
         this.createMoveBaseClient();
-        this.createMoveToPregraspClient();
-        this.createShowTabletClient();
         this.createCmdVelTopic();
         this.createJointVelTopic();
         this.createUseCenterCameraService();
@@ -597,22 +568,6 @@ export class Robot extends React.Component {
             serverName: moveBaseActionName,
             actionName: "nav2_msgs/action/NavigateToPose",
             // timeout: 100
-        });
-    }
-
-    createMoveToPregraspClient() {
-        this.moveToPregraspClient = new Action({
-            ros: this.ros,
-            serverName: moveToPregraspActionName,
-            actionName: "stretch4_web_teleop/action/MoveToPregrasp",
-        });
-    }
-
-    createShowTabletClient() {
-        this.showTabletClient = new Action({
-            ros: this.ros,
-            serverName: showTabletActionName,
-            actionName: "stretch_show_tablet_interfaces/action/ShowTablet",
         });
     }
 
@@ -1016,33 +971,6 @@ export class Robot extends React.Component {
         return newGoal;
     }
 
-    makeMoveToPregraspGoal(
-        scaled_x: number,
-        scaled_y: number,
-        horizontal: boolean
-    ) {
-        if (!this.moveToPregraspClient)
-            throw "moveToPregraspClient is undefined";
-
-        let newGoal = {
-            scaled_u: scaled_x,
-            scaled_v: scaled_y,
-            pregrasp_direction: horizontal ? 1 : 2,
-        };
-
-        return newGoal;
-    }
-
-    makeShowTabletGoal() {
-        if (!this.showTabletClient) throw "showTabletClient is undefined";
-
-        let newGoal = {
-            // TODO: Update once we have a finalized interface!
-            number_of_pose_estimates: 10,
-        };
-
-        return newGoal;
-    }
 
     makePoseGoal(pose: RobotPose) {
         let jointNames: ValidJoints[] = [];
@@ -1280,8 +1208,6 @@ export class Robot extends React.Component {
 
     stopAutonomousClients() {
         this.stopMoveBaseClient();
-        this.stopMoveToPregraspClient();
-        this.stopShowTabletClient();
     }
 
     stopTrajectoryClient() {
@@ -1304,58 +1230,6 @@ export class Robot extends React.Component {
         }
     }
 
-    /**
-     * @param x The x coordinate of the click on the Realsense camera
-     * @param y The y coordinate of the click on the Realsense camera
-     * @param horizontal Whether the gripper should orient horizontally or vertically.
-     */
-    executeMoveToPregraspGoal(
-        scaled_x?: number,
-        scaled_y?: number,
-        horizontal?: boolean
-    ) {
-        if (
-            scaled_x === undefined ||
-            scaled_y === undefined ||
-            horizontal === undefined
-        ) {
-            return;
-        }
-        console.log(
-            "Got move to pregrasp goal",
-            scaled_x,
-            scaled_y,
-            horizontal
-        );
-        this.moveToPregraspGoal = this.makeMoveToPregraspGoal(
-            scaled_x,
-            scaled_y,
-            horizontal
-        );
-        this.moveToPregraspClient.sendGoal(this.moveToPregraspGoal);
-    }
-
-    stopMoveToPregraspClient() {
-        if (!this.moveToPregraspClient)
-            throw "moveToPregraspClient is undefined";
-        if (this.moveToPregraspGoal) {
-            this.moveToPregraspClient.cancelGoal();
-            this.moveToPregraspGoal = undefined;
-        }
-    }
-
-    executeShowTabletGoal() {
-        this.showTabletGoal = this.makeShowTabletGoal();
-        this.showTabletClient.sendGoal(this.showTabletGoal);
-    }
-
-    stopShowTabletClient() {
-        if (!this.showTabletClient) throw "showTabletClient is undefined";
-        if (this.showTabletGoal) {
-            this.showTabletClient.cancelGoal();
-            this.showTabletGoal = undefined;
-        }
-    }
 
     setPanTiltFollowGripper(followGripper: boolean) {
         if (this.lookAtGripperInterval && followGripper) return;

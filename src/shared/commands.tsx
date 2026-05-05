@@ -15,13 +15,9 @@ export type cmd =
     | MoveBaseCommand
     | StopTrajectoryCommand
     | StopMoveBaseCommand
-    | MoveToPregraspCommand
-    | StopMoveToPregraspCommand
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
-    | ShowTabletCommand
-    | StopShowTabletCommand
     | HomeTheRobotCommand;
 
 export interface VelocityCommand {
@@ -103,25 +99,6 @@ export interface StopTrajectoryCommand {
 
 export interface StopMoveBaseCommand {
     type: "stopMoveBase";
-}
-
-export interface MoveToPregraspCommand {
-    type: "moveToPregrasp";
-    x: number;
-    y: number;
-}
-
-export interface StopMoveToPregraspCommand {
-    type: "stopMoveToPregrasp";
-}
-
-export interface ShowTabletCommand {
-    type: "showTablet";
-    url: string;
-}
-
-export interface StopShowTabletCommand {
-    type: "stopShowTablet";
 }
 
 export interface GetBatteryVoltageCommand {
