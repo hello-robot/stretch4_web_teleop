@@ -54,7 +54,7 @@ export interface ROSJointState extends Message {
 
 export enum StretchTool {
     DW4 = "eoa_wrist_dw4_tool_sg4",
-    TABLET = "eoa_wrist_dw3_tool_tablet_12in",
+    TABLET = "eoa_wrist_dw3_tool_tablet",
     UNKNOWN = "unknown",
 }
 
@@ -69,14 +69,6 @@ export function getStretchTool(stretchTool: string) {
         return StretchTool.DW4;
     } else {
         return StretchTool.UNKNOWN;
-    }
-}
-
-export function getStretchModel(stretchModel: string) {
-    if (stretchModel === "SE3") {
-        return StretchModel.SE3;
-    } else {
-        return StretchModel.SE4;
     }
 }
 

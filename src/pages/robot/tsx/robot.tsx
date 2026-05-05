@@ -440,11 +440,6 @@ export class Robot extends React.Component {
             this.stretchToolCallback(this.stretchTool);
     }
 
-    getStretchModel() {
-        if (this.stretchModelCallback)
-            this.stretchModelCallback(this.stretchModel);
-    }
-
     getOccupancyGrid() {
         let getMapService = new Service({
             ros: this.ros,

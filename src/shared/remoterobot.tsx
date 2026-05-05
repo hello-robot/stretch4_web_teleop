@@ -9,14 +9,11 @@ import {
     VelocityCommand,
     RobotPoseCommand,
     ToggleCommand,
-    LookAtGripper,
     GetOccupancyGrid,
     MoveBaseCommand,
     PlaybackPosesCommand,
     HomeTheRobotCommand,
-    GetHasBetaTeleopKit,
     GetStretchTool,
-    GetStretchModel,
     SetJointVelocityCommand,
 } from "shared/commands";
 import {
@@ -217,13 +214,6 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getStretchTool(type: "getStretchTool") {
         let cmd: GetStretchTool = {
-            type: type,
-        };
-        this.robotChannel(cmd);
-    }
-
-    getStretchModel(type: "getStretchModel") {
-        let cmd: GetStretchModel = {
             type: type,
         };
         this.robotChannel(cmd);
