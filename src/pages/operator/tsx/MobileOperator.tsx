@@ -20,7 +20,6 @@ import {
     stretchTool,
     movementRecorderFunctionProvider,
     underMapFunctionProvider,
-    underVideoFunctionProvider,
 } from ".";
 import {
     ButtonPadButton,
@@ -45,7 +44,7 @@ import {
 } from "./layout_components/MovementRecorder";
 import AutoNav from "./layout_components/AutoNav";
 import { CheckToggleButton } from "./basic_components/CheckToggleButton";
-import { UnderVideoButton } from "./function_providers/UnderVideoFunctionProvider";
+
 import { Alert } from "./basic_components/Alert";
 import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
 import GripperCamPIP from "./layout_components/GripperCamPIP";
@@ -125,7 +124,6 @@ export const MobileOperator = (props: {
     function updateLayout() {
         console.log("update layout");
         setButtonStateMapRerender(!buttonStateMapRerender);
-        setTabletOrientationRerender(!tabletOrientationRerender);
     }
     /**
      * Updates the action mode in the layout (visually) and in the function
@@ -145,13 +143,7 @@ export const MobileOperator = (props: {
         setButtonStateMapRerender(!buttonStateMapRerender);
     }
 
-    // Just used as a flag to force the operator to rerender when the tablet orientation
-    // changes.
-    const [tabletOrientationRerender, setTabletOrientationRerender] =
-        React.useState<boolean>(false);
-    underVideoFunctionProvider.setTabletOrientationOperatorCallback((_) => {
-        setTabletOrientationRerender(!tabletOrientationRerender);
-    });
+
 
     function moveBaseStateCallback(state: MoveBaseState) {
         setMoveBaseState(state);
