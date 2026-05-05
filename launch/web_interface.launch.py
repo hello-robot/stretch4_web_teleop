@@ -1,5 +1,6 @@
 import fnmatch
 import os
+import sys
 
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
@@ -23,7 +24,7 @@ from launch.substitutions import (
 )
 
 
-def symlinks_to_has_nav_head_cam():
+def symlinks_to_has_head_cams():
     usb_device_seen = {
         "hello-nav-head-camera-stereo": False,
     }
@@ -37,34 +38,37 @@ def symlinks_to_has_nav_head_cam():
     return all(usb_device_seen.values())
 
 
-def map_configuration_to_drivers(model, tool, has_nav_head_cam):
-    """This method maps configurations to drivers. I.e. it identifies the robot configuration
-    based on the variables provided and returns which drivers should be activated. If the
-    variables don't constitute a valid configuration, something is wrong with the hardware,
-    so the function raises an exception.
-
-    Returns
-    -------
-    Tuple
-        tuple with four elements:
-          which_realsense_drivers ('d405-only' or 'both'),
-          add_gripper_driver (True or False),
-          add_head_nav_driver (True or False)
+def check_valid_configuration(model, tool, has_head_cams):
+    """Validates that the robot configuration is supported. Checks model, tool,
+    and has_head_cams individually and exits with a targeted error message for
+    whichever value is not recognised.
     """
-    if model == "SE4" and tool == "eoa_wrist_dw4_tool_sg4" and has_nav_head_cam is True:
-        return "d405-only", False, True
+    valid_models = ["SE4"]
+    valid_tools = ["eoa_wrist_dw4_tool_sg4", "eoa_wrist_dw4_tool_tablet"]
 
-    elif (
-        model == "SE4"
-        and tool == "eoa_wrist_dw4_tool_tablet"
-        and has_nav_head_cam is True
-    ):
-        return "d405-only", False, True
+    if model not in valid_models:
+        print(
+            f"[web_interface.launch.py] ERROR: Unsupported robot model {model!r}. "
+            f"Valid models: {valid_models}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-    raise ValueError(
-        f"cannot find valid configuration for model={model}, tool={tool}, "
-        f"has_nav_head_cam={has_nav_head_cam}"
-    )
+    if tool not in valid_tools:
+        print(
+            f"[web_interface.launch.py] ERROR: Unsupported tool {tool!r} for model {model!r}. "
+            f"Valid tools: {valid_tools}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not has_head_cams:
+        print(
+            "[web_interface.launch.py] ERROR: Head cameras not detected. "
+            "Check that the /dev/hello-nav-head-camera-stereo symlink exists.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def generate_launch_description():
@@ -78,16 +82,8 @@ def generate_launch_description():
     stretch_serial_no = robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
-    stretch_has_nav_head_cam = symlinks_to_has_nav_head_cam()
-    (
-        drivers_realsense,
-        driver_gripper_cam,
-        driver_nav_head_cam,
-    ) = map_configuration_to_drivers(
-        stretch_model,
-        stretch_tool,
-        stretch_has_nav_head_cam,
-    )
+    stretch_has_head_cams = symlinks_to_has_head_cams()
+    check_valid_configuration(stretch_model, stretch_tool, stretch_has_head_cams)
 
     # Declare launch arguments
     params_file = DeclareLaunchArgument(
@@ -250,34 +246,5 @@ def generate_launch_description():
             shell=True,
         ),
     )
-
-    ld.add_action(
-        ExecuteProcess(
-            cmd=[
-                [
-                    FindExecutable(name="ros2"),
-                    " param set ",
-                    "/rosbridge_websocket ",
-                    "std_msgs/msg/Bool ",
-                    "true",
-                ]
-            ],
-            shell=True,
-        )
-    )
-
-    # Move To Pre-grasp Action Server
-    if (
-        stretch_tool == "eoa_wrist_dw3_tool_sg3"
-        or stretch_tool == "tool_stretch_dex_wrist"
-    ):
-        move_to_pregrasp_node = Node(
-            package="stretch4_web_teleop",
-            executable="move_to_pregrasp.py",
-            output="screen",
-            arguments=[LaunchConfiguration("params")],
-            parameters=[],
-        )
-        ld.add_action(move_to_pregrasp_node)
 
     return ld
