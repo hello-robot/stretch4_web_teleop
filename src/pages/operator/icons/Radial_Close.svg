@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150">
+  <path d="M 0 150 L 0 90 A 60 60 0 0 1 60 150 Z" fill="hsla(205, 50%, 50%, 1.00)" filter="url(#close-shadow)"/>
+  <g transform="translate(20, 130) rotate(45)">
+    <rect x="-10" y="-1.5" width="20" height="3" fill="hsl(204, 0%, 100%)" rx="1.5"/>
+    <rect x="-1.5" y="-10" width="3" height="20" fill="hsl(204, 0%, 100%)" rx="1.5"/>
+  </g>
+</svg>

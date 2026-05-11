@@ -1,0 +1,165 @@
+.scene-carousel-container {
+    position: relative;
+    width: 100%;
+}
+
+.scene-carousel-viewport {
+    overflow: hidden;
+    width: 100%;
+}
+
+.scene-carousel-track {
+    display: flex;
+    width: 100%;
+    will-change: transform;
+}
+
+.scene-carousel-page {
+    flex: 0 0 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 16px;
+    padding: 0 20px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.scene-carousel-item {
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    background-color: hsl(206 100% 7% / 1);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 200ms ease-out;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+    color: hsl(204, 100%, 50%);
+    box-shadow: none;
+}
+
+.scene-carousel-item:disabled {
+    cursor: not-allowed;
+    background-color: hsl(206 100% 7% / 1);
+    opacity: 0.5;
+    color: hsl(204, 30%, 30%);
+}
+
+.scene-carousel-item.selected {
+    border: 1px solid rgba(0, 150, 250, 0.1);
+    background: #001f33;
+    color: #ffffff;
+    box-shadow: 0 0 40px 0 #008cea inset;
+}
+
+.scene-carousel-item-content {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 5px;
+    text-align: center;
+}
+
+.scene-carousel-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: hsl(204, 100%, 50%);
+}
+
+.scene-carousel-item-name {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.scene-carousel-item-description {
+    font-size: 14px;
+    color: hsl(204, 44%, 66%);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.scene-carousel-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 10px 0 0;
+    padding: 2px;
+    gap: 50px;
+    background: hsl(204 80% 10% / 0.5);
+    border-radius: 14px;
+}
+
+.scene-carousel-footer-button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background-color: hsl(204deg 30% 20%);
+    border: 1px solid hsl(204deg 100% 7%);
+    border-radius: 12px;
+    color: hsl(204deg 100% 50%);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: none;
+    user-select: none;
+    outline: none;
+}
+
+.scene-carousel-footer-button:active:not(:disabled) {
+    border-color: hsl(204, 100%, 50%);
+}
+
+.scene-carousel-footer-button svg {
+    flex-shrink: 0;
+}
+
+.scene-carousel-dots {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+}
+
+.scene-carousel-dot {
+    width: 3px;
+    height: 12px;
+    border-radius: 3px;
+    background-color: hsl(204, 75%, 75%, 0.5);
+    transition: width 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.scene-carousel-dot.active {
+    width: 15px;
+    box-shadow: inset 0px 0px 13px -1px hsl(204, 100%, 50%, 1);
+}
+
+@media (max-width: 600px) {
+    .scene-carousel-page {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        padding: 0 20px;
+    }
+
+    .scene-carousel-item-name {
+        font-size: 14px;
+    }
+
+    .scene-carousel-item-description {
+        font-size: 12px;
+    }
+
+    .scene-carousel-nav-button {
+        width: 36px;
+        height: 36px;
+    }
+}

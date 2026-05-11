@@ -1,0 +1,285 @@
+:root {
+    /* Color scheme */
+    color-scheme: dark;
+
+    /* Button style variables */
+    --btn-brdr-radius: 0.4rem;
+    --btn-padding: 0.5em 1em;
+    --btn-padding-med: 0.4rem 0.5rem;
+
+    /* Color variables */
+    --blue: hsl(204 100% 50% / 1);
+    --green: hsl(171 77% 54% / 1);
+    --red: hsl(0deg, 100%, 50%);
+    --selected-color: hsl(33, 95%, 63%);
+    --btn-gray: #f0f0f0;
+    --btn-blue: hsl(204 100% 50% / 1);
+    --btn-green: hsl(171, 55%, 68%);
+    --btn-red: hsl(0, 100%, 50%);
+    --btn-turquoise: hsl(171, 32%, 46%);
+    --shadow-color: rgba(112, 112, 112, 0.196);
+    --background-color: hsl(0, 0%, 0%);
+    --gray-bg: hsl(0, 0%, 88%);
+    --shadow: 3px 3px 2px var(--shadow-color);
+    --tab-inactive: hsl(200, 20%, 85%);
+    --font-white: hsl(0, 0%, 100%);
+    --path-blue: hsl(171, 37%, 53%);
+    --shadow-bottom: 3px 0px 0px var(--shadow-color);
+
+    /* Animation timing function variables */
+    --anim-timing-ease-out-silky: cubic-bezier(0.4, 0, 0.2, 1);
+    --anim-timing-rubberband: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Sizing */
+    --scene-area-width: calc(((100dvh - 151px) * 9) / 16);
+    --scene-area-height: calc(-151px + 100dvh);
+}
+
+/* Reset box model and font inheritance for all elements */
+* {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    font: inherit;
+}
+
+/* Body base styles and font smoothing for better rendering */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+        "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
+        "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--background-color);
+}
+
+/* Prevent text selection and highlight on mobile */
+html {
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    -moz-user-select: -moz-none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Ensure full height and prevent scrollbars by default */
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    user-select: none;
+}
+
+/* Allow scrolling on landscape mobile devices */
+@media screen and (orientation: landscape) and (max-device-width: 900px) {
+    html,
+    body,
+    #root {
+        overflow: scroll;
+    }
+}
+
+/* Customization mode: add a shadow highlight when selected */
+.customizing::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    left: 0;
+    top: 0;
+    box-shadow: 0 0 1rem 0.5rem var(--selected-color);
+    transition: opacity 0.25s ease-in-out;
+}
+
+/* Show shadow when element is selected in customization mode */
+.customizing.selected::after {
+    opacity: 1;
+}
+
+/* ================= Button Styles ================= */
+
+/* Base button styles */
+button {
+    background-color: var(--btn-gray);
+    border: none;
+    border-radius: var(--btn-brdr-radius);
+    padding: var(--btn-padding);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+}
+
+/* Disabled button styles */
+button:disabled {
+    background-color: hsl(204 20% 20% / 1);
+    pointer-events: none;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+/* Adjust icon spacing inside buttons */
+button .material-icons {
+    margin: -0.25rem;
+}
+
+/* Button color modifiers */
+.btn-green {
+    background-color: var(--btn-green);
+}
+
+.btn-red {
+    background-color: var(--btn-red);
+}
+
+.btn-blue {
+    background-color: var(--btn-blue);
+}
+
+.btn-turquoise {
+    background-color: var(--btn-turquoise);
+}
+
+.font-white {
+    color: var(--font-white);
+}
+
+.btn-yellow {
+    background-color: var(--selected-color);
+}
+
+/* Accessibility: Hide text but keep it for screen readers */
+.aria-inviz {
+    visibility: hidden;
+    display: block;
+    text-align: center;
+}
+
+/* Remove default dialog padding and border */
+dialog {
+    padding: 0;
+    border: 0;
+}
+
+/* ================= Input Styles ================= */
+
+/* Input field base styles */
+input {
+    padding: 15px 12px;
+    border-radius: 4px;
+    background-color: hsl(204deg 100% 4%);
+    color: #ffffff;
+    border: none;
+    width: 100%;
+}
+
+/* Input focus state */
+input:focus {
+    background-color: hsl(204deg 100% 4%);
+    border: none;
+    outline: 2px solid hsl(204deg 100% 50%);
+}
+
+/* ================= XP Button Styles ================= */
+
+/* Generic button class for modal actions */
+.btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    font-weight: 600;
+}
+
+.btn:active {
+    filter: brightness(90%);
+}
+
+/* Primary action button in modal footer */
+.btn-primary {
+    position: relative;
+    background: hsl(204 100% 50% / 1) !important;
+    color: #fff;
+    width: 100%;
+    padding: 15px 20px;
+    font-size: 16px;
+    transition: background 250ms ease-out;
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+
+.btn-primary:hover {
+    background: hsl(204 100% 40% / 1);
+}
+
+.btn-primary:active {
+    background: hsl(204 100% 60% / 1);
+}
+
+.btn-primary.glow {
+    background: hsl(204 100% 50% / 0.4);
+}
+
+.btn-primary.glow::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: hsl(204deg 100% 50% / 100%);
+    border-radius: 8px;
+    z-index: -1;
+    filter: blur(10px);
+    animation: pulse-glow 3s ease-out infinite;
+}
+
+/* Glow effect */
+@keyframes pulse-glow {
+    0%,
+    100% {
+        opacity: 0.2;
+    }
+    50% {
+        opacity: 0;
+    }
+}
+
+/* Disabled state for primary button */
+.btn-primary:disabled {
+    background: hsl(204 100% 2.5% / 0.25) !important;
+    cursor: not-allowed;
+}
+
+/* Tertiary action button in modal footer */
+.btn-tertiary {
+    background-color: hsl(204 50% 20% / 1) !important;
+    color: #ffffff;
+    width: 100%;
+    padding: 15px 20px;
+    font-size: 16px;
+    border: 1px solid hsl(204deg 30% 30% / 30%);
+    box-shadow: none;
+    transition: background 250ms ease-out;
+}
+
+.btn-tertiary:hover {
+    background-color: hsl(204 50% 30% / 1);
+}
+
+.btn-tertiary:active {
+    background-color: hsl(204 50% 35% / 1);
+}
+
+/* Ghost-y translucent oval button */
+.btn-oval-ghost {
+    background-color: hsl(0deg 0% 0% / 30%);
+    color: #fff;
+    border-radius: 100px;
+    box-shadow: none;
+}
+
+.btn-sm {
+    padding: 8px 14px;
+}

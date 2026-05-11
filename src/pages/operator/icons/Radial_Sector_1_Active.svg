@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150">
+  <defs>
+    <filter id="inner-glow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="10" result="blur" />
+      <feComposite in="blur" in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1"
+        result="shadowDiff" />
+      <feFlood flood-color="hsl(204, 50%, 50%)" flood-opacity="1" result="flood" />
+      <feComposite in="flood" in2="shadowDiff" operator="in" result="shadow" />
+      <feComposite in="shadow" in2="SourceGraphic" operator="over" />
+    </filter>
+  </defs>
+  <path
+    d="M 50.9326 118.2846 L 128.8923 73.2746 A 150 150 0 0 0 76.7254 21.1077 L 31.7154 99.0674 A 60 60 0 0 1 50.9326 118.2846 Z"
+    fill="hsl(204, 100%, 20%)" stroke="none" filter="url(#inner-glow)" />
+</svg>

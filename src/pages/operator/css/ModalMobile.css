@@ -1,0 +1,163 @@
+/* Generic Modal Styles */
+.modal-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    /* Aligns modal to the bottom */
+    justify-content: flex-end;
+    /* Centers modal horizontally */
+    align-items: center;
+    /* Semi-transparent background */
+    background-color: rgba(0, 0, 0, 0.6);
+    /* Ensure it's on top */
+    z-index: 1000;
+    opacity: 0;
+    /* --animation-timing-function is defined in ActionMode.css, ensure it's accessible or redefine here */
+    transition: opacity 300ms 200ms var(--anim-timing-ease-out-silky);
+    backdrop-filter: blur(5px);
+}
+
+.modal-overlay.enter {
+    animation: modal-fade-in 150ms var(--anim-timing-ease-out-silky) forwards;
+    /* Delay fade-in of overlay slightly less or same as modal */
+    animation-delay: 200ms;
+}
+
+.modal-overlay.exit {
+    animation: modal-fade-out 150ms var(--anim-timing-ease-out-silky) forwards;
+}
+
+.modal-content-wrapper {
+    text-align: left;
+    background: #122837;
+    /* Dark background similar to original */
+    color: #fff;
+    /* Light text color */
+    width: 100%;
+    max-width: 600px;
+    /* Max width for larger screens, adjust as needed */
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    /* General padding */
+    box-sizing: border-box;
+}
+
+.modal-content-wrapper.enter {
+    animation: modal-slide-up 400ms var(--anim-timing-ease-out-silky) forwards;
+    animation-delay: 200ms;
+}
+
+.modal-content-wrapper.exit {
+    animation: modal-slide-down 250ms var(--anim-timing-ease-out-silky) forwards;
+}
+
+.modal-header {
+    margin-bottom: 20px;
+    font-weight: 800;
+    padding: 0 5px;
+    display: flex;
+    justify-content: space-between;
+    /* Align with radio group padding */
+}
+
+.modal-subtitle {
+    color: hsl(204, 86%, 47%);
+    /* From original */
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.modal-title {
+    font-size: 20px;
+    margin: 0;
+}
+
+.modal-close-button {
+    width: 60px;
+    height: 40px;
+    background-color: hsl(204, 50%, 10%);
+    box-shadow: none;
+    outline: none;
+    user-select: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close-button:hover {
+    background-color: hsl(204, 50%, 20%);
+}
+
+.modal-close-button:active {
+    background-color: hsl(204, 50%, 5%);
+}
+
+.modal-close-button svg {
+    display: block;
+}
+
+.modal-close-button svg path {
+    stroke: hsl(204, 95%, 80%);
+}
+
+.modal-body {
+    margin: 20px 0 0;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    /* Default for generic, can be overridden */
+    margin-top: 20px;
+}
+
+/* Keyframes for modal animations */
+@keyframes modal-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes modal-fade-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes modal-slide-up {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+@keyframes modal-slide-down {
+    from {
+        transform: translateY(0);
+    }
+
+    to {
+        transform: translateY(100%);
+    }
+}

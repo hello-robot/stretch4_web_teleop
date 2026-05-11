@@ -1,0 +1,27 @@
+.infinite-carousel-container {
+    position: relative;
+    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.infinite-carousel-viewport {
+    padding: 10px 0px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.infinite-carousel-track {
+    display: flex;
+    width: 100%;
+    will-change: transform;
+}
+
+.infinite-carousel-page {
+    flex: 0 0 100%;
+    display: grid;
+    padding: 0 20px;
+    box-sizing: border-box;
+    width: 100%;
+}

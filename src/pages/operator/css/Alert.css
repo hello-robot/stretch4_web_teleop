@@ -1,0 +1,72 @@
+/* The alert message box */
+.alert {
+    position: relative;
+    padding: 2rem 1rem;
+    /* margin-bottom: 1rem; */
+    height: 5.5rem;
+    text-align: center;
+}
+
+.error {
+    font-weight: 800;
+    color: #ffffff;
+    background-color: hsla(204, 100%, 50%, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+.success {
+    color: #0f4f51;
+    background-color: #d1e4e7;
+    border-color: #badbcc;
+}
+
+.warning {
+    color: #664d03;
+    background-color: #fff3cd;
+    border-color: #ffecb5;
+}
+
+.loud-warning {
+    color: #664d03;
+    background-color: orange;
+    border-color: #ffecb5;
+}
+
+.primary {
+    color: #084298;
+    background-color: #cfe2ff;
+    border-color: #b6d4fe;
+}
+
+.info {
+    color: #41464b;
+    background-color: #e2e3e5;
+    border-color: #d3d6d8;
+}
+
+.secondary {
+    color: #055160;
+    background-color: #cff4fc;
+    border-color: #b6effb;
+}
+
+/* The close button */
+.closebtn {
+    margin: 1px 5px 0 0;
+    color: white;
+    font-weight: normal;
+    float: right;
+    font-size: 2rem;
+    line-height: 0.75rem;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+/* When moving the mouse over the close button */
+.closebtn:hover {
+    color: hsla(0, 0%, 100%, 0.5);
+}
+
+.hide {
+    display: none;
+}

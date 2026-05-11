@@ -1,0 +1,99 @@
+import React from "react";
+import {
+    ComponentDefinition,
+    ComponentType,
+} from "../utils/component_definitions";
+import { Panel } from "./Panel";
+import { RemoteStream, StretchTool } from "shared/util";
+import { ButtonPad } from "./ButtonPad";
+import { ButtonStateMap } from "../function_providers/ButtonFunctionProvider";
+import { Map } from "./Map";
+import { RunStopButton } from "../static_components/RunStop";
+import { BatteryGauge } from "../static_components/BatteryGauge";
+import { MovementRecorder } from "./MovementRecorder";
+
+/** State required for all elements */
+export type SharedState = {
+    customizing: boolean;
+    /** Called when user clicks on a component */
+    onSelect: (def: ComponentDefinition, path?: string) => void;
+    /** Remote robot video streams */
+    remoteStreams: Map<string, RemoteStream>;
+    /** Path to the active component */
+    selectedPath?: string;
+    /** Mapping of each button pad function to a {@link ButtonState} */
+    buttonStateMap?: ButtonStateMap;
+    /** Whether or not to hide the button labels */
+    hideLabels?: boolean;
+    /** What tool is attached to the stretch gripper. */
+    stretchTool: StretchTool;
+    /** Whether or not robot has been homed */
+    robotIsHomed: boolean;
+    /** Movement recorder's playback state  */
+    playbackPosesState?: undefined | {
+        state: string;
+        alert_type: string;
+    };
+    /** Index of the recording in LocalStorage that's being played back */
+    idxFixedRecordingPlaying: number;
+    /** Set value of "idxFixedRecordingPlaying" */
+    idxFixedRecordingPlayingSet: React.Dispatch<React.SetStateAction<number>>;
+};
+
+/** Properties for any of the customizable components: tabs, video streams, or
+ * button pads.
+ */
+export type CustomizableComponentProps = {
+    /**
+     * Path to the component
+     * @example "0-2" would represent the 2nd child of the 0th element in the layout
+     */
+    path: string;
+    /**
+     * Definition of the component (all the info required to know that type
+     * of component to render
+     */
+    definition: ComponentDefinition;
+    /** see {@link SharedState} */
+    sharedState: SharedState;
+};
+
+/**
+ * Takes a definition for a component and returns the react component.
+ *
+ * @note switch on the component definition's `type` field
+ * @returns rendered component
+ */
+export const CustomizableComponent = (props: CustomizableComponentProps) => {
+    if (!props.definition.type) {
+        throw new Error(`Component at ${props.path} is missing type`);
+    }
+
+    // switch on the component type to render specific type of component
+    switch (props.definition.type) {
+        case ComponentType.Panel:
+            return <Panel {...props} />;
+        case ComponentType.ButtonPad:
+            return <ButtonPad {...props} />;
+        case ComponentType.Map:
+            return <Map {...props} />;
+        case ComponentType.RunStopButton:
+            return <RunStopButton {...props} />;
+        case ComponentType.BatteryGauge:
+            return <BatteryGauge {...props} />;
+        case ComponentType.MovementRecorder:
+            return <MovementRecorder {...props} />;
+        default:
+            throw Error(
+                `CustomizableComponent cannot render component of unknown type: ${props.definition.type}\nYou may need to add a case for this component in the switch statement in CustomizableComponent.`
+            );
+    }
+};
+
+/**
+ * Checks if the component is currently selected
+ * @returns true if selected, otherwise false
+ */
+export function isSelected(props: CustomizableComponentProps): boolean {
+    return props.path === props.sharedState.selectedPath;
+}

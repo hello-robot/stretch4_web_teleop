@@ -1,0 +1,19 @@
+.pilot-mode-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    /* Hide scrollbar on iOS */
+    overflow: hidden;
+    justify-content: space-between;
+
+    /* Hide scrollbar on Chrome, Edge, Opera */
+    ::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+.controls {
+    position: relative;
+    height: 100%;
+    flex: 1;
+}

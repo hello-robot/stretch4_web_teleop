@@ -1,0 +1,130 @@
+/* Overlay area sized to the main <video>'s computed box so children can
+   anchor against the video corners. */
+.pilot-controls-toggle {
+    z-index: 2;
+    position: absolute;
+    left: calc(50% - 1px);
+    bottom: 0px;
+    width: var(--scene-area-width);
+    height: var(--scene-area-height);
+    translate: -50% 0%;
+    aspect-ratio: 9 / 16;
+    pointer-events: none;
+    transition: opacity 0.2s ease-out;
+}
+
+.pilot-controls-toggle.hidden {
+    opacity: 0;
+}
+
+/* Fills the video overlay so the toggle (corner) and mode tabs (center) can   be positioned independently without blocking the whole video. */
+.pilot-controls-toggle-slot {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.pilot-controls-toggle-toggle-wrap {
+    position: absolute;
+    left: 12px;
+    bottom: 22px;
+    width: 70px;
+    pointer-events: auto;
+}
+
+.pilot-controls-toggle-btn {
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: hsla(204, 0%, 2%, 60%);
+    outline: 1px solid hsla(204, 100%, 100%, 2%);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.pilot-controls-toggle-btn img.icon {
+    display: inline-block;
+    width: 60%;
+    height: auto;
+    overflow: visible;
+    filter: brightness(1);
+    transition: filter 200ms ease-out;
+}
+
+.pilot-controls-toggle-btn:active img.icon {
+    filter: brightness(1.5);
+}
+
+/* Bottom-centered tab control (`Drive` vs `Arm + Hand` | `Wrist`) */
+.pilot-controls-toggle-tab-control {
+    position: absolute;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: stretch;
+    max-width: calc(100% - 100px);
+    padding: 2px;
+    gap: 2px;
+    border-radius: 5px;
+    background-color: hsla(204, 100%, 2%, 30%);
+    backdrop-filter: blur(10px);
+    border: none;
+    pointer-events: auto;
+    font-family: sans-serif;
+}
+
+.pilot-controls-toggle-tab-control.pilot-controls-toggle-tab-control--drive {
+    background-color: transparent;
+}
+
+.pilot-controls-toggle-tab {
+    margin: 0;
+    border: none;
+    cursor: pointer;
+    font-weight: 800;
+    font-size: 12px;
+    line-height: 1.2;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: transparent;
+    color: hsl(204 20% 80% / 1);
+    transition:
+        background-color 200ms ease,
+        color 200ms ease,
+        box-shadow 200ms ease;
+    white-space: nowrap;
+    text-align: center;
+    min-width: 0;
+    box-shadow: none;
+}
+
+.pilot-controls-toggle-tab--static {
+    cursor: default;
+    flex: 1 1 auto;
+}
+
+.pilot-controls-toggle-tab--active {
+    background-color: hsl(204deg 30% 5% / 50%);
+    color: hsl(204 100% 65% / 1);
+}
+
+@media (hover: hover) {
+    .pilot-controls-toggle-tab:not(.pilot-controls-toggle-tab--active):not(
+            .pilot-controls-toggle-tab--static
+        ):hover {
+        color: hsl(204deg 100% 65% / 100%);
+    }
+}
+
+.pilot-controls-toggle-tab:active:not(.pilot-controls-toggle-tab--static) {
+    filter: brightness(1.08);
+}

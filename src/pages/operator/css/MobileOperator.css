@@ -1,0 +1,282 @@
+#mobile-operator {
+    height: 100%;
+    touch-action: none;
+    /* display: grid; */
+    grid-template-rows: auto auto 1fr;
+    grid-template-columns: 1fr auto;
+}
+
+.switch-camera {
+    z-index: 5;
+    position: absolute;
+    border-radius: 0px;
+    opacity: 0.5;
+    font-size: 2rem;
+    padding: 0;
+    float: right;
+    text-align: right;
+    margin-left: 85%;
+    color: black;
+}
+
+.switch-camera .material-icons {
+    color: black;
+}
+
+.record {
+    z-index: 5;
+    position: absolute;
+    border-radius: 0px;
+    opacity: 0.65;
+    /* font-size: 50px; */
+    text-align: right;
+    display: flex;
+    padding: 0.5rem;
+    align-items: center;
+    color: black;
+}
+
+.depth-sensing {
+    float: right;
+    z-index: 5;
+    position: absolute;
+    border-radius: 0px;
+    opacity: 0.5;
+    /* font-size: 50px; */
+    text-align: right;
+    display: flex;
+    align-items: center;
+    /* width: 20rem; */
+    /* margin-top: 85%; */
+    /* margin-left: 68%; */
+    background: whitesmoke;
+}
+
+.pill {
+    border-radius: 1.5rem;
+}
+
+.active-color {
+    color: white;
+    background-color: #084298;
+}
+
+#mobile-operator-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: #000000;
+}
+
+.mobile-alert {
+    position: absolute;
+    width: 100%;
+    z-index: 6;
+}
+
+/****************
+ * "Loading..." *
+ ****************/
+.loader-background {
+    z-index: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: hsla(0, 0%, 0%, 0.9);
+    backdrop-filter: blur(5px);
+}
+
+.loader {
+    z-index: 2;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    width: 11em;
+    height: 11em;
+    border: 1.1em solid hsla(204, 100%, 70%, 0.1);
+    border-left: 1.1em solid hsl(204, 100%, 70%);
+    border-radius: 50%;
+    animation: load 1s infinite linear;
+}
+
+.loading-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    font-size: large;
+    translate: -50% -50%;
+    z-index: 4;
+    color: hsl(204, 100%, 70%);
+}
+
+.control-modes {
+    touch-action: none;
+    font-size: 3.5rem;
+    justify-content: center;
+    display: flex;
+    padding-top: 20px;
+    gap: 15px;
+    padding-bottom: 50px;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+@keyframes load {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 900px) {
+    #operator-header .dropdown {
+        width: var(--header-btn-width-med);
+    }
+
+    #operator-header > *,
+    #operator-header button {
+        height: 3rem;
+    }
+
+    .operator-voice,
+    .operator-pose-library,
+    .operator-pose-recorder,
+    .operator-aruco-markers {
+        width: 30rem;
+        height: 5rem;
+    }
+}
+
+.slider {
+    height: 15px;
+    touch-action: none;
+    pointer-events: all;
+}
+
+.slider-container {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-around;
+    padding-top: 16px;
+}
+
+.slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 70%;
+    /* height: 30px; */
+    border-radius: 19px;
+    background: #d3d3d3;
+    outline: none;
+    opacity: 0.7;
+    -webkit-transition: 0.2s;
+    transition: opacity 0.2s;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background: #4caf50;
+    cursor: pointer;
+}
+
+.label {
+    font-size: 20px;
+    padding-bottom: 10px;
+}
+
+.map {
+    display: contents;
+}
+
+.map.hideMap,
+.controls.hideControls {
+    display: none;
+}
+
+.record-circle {
+    width: 20px;
+    height: 20px;
+    background-color: #bd1919;
+    border-radius: 50%;
+    margin: 0.5rem;
+}
+
+/** https://codepen.io/vram1980/pen/oNvWdO */
+.recording {
+    border: 3px solid #bd1919;
+    -webkit-border-radius: 30px;
+    border-radius: 30px;
+    height: 30px;
+    width: 30px;
+    position: absolute;
+    left: 11px;
+    top: 11px;
+    -webkit-animation: pulsate 1s ease-out;
+    animation: pulsate 1s ease-out;
+    -webkit-animation-iteration-count: infinite;
+    animation-iteration-count: infinite;
+    opacity: 0;
+}
+
+@-webkit-keyframes pulsate {
+    0% {
+        -webkit-transform: scale(0.1, 0.1);
+        opacity: 0;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        -webkit-transform: scale(1.2, 1.2);
+        opacity: 0;
+    }
+}
+
+@keyframes pulsate {
+    0% {
+        transform: scale(0.1, 0.1);
+        opacity: 0;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1.2, 1.2);
+        opacity: 0;
+    }
+}
+
+/**********************************
+ * CSS below targets "_XP" classes
+ **********************************/
+.simple-camera-view-wrapper_XP {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.controls {
+    position: relative;
+}
+
+.swipeable-views {
+    transition: filter 0.5s ease-out;
+}
+
+.pilot-mode-wrapper,
+.auto-nav-wrapper {
+    height: 100%;
+}

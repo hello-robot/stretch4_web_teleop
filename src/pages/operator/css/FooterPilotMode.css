@@ -1,0 +1,121 @@
+.footer-pilot-mode {
+    display: flex;
+    justify-content: space-between;
+    flex-direction: column;
+    /* Height will likely need to be
+    more fluid in the future */
+    height: 65.67px;
+    --button-width: 80px;
+}
+
+.footer-pilot-mode .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 0px;
+    background-color: #000000;
+}
+
+@media (min-width: 900px) {
+    .footer-pilot-mode {
+        width: 100%;
+        margin: 0 auto;
+    }
+    .footer-pilot-mode .footer-row {
+        width: calc(100vh * 0.5);
+        margin: 0 auto;
+    }
+}
+
+.action-speed,
+.footer-camera-switch-slot {
+    max-height: 50px;
+    border-radius: 5px;
+    width: var(--button-width);
+}
+
+.footer-camera-switch-slot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* START ActionSpeed */
+.action-speed {
+    display: flex;
+    flex-direction: row;
+}
+
+.action-speed button.button-action-speed {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    width: 46px;
+    height: 44px;
+    border-radius: 10px;
+    padding: 0;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.action-speed button.button-action-speed .action-speed-icon {
+    display: inline-block;
+    min-width: 46px;
+    max-width: 46px;
+    min-height: 44px;
+    max-height: 44px;
+    object-fit: contain;
+    object-position: center -1px;
+    filter: brightness(1);
+    transition: filter 200ms ease-out;
+    overflow: visible;
+}
+
+.action-speed button.button-action-speed:active .action-speed-icon {
+    filter: brightness(1.5);
+}
+
+/* END ActionSpeed */
+
+/* START ActionMode */
+.action-mode {
+    display: flex;
+    justify-content: center;
+}
+
+/* START ActionMode */
+.action-mode button.button-action-mode {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border-radius: 4px;
+    background: transparent;
+    border: 1px solid hsl(0deg 0% 100% / 10%);
+    box-shadow: none;
+    white-space: nowrap;
+    color: hsl(204, 44%, 66%);
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 10px;
+}
+
+@media (hover: hover) {
+    .action-mode button.button-action-mode:hover {
+        border: 1px solid hsl(0deg 0% 100% / 20%);
+        background-color: hsl(204deg 75.37% 28.38%);
+    }
+}
+
+.action-mode button.button-action-mode:active {
+    background-color: hsl(204deg 75.37% 28.38%);
+}
+
+.action-mode .action-mode-icon {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+}
+
+/* END ActionMode */

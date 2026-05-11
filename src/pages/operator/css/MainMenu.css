@@ -1,0 +1,192 @@
+.main-menu-modal-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    /* Aligns modal to the bottom */
+    justify-content: flex-end;
+    /* Centers modal horizontally */
+    align-items: center;
+    /* Semi-transparent background */
+    background-color: rgba(0, 0, 0, 0.6);
+    /* Ensure it's on top */
+    z-index: 1000;
+    opacity: 0;
+    /* --animation-timing-function is defined in ActionMode.css, ensure it's accessible or redefine here */
+    transition: opacity 300ms 200ms var(--anim-timing-ease-out-silky);
+    backdrop-filter: blur(2px);
+}
+
+.main-menu-modal-overlay.enter {
+    animation: modal-fade-in 150ms var(--anim-timing-ease-out-silky) forwards;
+    animation-delay: 200ms;
+    /* Delay fade-in of overlay slightly less or same as modal */
+}
+
+.main-menu-modal-overlay.exit {
+    animation: modal-fade-out 150ms var(--anim-timing-ease-out-silky) forwards;
+}
+
+.main-menu-modal-content-wrapper {
+    text-align: left;
+    color: #fff;
+    width: 100%;
+    max-width: 600px;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    box-sizing: border-box;
+    background-color: hsl(204deg 100% 5% / 90%);
+    backdrop-filter: blur(5px);
+}
+
+.main-menu-modal-content-wrapper.enter {
+    animation: modal-slide-up 400ms var(--anim-timing-ease-out-silky) forwards;
+    animation-delay: 200ms;
+}
+
+.main-menu-modal-content-wrapper.exit {
+    animation: modal-slide-down 250ms var(--anim-timing-ease-out-silky) forwards;
+}
+
+.main-menu-modal-header {
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    padding: 0px 20px 20px 20px;
+    font-weight: 800;
+}
+
+.main-menu-modal-header .chevron-wrapper {
+    position: relative;
+    top: -3px;
+    width: 59px;
+    height: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: hsl(204deg 100% 5% / 90%);
+    box-shadow: 0 2px 8px hsl(204, 100%, 7.5%);
+    border-radius: 5px;
+}
+
+.main-menu-modal-header .chevron-wrapper .chevron {
+    width: 13px;
+    height: 7px;
+}
+
+.main-menu-modal-subtitle {
+    color: hsl(204, 86%, 47%);
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.main-menu-modal-title {
+    margin: 0;
+    text-align: center;
+    font-feature-settings:
+        "liga" off,
+        "clig" off;
+    font-size: 18px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 22px;
+    background: radial-gradient(
+        48.35% 48.35% at 50% 22%,
+        hsl(204deg 100% 65%) 0%,
+        hsl(204 100% 45% / 1) 100%
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.main-menu-modal-close-button {
+    width: 60px;
+    height: 40px;
+    background-color: hsl(204, 50%, 10%);
+    box-shadow: none;
+    outline: none;
+    user-select: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+}
+
+.main-menu-modal-close-button:hover {
+    background-color: hsl(204, 50%, 20%);
+}
+
+.main-menu-modal-close-button:active {
+    background-color: hsl(204, 50%, 5%);
+}
+
+.main-menu-modal-close-button svg {
+    display: block;
+}
+
+.main-menu-modal-close-button svg path {
+    stroke: hsl(204, 95%, 80%);
+}
+
+.main-menu-modal-body {
+    padding: 0 20px 20px;
+}
+
+.main-menu-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    /* Default for generic, can be overridden */
+    margin-top: 20px;
+}
+
+/* Keyframes for modal animations */
+@keyframes modal-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes modal-fade-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes modal-slide-up {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+@keyframes modal-slide-down {
+    from {
+        transform: translateY(0);
+    }
+
+    to {
+        transform: translateY(100%);
+    }
+}

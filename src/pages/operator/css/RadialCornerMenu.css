@@ -1,0 +1,137 @@
+/* Container — positioned at bottom-left of the parent */
+.radial-corner-menu {
+    z-index: 2;
+    position: absolute;
+    left: calc(50% - 1px);
+    bottom: 0px;
+    translate: -50% 0%;
+    aspect-ratio: 9 / 16;
+    pointer-events: none;
+}
+
+.switch-camera-btn-container {
+    position: absolute;
+    bottom: 20px;
+    left: 10px;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.switch-camera-btn {
+    background-color: transparent;
+    box-shadow: none;
+    border: 1px solid hsla(0deg 0% 100% / 0.4);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    cursor: pointer;
+}
+
+.switch-camera-btn img {
+    padding: 5px;
+    width: 80%;
+    height: 80%;
+    object-fit: contain;
+}
+
+.radial-corner-menu-container {
+    position: absolute;
+    bottom: 10px;
+    left: 0;
+    width: 150px;
+    height: 150px;
+    pointer-events: none;
+    z-index: 20;
+    overflow: hidden;
+    border-bottom-left-radius: 21px;
+}
+
+/* Wrapper — holds all the SVG image layers */
+.radial-corner-menu-wrapper {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 150px;
+    height: 150px;
+    pointer-events: all;
+    /* Framer-motion drives open/close state via transform + opacity. */
+    transform-origin: 0% 100%;
+    will-change: transform, opacity;
+    /* Flatten child layers into one compositing surface before animating */
+    isolation: isolate;
+}
+
+/* Full-screen backdrop */
+.radial-corner-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.2);
+    pointer-events: all;
+    will-change: opacity;
+}
+
+/* Every SVG image is stacked at position 0,0 inside the wrapper */
+.radial-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 150px;
+    height: 150px;
+    pointer-events: none;
+    display: block;
+}
+
+/* Active glow layer - GPU promoted for opacity toggling */
+.radial-active-glow {
+    will-change: opacity;
+    transition: opacity 0.2s ease;
+}
+
+/* Sector hit-area — tightly sized per-sector so iOS Voice Control
+   places labels at the visual centre of each sector. */
+.radial-sector-hit {
+    position: absolute;
+    cursor: pointer;
+}
+
+/* Close button hit-area */
+.radial-close-hit {
+    cursor: pointer;
+    background-color: hsla(204deg, 100%, 50%, 100%);
+}
+
+/* Icon overlays — positioned at pre-computed centres */
+.radial-icon-overlay {
+    position: absolute;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+
+.radial-icon-button {
+    position: absolute;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 50%;
+    pointer-events: all;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow: none;
+}
+
+.radial-close-button {
+    background: transparent;
+    border-bottom-left-radius: 21px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
