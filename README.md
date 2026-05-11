@@ -20,12 +20,6 @@ Next, launch the interface:
 ./launch_interface
 ```
 
-If you'd like to launch the interface with a map run:
-
-```
-./launch_interface -m maps/<NAME_OF_MAP>.yaml
-```
-
 In the terminal, you will see output similar to:
 
 ```
@@ -126,6 +120,8 @@ Unless required by applicable law or agreed to in writing, the Contents are dist
 \============================================================
 
 Some of the contents of this directory derive from the following repositories:
+
+https://github.com/hello-robot/stretch_web_teleop
 
 https://github.com/hello-robot/stretch_web_interface
 
