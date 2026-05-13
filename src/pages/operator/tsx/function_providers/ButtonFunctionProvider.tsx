@@ -124,7 +124,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             const buttons = getButtonsFromJointName(key);
             if (!buttons) return;
             let [buttonNeg, buttonPos] =
-                key !== "joint_wrist_yaw" && key !== "joint_wrist_pitch"
+                key !== "wrist_yaw_joint" && key !== "wrist_pitch_joint"
                     ? buttons
                     : buttons.reverse();
 
@@ -457,23 +457,23 @@ function getButtonsFromJointName(
     jointName: ValidJoints
 ): [ButtonPadButton, ButtonPadButton] | undefined {
     switch (jointName) {
-        case "joint_gripper":
+        case "stretch_gripper_joint":
             return [ButtonPadButton.GripperClose, ButtonPadButton.GripperOpen];
-        case "joint_arm":
+        case "arm_joint":
             return [ButtonPadButton.ArmRetract, ButtonPadButton.ArmExtend];
-        case "joint_lift":
+        case "lift_joint":
             return [ButtonPadButton.ArmLower, ButtonPadButton.ArmLift];
-        case "joint_wrist_roll":
+        case "wrist_roll_joint":
             return [
                 ButtonPadButton.WristRollRight,
                 ButtonPadButton.WristRollLeft,
             ];
-        case "joint_wrist_pitch":
+        case "wrist_pitch_joint":
             return [
                 ButtonPadButton.WristPitchUp,
                 ButtonPadButton.WristPitchDown,
             ];
-        case "joint_wrist_yaw":
+        case "wrist_yaw_joint":
             return [
                 ButtonPadButton.WristRotateOut,
                 ButtonPadButton.WristRotateIn,
@@ -485,12 +485,12 @@ function getButtonsFromJointName(
                 ButtonPadButton.BaseRotateLeft,
                 ButtonPadButton.BaseRotateRight,
             ];
-        case "joint_head_pan":
+        case "head_pan_joint":
             return [
                 ButtonPadButton.CameraPanRight,
                 ButtonPadButton.CameraPanLeft,
             ];
-        case "joint_head_tilt":
+        case "head_tilt_joint":
             return [
                 ButtonPadButton.CameraTiltDown,
                 ButtonPadButton.CameraTiltUp,
@@ -524,35 +524,35 @@ function getJointNameFromButtonFunction(
 
         case ButtonPadButton.ArmLower:
         case ButtonPadButton.ArmLift:
-            return "joint_lift";
+            return "lift_joint";
 
         case ButtonPadButton.ArmRetract:
         case ButtonPadButton.ArmExtend:
-            return "joint_arm";
+            return "arm_joint";
 
         case ButtonPadButton.GripperClose:
         case ButtonPadButton.GripperOpen:
-            return "joint_gripper";
+            return "stretch_gripper_joint";
 
         case ButtonPadButton.WristRollLeft:
         case ButtonPadButton.WristRollRight:
-            return "joint_wrist_roll";
+            return "wrist_roll_joint";
 
         case ButtonPadButton.WristPitchUp:
         case ButtonPadButton.WristPitchDown:
-            return "joint_wrist_pitch";
+            return "wrist_pitch_joint";
 
         case ButtonPadButton.WristRotateIn:
         case ButtonPadButton.WristRotateOut:
-            return "joint_wrist_yaw";
+            return "wrist_yaw_joint";
 
         case ButtonPadButton.CameraTiltUp:
         case ButtonPadButton.CameraTiltDown:
-            return "joint_head_tilt";
+            return "head_tilt_joint";
 
         case ButtonPadButton.CameraPanLeft:
         case ButtonPadButton.CameraPanRight:
-            return "joint_head_pan";
+            return "head_pan_joint";
 
         default:
             throw Error("unknown button pad function" + buttonType);
