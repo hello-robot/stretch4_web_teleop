@@ -2,22 +2,23 @@ import ROSLIB, { Message } from "roslib";
 import { cmd } from "./commands";
 
 export type ValidJoints =
-    | "joint_head_tilt"
-    | "joint_head_pan"
-    | "joint_gripper"
-    | "joint_arm"
+    | "head_tilt_joint"
+    | "head_pan_joint"
+    | "stretch_gripper_joint"
+    | "arm_joint"
     | "wrist_extension"
-    | "joint_lift"
-    | "joint_wrist_roll"
-    | "joint_wrist_pitch"
-    | "joint_wrist_yaw"
+    | "lift_joint"
+    | "wrist_roll_joint"
+    | "wrist_pitch_joint"
+    | "wrist_yaw_joint"
     | "translate_mobile_base"
     | "rotate_mobile_base"
     | "gripper_aperture"
-    | "joint_arm_l0"
-    | "joint_arm_l1"
-    | "joint_arm_l2"
-    | "joint_arm_l3";
+    | "arm_l0_joint"
+    | "arm_l1_joint"
+    | "arm_l2_joint"
+    | "arm_l3_joint"
+    | "arm_l4_joint";
 
 
 
@@ -199,39 +200,39 @@ export interface ROSOccupancyGrid {
 }
 
 export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
-    joint_arm: [0.001, 0.518],
-    joint_wrist_roll: [-2.95, 2.94],
-    joint_wrist_pitch: [-1.57, 0.57],
-    joint_wrist_yaw: [-1.37, 4.41],
-    joint_lift: [0.001, 1.1],
+    arm_joint: [0.001, 0.518],
+    wrist_roll_joint: [-2.95, 2.94],
+    wrist_pitch_joint: [-1.57, 0.57],
+    wrist_yaw_joint: [-1.37, 4.41],
+    lift_joint: [0.001, 1.1],
     translate_mobile_base: [-30.0, 30.0],
     rotate_mobile_base: [-3.14, 3.14],
-    joint_gripper: [-0.37, 0.17],
-    joint_head_tilt: [-1.6, 0.3],
-    joint_head_pan: [-3.95, 1.7],
+    stretch_gripper_joint: [-0.37, 0.17],
+    head_tilt_joint: [-1.6, 0.3],
+    head_pan_joint: [-3.95, 1.7],
 };
 
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
-    joint_head_tilt: 0.3,
-    joint_head_pan: 0.3,
-    joint_arm: 0.04,
-    joint_lift: 0.04,
-    joint_wrist_roll: 0.1,
-    joint_wrist_pitch: 0.1,
-    joint_wrist_yaw: 0.4,
+    head_tilt_joint: 0.3,
+    head_pan_joint: 0.3,
+    arm_joint: 0.04,
+    lift_joint: 0.04,
+    wrist_roll_joint: 0.1,
+    wrist_pitch_joint: 0.1,
+    wrist_yaw_joint: 0.4,
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.3,
 };
 
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
-    joint_head_tilt: 0.1,
-    joint_head_pan: 0.1,
-    joint_gripper: 0.1,
-    joint_arm: 0.1,
-    joint_lift: 0.1,
-    joint_wrist_roll: 0.1,
-    joint_wrist_pitch: 0.1,
-    joint_wrist_yaw: 0.1,
+    head_tilt_joint: 0.1,
+    head_pan_joint: 0.1,
+    stretch_gripper_joint: 0.1,
+    arm_joint: 0.1,
+    lift_joint: 0.1,
+    wrist_roll_joint: 0.1,
+    wrist_pitch_joint: 0.1,
+    wrist_yaw_joint: 0.1,
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.5,
 };

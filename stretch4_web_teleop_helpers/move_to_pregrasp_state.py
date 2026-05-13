@@ -134,10 +134,10 @@ class MoveToPregraspState(Enum):
         if self == MoveToPregraspState.TERMINAL:
             return None
         elif self == MoveToPregraspState.STOW_ARM_LENGTH_FULL:
-            joints_for_position_control.update(get_stow_configuration([Joint.ARM_L0]))
+            joints_for_position_control.update(get_stow_configuration([Joint.ARM_L4]))
         elif self == MoveToPregraspState.STOW_ARM_LENGTH_PARTIAL:
             joints_for_position_control.update(
-                get_stow_configuration([Joint.ARM_L0], partial=True)
+                get_stow_configuration([Joint.ARM_L4], partial=True)
             )
         elif self == MoveToPregraspState.STOW_ARM_LIFT:
             joints_for_position_control.update(get_stow_configuration([Joint.ARM_LIFT]))
@@ -193,7 +193,7 @@ class MoveToPregraspState(Enum):
                 get_pregrasp_wrist_configuration(horizontal_grasp)
             )
         elif self == MoveToPregraspState.LENGTHEN_ARM:
-            joints_for_position_control[Joint.ARM_L0] = ik_solution[Joint.ARM_L0]
+            joints_for_position_control[Joint.ARM_L4] = ik_solution[Joint.ARM_L4]
 
         # Create the motion executor
         if len(joints_for_velocity_control) > 0:

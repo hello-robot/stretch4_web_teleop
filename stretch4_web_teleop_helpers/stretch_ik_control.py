@@ -121,7 +121,7 @@ class StretchIKControl:
         self.controllable_joints = [
             Joint.BASE_ROTATION,
             Joint.ARM_LIFT,
-            Joint.ARM_L0,  # The URDF uses the most distal of the telescoping joints
+            Joint.ARM_L4,  # The URDF uses the most distal of the telescoping joints
         ]
         self.base_ik_solver = PinocchioIKSolver(
             self.urdf_path,
@@ -243,7 +243,7 @@ class StretchIKControl:
         # Get the velocity limits for the controllable joints
         joint_map = {
             Joint.ARM_LIFT: ("lift", "vel_m"),
-            Joint.ARM_L0: ("arm", "vel_m"),
+            Joint.ARM_L4: ("arm", "vel_m"),
             Joint.COMBINED_ARM: ("arm", "vel_m"),
             Joint.WRIST_EXTENSION: ("arm", "vel"),
             Joint.WRIST_YAW: ("wrist_yaw", "vel"),
@@ -294,7 +294,7 @@ class StretchIKControl:
 
         for joint_name, (min_pos, max_pos) in joint_pos_lim.items():
             if joint_name == Joint.COMBINED_ARM:
-                joint_name = Joint.ARM_L0
+                joint_name = Joint.ARM_L4
             self.joint_pos_lim[joint_name] = (min_pos, max_pos)
         self.joint_pos_lim[Joint.BASE_ROTATION] = (-np.pi, np.pi)
 
@@ -1003,8 +1003,8 @@ class StretchIKControl:
         self.node.get_logger().debug(f"Commanding arm to {joint_positions}")
 
         # Replace the distal arm joint with the combined joint
-        if Joint.ARM_L0 in joint_positions:
-            joint_positions[Joint.COMBINED_ARM] = joint_positions.pop(Joint.ARM_L0)
+        if Joint.ARM_L4 in joint_positions:
+            joint_positions[Joint.COMBINED_ARM] = joint_positions.pop(Joint.ARM_L4)
 
         # Create the goal
         arm_goal = FollowJointTrajectory.Goal()
@@ -1146,8 +1146,8 @@ class StretchIKControl:
         # We also add other fully random configurations in case the
         # first one fails.
         q_init = self.__get_q(joint_position_overrides, all_joints=True)
-        q_init[self.controllable_joints.index(Joint.ARM_L0)] = self.joint_pos_lim[
-            Joint.ARM_L0
+        q_init[self.controllable_joints.index(Joint.ARM_L4)] = self.joint_pos_lim[
+            Joint.ARM_L4
         ][1]
         initializations = [q_init]
         for _ in range(max_tries - 1):
@@ -1256,11 +1256,11 @@ class StretchIKControl:
             latest_joint_state = self.latest_joint_state
 
         # Get the positions
-        joint_positions = {Joint.ARM_L0: 0.0}
+        joint_positions = {Joint.ARM_L4: 0.0}
         for joint_name in latest_joint_state:
             pos = latest_joint_state[joint_name]
             if combine_arm and joint_name in Joint.get_arm_joints():
-                joint_positions[Joint.ARM_L0] += pos
+                joint_positions[Joint.ARM_L4] += pos
             else:
                 joint_positions[joint_name] = pos
 

@@ -17,30 +17,31 @@ class Joint(Enum):
     Joint names of Stretch.
     """
 
-    BASE_ROTATION = "joint_mobile_base_rotation"
-    ARM_LIFT = "joint_lift"
-    ARM_L0 = "joint_arm_l0"
-    ARM_L1 = "joint_arm_l1"
-    ARM_L2 = "joint_arm_l2"
-    ARM_L3 = "joint_arm_l3"
-    COMBINED_ARM = "joint_arm"
+    BASE_ROTATION = "mobile_base_rotation_joint"
+    ARM_LIFT = "lift_joint"
+    ARM_L0 = "arm_l0_joint"
+    ARM_L1 = "arm_l1_joint"
+    ARM_L2 = "arm_l2_joint"
+    ARM_L3 = "arm_l3_joint"
+    ARM_L4 = "arm_l4_joint"
+    COMBINED_ARM = "arm_joint"
     WRIST_EXTENSION = "wrist_extension"
-    WRIST_YAW = "joint_wrist_yaw"
-    WRIST_PITCH = "joint_wrist_pitch"
-    WRIST_ROLL = "joint_wrist_roll"
-    GRIPPER_RIGHT = "joint_gripper_finger_right"
-    GRIPPER_LEFT = "joint_gripper"
-    RIGHT_WHEEL = "joint_right_wheel"
-    LEFT_WHEEL = "joint_left_wheel"
-    HEAD_PAN = "joint_head_pan"
-    HEAD_TILT = "joint_head_tilt"
+    WRIST_YAW = "wrist_yaw_joint"
+    WRIST_PITCH = "wrist_pitch_joint"
+    WRIST_ROLL = "wrist_roll_joint"
+    GRIPPER_RIGHT = "gripper_finger_right_joint"
+    GRIPPER_LEFT = "stretch_gripper_joint"
+    RIGHT_WHEEL = "right_wheel_joint"
+    LEFT_WHEEL = "left_wheel_joint"
+    HEAD_PAN = "head_pan_joint"
+    HEAD_TILT = "head_tilt_joint"
 
     @staticmethod
     def get_arm_joints():
         """
         Get the list of telescoping arm joints.
         """
-        return [Joint.ARM_L0, Joint.ARM_L1, Joint.ARM_L2, Joint.ARM_L3]
+        return [Joint.ARM_L0, Joint.ARM_L1, Joint.ARM_L2, Joint.ARM_L3, Joint.ARM_L4]
 
     @staticmethod
     def get_wrist_joints():
@@ -56,10 +57,10 @@ class Frame(Enum):
     """
 
     BASE_LINK = "base_link"
-    END_EFFECTOR_LINK = "link_grasp_center"
-    LIFT_LINK = "link_lift"
-    L0_LINK = "link_arm_l0"
-    WRIST_PITCH_LINK = "link_wrist_pitch"
+    END_EFFECTOR_LINK = "grasp_center_link"
+    LIFT_LINK = "lift_link"
+    L0_LINK = "arm_l0_link"
+    WRIST_PITCH_LINK = "wrist_pitch_link"
     ODOM = "odom"
 
 
@@ -113,7 +114,7 @@ def get_stow_configuration(
     """
     retval = {}
     for joint in joints:
-        if joint == Joint.ARM_L0:
+        if joint == Joint.ARM_L4:
             retval[joint] = 0.1675 if partial else 0.0
         elif joint == Joint.ARM_LIFT:
             retval[
@@ -147,13 +148,13 @@ def adjust_arm_lift_for_base_collision(
     if horizontal_grasp:
         # If the arm length is less than 10cm and the arm lift is less than 11cm,
         # a horizontal wrist will collide with the base. Raise the arm lift.
-        if ik_solution[Joint.ARM_L0] < 0.10:
+        if ik_solution[Joint.ARM_L4] < 0.10:
             if ik_solution[Joint.ARM_LIFT] < 0.11:
                 ik_solution[Joint.ARM_LIFT] = 0.11
     else:
         # If the arm length is less than 10cm and the arm lift is less than 33cm,
         # a vertical wrist will collide with the base. Raise the arm lift.
-        if ik_solution[Joint.ARM_L0] < 0.10:
+        if ik_solution[Joint.ARM_L4] < 0.10:
             if ik_solution[Joint.ARM_LIFT] < 0.33:
                 ik_solution[Joint.ARM_LIFT] = 0.33
 
