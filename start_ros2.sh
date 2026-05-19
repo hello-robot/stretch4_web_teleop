@@ -40,17 +40,17 @@ echo "Reload USB bus..."
 sudo udevadm control --reload-rules && sudo udevadm trigger &>>$REDIRECT_LOGFILE
 
 echo "Check rmw_zenohd..."
-if ! pgrep -x rmw_zenohd > /dev/null; then
-    echo "rmw_zenohd not running, starting it..."
-    screen -dm -S "rmw_zenohd" bash -c "source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $REDIRECT_LOGDIR/rmw_zenohd.txt"
-    sleep 2
-    if ! pgrep -x rmw_zenohd > /dev/null; then
-        echo "ERROR: Failed to start rmw_zenohd. See logs: $REDIRECT_LOGDIR/rmw_zenohd.txt"
-        exit 1
-    fi
-    echo "rmw_zenohd started."
+if ! pgrep -x rmw_zenohd >/dev/null; then
+	echo "rmw_zenohd not running, starting it..."
+	screen -dm -S "rmw_zenohd" bash -c "source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $REDIRECT_LOGDIR/rmw_zenohd.txt"
+	sleep 2
+	if ! pgrep -x rmw_zenohd >/dev/null; then
+		echo "ERROR: Failed to start rmw_zenohd. See logs: $REDIRECT_LOGDIR/rmw_zenohd.txt"
+		exit 1
+	fi
+	echo "rmw_zenohd started."
 else
-    echo "rmw_zenohd already running."
+	echo "rmw_zenohd already running."
 fi
 
 LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
@@ -62,8 +62,8 @@ sleep 8
 # Check if the launch log contains any errors
 ERRORS=$(grep -E "ERROR" "$LAUNCH_LOGFILE" || true)
 if [ -n "$ERRORS" ]; then
-    echo ""
-    echo "Errors found in web_interface.launch.py output:"
-    echo "$ERRORS"
-    exit 1
+	echo ""
+	echo "Errors found in web_interface.launch.py output:"
+	echo "$ERRORS"
+	exit 1
 fi
