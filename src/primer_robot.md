@@ -4,7 +4,7 @@ The **robot page** is the headless browser that runs onboard the Stretch robot. 
 
 > For a high-level view of how the robot and operator browsers fit together, see [`primer_software_architecture.md`](primer_software_architecture.md).
 
----
+______________________________________________________________________
 
 ## Directory Layout
 
@@ -19,7 +19,7 @@ src/pages/robot/
     └── audiostreams.tsx   # AudioStream class — captures microphone audio for WebRTC
 ```
 
----
+______________________________________________________________________
 
 ## Entry Point: `tsx/index.tsx`
 
@@ -28,20 +28,21 @@ This file is the module entry. It wires together the three main subsystems — `
 ### Startup Sequence
 
 1. **Instantiates `Robot`** with a set of forwarding callbacks (one per ROS2 data stream). Each callback calls `connection.sendData()` to forward the data to the operator browser over WebRTC.
-2. **Instantiates `WebRTCConnection`** as the robot peer.
-3. **Instantiates media streams**: `navigationStream`, `gripperStream` (both `VideoStream`), and `audioStream` (`AudioStream`).
-4. **Sets `onRosConnectCallback`** — once ROS is ready, this callback:
+1. **Instantiates `WebRTCConnection`** as the robot peer.
+1. **Instantiates media streams**: `navigationStream`, `gripperStream` (both `VideoStream`), and `audioStream` (`AudioStream`).
+1. **Sets `onRosConnectCallback`** — once ROS is ready, this callback:
    - Subscribes to the camera topics and starts the video streams.
    - Fetches the occupancy grid map (if there is one).
    - Logs into the signaling server and joins the robot room, then waits for an operator.
-5. **Calls `robot.connect()`** to initiate the rosbridge WebSocket connection.
+1. **Calls `robot.connect()`** to initiate the rosbridge WebSocket connection.
 
 ### Session Lifecycle (`handleSessionStart`)
 
 Called by `WebRTCConnection` when an operator joins. It:
+
 1. Removes any existing media tracks from the peer connection.
-2. Adds the head cameras and gripper cameras to the peer connection.
-3. Opens the WebRTC data channels for bidirectional command/data flow.
+1. Adds the head cameras and gripper cameras to the peer connection.
+1. Opens the WebRTC data channels for bidirectional command/data flow.
 
 ### Incoming Message Handler (`handleMessage`)
 
@@ -83,7 +84,7 @@ Each of these functions is registered with `Robot` at startup. When the robot pu
 
 > **Note on occupancy grid chunking:** Map data can be very large. `forwardOccupancyGrid` splits the `data` array into 50,000-element slices and sends each as a separate `occupancyGrid` message. The operator browser reassembles them by concatenating the `data` arrays.
 
----
+______________________________________________________________________
 
 ## `robot.tsx` — The `Robot` Class
 
@@ -102,6 +103,7 @@ robot.connect()
 `checkROSConnection()` verifies that the two required camera topics have publishers before proceeding. This guards against timing issues where rosbridge connects before all required ROS nodes have started. If the check fails, it reconnects after 1 second.
 
 `onConnect()` sets up all ROSLib clients:
+
 - **Subscriptions**: joint states, joint limits, battery state, mode, is-homed, is-run-stopped, action results
 - **Action clients**: `follow_joint_trajectory`, `navigate_to_pose`
 - **Topics**: `/cmd_vel` (base velocity), `/joint_vel` (joint velocity)
@@ -171,15 +173,15 @@ ROS2 (rosbridge wss://localhost:9090)
   WebRTC media channel → Operator browser camera views
 ```
 
----
+______________________________________________________________________
 
 ## How to Add a New Robot Capability (Summary)
 
 1. **`shared/commands.tsx`** — define `interface MyCommand { type: "myCommand"; ... }` and add it to the `cmd` union.
-2. **`shared/remoterobot.tsx`** — add `myAction() { this.robotChannel({ type: "myCommand" }); }`.
-3. **`robot/tsx/robot.tsx`** — implement the ROS2 interaction (subscribe to a topic, call a service, send an action goal). If the robot needs to push data back, accept a callback in the constructor and call it from the subscription.
-4. **`robot/tsx/index.tsx`**:
+1. **`shared/remoterobot.tsx`** — add `myAction() { this.robotChannel({ type: "myCommand" }); }`.
+1. **`robot/tsx/robot.tsx`** — implement the ROS2 interaction (subscribe to a topic, call a service, send an action goal). If the robot needs to push data back, accept a callback in the constructor and call it from the subscription.
+1. **`robot/tsx/index.tsx`**:
    - Add a forwarding callback that calls `connection.sendData()` if data flows robot → operator.
    - Add a `case "myCommand": robot.myAction(); break;` in `handleMessage()` for operator → robot commands.
    - Pass the forwarding callback into the `Robot` constructor.
-5. **Operator side** — update `operator/tsx/index.tsx` to handle the new WebRTC message type and wire it to the appropriate function provider.
+1. **Operator side** — update `operator/tsx/index.tsx` to handle the new WebRTC message type and wire it to the appropriate function provider.

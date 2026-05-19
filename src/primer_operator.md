@@ -4,7 +4,7 @@ The **operator page** is the browser-based UI through which a user teleoperates 
 
 > For a worked example of adding a brand-new feature end-to-end (the "Home the Robot" button), see [`documentation/development.md`](../../../../documentation/development.md).
 
----
+______________________________________________________________________
 
 ## Directory Layout
 
@@ -25,7 +25,7 @@ src/pages/operator/
     └── default_layouts/         # JSON default layout configs
 ```
 
----
+______________________________________________________________________
 
 ## Shared Layer (`src/shared/`)
 
@@ -84,15 +84,15 @@ You generally do not need to edit this file unless adding a new WebRTC message t
 
 This file contains the code used for establishing a peer connection between the operator and robot browser and setting up data channels such that they can communicate.
 
----
+______________________________________________________________________
 
 ## Entry Point: `tsx/index.tsx`
 
 This file is the module entry. It:
 
 1. **Creates** all `FunctionProvider` singletons (see below).
-2. **Establishes** the WebRTC connection to the robot browser.
-3. **Handles two WebRTC callbacks**:
+1. **Establishes** the WebRTC connection to the robot browser.
+1. **Handles two WebRTC callbacks**:
    - `handleRemoteTrackAdded()` — subscribes to video/audio media channels so they feed the camera views.
    - `handleWebRTCMessage()` — a switch statement that routes incoming robot data to the right function provider or state variable:
      ```ts
@@ -103,7 +103,7 @@ This file is the module entry. It:
      case "occupancyGrid":
          // chunked and assembled into occupancyGrid module-level var
      ```
-4. **Calls** `initializeOperator()` once the data channel is open, which:
+1. **Calls** `initializeOperator()` once the data channel is open, which:
    - Creates the `RemoteRobot` instance and sets up its sensor callbacks.
    - Creates the `StorageHandler` (loads the saved layout).
    - Instantiates providers that require storage (e.g. `MovementRecorderFunctionProvider`, `UnderMapFunctionProvider`, etc.).
@@ -123,14 +123,15 @@ Key module-level exports that components import directly (no prop-drilling):
 | `stretchTool` | `StretchTool` | Currently mounted tool |
 | `storageHandler` | `StorageHandler` | Persisted layout/recordings |
 
----
+______________________________________________________________________
 
 ## Root Components
 
 ### `MobileOperator.tsx`
+
 The active root component rendered on the user's device. Renders two the **Pilot Mode** scene by default (live camera + robot controls) and the **Auto Nav** scene can but accessed from the scene menu (map-based autonomous navigation).
 
----
+______________________________________________________________________
 
 ## Function Providers (`tsx/function_providers/`)
 
@@ -154,40 +155,51 @@ const Home = homeTheRobotFunctionProvider.provideFunctions(HomeTheRobotFunction.
 ```
 
 ### `FunctionProvider` (base class)
+
 All providers extend this. It holds:
+
 - `static remoteRobot` — the single shared `RemoteRobot` instance (set via `addRemoteRobot()`)
 - `static velocityScale`, `actionMode`, `pilotControlsCurrent` — global control settings shared across all providers
 - `setBaseVelocity()` / `incrementalJointMovement()` / `continuousJointMovement()` — shared motion helpers that manage the velocity heartbeat interval (sent every 25 ms)
 - `stopCurrentAction()` — cancels any active velocity send loop or timeout
 
 ### `ButtonFunctionProvider`
+
 The heaviest provider. Maps every `ButtonPadButton` enum value to robot actions. Handles:
+
 - Different **action modes**: `StepActions` (tap once, move discrete amount), `PressRelease` (hold for continuous), `ClickClick` (tap to start, tap to stop)
 - **Joint state callbacks** from the robot → updates which buttons are at their limits/in collision → updates `ButtonStateMap` for the UI
 - Drive, arm, lift, wrist, gripper, head, and camera-perspective commands
 
 ### `MovementRecorderFunctionProvider`
+
 Manages recording and playing back sequences of joint poses. Interfaces with `StorageHandler` to persist recordings. Streams playback state back via operator callback.
 
 ### `UnderMapFunctionProvider`
+
 Handles autonomous move-base navigation. Sends navigation goals via `RemoteRobot`, receives action state feedback, and exposes an operator callback for alert rendering.
 
 ### `HomeTheRobotFunctionProvider`
+
 Tracks homing and robot mode state. Exposes `updateModeState()` and `updateIsHomedState()` for the WebRTC message handler to call.
 
 ### `RunStopFunctionProvider`
+
 Tracks the software run-stop state. Exposes `updateRunStopState()`.
 
 ### `BatteryVoltageFunctionProvider`
+
 Tracks battery voltage. Exposes `updateVoltage()`.
 
 ### `MapFunctionProvider`
+
 Handles click-on-map → navigation goal conversion.
 
 ### `CameraSwitcherFunctionProvider`
+
 Manages which camera perspective is active.
 
----
+______________________________________________________________________
 
 ## Component Folders
 
@@ -231,7 +243,7 @@ There are three component folders, each with a different intended scope:
 | `PlaybackStatusbar` | Progress bar for movement playback |
 | `Flex` | Lightweight flexbox layout wrapper |
 
----
+______________________________________________________________________
 
 ## Storage Handler (`tsx/storage_handler/`)
 
@@ -242,7 +254,7 @@ Persists the operator's layout and recordings across sessions. Two backends:
 
 Both implement the common `StorageHandler` interface.
 
----
+______________________________________________________________________
 
 ## Utils (`tsx/utils/`)
 
@@ -253,7 +265,7 @@ Both implement the common `StorageHandler` interface.
 | `hex-to-rgb-array.tsx` | `#rrggbb` → `[r, g, b]` color conversion |
 | `svg.tsx` | Inline SVG strings for all button pad icons (arm directions, gripper, head, etc.) |
 
----
+______________________________________________________________________
 
 ## Full Data Flow
 
@@ -262,7 +274,7 @@ WebRTC media channels
         │
         ▼
   handleRemoteTrackAdded()      ← feeds camera <video> elements
-  
+
 WebRTC data channel (robot → operator)
         │
         ▼
@@ -299,19 +311,19 @@ WebRTC data channel (robot → operator)
   Robot.executeX() → ROSLib → rosbridge → ROS2
 ```
 
----
+______________________________________________________________________
 
 ## How to Add a New Feature (Summary)
 
 1. **`shared/commands.tsx`** — define a new `interface MyCommand { type: "myCommand"; ... }` and add it to the `cmd` union.
-2. **`shared/remoterobot.tsx`** — add a method `myAction() { this.robotChannel({ type: "myCommand" }); }`.
-3. **`robot/tsx/index.tsx`** — add a `case "myCommand": robot.myAction(); break;` in `handleMessage()`.
-4. **`robot/tsx/robot.tsx`** — implement `myAction()` using ROSLib (service, topic, or action client).
-5. **`operator/tsx/function_providers/MyFunctionProvider.tsx`** — extend `FunctionProvider`, implement `provideFunctions()`.
-6. **`operator/tsx/index.tsx`** — instantiate the new provider and wire up any WebRTC message callbacks.
-7. **Component** — define the `enum MyFunction` and render a component that calls `myFunctionProvider.provideFunctions(...)`.
+1. **`shared/remoterobot.tsx`** — add a method `myAction() { this.robotChannel({ type: "myCommand" }); }`.
+1. **`robot/tsx/index.tsx`** — add a `case "myCommand": robot.myAction(); break;` in `handleMessage()`.
+1. **`robot/tsx/robot.tsx`** — implement `myAction()` using ROSLib (service, topic, or action client).
+1. **`operator/tsx/function_providers/MyFunctionProvider.tsx`** — extend `FunctionProvider`, implement `provideFunctions()`.
+1. **`operator/tsx/index.tsx`** — instantiate the new provider and wire up any WebRTC message callbacks.
+1. **Component** — define the `enum MyFunction` and render a component that calls `myFunctionProvider.provideFunctions(...)`.
 
----
+______________________________________________________________________
 
 ## Key Design Decisions
 
