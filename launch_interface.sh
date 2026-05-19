@@ -9,10 +9,6 @@ while getopts m:t:f opt; do
 			MAP="-m $OPTARG"
 		fi
 		;;
-	t)
-		# Usage: ./launch_interface.sh -t pyttsx3
-		TTS="-t $OPTARG"
-		;;
 	f)
 		# Usage: ./launch_interface.sh -f
 		FIREBASE="-f"
@@ -44,7 +40,7 @@ echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
 
 cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_ros2.sh -l $logdir $MAP $TTS |& tee $logfile_ros
+./start_ros2.sh -l $logdir $MAP |& tee $logfile_ros
 if [ $? -ne 0 ]; then
 	echo_failure_help
 fi

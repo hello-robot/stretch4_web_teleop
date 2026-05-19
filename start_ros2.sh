@@ -18,35 +18,20 @@ while getopts l:m:t: opt; do
 			MAP_ARG="map_yaml:=$OPTARG"
 		fi
 		;;
-	t)
-		# Usage: ./start_ros2.sh -t pyttsx3
-		echo "Setting tts engine..."
-		TTS_ARG="tts_engine:=$OPTARG"
-		;;
 	esac
 done
 REDIRECT_LOGFILE="$REDIRECT_LOGDIR/start_ros2.$(date '+%Y%m%d%H%M')_redirected.txt"
 echo "Arguments:" &>>$REDIRECT_LOGFILE
 echo "-l $REDIRECT_LOGDIR" &>>$REDIRECT_LOGFILE
 echo "-m $MAP_ARG" &>>$REDIRECT_LOGFILE
-echo "-t $TTS_ARG" &>>$REDIRECT_LOGFILE
-
-# if [[ -z `nmcli -t -f DEVICE c show --active | grep wlo1` ]]; then
-#     echo "Not connected to Wifi. Starting Wifi-Connect..."
-#     echo "Please connect to $HOSTNAME wifi and provide your home network's credentials"
-#     sudo wifi-connect -s $HOSTNAME &>> $REDIRECT_LOGFILE
-# fi
 
 echo "Setup environment..."
 . /etc/hello-robot/hello-robot.conf
 export HELLO_FLEET_ID HELLO_FLEET_ID
 export HELLO_FLEET_PATH=$HOME/stretch_user
-source /opt/ros/humble/setup.bash &>>$REDIRECT_LOGFILE
+source /opt/ros/jazzy/setup.bash &>>$REDIRECT_LOGFILE
 source ~/ament_ws/install/setup.bash &>>$REDIRECT_LOGFILE
 source /usr/share/colcon_cd/function/colcon_cd.sh &>>$REDIRECT_LOGFILE
-
-echo "Freeing robot process..."
-/usr/bin/python3 $HOME/.local/bin/stretch_free_robot_process.py &>>$REDIRECT_LOGFILE
 
 echo "Stopping previous instances..."
 ./stop_interface.sh &>>$REDIRECT_LOGFILE
@@ -54,7 +39,31 @@ echo "Stopping previous instances..."
 echo "Reload USB bus..."
 sudo udevadm control --reload-rules && sudo udevadm trigger &>>$REDIRECT_LOGFILE
 
+# echo "Check rmw_zenohd..."
+# if ! pgrep -x rmw_zenohd > /dev/null; then
+#     echo "rmw_zenohd not running, starting it..."
+#     screen -dm -S "rmw_zenohd" bash -c "source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $REDIRECT_LOGDIR/rmw_zenohd.txt"
+#     sleep 2
+#     if ! pgrep -x rmw_zenohd > /dev/null; then
+#         echo "ERROR: Failed to start rmw_zenohd. See logs: $REDIRECT_LOGDIR/rmw_zenohd.txt"
+#         exit 1
+#     fi
+#     echo "rmw_zenohd started."
+# else
+#     echo "rmw_zenohd already running."
+# fi
+
+LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
 echo "Start ROS2..."
-sleep 2
-screen -dm -S "web_teleop_ros" ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG $TTS_ARG &>>$REDIRECT_LOGFILE
-sleep 3
+echo "ROS2 launch output: $LAUNCH_LOGFILE"
+screen -dm -S "web_teleop_ros" bash -c "ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG &>> $LAUNCH_LOGFILE"
+sleep 8
+
+# Check if the launch log contains any errors
+ERRORS=$(grep -E "ERROR" "$LAUNCH_LOGFILE" || true)
+if [ -n "$ERRORS" ]; then
+    echo ""
+    echo "Errors found in web_interface.launch.py output:"
+    echo "$ERRORS"
+    exit 1
+fi
