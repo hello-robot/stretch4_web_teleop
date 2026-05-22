@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Define color variables
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color (Reset)
+
 REDIRECT_LOGDIR="$HOME/stretch_user/log/web_teleop"
 mkdir -p $REDIRECT_LOGDIR
 while getopts l:m:t: opt; do
@@ -25,6 +31,7 @@ echo "Arguments:" &>>$REDIRECT_LOGFILE
 echo "-l $REDIRECT_LOGDIR" &>>$REDIRECT_LOGFILE
 echo "-m $MAP_ARG" &>>$REDIRECT_LOGFILE
 
+echo ""
 echo "Setup environment..."
 . /etc/hello-robot/hello-robot.conf
 export HELLO_FLEET_ID HELLO_FLEET_ID
