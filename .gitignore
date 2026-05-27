@@ -25,10 +25,6 @@ yarn-error.log*
 
 package-lock.json
 
-# individual certificates
-certificates/*
-mkcert*
-
 dist/*
 
 outcomes/*
