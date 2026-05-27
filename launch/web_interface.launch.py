@@ -5,7 +5,7 @@ import sys
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
 from launch_ros.actions import Node
-from stretch_body_ii.core.robot_params import RobotParams
+from stretch4_body.core.robot_params import RobotParams
 
 from launch import LaunchDescription
 from launch.actions import (

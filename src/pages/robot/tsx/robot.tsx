@@ -336,7 +336,7 @@ export class Robot extends React.Component {
                     msg.position[idx],
                     msg.velocity[idx]
                 );
-                // if (name == "joint_arm") name = "wrist_extension";
+                // if (name == "arm_joint") name = "wrist_extension";
                 this.jointLimits[name] = [msg.position[idx], msg.velocity[idx]];
             });
         });
@@ -651,7 +651,7 @@ export class Robot extends React.Component {
 
     subscribeToGripperFingerTF() {
         this.robotFrameTfClient?.subscribe(
-            "link_gripper_finger_left",
+            "gripper_finger_left_link",
             (transform) => {
                 this.linkGripperFingerLeftTF = transform;
             }
@@ -659,13 +659,13 @@ export class Robot extends React.Component {
     }
 
     subscribeToWristYawTF() {
-        this.robotFrameTfClient?.subscribe("link_wrist_yaw", (transform) => {
+        this.robotFrameTfClient?.subscribe("wrist_yaw_link", (transform) => {
             this.linkWristYawTF = transform;
         });
     }
 
     subscribeToHeadTiltTF() {
-        this.robotFrameTfClient?.subscribe("link_head_tilt", (transform) => {
+        this.robotFrameTfClient?.subscribe("head_tilt_link", (transform) => {
             this.linkHeadTiltTF = transform;
         });
     }
@@ -797,7 +797,7 @@ export class Robot extends React.Component {
         //     jointName: jointName,
         // });
         // let collisionIndex = jointValueInc <= 0 ? 0 : 1;
-        // if (jointName === "joint_wrist_yaw") {
+        // if (jointName === "wrist_yaw_joint") {
         //     collisionIndex = jointValueInc <= 0 ? 1 : 0;
         // }
         // Negative joint increment is for lower/retract/wrist out
@@ -1119,13 +1119,13 @@ export class Robot extends React.Component {
         // mechanical factors (e.g., an old cable), etc. Thus, a single threshold
         // will not work across all robots.
         const MAX_EFFORTS: { [key in ValidJoints]?: [number, number] } = {
-            joint_head_tilt: [-50, 50],
-            joint_head_pan: [-50, 50],
+            head_tilt_joint: [-50, 50],
+            head_pan_joint: [-50, 50],
             wrist_extension: [-40, 40],
-            joint_lift: [0, 70],
-            // "joint_wrist_yaw": [-10, 10],
-            // "joint_wrist_pitch": [-10, 10],
-            // "joint_wrist_roll": [-10, 10],
+            lift_joint: [0, 70],
+            // "wrist_yaw_joint": [-10, 10],
+            // "wrist_pitch_joint": [-10, 10],
+            // "wrist_roll_joint": [-10, 10],
         };
 
         if (!(jointName in MAX_EFFORTS)) return inCollision;

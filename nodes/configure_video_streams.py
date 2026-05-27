@@ -517,8 +517,8 @@ class ConfigureVideoStreams(Node):
         return result
 
     def joint_state_cb(self, joint_state):
-        if "joint_wrist_roll" in joint_state.name:
-            roll_index = joint_state.name.index("joint_wrist_roll")
+        if "wrist_roll_joint" in joint_state.name:
+            roll_index = joint_state.name.index("wrist_roll_joint")
             self.roll_value = joint_state.position[roll_index]
 
     def publish_compressed_msg(self, image, publisher, header):
