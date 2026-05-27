@@ -1,4 +1,0 @@
-hello-robot-stretch-urdf>=0.1.0
-loguru
-pin
-#PyAudio==0.2.14
