@@ -47,7 +47,8 @@
         "firebase": "webpack --mode development --progress --env storage='firebase'",
         "localstorage": "webpack --mode development --progress --env storage='localstorage'",
         "styleguide": "styleguidist server",
-        "build": "webpack --mode production --progress --env storage='firebase'"
+        "build": "webpack --mode production --progress --env storage='firebase'",
+        "postinstall": "npx playwright install-deps && npx playwright install"
     },
     "eslintConfig": {
         "extends": [

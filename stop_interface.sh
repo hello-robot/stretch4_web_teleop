@@ -9,6 +9,7 @@
 # but this would not arise if this script properly terminates
 # realsense nodes.
 screen -S "web_teleop_ros" -X stuff '^C'
+screen -S "rmw_zenohd" -X stuff '^C'
 t1=$?
 sleep 3
 if [[ $t1 -ne 0 ]]; then
