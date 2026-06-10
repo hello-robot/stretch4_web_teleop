@@ -32,19 +32,7 @@ export enum ButtonPadButton {
     WristPitchDown = "Wrist pitch down",
     WristRollLeft = "Wrist roll left",
     WristRollRight = "Wrist roll right",
-    CameraTiltUp = "Camera tilt up",
-    CameraTiltDown = "Camera tilt down",
-    CameraPanLeft = "Camera pan left",
-    CameraPanRight = "Camera pan right",
 }
-
-/** Array of the pan tilt buttons */
-export const panTiltButtons: ButtonPadButton[] = [
-    ButtonPadButton.CameraTiltUp,
-    ButtonPadButton.CameraTiltDown,
-    ButtonPadButton.CameraPanLeft,
-    ButtonPadButton.CameraPanRight,
-];
 
 /** Button functions which require moving a joint in the negative direction. */
 const negativeButtonPadFunctions = new Set<ButtonPadButton>([
@@ -58,8 +46,6 @@ const negativeButtonPadFunctions = new Set<ButtonPadButton>([
     ButtonPadButton.WristRotateOut,
     ButtonPadButton.WristPitchUp,
     ButtonPadButton.WristRollLeft,
-    ButtonPadButton.CameraTiltDown,
-    ButtonPadButton.CameraPanRight,
 ]);
 
 /** Functions called when the user interacts with a button. */
@@ -307,18 +293,6 @@ export class ButtonFunctionProvider extends FunctionProvider {
                         action = () =>
                             this.incrementalJointMovement(jointName, increment);
                         break;
-                    case ButtonPadButton.CameraTiltUp:
-                    case ButtonPadButton.CameraTiltDown:
-                    case ButtonPadButton.CameraPanLeft:
-                    case ButtonPadButton.CameraPanRight:
-                        action = () => {
-                            this.incrementalJointMovement(jointName, increment);
-                            FunctionProvider.remoteRobot?.setToggle(
-                                "setFollowGripper",
-                                false
-                            );
-                        };
-                        break;
                 }
                 return {
                     onClick: () => {
@@ -364,18 +338,6 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     case ButtonPadButton.GripperClose:
                         action = () =>
                             this.continuousJointMovement(jointName, increment);
-                        break;
-                    case ButtonPadButton.CameraTiltUp:
-                    case ButtonPadButton.CameraTiltDown:
-                    case ButtonPadButton.CameraPanLeft:
-                    case ButtonPadButton.CameraPanRight:
-                        action = () => {
-                            this.continuousJointMovement(jointName, increment);
-                            FunctionProvider.remoteRobot?.setToggle(
-                                "setFollowGripper",
-                                false
-                            );
-                        };
                         break;
                 }
 
@@ -485,16 +447,6 @@ function getButtonsFromJointName(
                 ButtonPadButton.BaseRotateLeft,
                 ButtonPadButton.BaseRotateRight,
             ];
-        case "head_pan_joint":
-            return [
-                ButtonPadButton.CameraPanRight,
-                ButtonPadButton.CameraPanLeft,
-            ];
-        case "head_tilt_joint":
-            return [
-                ButtonPadButton.CameraTiltDown,
-                ButtonPadButton.CameraTiltUp,
-            ];
         default:
             return undefined;
     }
@@ -545,14 +497,6 @@ function getJointNameFromButtonFunction(
         case ButtonPadButton.WristRotateIn:
         case ButtonPadButton.WristRotateOut:
             return "wrist_yaw_joint";
-
-        case ButtonPadButton.CameraTiltUp:
-        case ButtonPadButton.CameraTiltDown:
-            return "head_tilt_joint";
-
-        case ButtonPadButton.CameraPanLeft:
-        case ButtonPadButton.CameraPanRight:
-            return "head_pan_joint";
 
         default:
             throw Error("unknown button pad function" + buttonType);
