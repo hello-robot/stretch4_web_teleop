@@ -30,7 +30,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 
     runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
-        
+
     const scenes: SceneItem[] = useMemo(
         () => [
             {
