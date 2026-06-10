@@ -8,7 +8,6 @@ import { RemoteStream, StretchTool } from "shared/util";
 import { ButtonPad } from "./ButtonPad";
 import { ButtonStateMap } from "../function_providers/ButtonFunctionProvider";
 import { Map } from "./Map";
-import { RunStopButton } from "../static_components/RunStop";
 import { BatteryGauge } from "../static_components/BatteryGauge";
 import { MovementRecorder } from "./MovementRecorder";
 
@@ -77,8 +76,6 @@ export const CustomizableComponent = (props: CustomizableComponentProps) => {
             return <ButtonPad {...props} />;
         case ComponentType.Map:
             return <Map {...props} />;
-        case ComponentType.RunStopButton:
-            return <RunStopButton {...props} />;
         case ComponentType.BatteryGauge:
             return <BatteryGauge {...props} />;
         case ComponentType.MovementRecorder:

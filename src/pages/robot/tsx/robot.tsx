@@ -606,7 +606,7 @@ export class Robot extends React.Component {
     createRunStopService() {
         this.setRunStopService = new Service({
             ros: this.ros,
-            name: "/runstop",
+            name: "/runstop_the_robot",
             serviceType: "std_srvs/srv/SetBool",
         });
     }
