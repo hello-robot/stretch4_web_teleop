@@ -11,6 +11,8 @@ import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
+import { batteryStateFunctionProvider } from "..";
+import { BatteryStateFunctions } from "../function_providers/BatteryStateFunctionProvider";
 
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
@@ -25,7 +27,13 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 }) => {
     const [isStopped, isStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
+    const [batteryPercentage, batteryPercentageSet] = useState<number>(0);
+    const [isCharging, isChargingSet] = useState<boolean>(false);
 
+    const batteryFuncts: BatteryStateFunctions = batteryStateFunctionProvider.provideFunctions();
+    batteryStateFunctionProvider.setPercentageChangeCallback(batteryPercentageSet);
+    batteryStateFunctionProvider.setChargeStateChangeCallback(isChargingSet);
+    
     const scenes: SceneItem[] = useMemo(
         () => [
             {
@@ -99,7 +107,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     return (
         <div className="footer-global">
             <div className="battery-container">
-                <img src={batteryIcon} alt="Battery" className="battery" />
+                <img src={batteryFuncts.getBatteryIcon()} alt="Battery" className="battery" />
             </div>
             <div className="scene-menu-button-container">
                 <button
