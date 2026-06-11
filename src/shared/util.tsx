@@ -27,8 +27,6 @@ export type RemoteStream = {
     track: MediaStreamTrack;
 };
 
-
-
 export type ValidJointStateDict = { [key in ValidJoints]?: [boolean, boolean] };
 
 export interface ROSJointState extends Message {
@@ -38,6 +36,22 @@ export interface ROSJointState extends Message {
     velocity: [number];
 }
 
+export interface DiagnosticArray extends Message {
+    status: DiagnosticStatus[];
+}
+
+export interface DiagnosticStatus extends Message {
+    name: string;
+    level: number;
+    message: string;
+    hardware_id: string;
+    values: KeyValue[];
+}
+
+export interface KeyValue {
+    key: string;
+    value: string;
+}
 export enum StretchTool {
     DW4 = "eoa_wrist_dw4_tool_sg4",
     TABLET = "eoa_wrist_dw3_tool_tablet",
@@ -164,8 +178,6 @@ export interface BatteryVoltageMessage {
     type: "batteryVoltage";
     message: number;
 }
-
-
 
 export interface ROSPoint extends Message {
     x: number;

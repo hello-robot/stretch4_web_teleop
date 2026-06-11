@@ -22,6 +22,7 @@ import {
     ROSBatteryState,
     StretchTool,
     getStretchTool,
+    DiagnosticArray,
 } from "shared/util";
 import {
     rosJointStatetoRobotPose,
@@ -254,8 +255,7 @@ export class Robot extends React.Component {
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
         this.subscribeToMode();
-        this.subscribeToIsHomed();
-        this.subscribeToIsRunStopped();
+        this.subscribetoJointStateDiagnostics();
         this.subscribeToActionResult(
             moveBaseActionName,
             this.moveBaseResultCallback,
@@ -368,29 +368,25 @@ export class Robot extends React.Component {
         });
     }
 
-    subscribeToIsHomed() {
-        const isHomedTopic: Topic = new Topic({
+    subscribetoJointStateDiagnostics() {
+        const jointStateDiagnosticsTopic: Topic = new Topic({
             ros: this.ros,
-            name: "/is_homed",
-            messageType: "std_msgs/msg/Bool",
+            name: "/joint_states_diagnostics",
+            messageType: "diagnostic_msgs/msg/DiagnosticArray",
         });
-        this.subscriptions.push(isHomedTopic);
-
-        isHomedTopic.subscribe((msg) => {
-            if (this.isHomedCallback) this.isHomedCallback(msg.data);
-        });
-    }
-
-    subscribeToIsRunStopped() {
-        let topic: Topic = new Topic({
-            ros: this.ros,
-            name: "is_runstopped",
-            messageType: "std_msgs/msg/Bool",
-        });
-        this.subscriptions.push(topic);
-
-        topic.subscribe((msg) => {
-            if (this.isRunStoppedCallback) this.isRunStoppedCallback(msg.data);
+        this.subscriptions.push(jointStateDiagnosticsTopic);
+        jointStateDiagnosticsTopic.subscribe((message: Message) => {
+            let msg = message as DiagnosticArray;
+            msg.status.forEach((status) => {
+                if (status.name == "is_runstopped") {
+                    let isRunStopped = status.values.every((v) => v.value == 'True');
+                    if (this.isRunStoppedCallback) this.isRunStoppedCallback(isRunStopped);
+                }
+                if (status.name == "is_homed") {
+                    let isHomed = status.values.every((v) => v.value == 'True');
+                    if (this.isHomedCallback) this.isHomedCallback(isHomed);
+                }
+            });
         });
     }
 
