@@ -27,8 +27,8 @@
 
 .pilot-controls-toggle-toggle-wrap {
     position: absolute;
-    left: 12px;
-    bottom: 22px;
+    left: 21px;
+    bottom: 30px;
     width: 70px;
     pointer-events: auto;
 }
@@ -67,7 +67,7 @@
 .pilot-controls-toggle-tab-control {
     position: absolute;
     left: 50%;
-    bottom: 20px;
+    bottom: 37px;
     transform: translateX(-50%);
     display: flex;
     align-items: stretch;
