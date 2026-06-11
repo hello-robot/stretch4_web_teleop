@@ -14,6 +14,9 @@
     /* Size of the icon */
     --size-icon: calc(var(--size) * 0.25);
 
+    /* Size of the turn icon */
+    --size-icon-turn: calc(var(--size) * 0.2);
+
     /* Box size for turn button */
     --width-turn-button: calc(var(--size) / 2);
     --height-turn-button: var(--size);
@@ -284,6 +287,65 @@ button.Arm.\+.Gripper.button-turn img {
 
 /* END Bespoke Arm+Gripper dpad */
 
+/* START Bespoke Wrist dpad */
+
+/* Resting state */
+.button-wrapper button.button-wrist {
+    z-index: 0;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    padding: 0px;
+    filter: saturate(0) brightness(3);
+    transition: filter 300ms ease-out;
+    background-color: transparent;
+    box-shadow: none;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    touch-action: none;
+}
+
+/* Emulated :active */
+.button-wrapper.active button.button-wrist {
+    filter: saturate(1) brightness(1);
+}
+
+.button-wrapper button.button-wrist img {
+    width: var(--size-icon);
+    height: var(--size-icon);
+}
+
+.button-wrapper.north button.button-wrist {
+    top: calc(var(--size) * -0.65);
+}
+.button-wrapper.south button.button-wrist {
+    top: calc(var(--size) * 0.8);
+    left: 0px;
+}
+.button-wrapper.east button.button-wrist {
+    top: 0;
+    left: calc(var(--size) * 0.98 - var(--size-icon));
+}
+.button-wrapper.east button.button-wrist img {
+    position: relative;
+    top: calc(var(--size) / 12);
+}
+.button-wrapper.west button.button-wrist {
+    top: 0px;
+    left: calc(var(--size) * -0.725);
+}
+.button-wrapper.west button.button-wrist img {
+    position: relative;
+    top: calc(var(--size) / 12);
+}
+
+button.Arm.\+.Gripper.button-turn img {
+    width: 40px;
+    height: 40px;
+}
+
+/* END Bespoke Wrist dpad */
+
 /* START Button turn */
 
 .base-movement-controls .rbutton-pad {
@@ -301,10 +363,9 @@ button.Arm.\+.Gripper.button-turn img {
     align-items: center;
     width: var(--width-turn-button);
     height: var(--height-turn-button);
-    border-radius: 0px;
     padding: 0px;
     cursor: pointer;
-    border: 1px solid hsla(204, 100%, 50%, 0);
+    box-shadow: inset var(--box-shadow);
     filter: saturate(0) brightness(3);
     transition: filter 300ms ease-out;
 }
@@ -320,14 +381,14 @@ button.Arm.\+.Gripper.button-turn img {
 }
 
 .base-movement-controls .rbutton-pad .button-turn-wrapper.rotate-left {
-    border-radius: 100px 0px 0px 100px;
+    border-radius: calc(var(--size) * 0.5) 0px 0px calc(var(--size) * 0.5);
 }
 
 .base-movement-controls .rbutton-pad .button-turn-wrapper.rotate-right {
-    border-radius: 0px 100px 100px 0px;
+    border-radius: 0px calc(var(--size) * 0.5) calc(var(--size) * 0.5) 0px;
 }
 
-/* START used to prevent clicking with cursor device */
+/* Used to prevent clicking with cursor device */
 .base-movement-controls .rbutton-pad .button-turn-wrapper .click-block {
     z-index: 1;
     position: absolute;
@@ -338,13 +399,9 @@ button.Arm.\+.Gripper.button-turn img {
     height: var(--height-turn-button);
 }
 
-/* END used to prevent clicking with cursor device */
-
-/* START Button turn */
 .base-movement-controls .rbutton-pad .button-turn-wrapper button.button-turn {
-    width: 37px;
-    height: 37px;
-    background-size: 37px;
+    width: var(--size-icon-turn);
+    height: var(--size-icon-turn);
     padding: 0;
     border: none;
     border-radius: 0px;
@@ -356,6 +413,15 @@ button.Arm.\+.Gripper.button-turn img {
     filter: saturate(0) brightness(3);
     transition: filter 300ms ease-out;
 }
+.base-movement-controls
+    .rbutton-pad
+    .button-turn-wrapper
+    button.button-turn
+    img.turn-icon {
+    width: var(--size-icon-turn);
+    height: var(--size-icon-turn);
+}
+/* END Button turn */
 
 .base-movement-controls
     .rbutton-pad
@@ -416,8 +482,6 @@ button.Arm.\+.Gripper.button-turn img {
     position: relative;
     right: 0px;
 }
-
-/* END Button turn */
 
 .base-movement-controls .rbutton-pad .line {
     position: absolute;
