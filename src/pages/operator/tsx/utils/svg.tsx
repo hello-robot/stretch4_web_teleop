@@ -11,17 +11,12 @@ import armUp from "operator/icons/Arm_Up.svg";
 // Gripper movement
 import gripClose from "operator/icons/Grip_Grasp.svg";
 import gripOpen from "operator/icons/Grip_Open.svg";
-import rollLeft from "operator/icons/Roll_Left.svg";
-import rollRight from "operator/icons/Roll_Right.svg";
-import pitchDown from "operator/icons/Pitch_Down.svg";
-import pitchUp from "operator/icons/Pitch_Up.svg";
-import yawLeft from "operator/icons/Yaw_Left.svg";
-import yawRight from "operator/icons/Yaw_Right.svg";
-// Headcam movement
-import panLeft from "operator/icons/Pan_Left.svg";
-import panRight from "operator/icons/Pan_Right.svg";
-import tiltUp from "operator/icons/Tilt_Up.svg";
-import tiltDown from "operator/icons/Tilt_Down.svg";
+import rollLeft from "operator/icons/WristRollLeft.svg";
+import rollRight from "operator/icons/WristRollRight.svg";
+import pitchDown from "operator/icons/WristPitchDown.svg";
+import pitchUp from "operator/icons/WristPitchUp.svg";
+import yawLeft from "operator/icons/WristYawLeft.svg";
+import yawRight from "operator/icons/WristYawRight.svg";
 
 import { ButtonPadButton } from "../function_providers/ButtonFunctionProvider";
 
@@ -465,14 +460,6 @@ export function getIcon(buttonPadButton: ButtonPadButton) {
             return yawLeft;
         case ButtonPadButton.WristRotateOut:
             return yawRight;
-        case ButtonPadButton.CameraPanLeft:
-            return panLeft;
-        case ButtonPadButton.CameraPanRight:
-            return panRight;
-        case ButtonPadButton.CameraTiltUp:
-            return tiltUp;
-        case ButtonPadButton.CameraTiltDown:
-            return tiltDown;
         default:
             console.warn(`cannot get icon for ${buttonPadButton}`);
             return null;

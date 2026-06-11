@@ -29,13 +29,18 @@ import DirectionalPad from "../static_components/DirectionalPad";
 import chevronIcon from "operator/icons/Chevron.svg";
 import rotateLeftIcon from "operator/icons/RotateLeft.svg";
 import rotateRightIcon from "operator/icons/RotateRight.svg";
-
 import gripperCloseIcon from "operator/icons/GripperClose.svg";
 import gripperOpenIcon from "operator/icons/GripperOpen.svg";
 import armUpIcon from "operator/icons/ArmUp.svg";
 import armDownIcon from "operator/icons/ArmDown.svg";
 import armExtendIcon from "operator/icons/ArmExtend.svg";
 import armRetractIcon from "operator/icons/ArmRetract.svg";
+import wristPitchUpIcon from "operator/icons/WristPitchUp.svg";
+import wristPitchDownIcon from "operator/icons/WristPitchDown.svg";
+import wristYawLeftIcon from "operator/icons/WristYawLeft.svg";
+import wristYawRightIcon from "operator/icons/WristYawRight.svg";
+import wristRollLeftIcon from "operator/icons/WristRollLeft.svg";
+import wristRollRightIcon from "operator/icons/WristRollRight.svg";
 
 /** Properties for {@link ButtonPad} */
 type ButtonPadProps = CustomizableComponentProps & {
@@ -64,11 +69,12 @@ const getRotateIcon = (
     pilotControlsCurrent: string,
     direction: string
 ): string => {
-    const isArmElevatorIcons = pilotControlsCurrent === PilotButtonPadType.ArmGripper;
+    const isArmGripper = pilotControlsCurrent === PilotButtonPadType.ArmGripper;
+    const isWrist = pilotControlsCurrent === PilotButtonPadType.Wrist;
     if (direction === "rotate-left") {
-        return isArmElevatorIcons ? armUpIcon : rotateLeftIcon;
+        return isArmGripper ? armUpIcon : isWrist ? wristRollLeftIcon : rotateLeftIcon;
     } else {
-        return isArmElevatorIcons ? armDownIcon : rotateRightIcon;
+        return isArmGripper ? armDownIcon : isWrist ? wristRollRightIcon : rotateRightIcon;
     }
 };
 
@@ -406,7 +412,8 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
     const ariaLabel = getAriaLabel(props.direction);
     const pilotControlsCurrent = props.pilotControlsCurrent;
     const isArmGripperButtons = pilotControlsCurrent === PilotButtonPadType.ArmGripper;
-    const isChevronButtons = !isArmGripperButtons && cardinalDirections.includes(props.direction);
+    const isWristButtons = pilotControlsCurrent === PilotButtonPadType.Wrist;
+    const isChevronButtons = !isArmGripperButtons && !isWristButtons && cardinalDirections.includes(props.direction);
     const isRotate = rotateDirections.includes(props.direction);
     const armGripperIconCalc = (direction: string): string => {
         switch (direction) {
@@ -423,8 +430,52 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
         }
     }
 
-    // Renders standard "chevron" style dpad
-    if (isChevronButtons) {
+     const wristIconCalc = (direction: string): string => {
+        switch (direction) {
+            case "north":
+                return wristPitchUpIcon;
+            case "south":
+                return wristPitchDownIcon;
+            case "west":
+                return wristYawLeftIcon;
+            case "east":
+                return wristYawRightIcon;
+            default:
+                return chevronIcon;
+        }
+    }
+
+    // Base drive
+    if (isRotate) {
+        return (
+            <div
+                className={`button-turn-wrapper ${props.direction} ${buttonState}`}
+                key={props.direction}
+                role="none"
+                {...clickProps}
+            >
+                {/* Used to prevent clicking with cursor device */}
+                <div className="click-block" />
+                <button
+                    className={`${pilotControlsCurrent} button-turn ${props.direction} ${buttonState}`}
+                    disabled={isDisabled}
+                    aria-label={ariaLabel}
+                    type="button"
+                    tabIndex={0}
+                    {...clickProps}
+                >
+                    <img
+                        src={getRotateIcon(pilotControlsCurrent, props.direction)}
+                        alt=""
+                        className="turn-icon"
+                        aria-hidden="true"
+                    />
+                    {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
+                    <span className="aria-inviz" aria-hidden="true"></span>
+                </button>
+            </div>
+        );
+    } else if (isChevronButtons) {
         return (
             <div
                 className={`button-wrapper ${props.direction} ${buttonState}`}
@@ -456,36 +507,7 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
         );
         // Both of the buttons in the center of dpad
 
-    } else if (isRotate) {
-        return (
-            <div
-                className={`button-turn-wrapper ${props.direction} ${buttonState}`}
-                key={props.direction}
-                role="none"
-                {...clickProps}
-            >
-                {/* Used to prevent clicking with cursor device */}
-                <div className="click-block" />
-                <button
-                    className={`${pilotControlsCurrent} button-turn ${props.direction} ${buttonState}`}
-                    disabled={isDisabled}
-                    aria-label={ariaLabel}
-                    type="button"
-                    tabIndex={0}
-                    {...clickProps}
-                >
-                    <img
-                        src={getRotateIcon(pilotControlsCurrent, props.direction)}
-                        alt=""
-                        className="turn-icon"
-                        aria-hidden="true"
-                    />
-                    {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
-                    <span className="aria-inviz" aria-hidden="true"></span>
-                </button>
-            </div>
-        );
-        // Renders a bespoke Arm+Gripper dpad
+    // Arm + Hand
     } else if (isArmGripperButtons) {
         return (
             <div
@@ -507,6 +529,36 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                 >
                     <img
                         src={armGripperIconCalc(props.direction)}
+                        alt=""
+                        aria-hidden="true"
+                    />
+                    {/* Adding arbitrary text inside <span/> changes the position of iOS voice control labels */}
+                    <span className="aria-inviz">••</span>
+                </button>
+            </div>
+        );
+    // Both of the buttons in the center of dpad
+    } else if (isWristButtons) {
+        return (
+            <div
+                className={`button-wrapper ${props.direction} ${buttonState}`}
+                key={props.direction}
+                role="none"
+                {...clickProps}
+            >
+                <div className={`button-cardinal ${buttonState}`}>
+                    <span className="synthetic-bottom-border"></span>
+                </div>
+                <button
+                    type="button"
+                    className={`button-wrist ${buttonState}`}
+                    aria-label={ariaLabel}
+                    tabIndex={0}
+                    disabled={isDisabled}
+                    {...clickProps}
+                >
+                    <img
+                        src={wristIconCalc(props.direction)}
                         alt=""
                         aria-hidden="true"
                     />
@@ -642,15 +694,6 @@ function getShapeAndFunctionsFromId(
                 B.BaseReverse,
                 B.BaseRotateLeft,
                 B.BaseRotateRight,
-            ];
-            shape = ButtonPadShape.SimpleButtonPad;
-            break;
-        case ButtonPadId.Camera:
-            functions = [
-                B.CameraTiltUp,
-                B.CameraTiltDown,
-                B.CameraPanLeft,
-                B.CameraPanRight,
             ];
             shape = ButtonPadShape.SimpleButtonPad;
             break;
