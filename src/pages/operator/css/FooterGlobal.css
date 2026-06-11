@@ -15,11 +15,18 @@
 }
 
 /* START Battery */
-.footer-global .battery-container .battery {
-    display: inline-block;
+.footer-global .battery-container {
     width: 32px;
-    height: 18px;
-    object-position: 5px center;
+    height: auto;
+}
+
+.footer-global .battery-container .battery {
+    position: relative;
+    top: 3px;
+    left: 6px;
+    display: inline-block;
+    width: 35px;
+    height: auto;
     filter: brightness(1);
     transition: filter 200ms ease-out;
     overflow: visible;
@@ -37,12 +44,12 @@
 }
 
 .footer-global .run-stop-container .run-stop-button {
+    position: relative;
+    right: 9px;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 0px;
-    width: 32px;
-    height: 32px;
     background: transparent;
     border: none;
     outline: none;
@@ -53,7 +60,6 @@
     display: inline-block;
     width: 30px;
     height: 30px;
-    object-position: -4px center;
     overflow: visible;
     filter: brightness(1);
     transition: filter 200ms ease-out;

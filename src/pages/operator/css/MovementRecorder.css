@@ -14,8 +14,8 @@
 .mrecord-button-wrapper {
     z-index: 2;
     position: absolute;
-    right: 12px;
-    bottom: 22px;
+    right: 20px;
+    bottom: 30px;
     display: flex;
     justify-content: center;
     align-items: center;
