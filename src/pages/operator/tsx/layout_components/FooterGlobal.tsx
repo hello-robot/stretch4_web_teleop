@@ -33,7 +33,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     const batteryFuncts: BatteryStateFunctions = batteryStateFunctionProvider.provideFunctions();
     batteryStateFunctionProvider.setPercentageChangeCallback(batteryPercentageSet);
     batteryStateFunctionProvider.setChargeStateChangeCallback(isChargingSet);
-    
+
     const scenes: SceneItem[] = useMemo(
         () => [
             {
