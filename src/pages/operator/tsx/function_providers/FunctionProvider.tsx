@@ -5,6 +5,7 @@ import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
+import { clampDurationMs } from "../voice/constants";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
 import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 
@@ -22,7 +23,11 @@ export abstract class FunctionProvider {
     public activeButtonPadFunction: ButtonPadButton;
     public activeVelocityAction?: VelocityCommand;
     public velocityExecutionHeartbeat?: number; // ReturnType<typeof setInterval>
-
+    // Used for managing voice-controleld moves since
+    // they are inherently *timed* moves, and therefore
+    // needed in order to measure movement / stopped.
+    public timedVoiceMoveActive = false;
+    protected timedVoiceMoveTimer?: ReturnType<typeof setTimeout>;
     /**
      * Adds a remote robot instance to this function provider. This must be called
      * before any components of the interface will be able to execute functions
@@ -51,6 +56,13 @@ export abstract class FunctionProvider {
         this.pilotControlsCurrent = pilotControlsCurrent as PilotButtonPadType ?? PilotButtonPads[0];
     }
 
+    /**
+     * Check if robot is connected
+     */
+    public static robotIsConnected(): boolean {
+        return FunctionProvider.remoteRobot !== undefined;
+    }
+
     public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {
         this.stopCurrentAction();
         this.velocityExecutionHeartbeat = window.setInterval(() => {
@@ -60,6 +72,42 @@ export abstract class FunctionProvider {
                 angVel
             );
         }, 25);
+    }
+
+    /**
+     * Drive base continuously for durationMs then stop sending velocity.
+     * Also, rejects overlapping calls while timedVoiceMoveActive.
+     *
+     * @returns false if overlap or no RemoteRobot attached
+     */
+    public timedBaseDrive(
+        linVelX: number,
+        linVelY: number,
+        durationMs: number,
+        angVel: number = 0
+    ): boolean {
+        if (!FunctionProvider.remoteRobot) {
+            return false;
+        }
+        if (this.timedVoiceMoveActive) {
+            return false;
+        }
+
+        const clampedMs = clampDurationMs(durationMs);
+
+        this.stopCurrentAction(true);
+        this.timedVoiceMoveActive = true;
+        this.setBaseVelocity(
+            linVelX,
+            linVelY,
+            angVel
+        );
+        this.timedVoiceMoveTimer = setTimeout(() => {
+            this.timedVoiceMoveTimer = undefined;
+            this.timedVoiceMoveActive = false;
+            this.stopCurrentAction(true);
+        }, clampedMs);
+        return true;
     }
 
     public incrementalJointMovement(jointName: ValidJoints, velocity: number) {
@@ -92,14 +140,19 @@ export abstract class FunctionProvider {
             this.activeVelocityAction = undefined;
         }
 
-        if (this.velocityExecutionTimeout) {
-            clearTimeout(this.velocityExecutionTimeout);
-            this.velocityExecutionTimeout = undefined;
-        }
-
         if (this.velocityExecutionHeartbeat) {
             clearInterval(this.velocityExecutionHeartbeat);
             this.velocityExecutionHeartbeat = undefined;
         }
+
+        /**
+         * clearTimeout() to prevent the timed voice move
+         * from being executed.
+         */
+        if (this.timedVoiceMoveTimer) {
+            clearTimeout(this.timedVoiceMoveTimer);
+            this.timedVoiceMoveTimer = undefined;
+        }
+        this.timedVoiceMoveActive = false;
     }
 }

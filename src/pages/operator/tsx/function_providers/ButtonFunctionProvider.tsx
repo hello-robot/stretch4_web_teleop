@@ -5,6 +5,7 @@ import {
     ValidJointStateDict,
 } from "shared/util";
 import { ActionModeType } from "../utils/component_definitions";
+import { clampDurationMs } from "../voice/constants";
 import { FunctionProvider } from "./FunctionProvider";
 
 /**
@@ -226,6 +227,39 @@ export class ButtonFunctionProvider extends FunctionProvider {
     public disableActiveButton() {
         this.stopCurrentAction(true);
         this.setButtonInactiveState(this.activeButtonPadFunction);
+    }
+
+    /**
+     * Simulates press-and-hold on a ButtonPad for durationMs.
+     * Also, VC automatically sets ActionMode to PressAndHold.
+     */
+    public timedButtonPadPress(
+        buttonPadButton: ButtonPadButton,
+        durationMs: number,
+    ): boolean {
+        if (!FunctionProvider.remoteRobot) {
+            return false;
+        }
+        if (this.timedVoiceMoveActive) {
+            return false;
+        }
+
+        const clampedMs = clampDurationMs(durationMs);
+        this.stopCurrentAction(true);
+        this.timedVoiceMoveActive = true;
+        this.activeButtonPadFunction = buttonPadButton;
+
+        const functs = this.provideFunctions(buttonPadButton);
+        functs.onClick();
+
+        this.timedVoiceMoveTimer = setTimeout(() => {
+            this.timedVoiceMoveTimer = undefined;
+            this.timedVoiceMoveActive = false;
+            functs.onRelease?.();
+            this.setButtonInactiveState(buttonPadButton);
+            this.stopCurrentAction(true);
+        }, clampedMs);
+        return true;
     }
 
     /**

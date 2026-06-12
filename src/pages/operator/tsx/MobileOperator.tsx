@@ -51,6 +51,7 @@ import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
 import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
+import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -69,6 +70,10 @@ export const MobileOperator = (props: {
     const [velocityScale, setVelocityScale] = React.useState<number>(
         FunctionProvider.velocityScale
     );
+    const applyVelocityScale = React.useCallback((scale: number) => {
+        setVelocityScale(scale);
+        FunctionProvider.velocityScale = scale;
+    }, []);
     const [activeMainGroupTab, setActiveMainGroupTab] =
         React.useState<number>(0);
     const [activeControlTab, setActiveControlTab] = React.useState<number>(0);
@@ -142,11 +147,12 @@ export const MobileOperator = (props: {
      * Updates the action mode in the layout (visually) and in the function
      * provider (functionally).
      */
-    function setActionMode(actionMode: ActionModeType) {
+    const setActionMode = React.useCallback((actionMode: ActionModeType) => {
         layout.current.actionMode = actionMode;
         FunctionProvider.actionMode = actionMode;
         props.storageHandler.saveCurrentLayout(layout.current);
-    }
+        setButtonStateMapRerender((r) => !r);
+    }, [props.storageHandler]);
 
     function setPilotControlsCurrent(pilotControlsCurrent: string) {
         layout.current.pilotControlsCurrent = pilotControlsCurrent;
@@ -155,8 +161,6 @@ export const MobileOperator = (props: {
         props.storageHandler.saveCurrentLayout(layout.current);
         setButtonStateMapRerender(!buttonStateMapRerender);
     }
-
-
 
     function moveBaseStateCallback(state: MoveBaseState) {
         setMoveBaseState(state);
@@ -254,7 +258,11 @@ export const MobileOperator = (props: {
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
-             <HomingBanner
+            <VoiceCommandAssistant
+                onVelocityScaleApplied={applyVelocityScale}
+                setActionMode={setActionMode}
+            />
+            <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
             />
@@ -325,7 +333,7 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-                            setVelocityScale={setVelocityScale}
+                            onVelocityScaleChange={applyVelocityScale}
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}

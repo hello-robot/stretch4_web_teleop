@@ -18,7 +18,7 @@ interface PilotModeProps {
     tabContent: ((active: boolean) => React.JSX.Element)[];
     activeMainGroupTab: number;
     setActiveMainGroupTab: (index: number) => void;
-    setVelocityScale: (speed: number) => void;
+    onVelocityScaleChange: (scale: number) => void;
     setActionMode: (mode: string) => void;
     setPilotControlsCurrent: (pilotControlsCurrent: string) => void;
     swipeableViewsIdxSet: (idx: number) => void;
@@ -37,7 +37,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
     tabContent,
     activeMainGroupTab,
     setActiveMainGroupTab,
-    setVelocityScale,
+    onVelocityScaleChange,
     setActionMode,
     setPilotControlsCurrent,
     swipeableViewsIdxSet,
@@ -47,13 +47,6 @@ const PilotMode: React.FC<PilotModeProps> = ({
     sharedState,
 }) => {
     const [isRecording, isRecordingSet] = React.useState<boolean>(false);
-    const onActionSpeedChange = useCallback(
-        (newSpeed: number) => {
-            setVelocityScale(newSpeed);
-            FunctionProvider.velocityScale = newSpeed;
-        },
-        [setVelocityScale]
-    );
 
     return (
         <div className={`pilot-mode-wrapper ${isRecording ? 'is-recording' : ''}`}>
@@ -137,7 +130,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
                 setCameraID={setCameraID}
                 // Action Speed
                 actionSpeedCurrent={FunctionProvider.velocityScale}
-                onActionSpeedChange={onActionSpeedChange}
+                onActionSpeedChange={onVelocityScaleChange}
                 // Action Mode
                 actionModeCurrent={FunctionProvider.actionMode}
                 onActionModeChange={setActionMode}
