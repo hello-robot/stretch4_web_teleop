@@ -53,6 +53,7 @@ import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
+import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -323,8 +324,15 @@ export const MobileOperator = (props: {
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
+<<<<<<< HEAD
             <Toasts toasts={toasts} toastsSet={toastsSet} />
 
+=======
+            <VoiceCommandAssistant
+                onVelocityScaleApplied={applyVelocityScale}
+                setActionMode={setActionMode}
+            />
+>>>>>>> 78b6024 (initial commit for custom voice control)
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
@@ -396,7 +404,11 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
+<<<<<<< HEAD
                             setVelocityScale={applyVelocityScale}
+=======
+                            onVelocityScaleChange={applyVelocityScale}
+>>>>>>> 78b6024 (initial commit for custom voice control)
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
@@ -445,6 +457,6 @@ export const MobileOperator = (props: {
                     onSceneSelectedChange={setSceneSelected}
                 />
             </div>
-        </div>
+        </div >
     );
 };

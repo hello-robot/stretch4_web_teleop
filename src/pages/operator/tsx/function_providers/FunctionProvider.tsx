@@ -7,6 +7,7 @@ import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
+import { clampDurationMs } from "../voice/constants";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
 
 const x = PilotButtonPads;
@@ -23,6 +24,11 @@ export abstract class FunctionProvider {
     public activeButtonPadFunction: ButtonPadButton;
     public activeVelocityAction?: VelocityCommand;
     public velocityExecutionHeartbeat?: number; // ReturnType<typeof setInterval>
+    // Used for managing voice-controleld moves since
+    // they are inherently *timed* moves, and therefore
+    // needed in order to measure movement / stopped.
+    public timedVoiceMoveActive = false;
+    protected timedVoiceMoveTimer?: ReturnType<typeof setTimeout>;
     /**
      * Adds a remote robot instance to this function provider. This must be called
      * before any components of the interface will be able to execute functions
@@ -106,6 +112,42 @@ export abstract class FunctionProvider {
                 angVel
             );
         }, 25);
+    }
+
+    /**
+     * Drive base continuously for durationMs then stop sending velocity.
+     * Also, rejects overlapping calls while timedVoiceMoveActive.
+     *
+     * @returns false if overlap or no RemoteRobot attached
+     */
+    public timedBaseDrive(
+        linVelX: number,
+        linVelY: number,
+        durationMs: number,
+        angVel: number = 0
+    ): boolean {
+        if (!FunctionProvider.remoteRobot) {
+            return false;
+        }
+        if (this.timedVoiceMoveActive) {
+            return false;
+        }
+
+        const clampedMs = clampDurationMs(durationMs);
+
+        this.stopCurrentAction(true);
+        this.timedVoiceMoveActive = true;
+        this.setBaseVelocity(
+            linVelX,
+            linVelY,
+            angVel
+        );
+        this.timedVoiceMoveTimer = setTimeout(() => {
+            this.timedVoiceMoveTimer = undefined;
+            this.timedVoiceMoveActive = false;
+            this.stopCurrentAction(true);
+        }, clampedMs);
+        return true;
     }
 
     public incrementalJointMovement(jointName: ValidJoints, velocity: number) {
