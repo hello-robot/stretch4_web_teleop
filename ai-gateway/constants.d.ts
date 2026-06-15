@@ -1,6 +1,10 @@
 export declare const VOICE_DURATION_MS_MIN: 100;
 export declare const VOICE_DURATION_MS_MAX: 10000;
 export declare const VOICE_DURATION_MS_DEFAULT: 800;
+export declare const VOICE_DISTANCE_M_MIN: number;
+export declare const VOICE_DISTANCE_M_MAX: number;
+export declare const VOICE_ROTATION_DEG_MIN: number;
+export declare const VOICE_ROTATION_DEG_MAX: number;
 export declare const EXECUTE_BASE_MOVE: "execute_base_move";
 export declare const STOP_BASE_MOVE: "stop_base_move";
 export declare const REPEAT_BASE_MOVE: "repeat_base_move";
