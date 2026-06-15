@@ -85,7 +85,7 @@ export const MobileOperator = (props: {
     const [isCameraVeilVisible, isCameraVeilVisibleSet] = useState(false);
 
     // Track homed state in local React state
-    const [robotIsHomed, robotIsHomedSet] = useState<boolean>(false);
+    const [robotIsHomed, robotIsHomedSet] = useState<boolean>(true);
     // True once `HomingBanner` has fully dismissed (after success strip + exit), not merely `robotIsHomed`
     const [homingBannerDismissed, homingBannerDismissedSet] =
         useState(false);
