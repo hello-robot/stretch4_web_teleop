@@ -5,7 +5,7 @@ export type RunStopFunctions = {
 };
 
 export class RunStopFunctionProvider extends FunctionProvider {
-    private enabled: boolean;
+    private enabled: boolean = false;
     private runStopStateChangeCallback: (enabled: boolean) => void;
 
     constructor() {

@@ -11,7 +11,8 @@ import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
-import { batteryStateFunctionProvider } from "..";
+import { runStopFunctionProvider, batteryStateFunctionProvider } from "..";
+import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
 import { BatteryStateFunctions } from "../function_providers/BatteryStateFunctionProvider";
 
 interface FooterGlobalProps {
@@ -25,14 +26,17 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     sceneSelected,
     onSceneSelectedChange,
 }) => {
-    const [isStopped, isStoppedSet] = useState<boolean>(false);
+    const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
     const [batteryPercentage, batteryPercentageSet] = useState<number>(0);
     const [isCharging, isChargingSet] = useState<boolean>(false);
 
-    const batteryFuncts: BatteryStateFunctions = batteryStateFunctionProvider.provideFunctions();
+    runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
+    const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
+
     batteryStateFunctionProvider.setPercentageChangeCallback(batteryPercentageSet);
     batteryStateFunctionProvider.setChargeStateChangeCallback(isChargingSet);
+    const batteryFuncts: BatteryStateFunctions = batteryStateFunctionProvider.provideFunctions();
 
     const scenes: SceneItem[] = useMemo(
         () => [
@@ -132,13 +136,13 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             </div>
             <div className="run-stop-container">
                 <button
-                    onClick={() => isStoppedSet(!isStopped)}
+                    onClick={() => functs.onClick()}
                     type="button"
-                    className={`run-stop-button ${isStopped ? "stopped" : "running"}`}
-                    aria-label={isStopped ? "Run" : "Stop"}
+                    className={`run-stop-button ${isRunStopped ? "stopped" : "running"}`}
+                    aria-label={isRunStopped ? "Run" : "Stop"}
                 >
                     <img
-                        src={!isStopped ? runStopStopIcon : runStopRunIcon}
+                        src={!isRunStopped ? runStopStopIcon : runStopRunIcon}
                         alt=""
                         aria-hidden="true"
                         className="icon"
