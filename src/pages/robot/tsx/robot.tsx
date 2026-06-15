@@ -23,6 +23,7 @@ import {
     StretchTool,
     getStretchTool,
     DiagnosticArray,
+    ROSOdometry,
 } from "shared/util";
 import {
     rosJointStatetoRobotPose,
@@ -88,6 +89,7 @@ export class Robot extends React.Component {
     ) => void;
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+    private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
@@ -109,6 +111,7 @@ export class Robot extends React.Component {
         ) => void;
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+        odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
@@ -121,6 +124,7 @@ export class Robot extends React.Component {
         this.jointStateCallback = props.jointStateCallback;
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
+        this.odomCallback = props.odomCallback;
         this.moveBaseResultCallback = props.moveBaseResultCallback;
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
@@ -254,6 +258,7 @@ export class Robot extends React.Component {
         this.subscribeToJointState();
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
+        this.subscribeToOdom();
         this.subscribeToMode();
         this.subscribetoJointStateDiagnostics();
         this.subscribeToActionResult(
@@ -352,6 +357,19 @@ export class Robot extends React.Component {
 
         batteryStateTopic.subscribe((msg: ROSBatteryState) => {
             if (this.batteryStateCallback) this.batteryStateCallback(msg);
+        });
+    }
+
+    subscribeToOdom() {
+        const odomTopic: Topic<ROSOdometry> = new Topic({
+            ros: this.ros,
+            name: "/wheel_odom",
+            messageType: "nav_msgs/msg/Odometry",
+        });
+        this.subscriptions.push(odomTopic);
+
+        odomTopic.subscribe((msg: ROSOdometry) => {
+            if (this.odomCallback) this.odomCallback(msg);
         });
     }
 

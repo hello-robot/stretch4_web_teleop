@@ -102,13 +102,13 @@ export type WebRTCMessage =
     | MapPoseMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
-
     | BatteryVoltageMessage
     | ModeMessage
     | IsHomedMessage
     | IsRunStoppedMessage
     | StretchToolMessage
     | ActionStateMessage
+    | OdomMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -179,6 +179,11 @@ export interface BatteryVoltageMessage {
     message: number;
 }
 
+export interface OdomMessage {
+    type: "odom";
+    message: ROSOdometry;
+}
+
 export interface ROSPoint extends Message {
     x: number;
     y: number;
@@ -209,6 +214,22 @@ export interface ROSOccupancyGrid {
     header: string;
     info: ROSMapMetaData;
     data: number[];
+}
+
+export interface ROSOdometry extends Message {
+    header: string;
+    child_frame_id: string;
+    pose: {
+        pose: ROSPose;
+        covariance: number[];
+    };
+    twist: {
+        twist: {
+            linear: { x: number; y: number; z: number };
+            angular: { x: number; y: number; z: number };
+        };
+        covariance: number[];
+    };
 }
 
 export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
