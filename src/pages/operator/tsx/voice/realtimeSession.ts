@@ -87,11 +87,16 @@ function formatToolCallLog(
                 string,
                 unknown
             >;
-            argsSummary = JSON.stringify({
+            const summary: Record<string, unknown> = {
                 action: parsed.action,
                 speed: parsed.speed ?? BASE_MOVE_SPEED_DEFAULT,
-                duration_ms: parsed.duration_ms ?? VOICE_DURATION_MS_DEFAULT,
-            });
+            };
+            if (parsed.distance_m !== undefined && parsed.distance_m !== null) {
+                summary.distance_m = parsed.distance_m;
+            } else {
+                summary.duration_ms = parsed.duration_ms ?? VOICE_DURATION_MS_DEFAULT;
+            }
+            argsSummary = JSON.stringify(summary);
         } catch {
             //
         }

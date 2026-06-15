@@ -21,6 +21,10 @@ const {
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
+    VOICE_DISTANCE_M_MIN,
+    VOICE_DISTANCE_M_MAX,
+    VOICE_ROTATION_DEG_MIN,
+    VOICE_ROTATION_DEG_MAX,
 } = require("./constants");
 
 /**
@@ -67,8 +71,11 @@ function buildRealtimeVoiceSessionPayload() {
                 "If ambiguous, prefer slower/shorter movements.",
                 `Call tool ${EXECUTE_BASE_MOVE} at most ONCE per user utterance.`,
                 `After a tool result, confirm warmly in one brief sentence — never call ${EXECUTE_BASE_MOVE} again unless the user gives a new command.`,
-                `Call tool ${EXECUTE_BASE_MOVE} with action (enum), speed (${BASE_MOVE_SPEEDS.join("|")}), duration_ms (${VOICE_DURATION_MS_MIN}-${VOICE_DURATION_MS_MAX}).`,
-                `Default duration_ms ${VOICE_DURATION_MS_DEFAULT} if unstated; default speed ${BASE_MOVE_SPEED_DEFAULT}.`,
+                `Call tool ${EXECUTE_BASE_MOVE} with action (enum), speed (${BASE_MOVE_SPEEDS.join("|")}), and EITHER duration_ms OR distance_m — not both.`,
+                `If the user specifies a distance (e.g. "move forward half a meter", "go forward 0.5 meters"), set distance_m in meters (${VOICE_DISTANCE_M_MIN}–${VOICE_DISTANCE_M_MAX}) and omit duration_ms.`,
+                `If the user specifies a rotation angle (e.g. "rotate 90 degrees", "turn left a quarter turn"), set distance_m in degrees (e.g. 90) and omit duration_ms.`,
+                `If the user specifies a time (e.g. "move forward for 2 seconds"), set duration_ms and omit distance_m.`,
+                `If neither distance nor time is specified, use default duration_ms ${VOICE_DURATION_MS_DEFAULT} and omit distance_m.`,
                 `When the user wants to halt base motion (stop, wait, freeze, do not move, cut that, enough), call tool ${STOP_BASE_MOVE} with no arguments — not ${EXECUTE_BASE_MOVE}.`,
                 `When the user wants to repeat the last base move (again, same thing, one more time, do that again), call tool ${REPEAT_BASE_MOVE} with no arguments — not ${EXECUTE_BASE_MOVE} with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
                 "Do not respond to the user. Do not speak to the user. Only call tools as instructed.",
@@ -97,10 +104,20 @@ function buildRealtimeVoiceSessionPayload() {
                             duration_ms: {
                                 type: "integer",
                                 description:
-                                    "How long to move in milliseconds before stopping.",
+                                    "How long to move in milliseconds before stopping. Use when the user specifies a time. Omit if distance_m is set.",
                                 minimum: VOICE_DURATION_MS_MIN,
                                 maximum: VOICE_DURATION_MS_MAX,
                                 default: VOICE_DURATION_MS_DEFAULT,
+                            },
+                            distance_m: {
+                                type: "number",
+                                description:
+                                    "Distance to travel in meters (for translation actions: forward, backward, strafe). " +
+                                    "For rotation actions (rotate_left, rotate_right), pass the angle in degrees (e.g. 90 for a quarter turn). " +
+                                    `Valid range: translation (${VOICE_DISTANCE_M_MIN}–${VOICE_DISTANCE_M_MAX} meters), ` +
+                                    `rotation (${VOICE_ROTATION_DEG_MIN}–${VOICE_ROTATION_DEG_MAX} degrees). Omit if duration_ms is set.`,
+                                minimum: VOICE_DISTANCE_M_MIN,
+                                maximum: VOICE_ROTATION_DEG_MAX,
                             },
                         },
                         required: ["action"],

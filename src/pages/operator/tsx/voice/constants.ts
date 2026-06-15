@@ -15,6 +15,10 @@ import {
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
+    VOICE_DISTANCE_M_MIN,
+    VOICE_DISTANCE_M_MAX,
+    VOICE_ROTATION_DEG_MIN,
+    VOICE_ROTATION_DEG_MAX,
 } from "ai-gateway/constants";
 
 /**
@@ -32,6 +36,10 @@ export {
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
+    VOICE_DISTANCE_M_MIN,
+    VOICE_DISTANCE_M_MAX,
+    VOICE_ROTATION_DEG_MIN,
+    VOICE_ROTATION_DEG_MAX,
 };
 
 /** Derived from ai-gateway action/speed enums (operator client). */
@@ -48,6 +56,14 @@ export type ExecuteBaseMoveArgs = {
     action: BaseMoveAction;
     speed?: BaseMoveSpeed;
     duration_ms?: number;
+    /**
+     * Distance-based move target.
+     * - Translation actions (forward/backward/strafe): meters.
+     * - Rotation actions (rotate_left/rotate_right): degrees (converted to radians client-side).
+     * When set, the robot moves until odom confirms the target is reached instead of relying
+     * on a fixed time duration. Falls back to an estimated duration if odom is unavailable.
+     */
+    distance_m?: number;
 };
 
 /** Tool result sent back on the Realtime data channel (operator client). */
@@ -109,6 +125,28 @@ export function clampDurationMs(ms: number): number {
     return Math.round(
         Math.max(VOICE_DURATION_MS_MIN, Math.min(VOICE_DURATION_MS_MAX, ms)),
     );
+}
+
+/**
+ * Clamp a distance_m value from tool args before robot dispatch.
+ * - For translation: value is in meters.
+ * - For rotation: value is in degrees (caller converts to radians).
+ *
+ * @param d raw distance from Realtime tool arguments
+ * @returns clamped value in [VOICE_DISTANCE_M_MIN, VOICE_DISTANCE_M_MAX]
+ */
+export function clampDistanceM(d: number): number {
+    return Math.max(VOICE_DISTANCE_M_MIN, Math.min(VOICE_DISTANCE_M_MAX, d));
+}
+
+/**
+ * Clamp a rotation degrees value from tool args before robot dispatch.
+ *
+ * @param d raw rotation in degrees from Realtime tool arguments
+ * @returns clamped value in [VOICE_ROTATION_DEG_MIN, VOICE_ROTATION_DEG_MAX]
+ */
+export function clampRotationDeg(d: number): number {
+    return Math.max(VOICE_ROTATION_DEG_MIN, Math.min(VOICE_ROTATION_DEG_MAX, d));
 }
 
 /** Union of tool names in VOICE_TOOLS; used for typed dispatch in realtimeSession.ts. */
