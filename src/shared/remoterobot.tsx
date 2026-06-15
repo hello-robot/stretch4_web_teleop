@@ -23,6 +23,7 @@ import {
     ValidJoints,
     ROSPose,
     waitUntil,
+    ROSOdometry,
 } from "shared/util";
 export type robotMessageChannel = (message: cmd) => void;
 
@@ -270,6 +271,7 @@ class RobotSensors extends React.Component {
     private mode: string | undefined = undefined;
     private isHomed: boolean | undefined = undefined;
     private runStopEnabled: boolean = false;
+    private odom: ROSOdometry | undefined = undefined;
     private functionProviderCallback?: (
         inJointLimits: ValidJointStateDict,
         inCollision: ValidJointStateDict
@@ -419,6 +421,10 @@ class RobotSensors extends React.Component {
             this.runStopFunctionProviderCallback(this.runStopEnabled);
     }
 
+    setOdom(odom: ROSOdometry) {
+        this.odom = odom;
+    }
+    
     /**
      * Records a callback from the function provider. The callback is called
      * whenever the battery voltage changes.
