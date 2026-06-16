@@ -429,7 +429,7 @@ class RobotSensors extends React.Component {
     getOdom(): ROSOdometry | undefined {
         return this.odom;
     }
-    
+
     /**
      * Records a callback from the function provider. The callback is called
      * whenever the battery voltage changes.
