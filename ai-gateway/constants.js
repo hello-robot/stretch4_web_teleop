@@ -8,7 +8,7 @@
 const VOICE_DURATION_MS_MIN = 100;
 
 /** Matches Realtime tool maximum on duration_ms in buildRealtimeVoiceSessionPayload(). */
-const VOICE_DURATION_MS_MAX = 10000;
+const VOICE_DURATION_MS_MAX = 30000;
 
 /** Server schema default when the model omits duration_ms. */
 const VOICE_DURATION_MS_DEFAULT = 800;
