@@ -547,6 +547,23 @@ export async function connectOpenAIRealtimeVoice(
                 opts.onLog?.(
                     `[Realtime] user transcript: ${transcript.slice(0, 160)}`,
                 );
+                // ── Fast-path stop ────────────────────────────────────────────────────────────
+                // Fire stop immediately from the transcript, before the AI tool call
+                // pipeline completes. Only applies to short utterances that are clearly
+                // stop commands (to avoid false positives on longer sentences).
+                const STOP_KEYWORDS = new Set([
+                    "stop", "freeze", "halt", "pause", "cancel", "enough", "wait",
+                ]);
+                const words = transcript.trim().toLowerCase().split(/\s+/);
+                if (
+                    words.length <= 3 &&
+                    words.some((w) => STOP_KEYWORDS.has(w))
+                ) {
+                    opts.onLog?.(
+                        `[Realtime] Fast-path stop triggered by transcript: "${transcript.trim()}"`,
+                    );
+                    executeStopMotionOnProvider(opts.voiceProvider);
+                }
             }
         }
 

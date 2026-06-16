@@ -75,17 +75,18 @@ function buildRealtimeVoiceSessionPayload() {
                 `Call tool ${EXECUTE_BASE_MOVE} with action (enum), speed (${VOICE_SPEEDS.join("|")}), and EITHER duration_ms OR distance_m — not both.`,
                 `If the user specifies a distance (e.g. "move forward half a meter"), set distance_m in meters (${VOICE_DISTANCE_M_MIN}–${VOICE_DISTANCE_M_MAX}) and omit duration_ms.`,
                 `If the user specifies a rotation angle (e.g. "rotate 90 degrees"), set distance_m in degrees (e.g. 90) and omit duration_ms.`,
-                `If the user specifies a time for base movement, set duration_ms and omit distance_m.`,
-                `If neither distance nor time is specified for base movement, use default duration_ms ${VOICE_DURATION_MS_DEFAULT} and omit distance_m.`,
+                `If the user specifies an explicit time for base movement, set duration_ms to that time and omit distance_m.`,
+                `If neither distance nor time is specified for base movement, set duration_ms=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says stop).`,
                 // ── Joint move harness ───────────────────────────────────────────────────
                 `For JOINT movement (arm, wrist, gripper), call tool ${EXECUTE_JOINT_MOVE}.`,
                 `Lift/arm actions (${JOINT_LIFT_ARM_ACTIONS.join("|")}): EITHER set distance in meters (${JOINT_DISTANCE_M_MIN}–${JOINT_DISTANCE_M_MAX}) OR duration_ms.`,
                 `Wrist actions (${JOINT_WRIST_ACTIONS.join("|")}): EITHER set distance in radians (${JOINT_DISTANCE_RAD_MIN}–${JOINT_DISTANCE_RAD_MAX}) OR duration_ms.`,
                 `Gripper actions (gripper_open|gripper_close): use duration_ms only — no distance.`,
                 `If the user says "lift the arm 0.2 meters", set action=arm_lift, distance=0.2. If they say "open gripper for 1 second", set action=gripper_open, duration_ms=1000.`,
-                `If neither distance nor time is specified for joint movement, use default duration_ms ${VOICE_DURATION_MS_DEFAULT}.`,
-                // ── Stop / repeat ────────────────────────────────────────────────────────
-                `When the user wants to halt ANY motion (stop, wait, freeze, enough), call tool ${STOP_MOTION} with no arguments.`,
+                `If neither distance nor time is specified for joint movement, set duration_ms=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says stop).`,
+                // ── Stop / repeat ────────────────────────────────────────────────────────────────────────────
+                `When the user wants to halt ANY motion (stop, wait, freeze, enough, pause, cancel), call tool ${STOP_MOTION} with no arguments.`,
+                `Call ${STOP_MOTION} IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
                 `When the user wants to repeat the last base move (again, same thing, one more time), call tool ${REPEAT_BASE_MOVE} with no arguments. Ensure you are over 90% confident.`,
                 // ── Global rules ─────────────────────────────────────────────────────────
                 "Call at most ONE tool per user utterance. If ambiguous, prefer slower/shorter movements.",
@@ -116,10 +117,13 @@ function buildRealtimeVoiceSessionPayload() {
                             duration_ms: {
                                 type: "integer",
                                 description:
-                                    "How long to move in milliseconds before stopping. Use when the user specifies a time. Omit if distance_m is set.",
+                                    `How long to move in milliseconds. ` +
+                                    `Use when the user specifies a time (e.g. "for 2 seconds" → 2000). ` +
+                                    `Omit if distance_m is set. ` +
+                                    `Set to ${VOICE_DURATION_MS_MAX} for continuous motion (no explicit duration or distance given).`,
                                 minimum: VOICE_DURATION_MS_MIN,
                                 maximum: VOICE_DURATION_MS_MAX,
-                                default: VOICE_DURATION_MS_DEFAULT,
+                                default: VOICE_DURATION_MS_MAX,
                             },
                             distance_m: {
                                 type: "number",
@@ -164,11 +168,13 @@ function buildRealtimeVoiceSessionPayload() {
                             duration_ms: {
                                 type: "integer",
                                 description:
-                                    "How long to move in milliseconds. " +
-                                    "Required for gripper actions. For lift/arm/wrist, use distance instead if the user specifies one.",
+                                    `How long to move in milliseconds. ` +
+                                    `Required for gripper actions. ` +
+                                    `For lift/arm/wrist, use distance instead if the user specifies one. ` +
+                                    `Set to ${VOICE_DURATION_MS_MAX} for continuous motion (no explicit duration or distance given).`,
                                 minimum: VOICE_DURATION_MS_MIN,
                                 maximum: VOICE_DURATION_MS_MAX,
-                                default: VOICE_DURATION_MS_DEFAULT,
+                                default: VOICE_DURATION_MS_MAX,
                             },
                             distance: {
                                 type: "number",
@@ -201,11 +207,11 @@ function buildRealtimeVoiceSessionPayload() {
                 input: {
                     turn_detection: {
                         type: "server_vad",
-                        threshold: 0.65,
+                        threshold: 0.5,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 600,
+                        silence_duration_ms: 100,
                         create_response: true,
-                        interrupt_response: false,
+                        interrupt_response: true,
                     },
                 },
                 // output: {

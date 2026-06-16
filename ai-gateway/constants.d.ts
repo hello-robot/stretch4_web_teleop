@@ -1,5 +1,5 @@
 export declare const VOICE_DURATION_MS_MIN: 100;
-export declare const VOICE_DURATION_MS_MAX: 10000;
+export declare const VOICE_DURATION_MS_MAX: 30000;
 export declare const VOICE_DURATION_MS_DEFAULT: 800;
 export declare const VOICE_DISTANCE_M_MIN: number;
 export declare const VOICE_DISTANCE_M_MAX: number;
