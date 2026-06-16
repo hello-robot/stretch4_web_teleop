@@ -1,7 +1,7 @@
 /**
  * This file contains the auth and harness for working with OpenAI Realtime API
  *
- * Builds the Realtime session payload (model, base-move tool schema, VAD config)
+ * Builds the Realtime session payload (model, base-move + joint-move tool schemas, VAD config)
  * and registers `GET /openai-realtime/token`, which mints an ephemeral client secret
  * so the browser can open a WebRTC session without exposing `OPENAI_API_KEY`.
  *
@@ -9,15 +9,16 @@
  * (local socket.io operator session from `voice-session-auth.js`).
  *
  * Wired into the app by `server.js` via `registerOpenAiRealtimeRoutes(app, opts)`.
- * Shared tool names, duration bounds, and execute_base_move enums live in `./constants.js`.
+ * Shared tool names, duration bounds, and action enums live in `./constants.js`.
  */
 const {
     BASE_MOVE_ACTIONS,
-    BASE_MOVE_SPEED_DEFAULT,
-    BASE_MOVE_SPEEDS,
+    VOICE_SPEED_DEFAULT,
+    VOICE_SPEEDS,
     EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
     REPEAT_BASE_MOVE,
-    STOP_BASE_MOVE,
+    STOP_MOTION,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
@@ -25,6 +26,13 @@ const {
     VOICE_DISTANCE_M_MAX,
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
+    JOINT_MOVE_ACTIONS,
+    JOINT_LIFT_ARM_ACTIONS,
+    JOINT_WRIST_ACTIONS,
+    JOINT_DISTANCE_M_MIN,
+    JOINT_DISTANCE_M_MAX,
+    JOINT_DISTANCE_RAD_MIN,
+    JOINT_DISTANCE_RAD_MAX,
 } = require("./constants");
 
 /**
@@ -57,30 +65,34 @@ function buildRealtimeVoiceSessionPayload() {
         session: {
             type: "realtime",
             model: "gpt-realtime",
-            // The harness!
             instructions: [
-                // Identity and tone
-                // "You are Stretch, the robot's voice for teleoperation (proof of concept).",
-                // 'Speak in first person as Stretch (e.g. "I\'ll move forward," not "the robot will").',
-                // "If asked your name or who you are, you are Stretch.",
-                // "Tone: warm, friendly, and calm — like a helpful teammate. Stay brief: one short sentence for confirmations; plain language, no jargon.",
-                // Motion harness
                 "Don't speak to the user",
-                "The user speaks imprecisely. Infer exactly ONE base motion per turn: either holonomic translation from",
-                "{ forward | backward | strafe_left | strafe_right } or in-place rotation from { rotate_left | rotate_right }.",
-                "If ambiguous, prefer slower/shorter movements.",
-                `Call tool ${EXECUTE_BASE_MOVE} at most ONCE per user utterance.`,
-                `After a tool result, confirm warmly in one brief sentence — never call ${EXECUTE_BASE_MOVE} again unless the user gives a new command.`,
-                `Call tool ${EXECUTE_BASE_MOVE} with action (enum), speed (${BASE_MOVE_SPEEDS.join("|")}), and EITHER duration_ms OR distance_m — not both.`,
-                `If the user specifies a distance (e.g. "move forward half a meter", "go forward 0.5 meters"), set distance_m in meters (${VOICE_DISTANCE_M_MIN}–${VOICE_DISTANCE_M_MAX}) and omit duration_ms.`,
-                `If the user specifies a rotation angle (e.g. "rotate 90 degrees", "turn left a quarter turn"), set distance_m in degrees (e.g. 90) and omit duration_ms.`,
-                `If the user specifies a time (e.g. "move forward for 2 seconds"), set duration_ms and omit distance_m.`,
-                `If neither distance nor time is specified, use default duration_ms ${VOICE_DURATION_MS_DEFAULT} and omit distance_m.`,
-                `When the user wants to halt base motion (stop, wait, freeze, do not move, cut that, enough), call tool ${STOP_BASE_MOVE} with no arguments — not ${EXECUTE_BASE_MOVE}.`,
-                `When the user wants to repeat the last base move (again, same thing, one more time, do that again), call tool ${REPEAT_BASE_MOVE} with no arguments — not ${EXECUTE_BASE_MOVE} with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
+                // ── Base move harness ────────────────────────────────────────────────────
+                "The user speaks imprecisely. Infer exactly ONE motion command per turn.",
+                `For BASE movement (forward, backward, strafe, rotate), call tool ${EXECUTE_BASE_MOVE}.`,
+                "Base actions: { forward | backward | strafe_left | strafe_right } for translation,",
+                "{ rotate_left | rotate_right } for in-place rotation.",
+                `Call tool ${EXECUTE_BASE_MOVE} with action (enum), speed (${VOICE_SPEEDS.join("|")}), and EITHER duration_ms OR distance_m — not both.`,
+                `If the user specifies a distance (e.g. "move forward half a meter"), set distance_m in meters (${VOICE_DISTANCE_M_MIN}–${VOICE_DISTANCE_M_MAX}) and omit duration_ms.`,
+                `If the user specifies a rotation angle (e.g. "rotate 90 degrees"), set distance_m in degrees (e.g. 90) and omit duration_ms.`,
+                `If the user specifies a time for base movement, set duration_ms and omit distance_m.`,
+                `If neither distance nor time is specified for base movement, use default duration_ms ${VOICE_DURATION_MS_DEFAULT} and omit distance_m.`,
+                // ── Joint move harness ───────────────────────────────────────────────────
+                `For JOINT movement (arm, wrist, gripper), call tool ${EXECUTE_JOINT_MOVE}.`,
+                `Lift/arm actions (${JOINT_LIFT_ARM_ACTIONS.join("|")}): EITHER set distance in meters (${JOINT_DISTANCE_M_MIN}–${JOINT_DISTANCE_M_MAX}) OR duration_ms.`,
+                `Wrist actions (${JOINT_WRIST_ACTIONS.join("|")}): EITHER set distance in radians (${JOINT_DISTANCE_RAD_MIN}–${JOINT_DISTANCE_RAD_MAX}) OR duration_ms.`,
+                `Gripper actions (gripper_open|gripper_close): use duration_ms only — no distance.`,
+                `If the user says "lift the arm 0.2 meters", set action=arm_lift, distance=0.2. If they say "open gripper for 1 second", set action=gripper_open, duration_ms=1000.`,
+                `If neither distance nor time is specified for joint movement, use default duration_ms ${VOICE_DURATION_MS_DEFAULT}.`,
+                // ── Stop / repeat ────────────────────────────────────────────────────────
+                `When the user wants to halt ANY motion (stop, wait, freeze, enough), call tool ${STOP_MOTION} with no arguments.`,
+                `When the user wants to repeat the last base move (again, same thing, one more time), call tool ${REPEAT_BASE_MOVE} with no arguments. Ensure you are over 90% confident.`,
+                // ── Global rules ─────────────────────────────────────────────────────────
+                "Call at most ONE tool per user utterance. If ambiguous, prefer slower/shorter movements.",
                 "Do not respond to the user. Do not speak to the user. Only call tools as instructed.",
             ].join(" "),
             tools: [
+                // ── execute_base_move ────────────────────────────────────────────────────
                 {
                     type: "function",
                     name: EXECUTE_BASE_MOVE,
@@ -97,9 +109,9 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                             speed: {
                                 type: "string",
-                                enum: BASE_MOVE_SPEEDS,
+                                enum: VOICE_SPEEDS,
                                 description: "Driving speed preset.",
-                                default: BASE_MOVE_SPEED_DEFAULT,
+                                default: VOICE_SPEED_DEFAULT,
                             },
                             duration_ms: {
                                 type: "integer",
@@ -124,10 +136,61 @@ function buildRealtimeVoiceSessionPayload() {
                         additionalProperties: false,
                     },
                 },
+                // ── execute_joint_move ───────────────────────────────────────────────────
+                {
+                    type: "function",
+                    name: EXECUTE_JOINT_MOVE,
+                    description:
+                        "Moves a Stretch arm, wrist, or gripper joint by voice command. " +
+                        "Lift and arm use meters; wrist uses radians; gripper uses duration only.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: JOINT_MOVE_ACTIONS,
+                                description:
+                                    "Joint movement action. " +
+                                    `Lift/arm: ${JOINT_LIFT_ARM_ACTIONS.join("|")}. ` +
+                                    `Wrist: ${JOINT_WRIST_ACTIONS.join("|")}. ` +
+                                    "Gripper: gripper_open|gripper_close.",
+                            },
+                            speed: {
+                                type: "string",
+                                enum: VOICE_SPEEDS,
+                                description: "Movement speed preset.",
+                                default: VOICE_SPEED_DEFAULT,
+                            },
+                            duration_ms: {
+                                type: "integer",
+                                description:
+                                    "How long to move in milliseconds. " +
+                                    "Required for gripper actions. For lift/arm/wrist, use distance instead if the user specifies one.",
+                                minimum: VOICE_DURATION_MS_MIN,
+                                maximum: VOICE_DURATION_MS_MAX,
+                                default: VOICE_DURATION_MS_DEFAULT,
+                            },
+                            distance: {
+                                type: "number",
+                                description:
+                                    "How far to move. " +
+                                    `Lift/arm: meters (${JOINT_DISTANCE_M_MIN}–${JOINT_DISTANCE_M_MAX}). ` +
+                                    `Wrist: radians (${JOINT_DISTANCE_RAD_MIN}–${JOINT_DISTANCE_RAD_MAX}). ` +
+                                    "Gripper: omit (use duration_ms instead). Omit if duration_ms is set.",
+                                minimum: JOINT_DISTANCE_M_MIN,
+                                maximum: JOINT_DISTANCE_RAD_MAX,
+                            },
+                        },
+                        required: ["action"],
+                        additionalProperties: false,
+                    },
+                },
+                // ── stop_motion ──────────────────────────────────────────────────────────
                 noArgVoiceTool(
-                    STOP_BASE_MOVE,
-                    "Stops ongoing holonomic base motion including translation and rotation (voice timed move or pilot velocity). Call when the user wants the base to stop moving."
+                    STOP_MOTION,
+                    "Stops any ongoing robot motion — base translation, rotation, arm, wrist, or gripper. Call when the user wants all movement to stop."
                 ),
+                // ── repeat_base_move ─────────────────────────────────────────────────────
                 noArgVoiceTool(
                     REPEAT_BASE_MOVE,
                     "Repeats the last successful voice base move (same direction, speed, duration). No parameters."

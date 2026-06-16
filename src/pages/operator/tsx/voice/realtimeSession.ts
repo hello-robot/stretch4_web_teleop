@@ -9,15 +9,19 @@ import {
     clearLastVoiceBaseMove,
     executeBaseMoveOnProvider,
     executeRepeatBaseMoveOnProvider,
-    executeStopBaseMoveOnProvider,
     setVoiceMoveExecutionContext,
 } from "./executeBaseMove";
 import {
-    BASE_MOVE_SPEED_DEFAULT,
+    executeJointMoveOnProvider,
+    executeStopMotionOnProvider,
+} from "./executeJointMove";
+import {
+    VOICE_SPEED_DEFAULT,
     EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
     isPlaceholderArgs,
     NO_ARG_VOICE_TOOLS,
-    type BaseMoveSpeed,
+    type VoiceSpeed,
     type ExecuteToolResult,
     type VoiceMoveExecutionMode,
     type VoiceToolName,
@@ -89,10 +93,29 @@ function formatToolCallLog(
             >;
             const summary: Record<string, unknown> = {
                 action: parsed.action,
-                speed: parsed.speed ?? BASE_MOVE_SPEED_DEFAULT,
+                speed: parsed.speed ?? VOICE_SPEED_DEFAULT,
             };
             if (parsed.distance_m !== undefined && parsed.distance_m !== null) {
                 summary.distance_m = parsed.distance_m;
+            } else {
+                summary.duration_ms = parsed.duration_ms ?? VOICE_DURATION_MS_DEFAULT;
+            }
+            argsSummary = JSON.stringify(summary);
+        } catch {
+            //
+        }
+    } else if (fc.name === EXECUTE_JOINT_MOVE) {
+        try {
+            const parsed = JSON.parse(fc.arguments || "{}") as Record<
+                string,
+                unknown
+            >;
+            const summary: Record<string, unknown> = {
+                action: parsed.action,
+                speed: parsed.speed ?? VOICE_SPEED_DEFAULT,
+            };
+            if (parsed.distance !== undefined && parsed.distance !== null) {
+                summary.distance = parsed.distance;
             } else {
                 summary.duration_ms = parsed.duration_ms ?? VOICE_DURATION_MS_DEFAULT;
             }
@@ -300,9 +323,9 @@ function sendFnOutput(
     dc: RTCDataChannel,
     callId: string,
     output: ExecuteToolResult,
-    onAssistantResponseStart?: () => void,
+    // onAssistantResponseStart?: () => void,
 ) {
-    onAssistantResponseStart?.();
+    // onAssistantResponseStart?.();
     dc.send(
         JSON.stringify({
             type: "conversation.item.create",
@@ -313,7 +336,7 @@ function sendFnOutput(
             },
         }),
     );
-    dc.send(JSON.stringify({ type: "response.create", response: {} }));
+    // dc.send(JSON.stringify({ type: "response.create", response: {} }));
 }
 
 export type RealtimeVoiceConnectOptions = {
@@ -329,7 +352,7 @@ export type RealtimeVoiceConnectOptions = {
     /** Temporary POC: direct timedBaseDrive vs directional pad button path */
     voiceMoveExecutionMode?: VoiceMoveExecutionMode;
     /** Sync Action Speed UI + FunctionProvider.velocityScale from voice `speed` arg */
-    onVoiceSpeedChange?: (speed: BaseMoveSpeed) => void;
+    onVoiceSpeedChange?: (speed: VoiceSpeed) => void;
     /** Switch operator to Press-Hold before each voice move */
     onVoicePressAndHoldRequired?: () => void;
 };
@@ -402,13 +425,13 @@ export async function connectOpenAIRealtimeVoice(
         pc.addTrack(t, micGate.transmitStream);
     }
 
-    const muteMicForAssistant = () => {
-        if (micUnmuteTimer) {
-            clearTimeout(micUnmuteTimer);
-            micUnmuteTimer = undefined;
-        }
-        micGate?.setForceClosed(true);
-    };
+    // const muteMicForAssistant = () => {
+    //     if (micUnmuteTimer) {
+    //         clearTimeout(micUnmuteTimer);
+    //         micUnmuteTimer = undefined;
+    //     }
+    //     micGate?.setForceClosed(true);
+    // };
 
     const scheduleMicUnmute = () => {
         if (micUnmuteTimer) {
@@ -451,8 +474,23 @@ export async function connectOpenAIRealtimeVoice(
             }
             return executeBaseMoveOnProvider(voiceProvider, rawArgs);
         },
-        stop_base_move: (voiceProvider) =>
-            executeStopBaseMoveOnProvider(voiceProvider),
+        execute_joint_move: (voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                opts.onLog?.(
+                    `[Realtime] Bad JSON arguments: ${fc.arguments}`,
+                );
+                rawArgs = {};
+            }
+            return executeJointMoveOnProvider(voiceProvider, rawArgs);
+        },
+        stop_motion: (voiceProvider) =>
+            executeStopMotionOnProvider(voiceProvider),
         repeat_base_move: (voiceProvider) =>
             executeRepeatBaseMoveOnProvider(voiceProvider),
     };
@@ -479,7 +517,7 @@ export async function connectOpenAIRealtimeVoice(
             `[Realtime] Tool result ${JSON.stringify(result)} (${fc.call_id})`,
         );
         if (dc.readyState === "open") {
-            sendFnOutput(dc, fc.call_id, result, muteMicForAssistant);
+            sendFnOutput(dc, fc.call_id, result);
         }
     };
 
@@ -570,7 +608,7 @@ export async function connectOpenAIRealtimeVoice(
                     `[Realtime] Tool result ${JSON.stringify(dead)} (${cid})`,
                 );
                 if (dc.readyState === "open") {
-                    sendFnOutput(dc, cid, dead, muteMicForAssistant);
+                    sendFnOutput(dc, cid, dead);
                 }
                 return;
             }

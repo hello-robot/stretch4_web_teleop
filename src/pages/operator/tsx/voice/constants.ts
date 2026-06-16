@@ -1,17 +1,19 @@
 /**
  * Client-side access to the voice control assistant constants and helpers.
- * Wires in the tool names, duration bounds, and execute_base_move enums.
+ * Wires in the tool names, duration bounds, and action enums for both
+ * execute_base_move and execute_joint_move.
  */
 import {
     BASE_MOVE_ACTIONS,
-    BASE_MOVE_SPEED_DEFAULT,
-    BASE_MOVE_SPEEDS,
+    VOICE_SPEED_DEFAULT,
+    VOICE_SPEEDS,
     BASE_ROTATE_ACTIONS,
     BASE_TRANSLATE_ACTIONS,
     EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
     REPEAT_BASE_MOVE,
     VOICE_TOOLS,
-    STOP_BASE_MOVE,
+    STOP_MOTION,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
@@ -19,20 +21,29 @@ import {
     VOICE_DISTANCE_M_MAX,
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
+    JOINT_MOVE_ACTIONS,
+    JOINT_LIFT_ARM_ACTIONS,
+    JOINT_WRIST_ACTIONS,
+    JOINT_GRIPPER_ACTIONS,
+    JOINT_DISTANCE_M_MIN,
+    JOINT_DISTANCE_M_MAX,
+    JOINT_DISTANCE_RAD_MIN,
+    JOINT_DISTANCE_RAD_MAX,
 } from "ai-gateway/constants";
 
 /**
  * Re-export constants from ai-gateway/constants.js
  * for usage in other parts of the teleop webapp.
-*/
+ */
 export {
     BASE_MOVE_ACTIONS,
-    BASE_MOVE_SPEED_DEFAULT,
-    BASE_MOVE_SPEEDS,
+    VOICE_SPEED_DEFAULT,
+    VOICE_SPEEDS,
     EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
     REPEAT_BASE_MOVE,
     VOICE_TOOLS,
-    STOP_BASE_MOVE,
+    STOP_MOTION,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
@@ -40,13 +51,23 @@ export {
     VOICE_DISTANCE_M_MAX,
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
+    JOINT_MOVE_ACTIONS,
+    JOINT_LIFT_ARM_ACTIONS,
+    JOINT_WRIST_ACTIONS,
+    JOINT_GRIPPER_ACTIONS,
+    JOINT_DISTANCE_M_MIN,
+    JOINT_DISTANCE_M_MAX,
+    JOINT_DISTANCE_RAD_MIN,
+    JOINT_DISTANCE_RAD_MAX,
 };
+
+// ── Base move types ───────────────────────────────────────────────────────────
 
 /** Derived from ai-gateway action/speed enums (operator client). */
 export type BaseTranslateAction = (typeof BASE_TRANSLATE_ACTIONS)[number];
 export type BaseRotateAction = (typeof BASE_ROTATE_ACTIONS)[number];
 export type BaseMoveAction = BaseTranslateAction | BaseRotateAction;
-export type BaseMoveSpeed = (typeof BASE_MOVE_SPEEDS)[number];
+export type VoiceSpeed = (typeof VOICE_SPEEDS)[number];
 
 /** How voice `execute_base_move` drives the robot (temporary POC toggle). */
 export type VoiceMoveExecutionMode = "direct" | "button_provider";
@@ -54,7 +75,7 @@ export type VoiceMoveExecutionMode = "direct" | "button_provider";
 /** Parsed execute_base_move tool args (operator client). */
 export type ExecuteBaseMoveArgs = {
     action: BaseMoveAction;
-    speed?: BaseMoveSpeed;
+    speed?: VoiceSpeed;
     duration_ms?: number;
     /**
      * Distance-based move target.
@@ -66,6 +87,25 @@ export type ExecuteBaseMoveArgs = {
     distance_m?: number;
 };
 
+// ── Joint move types ──────────────────────────────────────────────────────────
+
+/** All valid execute_joint_move.action values. */
+export type JointMoveAction = (typeof JOINT_MOVE_ACTIONS)[number];
+
+/** Parsed execute_joint_move tool args (operator client). */
+export type ExecuteJointMoveArgs = {
+    action: JointMoveAction;
+    speed?: VoiceSpeed;
+    duration_ms?: number;
+    /**
+     * Distance-based move target.
+     * - Lift/arm actions: meters.
+     * - Wrist actions: radians.
+     * - Gripper actions: omit (duration only).
+     */
+    distance?: number;
+};
+
 /** Tool result sent back on the Realtime data channel (operator client). */
 export type ExecuteToolResult =
     | { ok: true; detail: string }
@@ -75,6 +115,8 @@ export type ExecuteToolResult =
         busy?: boolean;
         ignored?: boolean;
     };
+
+// ── Dedupe / timing constants ─────────────────────────────────────────────────
 
 /**
  * Suppress duplicate execute_base_move with identical args within this window (echo safety net).
@@ -114,6 +156,8 @@ export const VOICE_MIC_GATE_HANG_MS = 250;
  */
 export const VOICE_MIC_GATE_POLL_MS = 100;
 
+// ── Clamp helpers ─────────────────────────────────────────────────────────────
+
 /**
  * Clamp raw duration_ms from tool args before robot dispatch.
  * OpenAI may omit duration_ms (VOICE_DURATION_MS_DEFAULT); callers apply defaults before clamping when needed.
@@ -149,15 +193,37 @@ export function clampRotationDeg(d: number): number {
     return Math.max(VOICE_ROTATION_DEG_MIN, Math.min(VOICE_ROTATION_DEG_MAX, d));
 }
 
+/**
+ * Clamp a joint distance (meters) for lift/arm moves.
+ *
+ * @param d raw distance from tool arguments
+ * @returns clamped value in [JOINT_DISTANCE_M_MIN, JOINT_DISTANCE_M_MAX]
+ */
+export function clampJointDistanceM(d: number): number {
+    return Math.max(JOINT_DISTANCE_M_MIN, Math.min(JOINT_DISTANCE_M_MAX, d));
+}
+
+/**
+ * Clamp a joint distance (radians) for wrist moves.
+ *
+ * @param d raw angle from tool arguments
+ * @returns clamped value in [JOINT_DISTANCE_RAD_MIN, JOINT_DISTANCE_RAD_MAX]
+ */
+export function clampJointDistanceRad(d: number): number {
+    return Math.max(JOINT_DISTANCE_RAD_MIN, Math.min(JOINT_DISTANCE_RAD_MAX, d));
+}
+
+// ── Tool set helpers ──────────────────────────────────────────────────────────
+
 /** Union of tool names in VOICE_TOOLS; used for typed dispatch in realtimeSession.ts. */
 export type VoiceToolName = (typeof VOICE_TOOLS)[number];
 
 /**
  * Tools that omit arguments — streamed "{}" is valid completion (realtimeSession.ts).
- * Contrast with execute_base_move, which requires real JSON via isPlaceholderArgs.
+ * Contrast with execute_base_move / execute_joint_move, which require real JSON via isPlaceholderArgs.
  */
 export const NO_ARG_VOICE_TOOLS = new Set<string>([
-    STOP_BASE_MOVE,
+    STOP_MOTION,
     REPEAT_BASE_MOVE,
 ]);
 
