@@ -124,7 +124,42 @@ export abstract class FunctionProvider {
                     jointName,
                     velocity
                 );
-        }, 25);
+        }, 50);
+    }
+
+    /**
+     * Move a joint continuously for durationMs then stop.
+     * Uses the same timedVoiceMoveActive guard as timedBaseDrive so base and
+     * joint timed moves are mutually exclusive.
+     *
+     * @param jointName the joint to actuate
+     * @param velocity  signed velocity in joint units/s (m/s for linear, rad/s for rotary)
+     * @param durationMs how long to apply velocity (clamped internally)
+     * @returns false if a timed move is already active or no robot attached
+     */
+    public timedJointMove(
+        jointName: ValidJoints,
+        velocity: number,
+        durationMs: number,
+    ): boolean {
+        if (!FunctionProvider.remoteRobot) {
+            return false;
+        }
+        if (this.timedVoiceMoveActive) {
+            return false;
+        }
+
+        const clampedMs = clampDurationMs(durationMs);
+
+        this.stopCurrentAction(true);
+        this.timedVoiceMoveActive = true;
+        this.continuousJointMovement(jointName, velocity);
+        this.timedVoiceMoveTimer = setTimeout(() => {
+            this.timedVoiceMoveTimer = undefined;
+            this.timedVoiceMoveActive = false;
+            this.stopCurrentAction(true);
+        }, clampedMs);
+        return true;
     }
 
     // NOTE: When we undo this temp fix (of not stopping the

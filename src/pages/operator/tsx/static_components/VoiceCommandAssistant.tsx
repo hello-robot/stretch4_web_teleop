@@ -22,7 +22,7 @@ import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
     VOICE_MIC_RMS_THRESHOLD,
-    type BaseMoveSpeed,
+    type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
 
@@ -97,7 +97,7 @@ export const VoiceCommandAssistant = ({
     }, [disconnect]);
 
     const onVoiceSpeedChange = useCallback(
-        (speed: BaseMoveSpeed) =>
+        (speed: VoiceSpeed) =>
             onVelocityScaleApplied(velocityScaleForVoiceSpeed(speed)),
         [onVelocityScaleApplied],
     );

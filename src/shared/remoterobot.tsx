@@ -391,6 +391,11 @@ class RobotSensors extends React.Component {
     setOdom(odom: ROSOdometry) {
         this.odom = odom;
     }
+
+    /** Returns the latest odometry snapshot, or undefined if none has been received yet. */
+    getOdom(): ROSOdometry | undefined {
+        return this.odom;
+    }
     
     /**
      * Records a callback from the function provider. The callback is called
