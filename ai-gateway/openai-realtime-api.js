@@ -64,7 +64,7 @@ function buildRealtimeVoiceSessionPayload() {
     return {
         session: {
             type: "realtime",
-            model: "gpt-realtime",
+            model: "gpt-realtime-2",
             instructions: [
                 "Don't speak to the user",
                 // ── Base move harness ────────────────────────────────────────────────────
@@ -209,7 +209,7 @@ function buildRealtimeVoiceSessionPayload() {
                         type: "server_vad",
                         threshold: 0.5,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 100,
+                        silence_duration_ms: 300,
                         create_response: true,
                         interrupt_response: true,
                     },
