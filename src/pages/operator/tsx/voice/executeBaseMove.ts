@@ -213,6 +213,9 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                     action,
                     speed,
                     duration_ms: clampedMs,
+                    distance_display: isRotation
+                        ? `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(1)}°`
+                        : `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(2)} m`,
                     repeated: opts?.repeated,
                 });
                 return {
@@ -239,6 +242,9 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                 action,
                 speed,
                 duration_ms: clampedMs,
+                distance_display: isRotation
+                    ? `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(1)}°`
+                    : `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(2)} m`,
                 repeated: opts?.repeated,
             });
             return {

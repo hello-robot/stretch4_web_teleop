@@ -6,6 +6,9 @@ export type VoiceMoveFeedback =
         action: BaseMoveAction | JointMoveAction;
         speed: VoiceSpeed;
         duration_ms: number;
+        /** Pre-formatted user-facing distance string (e.g. "5°", "0.3 m", "1.2 rad").
+         *  When present the toast shows this instead of the computed duration. */
+        distance_display?: string;
         repeated?: boolean;
     }
     | { kind: "stop"; hadMotion: boolean }
@@ -69,10 +72,12 @@ export function voiceMoveFeedbackToToast(
             const prefix = feedback.repeated ? "Repeating: " : "";
             const action = ACTION_LABELS[feedback.action];
             const speed = SPEED_LABELS[feedback.speed];
-            const duration = formatDurationMs(feedback.duration_ms);
+            const distPart = feedback.distance_display
+                ? feedback.distance_display
+                : `for ${formatDurationMs(feedback.duration_ms)}`;
             return {
                 type: "info",
-                message: `${prefix}${action}, ${speed}, for ${duration}`,
+                message: `${prefix}${action}, ${speed}, ${distPart}`,
             };
         }
         case "stop":

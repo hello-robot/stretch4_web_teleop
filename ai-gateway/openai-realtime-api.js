@@ -72,8 +72,12 @@ function buildRealtimeVoiceSessionPayload() {
                 // ── Base move harness ────────────────────────────────────────────────────
                 "The user speaks imprecisely. Infer exactly ONE motion command per turn.",
                 `For BASE movement (forward, backward, strafe, rotate), call tool ${EXECUTE_BASE_MOVE}.`,
-                "Base actions: { forward | backward | strafe_left | strafe_right } for translation,",
-                "{ rotate_left | rotate_right } for in-place rotation.",
+                "Base actions: { forward | backward | strafe_left | strafe_right } for translation (robot body slides sideways without turning),",
+                "{ rotate_left | rotate_right } for in-place rotation (robot turns/spins in place).",
+                "CRITICAL DISAMBIGUATION — use strafe_left for: \"move left\", \"go left\", \"slide left\", \"strafe left\", \"left\", \"shift left\", \"lateral left\".",
+                "Use rotate_left ONLY when the user explicitly says \"turn\", \"rotate\", \"spin\", \"face\", \"pivot\" left.",
+                "CRITICAL DISAMBIGUATION — use strafe_right for: \"move right\", \"go right\", \"slide right\", \"strafe right\", \"right\", \"shift right\", \"lateral right\".",
+                "Use rotate_right ONLY when the user explicitly says \"turn\", \"rotate\", \"spin\", \"face\", \"pivot\" right.",
                 `Call tool ${EXECUTE_BASE_MOVE} with action (enum), speed (${VOICE_SPEEDS.join("|")}), and EITHER duration_ms OR distance_m — not both.`,
                 `If the user specifies a distance (e.g. "move forward half a meter"), set distance_m in meters (${VOICE_DISTANCE_M_MIN}–${VOICE_DISTANCE_M_MAX}) and omit duration_ms.`,
                 `If the user specifies a rotation angle (e.g. "rotate 90 degrees"), set distance_m in degrees (e.g. 90) and omit duration_ms.`,
@@ -231,7 +235,7 @@ function buildRealtimeVoiceSessionPayload() {
                 input: {
                     turn_detection: {
                         type: "server_vad",
-                        threshold: 0.5,
+                        threshold: 0.7,
                         prefix_padding_ms: 300,
                         silence_duration_ms: 300,
                         create_response: true,
