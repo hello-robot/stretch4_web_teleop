@@ -17,6 +17,7 @@ import {
     type VoiceMoveExecutionMode,
     type ExecuteToolResult,
 } from "./constants";
+import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 
 // ── Shared context type ───────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ export type VoiceMoveExecutionContext = {
     mode: VoiceMoveExecutionMode;
     onSpeedChange: (speed: VoiceSpeed) => void;
     onPressAndHoldRequired: () => void;
+    onVoiceMoveFeedback?: (feedback: VoiceMoveFeedback) => void;
 };
 
 // ── Abstract base class ───────────────────────────────────────────────────────
@@ -65,6 +67,9 @@ export abstract class VoiceMoveExecutor {
         VoiceMoveExecutor._context?.onSpeedChange(speed);
     }
 
+    protected static emitVoiceMoveFeedback(feedback: VoiceMoveFeedback): void {
+        VoiceMoveExecutor._context?.onVoiceMoveFeedback?.(feedback);
+    }
     /**
      * Coerce and validate the raw `speed` arg from Realtime tool arguments.
      * Falls back to VOICE_SPEED_DEFAULT when missing or unrecognised.

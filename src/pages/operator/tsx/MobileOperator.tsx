@@ -52,6 +52,7 @@ import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
+import Toasts, { useToasts } from "./layout_components/Toasts";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -108,6 +109,8 @@ export const MobileOperator = (props: {
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
+
+    const { toasts, toastsSet, addToast } = useToasts();
 
     const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
@@ -258,9 +261,11 @@ export const MobileOperator = (props: {
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
+            <Toasts toasts={toasts} toastsSet={toastsSet} />
             <VoiceCommandAssistant
                 onVelocityScaleApplied={applyVelocityScale}
                 setActionMode={setActionMode}
+                addToast={addToast}
             />
             <HomingBanner
                 robotIsHomed={robotIsHomed}
@@ -364,6 +369,7 @@ export const MobileOperator = (props: {
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
+                            addToast={addToast}
                         />
                     </div>
                 </SwipeableViews>

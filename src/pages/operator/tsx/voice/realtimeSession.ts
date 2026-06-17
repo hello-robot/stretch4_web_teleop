@@ -33,6 +33,7 @@ import {
 } from "./constants";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
+import { VoiceMoveFeedback } from "./voiceMoveFeedback";
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
@@ -357,6 +358,8 @@ export type RealtimeVoiceConnectOptions = {
     onVoiceSpeedChange?: (speed: VoiceSpeed) => void;
     /** Switch operator to Press-Hold before each voice move */
     onVoicePressAndHoldRequired?: () => void;
+    /** Structured feedback when a voice move is accepted or rejected (toast UX). */
+    onVoiceMoveFeedback?: (feedback: VoiceMoveFeedback) => void;
 };
 
 export type ActiveRealtimeVoiceSession = {
@@ -385,6 +388,7 @@ export async function connectOpenAIRealtimeVoice(
             mode: opts.voiceMoveExecutionMode ?? "direct",
             onSpeedChange: opts.onVoiceSpeedChange,
             onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
+            onVoiceMoveFeedback: opts.onVoiceMoveFeedback,
         });
     } else {
         setVoiceMoveExecutionContext(undefined);

@@ -25,11 +25,13 @@ import {
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
+import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
 import {
     AccessibleRadioGroup,
     type AccessibleRadioOption,
 } from "./AccessibleRadioGroup";
 import Ellipsis from "../basic_components/Ellipsis";
+import type { AddToastFn } from "../layout_components/Toasts";
 import "operator/css/VoiceCommandAssistant.css";
 
 /** Explicit check to make sure operator is using
@@ -39,6 +41,7 @@ const isFirebaseStorage = process.env.storage === "firebase";
 export type VoiceCommandAssistantProps = {
     onVelocityScaleApplied: (scale: number) => void;
     setActionMode: (mode: ActionModeType) => void;
+    addToast: AddToastFn;
 };
 
 /** The use of `style` props will be moved to CSS when the VC feature becomes stable. */
@@ -67,6 +70,7 @@ const VOICE_MOVE_EXECUTION_OPTIONS: AccessibleRadioOption[] = [
 export const VoiceCommandAssistant = ({
     onVelocityScaleApplied,
     setActionMode,
+    addToast,
 }: VoiceCommandAssistantProps) => {
     const sessionRef =
         useRef<ActiveRealtimeVoiceSession | null>(null);
@@ -124,6 +128,16 @@ export const VoiceCommandAssistant = ({
         [setActionMode],
     );
 
+    const onVoiceMoveFeedback = useCallback(
+        (feedback: VoiceMoveFeedback) => {
+            const toast = voiceMoveFeedbackToToast(feedback);
+            if (toast) {
+                addToast(toast.type, toast.message);
+            }
+        },
+        [addToast],
+    );
+
     const connect = useCallback(async () => {
         if (phase === "connecting" || phase === "live") {
             return;
@@ -136,6 +150,7 @@ export const VoiceCommandAssistant = ({
                 voiceMoveExecutionMode,
                 onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
+                onVoiceMoveFeedback,
                 onLog: (lg) => {
                     if (isVoiceToolLogLine(lg)) {
                         console.log(
@@ -164,6 +179,7 @@ export const VoiceCommandAssistant = ({
         voiceMoveExecutionMode,
         onVoiceSpeedChange,
         onVoicePressAndHoldRequired,
+        onVoiceMoveFeedback
     ]);
 
     const robotOk = FunctionProvider.robotIsConnected();

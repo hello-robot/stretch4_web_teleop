@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import genUUID from '../utils/genUUID';
 import '../../css/Toasts.css';
 
 export interface Toast {
@@ -8,6 +9,27 @@ export interface Toast {
     message: string;
     duration?: number;
     closeButton?: boolean;
+}
+
+export type AddToastFn = (
+    type: Toast['type'],
+    message: string,
+    duration?: number,
+) => void;
+
+/** Toast queue state and enqueue helper for operator-level hosts. */
+export function useToasts() {
+    const [toasts, toastsSet] = useState<Toast[]>([]);
+
+    const addToast = useCallback<AddToastFn>((type, message, duration) => {
+        const id = genUUID();
+        toastsSet((prevToasts) => [
+            ...prevToasts,
+            { id, type, message, duration },
+        ]);
+    }, []);
+
+    return { toasts, toastsSet, addToast };
 }
 
 /**

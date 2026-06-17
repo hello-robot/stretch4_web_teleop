@@ -2,10 +2,9 @@ import React, { useEffect, useState, Dispatch, SetStateAction } from 'react'
 import { Canvas } from "../static_components/Canvas";
 import { Map } from './Map';
 import { ComponentType, MapDefinition } from '../utils/component_definitions';
-import genUUID from '../utils/genUUID';
 import { SharedState } from './CustomizableComponent';
 import FooterAutoNav from './FooterAutoNav';
-import Toasts, { Toast } from './Toasts';
+import type { AddToastFn } from './Toasts';
 import { mapFunctionProvider } from 'operator/tsx/index';
 import { OccupancyGrid } from '../static_components/OccupancyGrid';
 import { underMapFunctionProvider } from 'operator/tsx/index';
@@ -24,6 +23,7 @@ interface AutoNavProps {
     swipeableViewsIdxSet: Dispatch<SetStateAction<number>>;
     sceneSelected: string;
     onSceneSelectedChange: Dispatch<SetStateAction<string>>;
+    addToast: AddToastFn;
 }
 
 export enum MapFunction {
@@ -87,6 +87,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
     swipeableViewsIdxSet,
     sceneSelected,
     onSceneSelectedChange,
+    addToast,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -94,9 +95,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // Manage goal position
     const [goalPosition, goalPositionSet] = useState<ROSPoint | undefined>(undefined);
-
-    // Manage toast notifications for <Toasts>
-    const [toasts, toastsSet] = useState<Toast[]>([]);
 
     // OccupancyGrid instance for map and marker operations
     const [occupancyGrid, occupancyGridSet] = useState<OccupancyGrid>();
@@ -113,20 +111,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
             if (unsubscribeOnUnmount) unsubscribeOnUnmount();
         };
     }, [occupancyGrid]);
-
-    // Function to add a toast notification
-    const addToast = (
-        type: 'success' | 'error' | 'info',
-        message: string,
-        duration?: number
-    ) => {
-        // Generate a unique ID for toast
-        const id = genUUID();
-        // Add the toast to the state!
-        toastsSet((prevToasts) => (
-            [...prevToasts, { id, type, message, duration }]
-        ));
-    };
 
     /**
      * All navigation-related functions, provided by underMapFunctionProvider.
@@ -311,7 +295,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     return (
         <div className='auto-nav'>
-            <Toasts toasts={toasts} toastsSet={toastsSet} />
             <div className="map-wrapper">
                 <Map />
             </div>

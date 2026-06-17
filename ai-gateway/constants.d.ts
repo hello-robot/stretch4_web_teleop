@@ -73,5 +73,10 @@ export declare const JOINT_MOVE_ACTIONS: readonly [
     "gripper_open",
     "gripper_close",
 ];
+export declare const MACRO_MOVE_ACTIONS: readonly [
+    "center_wrist",
+    "stow_wrist",
+];
+
 export declare const VOICE_SPEEDS: readonly ["slow", "medium", "fast"];
 export declare const VOICE_SPEED_DEFAULT: "medium";
