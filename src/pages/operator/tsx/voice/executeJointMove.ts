@@ -208,6 +208,7 @@ class JointMoveExecutor extends VoiceMoveExecutor {
                 action,
                 speed,
                 duration_ms: clampedMs,
+                distance_display: `${distance % 1 === 0 ? distance : distance.toFixed(2)} ${meta.unit}`,
                 repeated: opts?.repeated,
             });
             return {

@@ -546,12 +546,12 @@ export async function connectOpenAIRealtimeVoice(
     const handleRealtimeDataMessage = async (blob: Record<string, unknown>) => {
         const eventType = String(blob.type ?? "");
 
-        if (
-            eventType === "response.done" ||
-            eventType === "output_audio_buffer.stopped"
-        ) {
-            scheduleMicUnmute();
-        }
+        // if (
+        //     eventType === "response.done" ||
+        //     eventType === "output_audio_buffer.stopped"
+        // ) {
+        //     scheduleMicUnmute();
+        // }
 
         // ── Instant stop on speech start ─────────────────────────────────────────
         // Stop any ongoing motion the moment the VAD detects speech, before
