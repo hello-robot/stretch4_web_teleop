@@ -1,6 +1,6 @@
 import { RemoteRobot } from "shared/remoterobot";
 import { VelocityCommand } from "shared/commands";
-import { ValidJoints } from "shared/util";
+import { RobotPose, ValidJoints } from "shared/util";
 import {
     ActionModeType,
     PilotButtonPadType,
@@ -61,6 +61,20 @@ export abstract class FunctionProvider {
      */
     public static robotIsConnected(): boolean {
         return FunctionProvider.remoteRobot !== undefined;
+    }
+
+    /**
+     * Move the robot to an absolute pose (e.g. a voice macro).
+     * Stops any ongoing velocity or timed move, then sends a setRobotPose command.
+     *
+     * @param pose  Partial RobotPose mapping joint names to absolute target positions.
+     * @returns false if no robot is connected.
+     */
+    public executeAbsolutePose(pose: RobotPose): boolean {
+        if (!FunctionProvider.remoteRobot) return false;
+        this.stopCurrentAction(true);
+        FunctionProvider.remoteRobot.setRobotPose(pose);
+        return true;
     }
 
     public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {

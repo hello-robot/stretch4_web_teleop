@@ -14,11 +14,13 @@ import {
 import {
     executeJointMoveOnProvider,
     executeStopMotionOnProvider,
+    executeMacroOnProvider,
 } from "./executeJointMove";
 import {
     VOICE_SPEED_DEFAULT,
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
+    EXECUTE_MACRO,
     isPlaceholderArgs,
     NO_ARG_VOICE_TOOLS,
     type VoiceSpeed,
@@ -493,7 +495,23 @@ export async function connectOpenAIRealtimeVoice(
             executeStopMotionOnProvider(voiceProvider),
         repeat_base_move: (voiceProvider) =>
             executeRepeatBaseMoveOnProvider(voiceProvider),
+        execute_macro: (voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                opts.onLog?.(
+                    `[Realtime] Bad JSON arguments for execute_macro: ${fc.arguments}`,
+                );
+                rawArgs = {};
+            }
+            return executeMacroOnProvider(voiceProvider, rawArgs);
+        },
     };
+
 
     const runVoiceToolOnce = async (
         fc: ExtractedFnCall,

@@ -33,6 +33,8 @@ const {
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_RAD_MIN,
     JOINT_DISTANCE_RAD_MAX,
+    EXECUTE_MACRO,
+    VOICE_MACRO_NAMES,
 } = require("./constants");
 
 /**
@@ -88,6 +90,10 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user wants to halt ANY motion (stop, wait, freeze, enough, pause, cancel), call tool ${STOP_MOTION} with no arguments.`,
                 `Call ${STOP_MOTION} IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
                 `When the user wants to repeat the last base move (again, same thing, one more time), call tool ${REPEAT_BASE_MOVE} with no arguments. Ensure you are over 90% confident.`,
+                // ── Macro actions ──────────────────────────────────────────────────────────────────────────
+                `Macro actions move the robot to predefined poses. Call ${EXECUTE_MACRO} with the appropriate macro name.`,
+                `macro="center_wrist": sets wrist yaw=0, pitch=0, roll=0. Phrases: "center the wrist", "reset wrist", "straighten wrist", "wrist to zero", "zero wrist", "center wrist".`,
+                `macro="stow_wrist": sets wrist yaw=pi/2, pitch=0, roll=0. Phrases: "stow the wrist", "stow wrist", "tuck wrist", "wrist to stow", "park wrist".`,
                 // ── Global rules ─────────────────────────────────────────────────────────
                 "Call at most ONE tool per user utterance. If ambiguous, prefer slower/shorter movements.",
                 "Do not respond to the user. Do not speak to the user. Only call tools as instructed.",
@@ -201,6 +207,24 @@ function buildRealtimeVoiceSessionPayload() {
                     REPEAT_BASE_MOVE,
                     "Repeats the last successful voice base move (same direction, speed, duration). No parameters."
                 ),
+                // ── execute_macro ──────────────────────────────────────────────────────────
+                {
+                    type: "function",
+                    name: EXECUTE_MACRO,
+                    description: "Move the robot to a predefined pose (macro). Use for requests like 'center the wrist' or 'reset wrist'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            macro: {
+                                type: "string",
+                                enum: VOICE_MACRO_NAMES,
+                                description: "Name of the macro to execute.",
+                            },
+                        },
+                        required: ["macro"],
+                        additionalProperties: false,
+                    },
+                },
             ],
             tool_choice: "auto",
             audio: {
