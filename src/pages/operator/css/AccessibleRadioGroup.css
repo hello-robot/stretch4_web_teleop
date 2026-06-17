@@ -195,6 +195,7 @@
     background: transparent;
 }
 
-.accessible-radio-group.voice-move-execution-mode .accessible-radio-group__legend {
+.accessible-radio-group.voice-move-execution-mode
+    .accessible-radio-group__legend {
     opacity: 0.7;
 }
