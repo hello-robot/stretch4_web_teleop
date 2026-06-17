@@ -25,6 +25,12 @@ import {
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
+import {
+    AccessibleRadioGroup,
+    type AccessibleRadioOption,
+} from "./AccessibleRadioGroup";
+import Ellipsis from "../basic_components/Ellipsis";
+import "operator/css/VoiceCommandAssistant.css";
 
 /** Explicit check to make sure operator is using
  * LAN/ngrok (LocalStorage + socket.io) and not cloud (Firebase) */
@@ -39,10 +45,23 @@ export type VoiceCommandAssistantProps = {
 const styleButton = {
     fontWeight: "bold" as const,
     width: "100%",
+    height: 43,
     backgroundColor: "hsla(184, 100%, 50%, 1)",
-    padding: "17px 0",
     color: "hsl(0deg 0% 0% / 75%)",
 };
+
+const VOICE_MOVE_EXECUTION_OPTIONS: AccessibleRadioOption[] = [
+    {
+        value: "direct",
+        label: "Direct",
+        ariaLabel: "Direct",
+    },
+    {
+        value: "button_provider",
+        label: "Button Pad",
+        ariaLabel: "Button Pad",
+    },
+];
 
 /** OpenAI speech-to-speech voice POC overlay (Realtime WebRTC). */
 export const VoiceCommandAssistant = ({
@@ -55,9 +74,7 @@ export const VoiceCommandAssistant = ({
         "idle" | "connecting" | "live" | "error"
     >("idle");
     const [statusLine, statusLineSet] =
-        useState<string>("Not connected");
-    const [lastExec, lastExecSet] =
-        useState<string>("Awaiting execute_base_move tool…");
+        useState<string>("Connect");
     const [micLevel, micLevelSet] = useState(0);
     const [micGateOpen, micGateOpenSet] = useState(false);
     const [voiceSessionReady, voiceSessionReadySet] = useState(() =>
@@ -85,7 +102,7 @@ export const VoiceCommandAssistant = ({
             sessionRef.current = null;
         }
         phaseSet("idle");
-        statusLineSet("Not connected");
+        statusLineSet("Connect");
         micLevelSet(0);
         micGateOpenSet(false);
     }, []);
@@ -119,13 +136,12 @@ export const VoiceCommandAssistant = ({
                 voiceMoveExecutionMode,
                 onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
-                onStatus: (t) =>
-                    statusLineSet((prev) =>
-                        `${t} (${new Date().toLocaleTimeString()})`,
-                    ),
                 onLog: (lg) => {
                     if (isVoiceToolLogLine(lg)) {
-                        lastExecSet(lg.slice(0, 240));
+                        console.log(
+                            "[VoiceCommandAssistant] tool trace:",
+                            lg.slice(0, 240),
+                        );
                     }
                 },
                 onMicLevel: (level, gateOpen) => {
@@ -161,10 +177,33 @@ export const VoiceCommandAssistant = ({
         phase !== "live"
             ? ""
             : micGateOpen
-                ? "Listening — speak clearly at the device"
+                ? "Listening..."
                 : micLevel > 0.001
-                    ? "Microphone gate closed — speak louder or closer"
-                    : "Waiting for voice — speak at the device";
+                    ? "Microphone gate closed"
+                    : "Ready";
+
+    const primaryButtonLabel =
+        phase === "live"
+            ? "Disconnect"
+            : phase === "connecting"
+                ? "Connecting…"
+                : statusLine;
+    const primaryButtonAriaLabel =
+        phase === "connecting" ? "Connecting" : primaryButtonLabel;
+
+    const onPrimaryButtonClick = () => {
+        if (phase === "live") {
+            void disconnect();
+            return;
+        }
+        if (phase !== "connecting") {
+            void connect();
+        }
+    };
+
+    const primaryButtonDisabled =
+        phase === "connecting" ||
+        (phase !== "live" && !canConnectVoice);
 
     return (
         <div
@@ -172,134 +211,96 @@ export const VoiceCommandAssistant = ({
                 zIndex: 10000,
                 position: "absolute",
                 bottom: 0,
-                left: 0,
-                right: 0,
-                top: 0,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "hsla(0, 0%, 0%, 0.5)",
+                backgroundColor: "hsla(0, 0%, 0%, 1)",
                 backdropFilter: "blur(30px)",
                 width: "100%",
-                height: "fit-content",
-                padding: "20px 20px 12px",
-                transform: phase === "live" ? "translateY(-128px)" : "translateY(0%)",
-                transition: "transform 0.3s ease-in-out",
+                padding: "0px 20px 20px",
             }}
         >
             <div
                 style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "10px",
                     fontWeight: 600,
                     width: "100%",
                     maxWidth: 520,
                 }}
             >
-                {robotOk && voiceSessionOk ? (
-                    <fieldset
-                        disabled={executionModeLocked}
-                        style={{
-                            padding: '20px 15px',
-                            width: "100%",
-                            background: 'hsl(184deg 100% 40% / 10%)',
-                            borderRadius: 10,
-                            border: '1px solid hsl(184deg 100% 40% / 10%)',
-                        }}
-                    >
-                        <legend
-                            style={{
-                                position: 'absolute',
-                                top: 29,
-                                fontSize: "0.88em",
-                                color: "hsl(184deg 60% 87%)",
-                                marginBottom: "6px",
-                                opacity: 0.7,
-                            }}
-                        >
-                            Move execution (locked while voice connected)
-                        </legend>
-                        <div
-                            style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "8px",
-                                margin: '15px 0 0',
-                                fontSize: "0.88em",
-                                color: "hsl(184deg 60% 87%)",
-                            }}
-                        >
-                            <label
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    cursor: executionModeLocked
-                                        ? "not-allowed"
-                                        : "pointer",
-                                }}
-                            >
-                                <input
-                                    type="radio"
-                                    name="voiceMoveExecutionMode"
-                                    checked={
-                                        voiceMoveExecutionMode === "direct"
-                                    }
-                                    disabled={executionModeLocked}
-                                    onChange={() =>
-                                        voiceMoveExecutionModeSet("direct")
-                                    }
-                                />
-                                Direct base calls
-                            </label>
-                            <label
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    cursor: executionModeLocked
-                                        ? "not-allowed"
-                                        : "pointer",
-                                }}
-                            >
-                                <input
-                                    type="radio"
-                                    name="voiceMoveExecutionMode"
-                                    checked={
-                                        voiceMoveExecutionMode ===
-                                        "button_provider"
-                                    }
-                                    disabled={executionModeLocked}
-                                    onChange={() =>
-                                        voiceMoveExecutionModeSet(
-                                            "button_provider",
-                                        )
-                                    }
-                                />
-                                Press movement buttons
-                            </label>
-                        </div>
-                    </fieldset>
-                ) : null}
-                <p
+                <div
                     style={{
-                        fontWeight: 600,
-                        wordBreak: "break-word",
-                        margin: '10px 0 0',
-                        color: "hsl(184deg 100% 50%)",
+                        display: "flex",
+                        flexDirection: "row",
+                        gap: "20px",
+                        margin: "10px 0 0",
+                        width: "100%",
                     }}
                 >
-                    {statusLine}
-                </p>
+                    <button
+                        className="voice-command-assistant__primary-button"
+                        style={styleButton}
+                        type="button"
+                        disabled={primaryButtonDisabled}
+                        aria-label={primaryButtonAriaLabel}
+                        aria-busy={phase === "connecting"}
+                        onClick={onPrimaryButtonClick}
+                    >
+                        {phase === "connecting" ? (
+                            <>
+                                <span
+                                    className="voice-command-assistant__spinner"
+                                    aria-hidden
+                                />
+                                <span className="voice-command-assistant__connecting-label">
+                                    Connecting
+                                    <span
+                                        className="voice-command-assistant__connecting-ellipsis"
+                                        aria-hidden="true"
+                                    >
+                                        <Ellipsis
+                                            size={2}
+                                            gap={1}
+                                            color="hsl(0deg 0% 0% / 75%)"
+                                        />
+                                    </span>
+                                </span>
+                            </>
+                        ) : (
+                            primaryButtonLabel
+                        )}
+                    </button>
+                </div>
+                {robotOk && voiceSessionOk && phase !== "live" ? (
+                    <AccessibleRadioGroup
+                        className="voice-move-execution-mode"
+                        legend="Movement Execution Mode"
+                        name="voiceMoveExecutionMode"
+                        options={VOICE_MOVE_EXECUTION_OPTIONS}
+                        value={voiceMoveExecutionMode}
+                        onChange={(value) =>
+                            voiceMoveExecutionModeSet(
+                                value as VoiceMoveExecutionMode,
+                            )
+                        }
+                        disabled={executionModeLocked}
+                        padding={8}
+                        hasRipple
+                        layout="horizontal"
+                    />
+                ) : null}
                 {phase === "live" ? (
                     <div
                         style={{
                             display: "flex",
                             flexDirection: "column",
+                            justifyContent: "center",
+                            alignItems: "center",
                             gap: "6px",
                             width: "100%",
+                            height: 78,
                         }}
                     >
                         <div
@@ -375,45 +376,6 @@ export const VoiceCommandAssistant = ({
                         </p>
                     </div>
                 ) : null}
-                <div
-                    style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        gap: "20px",
-                        margin: "10px 0 0",
-                        width: "100%",
-                    }}
-                >
-                    {phase !== "live"
-                        // Connect microphone
-                        ? (<button
-                            style={styleButton}
-                            type="button"
-                            disabled={
-                                phase === "connecting" ||
-                                !canConnectVoice
-                            }
-                            onClick={() => void connect()}
-                        >
-                            Connect voice
-                        </button>)
-                        // Disconnect microphone
-                        : (<button
-                            style={styleButton}
-                            type="button"
-                            disabled={phase !== "live" && phase !== "connecting"}
-                            onClick={() => void disconnect()}
-                        >
-                            Disconnect
-                        </button>)
-                    }
-                </div>
-                <p
-                    aria-live="polite"
-                    style={{ fontWeight: 400, fontSize: "0.88em", margin: 0, color: "hsl(184deg 60% 87%)" }}
-                >
-                    Tool trace: {lastExec}
-                </p>
             </div>
         </div>
     );
