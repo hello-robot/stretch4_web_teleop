@@ -28,6 +28,7 @@ import {
     type JointMoveAction,
 } from "./constants";
 import { VoiceMoveExecutor } from "./VoiceMoveExecutor";
+import { isVoiceMacroName, VOICE_MACROS } from "./voiceMacros";
 
 // ── Action metadata ───────────────────────────────────────────────────────────
 
@@ -251,3 +252,27 @@ export function executeStopMotionOnProvider(
             : "No active motion to stop.",
     };
 }
+
+/**
+ * Execute a named voice macro — moves the robot to an absolute pose target.
+ * Uses setRobotPose (relayed via RemoteRobot → FollowJointTrajectory on the robot page).
+ * Only the joints defined in the macro are moved; all others stay put.
+ */
+export function executeMacroOnProvider(
+    provider: ButtonFunctionProvider,
+    raw: Record<string, unknown>,
+): ExecuteToolResult {
+    const macroName = typeof raw.macro === "string" ? raw.macro : "";
+
+    if (!isVoiceMacroName(macroName)) {
+        return { ok: false, detail: `Unknown macro: "${macroName}".`, ignored: true };
+    }
+
+    const pose = VOICE_MACROS[macroName];
+    const started = provider.executeAbsolutePose(pose);
+    if (!started) {
+        return { ok: false, detail: "Robot not connected." };
+    }
+    return { ok: true, detail: `Macro "${macroName}" started.` };
+}
+

@@ -13,12 +13,16 @@ export declare const EXECUTE_BASE_MOVE: "execute_base_move";
 export declare const EXECUTE_JOINT_MOVE: "execute_joint_move";
 export declare const STOP_MOTION: "stop_motion";
 export declare const REPEAT_BASE_MOVE: "repeat_base_move";
+export declare const EXECUTE_MACRO: "execute_macro";
+export declare const VOICE_MACRO_NAMES: readonly ["center_wrist", "stow_wrist"];
 export declare const VOICE_TOOLS: readonly [
     typeof EXECUTE_BASE_MOVE,
     typeof EXECUTE_JOINT_MOVE,
     typeof STOP_MOTION,
     typeof REPEAT_BASE_MOVE,
+    typeof EXECUTE_MACRO,
 ];
+
 export declare const BASE_TRANSLATE_ACTIONS: readonly [
     "forward",
     "backward",

@@ -55,8 +55,14 @@ const STOP_MOTION = "stop_motion";
 /** Replay last successful voice execute_base_move from client memory (no arguments). */
 const REPEAT_BASE_MOVE = "repeat_base_move";
 
+/** Run a named macro that moves the robot to a predefined pose. */
+const EXECUTE_MACRO = "execute_macro";
+
+/** Names of available macros (matches voiceMacros.ts on the client). */
+const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
+
 /** All voice Realtime tools registered in the session payload and executed on the client. */
-const VOICE_TOOLS = [EXECUTE_BASE_MOVE, EXECUTE_JOINT_MOVE, STOP_MOTION, REPEAT_BASE_MOVE];
+const VOICE_TOOLS = [EXECUTE_BASE_MOVE, EXECUTE_JOINT_MOVE, STOP_MOTION, REPEAT_BASE_MOVE, EXECUTE_MACRO];
 
 // ── Base move action enums ────────────────────────────────────────────────────
 
@@ -142,6 +148,8 @@ module.exports = {
     EXECUTE_JOINT_MOVE,
     STOP_MOTION,
     REPEAT_BASE_MOVE,
+    EXECUTE_MACRO,
+    VOICE_MACRO_NAMES,
     VOICE_TOOLS,
     BASE_TRANSLATE_ACTIONS,
     BASE_ROTATE_ACTIONS,
