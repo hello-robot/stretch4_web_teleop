@@ -531,6 +531,14 @@ export async function connectOpenAIRealtimeVoice(
             scheduleMicUnmute();
         }
 
+        // ── Instant stop on speech start ─────────────────────────────────────────
+        // Stop any ongoing motion the moment the VAD detects speech, before
+        // transcription or model inference. The next tool call will restart motion
+        // if the command is anything other than "stop".
+        if (eventType === "input_audio_buffer.speech_started") {
+            executeStopMotionOnProvider(opts.voiceProvider);
+        }
+
         if (
             eventType.includes("input_audio_transcription") &&
             eventType.includes("completed")
