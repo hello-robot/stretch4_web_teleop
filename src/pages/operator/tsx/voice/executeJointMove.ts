@@ -310,4 +310,3 @@ export function executeMacroOnProvider(
     }
     return { ok: true, detail: `Macro "${macroName}" started.` };
 }
-
