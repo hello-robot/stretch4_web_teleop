@@ -54,6 +54,7 @@ import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
 import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
+import Toasts, { useToasts } from "./layout_components/Toasts";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -122,6 +123,7 @@ export const MobileOperator = (props: {
 
     const { toasts, toastsSet, addToast } = useToasts();
 
+<<<<<<< HEAD
     // Close Saved Locations when leaving AutoNav
     React.useEffect(() => {
         if (sceneSelected !== "autonav") {
@@ -178,6 +180,9 @@ export const MobileOperator = (props: {
         [],
     );
     const alertTimeoutDuration = 100; // milliseconds
+=======
+    const alertTimeoutDuration = 5000; // milliseconds
+>>>>>>> 560c377 (Added toasts for command execution)
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
@@ -324,15 +329,12 @@ export const MobileOperator = (props: {
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
-<<<<<<< HEAD
             <Toasts toasts={toasts} toastsSet={toastsSet} />
-
-=======
             <VoiceCommandAssistant
                 onVelocityScaleApplied={applyVelocityScale}
                 setActionMode={setActionMode}
+                addToast={addToast}
             />
->>>>>>> 78b6024 (initial commit for custom voice control)
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
@@ -404,11 +406,7 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-<<<<<<< HEAD
                             setVelocityScale={applyVelocityScale}
-=======
-                            onVelocityScaleChange={applyVelocityScale}
->>>>>>> 78b6024 (initial commit for custom voice control)
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}

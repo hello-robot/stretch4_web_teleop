@@ -149,10 +149,11 @@ class JointMoveExecutor extends VoiceMoveExecutor {
     static execute(
         provider: ButtonFunctionProvider,
         raw: Record<string, unknown>,
-        opts?: { skipDedupe?: boolean },
+        opts?: { skipDedupe?: boolean; repeated?: boolean },
     ): ExecuteToolResult {
         const coerced = JointMoveExecutor.coerce(raw);
         if (!coerced) {
+            JointMoveExecutor.emitVoiceMoveFeedback({ kind: "rejected", reason: "invalid" });
             return {
                 ok: false,
                 detail: `Invalid execute_joint_move args: ${JSON.stringify(raw)}`,
@@ -166,6 +167,7 @@ class JointMoveExecutor extends VoiceMoveExecutor {
             !opts?.skipDedupe &&
             JointMoveExecutor.isDuplicate(action, speed, duration_ms, distance)
         ) {
+            JointMoveExecutor.emitVoiceMoveFeedback({ kind: "rejected", reason: "duplicate" });
             return {
                 ok: false,
                 detail: "Duplicate voice joint move suppressed (identical args within debounce window).",
@@ -188,10 +190,26 @@ class JointMoveExecutor extends VoiceMoveExecutor {
             const clampedMs = clampDurationMs(estimatedMs);
 
             const started = provider.timedJointMove(meta.jointName, velocity, clampedMs);
-            if (!started) return JointMoveExecutor.busyOrDisconnected("timedJointMove");
+            if (!started) {
+                const result = JointMoveExecutor.busyOrDisconnected("timedJointMove");
+                JointMoveExecutor.emitVoiceMoveFeedback({
+                    kind: "rejected",
+                    reason: FunctionProvider.robotIsConnected()
+                        ? "busy"
+                        : "disconnected",
+                });
+                return result;
+            }
             JointMoveExecutor.lastExecutedJointMove = {
                 action, speed, duration_ms: clampedMs, distance, at: Date.now(),
             };
+            JointMoveExecutor.emitVoiceMoveFeedback({
+                kind: "move_started",
+                action,
+                speed,
+                duration_ms: clampedMs,
+                repeated: opts?.repeated,
+            });
             return {
                 ok: true,
                 detail:
@@ -202,10 +220,26 @@ class JointMoveExecutor extends VoiceMoveExecutor {
 
         // ── Duration-based path ───────────────────────────────────────────────
         const started = provider.timedJointMove(meta.jointName, velocity, duration_ms);
-        if (!started) return JointMoveExecutor.busyOrDisconnected("timedJointMove");
+        if (!started) {
+            const result = JointMoveExecutor.busyOrDisconnected("timedJointMove");
+            JointMoveExecutor.emitVoiceMoveFeedback({
+                kind: "rejected",
+                reason: FunctionProvider.robotIsConnected()
+                    ? "busy"
+                    : "disconnected",
+            });
+            return result;
+        }
         JointMoveExecutor.lastExecutedJointMove = {
             action, speed, duration_ms, distance: undefined, at: Date.now(),
         };
+        JointMoveExecutor.emitVoiceMoveFeedback({
+            kind: "move_started",
+            action,
+            speed,
+            duration_ms,
+            repeated: opts?.repeated,
+        });
         return {
             ok: true,
             detail:
@@ -230,7 +264,7 @@ export function coerceJointMoveArgs(raw: Record<string, unknown>) {
 export function executeJointMoveOnProvider(
     provider: ButtonFunctionProvider,
     raw: Record<string, unknown>,
-    opts?: { skipDedupe?: boolean },
+    opts?: { skipDedupe?: boolean; repeated?: boolean },
 ): ExecuteToolResult {
     return JointMoveExecutor.execute(provider, raw, opts);
 }

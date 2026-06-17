@@ -147,10 +147,11 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
     static execute(
         provider: ButtonFunctionProvider,
         raw: Record<string, unknown>,
-        opts?: { skipDedupe?: boolean },
+        opts?: { skipDedupe?: boolean; repeated?: boolean },
     ): ExecuteToolResult {
         const coerced = BaseMoveExecutor.coerce(raw);
         if (!coerced) {
+            BaseMoveExecutor.emitVoiceMoveFeedback({ kind: "rejected", reason: "invalid" });
             return {
                 ok: false,
                 detail: `Invalid execute_base_move args: ${JSON.stringify(raw)}`,
@@ -164,6 +165,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             !opts?.skipDedupe &&
             BaseMoveExecutor.isDuplicate(action, speed, duration_ms, distance_m)
         ) {
+            BaseMoveExecutor.emitVoiceMoveFeedback({ kind: "rejected", reason: "invalid" });
             return {
                 ok: false,
                 detail: "Duplicate voice move suppressed (identical args within debounce window).",
@@ -192,9 +194,27 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             if (mode === "button_provider") {
                 const button = VOICE_ACTION_TO_BUTTON[action];
                 const started = provider.timedButtonPadPress(button, clampedMs);
-                if (!started) return BaseMoveExecutor.busyOrDisconnected("timedButtonPadPress");
+                if (!started) {
+                    const result = BaseMoveExecutor.busyOrDisconnected(
+                        "timedButtonPadPress",
+                    );
+                    BaseMoveExecutor.emitVoiceMoveFeedback({
+                        kind: "rejected",
+                        reason: FunctionProvider.robotIsConnected()
+                            ? "busy"
+                            : "disconnected",
+                    });
+                    return result;
+                }
                 BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms: clampedMs, distance_m };
                 BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms: clampedMs, distance_m, at: Date.now() };
+                BaseMoveExecutor.emitVoiceMoveFeedback({
+                    kind: "move_started",
+                    action,
+                    speed,
+                    duration_ms: clampedMs,
+                    repeated: opts?.repeated,
+                });
                 return {
                     ok: true,
                     detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, mode, 0, 0, 0, button),
@@ -202,9 +222,25 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             }
 
             const started = provider.timedBaseDrive(linX, linY, clampedMs, angVel);
-            if (!started) return BaseMoveExecutor.busyOrDisconnected("timedBaseDrive");
+            if (!started) {
+                const result = BaseMoveExecutor.busyOrDisconnected("timedBaseDrive");
+                BaseMoveExecutor.emitVoiceMoveFeedback({
+                    kind: "rejected",
+                    reason: FunctionProvider.robotIsConnected()
+                        ? "busy"
+                        : "disconnected",
+                });
+                return result;
+            }
             BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms: clampedMs, distance_m };
             BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms: clampedMs, distance_m, at: Date.now() };
+            BaseMoveExecutor.emitVoiceMoveFeedback({
+                kind: "move_started",
+                action,
+                speed,
+                duration_ms: clampedMs,
+                repeated: opts?.repeated,
+            });
             return {
                 ok: true,
                 detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, mode, linX, linY, angVel),
@@ -215,9 +251,25 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         if (mode === "button_provider") {
             const button = VOICE_ACTION_TO_BUTTON[action];
             const started = provider.timedButtonPadPress(button, duration_ms);
-            if (!started) return BaseMoveExecutor.busyOrDisconnected("timedButtonPadPress");
+            if (!started) {
+                const result = BaseMoveExecutor.busyOrDisconnected("timedButtonPadPress");
+                BaseMoveExecutor.emitVoiceMoveFeedback({
+                    kind: "rejected",
+                    reason: FunctionProvider.robotIsConnected()
+                        ? "busy"
+                        : "disconnected",
+                });
+                return result;
+            }
             BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms };
             BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms, distance_m: undefined, at: Date.now() };
+            BaseMoveExecutor.emitVoiceMoveFeedback({
+                kind: "move_started",
+                action,
+                speed,
+                duration_ms,
+                repeated: opts?.repeated,
+            });
             return {
                 ok: true,
                 detail: formatMoveOkDetail(action, speed, duration_ms, undefined, mode, 0, 0, 0, button),
@@ -226,9 +278,25 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
 
         const { linX, linY, angVel } = BaseMoveExecutor.velocitiesForAction(action);
         const started = provider.timedBaseDrive(linX, linY, duration_ms, angVel);
-        if (!started) return BaseMoveExecutor.busyOrDisconnected("timedBaseDrive");
+        if (!started) {
+            const result = BaseMoveExecutor.busyOrDisconnected("timedBaseDrive");
+            BaseMoveExecutor.emitVoiceMoveFeedback({
+                kind: "rejected",
+                reason: FunctionProvider.robotIsConnected()
+                    ? "busy"
+                    : "disconnected",
+            });
+            return result;
+        }
         BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms };
         BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms, distance_m: undefined, at: Date.now() };
+        BaseMoveExecutor.emitVoiceMoveFeedback({
+            kind: "move_started",
+            action,
+            speed,
+            duration_ms,
+            repeated: opts?.repeated,
+        });
         return {
             ok: true,
             detail: formatMoveOkDetail(action, speed, duration_ms, undefined, mode, linX, linY, angVel),
@@ -293,7 +361,7 @@ export function coerceExecuteArgs(raw: Record<string, unknown>) {
 export function executeBaseMoveOnProvider(
     provider: ButtonFunctionProvider,
     raw: Record<string, unknown>,
-    opts?: { skipDedupe?: boolean },
+    opts?: { skipDedupe?: boolean; repeated?: boolean },
 ): ExecuteToolResult {
     return BaseMoveExecutor.execute(provider, raw, opts);
 }

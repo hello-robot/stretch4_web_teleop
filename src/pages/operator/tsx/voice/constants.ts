@@ -30,6 +30,7 @@ import {
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_RAD_MIN,
     JOINT_DISTANCE_RAD_MAX,
+    MACRO_MOVE_ACTIONS,
 } from "ai-gateway/constants";
 
 /**
@@ -117,6 +118,9 @@ export type ExecuteToolResult =
         busy?: boolean;
         ignored?: boolean;
     };
+
+// ── Macro move types ──────────────────────────────────────────────────────────
+export type MacroMoveAction = (typeof MACRO_MOVE_ACTIONS)[number];
 
 // ── Dedupe / timing constants ─────────────────────────────────────────────────
 

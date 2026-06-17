@@ -106,10 +106,13 @@ const AutoNav: React.FC<AutoNavProps> = ({
     sceneSelected,
     onSceneSelectedChange,
     addToast,
+<<<<<<< HEAD
     isModalLocationsMenuVisible,
     isModalLocationsMenuVisibleSet,
     onRegisterAutoNavNavControls,
     moveBaseState,
+=======
+>>>>>>> 560c377 (Added toasts for command execution)
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -138,12 +141,15 @@ const AutoNav: React.FC<AutoNavProps> = ({
         };
     }, [occupancyGrid]);
 
+<<<<<<< HEAD
     useEffect(() => {
         return subscribeOccupancyGridReady(() => {
             mapReadySet(true);
         });
     }, []);
 
+=======
+>>>>>>> 560c377 (Added toasts for command execution)
     /**
      * All navigation-related functions, provided by underMapFunctionProvider.
      * Many of these are ROS actions or service calls.
