@@ -19,8 +19,8 @@ import {
     MapPoseMessage,
     ActionState,
     ActionStateMessage,
-    ROSBatteryState,
-    BatteryVoltageMessage,
+    BatteryState,
+    BatteryStateMessage,
     delay,
 } from "shared/util";
 import { AllVideoStreamComponent, VideoStream } from "./videostreams";
@@ -174,13 +174,14 @@ function forwardJointStates(
     } as ValidJointStateMessage);
 }
 
-function forwardBatteryState(batteryState: ROSBatteryState) {
+function forwardBatteryState(batteryState: BatteryState) {
     if (!connection) throw "WebRTC connection undefined";
 
     connection.sendData({
-        type: "batteryVoltage",
-        message: batteryState.voltage,
-    } as BatteryVoltageMessage);
+        type: "batteryState",
+        percentage: batteryState.percentage,
+        isCharging: batteryState.power_supply_status === 1,
+    } as BatteryStateMessage);
 }
 
 function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {

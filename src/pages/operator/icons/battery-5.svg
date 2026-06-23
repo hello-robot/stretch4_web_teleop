@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="32"
+   height="18"
+   viewBox="0 0 32 18"
+   fill="none"
+   version="1.1"
+   id="svg8"
+   sodipodi:docname="battery-5.svg"
+   inkscape:version="1.4 (86a8ad7, 2024-10-11)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview8"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="32.416667"
+     inkscape:cx="10.812339"
+     inkscape:cy="8.9614396"
+     inkscape:window-width="2560"
+     inkscape:window-height="1369"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg8" />
+  <rect
+     width="31.0769"
+     height="18"
+     rx="2.46154"
+     fill="#003F66"
+     id="rect1" />
+  <rect
+     x="1.23071"
+     y="1.6153899"
+     width="4.92308"
+     height="14.7692"
+     fill="#4abaff"
+     id="rect2"
+     clip-path="url(#clipPath13)" />
+  <rect
+     x="1.23071"
+     y="1.6153899"
+     width="4.92308"
+     height="14.7692"
+     fill="#4abaff"
+     id="rect2-4"
+     clip-path="url(#clipPath13-0)"
+     transform="matrix(-1,0,0,1,31.104947,9.8945097e-6)" />
+  <rect
+     x="7.15381"
+     y="1.6153899"
+     width="4.92308"
+     height="14.7692"
+     fill="#4abaff"
+     id="rect3"
+     clip-path="url(#clipPath12)" />
+  <rect
+     x="13.0769"
+     y="1.6153899"
+     width="4.92308"
+     height="14.7692"
+     fill="#4abaff"
+     id="rect4"
+     clip-path="url(#clipPath11)" />
+  <rect
+     x="19"
+     y="1.6153899"
+     width="4.92308"
+     height="14.7692"
+     fill="#4abaff"
+     id="rect5"
+     clip-path="url(#clipPath10)" />
+  <rect
+     x="24.923"
+     y="1.6153899"
+     width="4.92308"
+     height="14.7692"
+     fill="#4abaff"
+     fill-opacity="0.2"
+     id="rect6"
+     clip-path="url(#clipPath9)" />
+  <rect
+     x="25.423"
+     y="2.1153901"
+     width="3.92308"
+     height="13.7692"
+     stroke="#4abaff"
+     stroke-opacity="0.05"
+     id="rect7"
+     clip-path="url(#clipPath8)" />
+  <defs
+     id="defs8">
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath8">
+      <rect
+         x="1.23071"
+         y="1.6153899"
+         width="28.6154"
+         height="14.7692"
+         rx="2.46154"
+         fill="#ffffff"
+         id="rect9" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath9">
+      <rect
+         x="1.23071"
+         y="1.6153899"
+         width="28.6154"
+         height="14.7692"
+         rx="2.46154"
+         fill="#ffffff"
+         id="rect10" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath10">
+      <rect
+         x="1.23071"
+         y="1.6153899"
+         width="28.6154"
+         height="14.7692"
+         rx="2.46154"
+         fill="#ffffff"
+         id="rect11" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath11">
+      <rect
+         x="1.23071"
+         y="1.6153899"
+         width="28.6154"
+         height="14.7692"
+         rx="2.46154"
+         fill="#ffffff"
+         id="rect12" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath12">
+      <rect
+         x="1.23071"
+         y="1.6153899"
+         width="28.6154"
+         height="14.7692"
+         rx="2.46154"
+         fill="#ffffff"
+         id="rect13" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath13">
+      <rect
+         x="1.23071"
+         y="1.6153899"
+         width="28.6154"
+         height="14.7692"
+         rx="2.46154"
+         fill="#ffffff"
+         id="rect14" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath13-0">
+      <rect
+         x="1.23071"
+         y="1.6153899"
+         width="28.6154"
+         height="14.7692"
+         rx="2.46154"
+         fill="#ffffff"
+         id="rect14-9" />
+    </clipPath>
+  </defs>
+</svg>

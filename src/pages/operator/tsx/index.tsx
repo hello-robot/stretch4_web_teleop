@@ -31,7 +31,7 @@ import { MobileOperator } from "./MobileOperator";
 import { isMobile } from "react-device-detect";
 import "operator/css/index.css";
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
-import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
+import { BatteryStateFunctionProvider } from "./function_providers/BatteryStateFunctionProvider";
 import { waitUntilAsync } from "../../../shared/util";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
@@ -50,8 +50,8 @@ export let storageHandler: StorageHandler;
 export var buttonFunctionProvider = new ButtonFunctionProvider();
 
 export var runStopFunctionProvider = new RunStopFunctionProvider();
-export var batteryVoltageFunctionProvider =
-    new BatteryVoltageFunctionProvider();
+export var batteryStateFunctionProvider =
+    new BatteryStateFunctionProvider();
 export var mapFunctionProvider: MapFunctionProvider;
 export var underMapFunctionProvider: UnderMapFunctionProvider;
 export var movementRecorderFunctionProvider: MovementRecorderFunctionProvider;
@@ -205,8 +205,8 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "relativePose":
             remoteRobot.setRelativePose(message.message);
             break;
-        case "batteryVoltage":
-            remoteRobot.sensors.setBatteryVoltage(message.message);
+        case "batteryState":
+            remoteRobot.sensors.setBatteryState(message.percentage, message.isCharging);
             break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
@@ -246,7 +246,7 @@ function configureRemoteRobot() {
     );
 
     remoteRobot.sensors.setBatteryFunctionProviderCallback(
-        batteryVoltageFunctionProvider.updateVoltage
+        batteryStateFunctionProvider.updateState
     );
     remoteRobot.sensors.setModeFunctionProviderCallback(
         homeTheRobotFunctionProvider.updateModeState

@@ -29,7 +29,8 @@ export class RemoteRobot extends React.Component<{}, any> {
     robotChannel: robotMessageChannel;
     sensors: RobotSensors;
     isRunStopped: boolean;
-    batteryVoltage: number;
+    batteryPercentage: number;
+    isCharging: boolean;
     mapPose: ROSLIB.Transform;
     moveBaseGoalReached: boolean;
     moveBaseState?: string;
@@ -39,7 +40,8 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel = props.robotChannel;
         this.sensors = new RobotSensors({});
         this.isRunStopped = false;
-        this.batteryVoltage = 13.0;
+        this.batteryPercentage = 13.0;
+        this.isCharging = false;
         this.mapPose = {
             translation: {
                 x: 0,
@@ -233,7 +235,8 @@ export class RemoteRobot extends React.Component<{}, any> {
 }
 
 class RobotSensors extends React.Component {
-    private batteryVoltage: number = 0.0;
+    private batteryPercentage: number = 0.0;
+    private isCharging: boolean = false;
     private robotPose: RobotPose = {};
     private inJointLimits: ValidJointStateDict = {};
     private inCollision: ValidJointStateDict = {};
@@ -244,7 +247,7 @@ class RobotSensors extends React.Component {
         inJointLimits: ValidJointStateDict,
         inCollision: ValidJointStateDict
     ) => void;
-    private batteryFunctionProviderCallback?: (voltage: number) => void;
+    private batteryFunctionProviderCallback?: (percentage: number, isCharging: boolean) => void;
     private modeFunctionProviderCallback?: (mode: string) => void;
     private isHomedFunctionProviderCallback?: (isHomed: boolean) => void;
     private runStopFunctionProviderCallback?: (enabled: boolean) => void;
@@ -360,11 +363,12 @@ class RobotSensors extends React.Component {
         this.jointStateFunctionProviderCallback = callback;
     }
 
-    setBatteryVoltage(voltage: number) {
-        let change = Math.abs(this.batteryVoltage - voltage) > 0.01;
+    setBatteryState(percentage: number, isCharging: boolean) {
+        let change = Math.abs(this.batteryPercentage - percentage) > 0.005 || this.isCharging !== isCharging;
         if (change && this.batteryFunctionProviderCallback) {
-            this.batteryVoltage = voltage;
-            this.batteryFunctionProviderCallback(this.batteryVoltage);
+            this.batteryPercentage = percentage;
+            this.isCharging = isCharging;
+            this.batteryFunctionProviderCallback(this.batteryPercentage, this.isCharging);
         }
     }
 
@@ -392,7 +396,7 @@ class RobotSensors extends React.Component {
      *
      * @param callback callback to function provider
      */
-    setBatteryFunctionProviderCallback(callback: (voltage: number) => void) {
+    setBatteryFunctionProviderCallback(callback: (percentage: number, isCharging: boolean) => void) {
         this.batteryFunctionProviderCallback = callback;
     }
 
