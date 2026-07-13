@@ -768,6 +768,7 @@ export class Robot extends React.Component {
         let jointVelocities = {
             joint_names: [jointName],
             velocities: [velocity],
+            duration: 0.15  // quadruple heartbeat (0.025s)
         };
         if (!this.jointVelTopic) throw "jointVelTopic is undefined";
         this.jointVelTopic.publish(jointVelocities);
