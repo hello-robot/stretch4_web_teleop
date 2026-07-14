@@ -35,6 +35,10 @@ const {
     JOINT_DISTANCE_RAD_MAX,
     EXECUTE_MACRO,
     VOICE_MACRO_NAMES,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    VOICE_SLEEP_PHRASE_DISPLAY,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_SLEEP_PHRASE_ALT_DISPLAY,
 } = require("./constants");
 
 /**
@@ -68,7 +72,10 @@ function buildRealtimeVoiceSessionPayload() {
             type: "realtime",
             model: "gpt-realtime-2",
             instructions: [
-                "Don't speak to the user",
+                "Do not respond to the user. Do not speak to the user. Only call tools as instructed.",
+                // Wake/sleep phrases — do not tool-call
+                `When the user says only ${VOICE_WAKE_PHRASE_DISPLAY}, ${VOICE_WAKE_PHRASE_ALT_DISPLAY}, or similar wake greetings, do NOT call any tool.`,
+                `When the user says only ${VOICE_SLEEP_PHRASE_DISPLAY}, ${VOICE_SLEEP_PHRASE_ALT_DISPLAY}, or similar farewells, do NOT call any tool.`,
                 // ── Base move harness ────────────────────────────────────────────────────
                 "The user speaks imprecisely. Infer exactly ONE motion command per turn.",
                 `For BASE movement (forward, backward, strafe, rotate), call tool ${EXECUTE_BASE_MOVE}.`,
@@ -233,12 +240,24 @@ function buildRealtimeVoiceSessionPayload() {
             tool_choice: "auto",
             audio: {
                 input: {
+
+                    transcription: {
+                        model: "gpt-4o-mini-transcribe",
+                        language: "en",
+                    },
+                    /** Docs: https://developers.openai.com/api/docs/guides/realtime-vad#server-vad  */
                     turn_detection: {
                         type: "server_vad",
-                        threshold: 0.7,
+                        // How loud and clear incoming audio must be
+                        // before the server counts it as speech
+                        threshold: 0.5,
+                        // When VAD detects speech, OpenAI includes 300ms
+                        // of audio from before the trigger point in that turn
                         prefix_padding_ms: 300,
                         silence_duration_ms: 300,
                         create_response: true,
+                        // If user starts speaking while it will
+                        // interrupt the prior in-flight response
                         interrupt_response: true,
                     },
                 },

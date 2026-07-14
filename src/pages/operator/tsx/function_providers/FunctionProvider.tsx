@@ -1,13 +1,13 @@
-import { RemoteRobot } from "shared/remoterobot";
 import { VelocityCommand } from "shared/commands";
+import { RemoteRobot } from "shared/remoterobot";
 import { RobotPose, ValidJoints } from "shared/util";
+import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
 import { clampDurationMs } from "../voice/constants";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
-import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 
 const x = PilotButtonPads;
 
@@ -61,6 +61,15 @@ export abstract class FunctionProvider {
      */
     public static robotIsConnected(): boolean {
         return FunctionProvider.remoteRobot !== undefined;
+    }
+
+    /** True while a timed voice move or continuous velocity heartbeat is active. */
+    public isMotionActive(): boolean {
+        return (
+            this.timedVoiceMoveActive ||
+            this.velocityExecutionHeartbeat !== undefined ||
+            this.activeVelocityAction !== undefined
+        );
     }
 
     /**
@@ -149,7 +158,7 @@ export abstract class FunctionProvider {
      * @param jointName the joint to actuate
      * @param velocity  signed velocity in joint units/s (m/s for linear, rad/s for rotary)
      * @param durationMs how long to apply velocity (clamped internally)
-     * @returns false if a timed move is already active or no robot attached
+     * @returns false if no robot attached
      */
     public timedJointMove(
         jointName: ValidJoints,
@@ -157,9 +166,6 @@ export abstract class FunctionProvider {
         durationMs: number,
     ): boolean {
         if (!FunctionProvider.remoteRobot) {
-            return false;
-        }
-        if (this.timedVoiceMoveActive) {
             return false;
         }
 

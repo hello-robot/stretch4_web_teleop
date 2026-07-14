@@ -3,36 +3,39 @@
  * sits at the top of the screen. Very WIP.
  */
 
+import "operator/css/VoiceCommandAssistant.css";
 import React, {
     useCallback,
     useEffect,
     useRef,
     useState,
 } from "react";
-import { buttonFunctionProvider } from "..";
-import { FunctionProvider } from "../function_providers/FunctionProvider";
-import { ActionModeType } from "../utils/component_definitions";
-import { velocityScaleForVoiceSpeed } from "../utils/action-speed-scale";
-import {
-    connectOpenAIRealtimeVoice,
-    type ActiveRealtimeVoiceSession,
-} from "../voice/realtimeSession";
-import { setVoiceMoveExecutionContext } from "../voice/executeBaseMove";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
+import { buttonFunctionProvider } from "..";
+import Ellipsis from "../basic_components/Ellipsis";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
+import type { AddToastFn } from "../layout_components/Toasts";
+import { velocityScaleForVoiceSpeed } from "../utils/action-speed-scale";
+import { ActionModeType } from "../utils/component_definitions";
 import {
     isVoiceToolLogLine,
     VOICE_MIC_RMS_THRESHOLD,
-    type VoiceSpeed,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_WAKE_PHRASE_DISPLAY,
     type VoiceMoveExecutionMode,
+    type VoiceSpeed,
 } from "../voice/constants";
+import { setVoiceMoveExecutionContext } from "../voice/executeBaseMove";
+import {
+    connectOpenAIRealtimeVoice,
+    type ActiveRealtimeVoiceSession,
+    type VoiceListeningState,
+} from "../voice/realtimeSession";
 import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
 import {
     AccessibleRadioGroup,
     type AccessibleRadioOption,
 } from "./AccessibleRadioGroup";
-import Ellipsis from "../basic_components/Ellipsis";
-import type { AddToastFn } from "../layout_components/Toasts";
-import "operator/css/VoiceCommandAssistant.css";
 
 /** Explicit check to make sure operator is using
  * LAN/ngrok (LocalStorage + socket.io) and not cloud (Firebase) */
@@ -86,6 +89,8 @@ export const VoiceCommandAssistant = ({
     );
     const [voiceMoveExecutionMode, voiceMoveExecutionModeSet] =
         useState<VoiceMoveExecutionMode>("direct");
+    const [listeningState, listeningStateSet] =
+        useState<VoiceListeningState>("asleep");
 
     const executionModeLocked =
         phase === "connecting" || phase === "live";
@@ -109,6 +114,7 @@ export const VoiceCommandAssistant = ({
         statusLineSet("Connect");
         micLevelSet(0);
         micGateOpenSet(false);
+        listeningStateSet("asleep");
     }, []);
 
     useEffect(() => {
@@ -151,12 +157,14 @@ export const VoiceCommandAssistant = ({
                 onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
                 onVoiceMoveFeedback,
+                onListeningState: listeningStateSet,
                 onLog: (lg) => {
-                    if (isVoiceToolLogLine(lg)) {
-                        console.log(
-                            "[VoiceCommandAssistant] tool trace:",
-                            lg.slice(0, 240),
-                        );
+                    if (
+                        lg.includes("[WakeSleep]") ||
+                        lg.includes("user transcript") ||
+                        isVoiceToolLogLine(lg)
+                    ) {
+                        console.log("[VoiceCommandAssistant]", lg.slice(0, 240));
                     }
                 },
                 onMicLevel: (level, gateOpen) => {
@@ -192,11 +200,11 @@ export const VoiceCommandAssistant = ({
     const micGateHint =
         phase !== "live"
             ? ""
-            : micGateOpen
-                ? "Listening..."
-                : micLevel > 0.001
-                    ? "Microphone gate closed"
-                    : "Ready";
+            : listeningState === "asleep"
+                ? `Asleep — say "${VOICE_WAKE_PHRASE_DISPLAY}" or "${VOICE_WAKE_PHRASE_ALT_DISPLAY}" to wake (or tap Wake)`
+                : micGateOpen
+                    ? "Listening..."
+                    : "Awake — speak your command";
 
     const primaryButtonLabel =
         phase === "live"
@@ -359,7 +367,9 @@ export const VoiceCommandAssistant = ({
                                         transform: `scaleX(${meterFill})`,
                                         backgroundColor: micGateOpen
                                             ? "hsl(184deg 100% 50%)"
-                                            : "hsla(184, 100%, 50%, 0.45)",
+                                            : listeningState === "asleep"
+                                                ? "hsla(184, 100%, 50%, 0.2)"
+                                                : "hsla(184, 100%, 50%, 0.45)",
                                         transition: "transform 0.05s linear",
                                         willChange: "transform",
                                     }}
@@ -383,13 +393,28 @@ export const VoiceCommandAssistant = ({
                                 fontWeight: 400,
                                 fontSize: "0.82em",
                                 margin: 0,
-                                color: micGateOpen
-                                    ? "hsl(184deg 100% 50%)"
-                                    : "hsl(184deg 60% 87%)",
+                                color:
+                                    listeningState === "awake" && micGateOpen
+                                        ? "hsl(184deg 100% 50%)"
+                                        : "hsl(184deg 60% 87%)",
                             }}
                         >
                             {micGateHint}
                         </p>
+                        {listeningState === "asleep" ? (
+                            <button
+                                type="button"
+                                style={{
+                                    ...styleButton,
+                                    height: 36,
+                                    fontSize: "0.9em",
+                                    marginTop: 4,
+                                }}
+                                onClick={() => sessionRef.current?.wake()}
+                            >
+                                Wake
+                            </button>
+                        ) : null}
                     </div>
                 ) : null}
             </div>

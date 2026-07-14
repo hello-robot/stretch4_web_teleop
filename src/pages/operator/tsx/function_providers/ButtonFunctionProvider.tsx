@@ -1,6 +1,6 @@
 import {
-    JOINT_VELOCITIES,
     JOINT_INCREMENTS,
+    JOINT_VELOCITIES,
     ValidJoints,
     ValidJointStateDict,
 } from "shared/util";
@@ -238,9 +238,6 @@ export class ButtonFunctionProvider extends FunctionProvider {
         durationMs: number,
     ): boolean {
         if (!FunctionProvider.remoteRobot) {
-            return false;
-        }
-        if (this.timedVoiceMoveActive) {
             return false;
         }
 

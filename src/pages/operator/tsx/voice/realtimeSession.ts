@@ -4,39 +4,53 @@
  * Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
  */
 
+import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import {
-    clearLastVoiceBaseMove,
-    executeBaseMoveOnProvider,
-    executeRepeatBaseMoveOnProvider,
-    setVoiceMoveExecutionContext,
-} from "./executeBaseMove";
-import {
-    executeJointMoveOnProvider,
-    executeStopMotionOnProvider,
-    executeMacroOnProvider,
-} from "./executeJointMove";
-import {
-    VOICE_SPEED_DEFAULT,
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
-    EXECUTE_MACRO,
     isPlaceholderArgs,
     NO_ARG_VOICE_TOOLS,
-    type VoiceSpeed,
-    type ExecuteToolResult,
-    type VoiceMoveExecutionMode,
-    type VoiceToolName,
-    VOICE_MIC_UNMUTE_COOLDOWN_MS,
+    STOP_MOTION,
+    VOICE_ASLEEP_TOOL_DEFER_MS,
     VOICE_DURATION_MS_DEFAULT,
+    VOICE_MIC_UNMUTE_COOLDOWN_MS,
+    VOICE_SPEED_DEFAULT,
+    VOICE_STOP_KEYWORDS,
     VOICE_TOOLS,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_WAKE_PHRASE_DISPLAY,
 } from "./constants";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
-import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
-import { VoiceMoveFeedback } from "./voiceMoveFeedback";
+import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
+import {
+    createVoiceWakeSleep,
+    type VoiceListeningState,
+    type VoiceWakeSleep,
+} from "./voiceWakeSleep";
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
+
+const sleepMs = (ms: number) =>
+    new Promise<void>((resolve) => {
+        window.setTimeout(resolve, ms);
+    });
+
+/** Extract user transcript text from Realtime transcription events. */
+function extractUserTranscript(blob: Record<string, unknown>): string {
+    if (typeof blob.transcript === "string") {
+        return blob.transcript;
+    }
+    if (typeof blob.delta === "string") {
+        return blob.delta;
+    }
+    const item = blob.item as { transcript?: string } | undefined;
+    if (typeof item?.transcript === "string") {
+        return item.transcript;
+    }
+    return "";
+}
 
 function realtimeHost(): string {
     return OAI_REALTIME_HC;
@@ -322,6 +336,56 @@ async function mintEphemeralCredential(
     return { key, raw };
 }
 
+let voiceWakeSleep: VoiceWakeSleep | undefined;
+
+/** Cleared on wake so trailing STT events from the same utterance are ignored. */
+const transcriptByItem = new Map<string, string>();
+
+voiceWakeSleep = createVoiceWakeSleep({
+    provider: opts.voiceProvider,
+    onStateChange: (s) => {
+        opts.onListeningState?.(s);
+        if (s === "awake") {
+            transcriptByItem.clear();
+        }
+    },
+    onLog: opts.onLog,
+});
+voiceWakeSleep.start();
+
+
+let micGate: MicLevelGate | undefined;
+
+micGate = await createMicLevelGate(ms, {
+    bypassGate: () => voiceWakeSleep?.state === "asleep",
+    onGateChange: (gateOpen, level) => {
+        opts.onMicLevel?.(level, gateOpen);
+    },
+});
+
+if (
+    opts.onVoiceSpeedChange &&
+    opts.onVoicePressAndHoldRequired
+) {
+    const baseFeedback = opts.onVoiceMoveFeedback;
+    setVoiceMoveExecutionContext({
+        mode: opts.voiceMoveExecutionMode ?? "direct",
+        onSpeedChange: opts.onVoiceSpeedChange,
+        onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
+        onVoiceMoveFeedback: (feedback) => {
+            if (
+                feedback.kind === "move_started" ||
+                feedback.kind === "macro_started"
+            ) {
+                voiceWakeSleep?.notifyMotionOrCommand();
+            }
+            baseFeedback?.(feedback);
+        },
+    });
+} else {
+    setVoiceMoveExecutionContext(undefined);
+}
+
 function sendFnOutput(
     dc: RTCDataChannel,
     callId: string,
@@ -360,10 +424,15 @@ export type RealtimeVoiceConnectOptions = {
     onVoicePressAndHoldRequired?: () => void;
     /** Structured feedback when a voice move is accepted or rejected (toast UX). */
     onVoiceMoveFeedback?: (feedback: VoiceMoveFeedback) => void;
+    /** Asleep/awake listening mode (wake/sleep phrases). */
+    onListeningState?: (state: VoiceListeningState) => void;
 };
 
 export type ActiveRealtimeVoiceSession = {
     disconnect: () => Promise<void>;
+    /** Manual wake when Web Speech API is unavailable. */
+    wake: () => void;
+    sleep: () => void;
 };
 
 export async function connectOpenAIRealtimeVoice(
@@ -380,24 +449,12 @@ export async function connectOpenAIRealtimeVoice(
 
     opts.onStatus?.("Fetching token…");
 
-    if (
-        opts.onVoiceSpeedChange &&
-        opts.onVoicePressAndHoldRequired
-    ) {
-        setVoiceMoveExecutionContext({
-            mode: opts.voiceMoveExecutionMode ?? "direct",
-            onSpeedChange: opts.onVoiceSpeedChange,
-            onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
-            onVoiceMoveFeedback: opts.onVoiceMoveFeedback,
-        });
-    } else {
-        setVoiceMoveExecutionContext(undefined);
-    }
-
     const { key: ephemeralKey } = await mintEphemeralCredential(
         tokenUrl,
         voiceSessionToken,
     );
+
+    export type { VoiceListeningState } from "./voiceWakeSleep";
 
     const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -517,6 +574,55 @@ export async function connectOpenAIRealtimeVoice(
     };
 
 
+    /** `item_id` → accumulated transcript from streaming deltas. */
+    const handleUserTranscription = (
+        blob: Record<string, unknown>,
+        eventType: string,
+    ) => {
+        const itemId =
+            typeof blob.item_id === "string" ? blob.item_id : "_default";
+
+        if (eventType === "conversation.item.input_audio_transcription.failed") {
+            const err =
+                typeof (blob.error as { message?: string } | undefined)
+                    ?.message === "string"
+                    ? (blob.error as { message: string }).message
+                    : "unknown";
+            opts.onLog?.(`[Realtime] user transcription failed: ${err}`);
+            transcriptByItem.delete(itemId);
+            return;
+        }
+
+        if (eventType === "conversation.item.input_audio_transcription.delta") {
+            const delta = extractUserTranscript(blob);
+            if (!delta) {
+                return;
+            }
+            const next = (transcriptByItem.get(itemId) ?? "") + delta;
+            transcriptByItem.set(itemId, next);
+            opts.onLog?.(
+                `[Realtime] user transcript (partial): ${next.slice(0, 160)}`,
+            );
+            voiceWakeSleep?.tryPhraseFromTranscript(next, false);
+            return;
+        }
+
+        if (eventType !== "conversation.item.input_audio_transcription.completed") {
+            return;
+        }
+
+        const transcript =
+            extractUserTranscript(blob) || transcriptByItem.get(itemId) || "";
+        transcriptByItem.delete(itemId);
+        if (!transcript) {
+            return;
+        }
+        opts.onLog?.(
+            `[Realtime] user transcript: ${transcript.slice(0, 160)}`,
+        );
+        voiceWakeSleep?.tryPhraseFromTranscript(transcript, true);
+    };
+
     const runVoiceToolOnce = async (
         fc: ExtractedFnCall,
         source: ToolCallSource,
@@ -527,6 +633,44 @@ export async function connectOpenAIRealtimeVoice(
         processedCalls.add(fc.call_id);
         opts.onLog?.(formatToolCallLog(fc, source));
 
+        if (
+            voiceWakeSleep?.state === "asleep" &&
+            fc.name !== STOP_MOTION
+        ) {
+            await sleepMs(VOICE_ASLEEP_TOOL_DEFER_MS);
+        }
+
+        if (voiceWakeSleep?.shouldIgnoreErroneousToolAfterPhraseWake()) {
+            const ignored: ExecuteToolResult = {
+                ok: false,
+                detail: "Ignored — wake phrase only (no movement).",
+                ignored: true,
+            };
+            opts.onLog?.(
+                `[Realtime] Tool result ${JSON.stringify(ignored)} (${fc.call_id})`,
+            );
+            if (dc.readyState === "open") {
+                sendFnOutput(dc, fc.call_id, ignored);
+            }
+            return;
+        }
+
+        const asleep = voiceWakeSleep?.state === "asleep";
+        if (asleep && fc.name !== STOP_MOTION) {
+            const ignored: ExecuteToolResult = {
+                ok: false,
+                detail: `Voice asleep — say "${VOICE_WAKE_PHRASE_DISPLAY}" or "${VOICE_WAKE_PHRASE_ALT_DISPLAY}" to wake.`,
+                ignored: true,
+            };
+            opts.onLog?.(
+                `[Realtime] Tool result ${JSON.stringify(ignored)} (${fc.call_id})`,
+            );
+            if (dc.readyState === "open") {
+                sendFnOutput(dc, fc.call_id, ignored);
+            }
+            return;
+        }
+
         const result: ExecuteToolResult = !isVoiceToolName(fc.name)
             ? {
                 ok: false,
@@ -534,6 +678,10 @@ export async function connectOpenAIRealtimeVoice(
                 ignored: true,
             }
             : voiceToolRunners[fc.name](opts.voiceProvider, fc);
+
+        if (result.ok) {
+            voiceWakeSleep?.notifyMotionOrCommand();
+        }
 
         opts.onLog?.(
             `[Realtime] Tool result ${JSON.stringify(result)} (${fc.call_id})`,
@@ -552,49 +700,37 @@ export async function connectOpenAIRealtimeVoice(
         // ) {
         //     scheduleMicUnmute();
         // }
-
-        // ── Instant stop on speech start ─────────────────────────────────────────
-        // Stop any ongoing motion the moment the VAD detects speech, before
-        // transcription or model inference. The next tool call will restart motion
-        // if the command is anything other than "stop".
-        if (eventType === "input_audio_buffer.speech_started") {
-            executeStopMotionOnProvider(opts.voiceProvider);
-        }
-
-        if (
-            eventType.includes("input_audio_transcription") &&
-            eventType.includes("completed")
-        ) {
+        if (eventType.includes("input_audio_transcription")) {
+            handleUserTranscription(blob, eventType);
+            if (voiceWakeSleep?.state !== "awake") {
+                return;
+            }
             const transcript =
-                typeof blob.transcript === "string"
-                    ? blob.transcript
-                    : typeof (blob as { item?: { transcript?: string } }).item
-                        ?.transcript === "string"
-                        ? (blob as { item: { transcript: string } }).item
-                            .transcript
-                        : "";
-            if (transcript) {
-                opts.onLog?.(
-                    `[Realtime] user transcript: ${transcript.slice(0, 160)}`,
-                );
-                // ── Fast-path stop ────────────────────────────────────────────────────────────
-                // Fire stop immediately from the transcript, before the AI tool call
-                // pipeline completes. Only applies to short utterances that are clearly
-                // stop commands (to avoid false positives on longer sentences).
-                const STOP_KEYWORDS = new Set([
-                    "stop", "freeze", "halt", "pause", "cancel", "enough", "wait",
-                ]);
+                extractUserTranscript(blob) ||
+                transcriptByItem.get(
+                    typeof blob.item_id === "string" ? blob.item_id : "_default",
+                ) ||
+                "";
+            if (
+                eventType ===
+                "conversation.item.input_audio_transcription.completed" &&
+                transcript
+            ) {
+                // ── Interrupt policy: intentional stop only ───────────────────────────────────
+                // Motion continues through non-command speech and VAD speech_started.
+                // Local stop here only for short transcripts matching VOICE_STOP_KEYWORDS;
+                // otherwise wait for stop_motion or a superseding movement tool.
                 const words = transcript.trim().toLowerCase().split(/\s+/);
                 if (
                     words.length <= 3 &&
-                    words.some((w) => STOP_KEYWORDS.has(w))
-                ) {
+                    words.some((w) => VOICE_STOP_KEYWORDS.has(w))) {
                     opts.onLog?.(
                         `[Realtime] Fast-path stop triggered by transcript: "${transcript.trim()}"`,
                     );
                     executeStopMotionOnProvider(opts.voiceProvider);
                 }
             }
+            return;
         }
 
         /** Streamed tool args (`response.function_call_arguments.delta`), finish on `.done`. */
@@ -698,7 +834,9 @@ export async function connectOpenAIRealtimeVoice(
     });
 
     dc.addEventListener("open", () => {
-        opts.onStatus?.("Data channel ready — listening");
+        opts.onStatus?.(
+            `Data channel ready — say ${VOICE_WAKE_PHRASE_DISPLAY} or ${VOICE_WAKE_PHRASE_ALT_DISPLAY} to wake`,
+        );
     });
 
     const offer = await pc.createOffer({
@@ -721,6 +859,8 @@ export async function connectOpenAIRealtimeVoice(
 
     if (!sdpResp.ok) {
         const errTxt = await sdpResp.text();
+        voiceWakeSleep?.stop();
+        voiceWakeSleep = undefined;
         micGate?.stop();
         ms.getTracks().forEach((t) => {
             t.stop();
@@ -744,6 +884,8 @@ export async function connectOpenAIRealtimeVoice(
             clearTimeout(micUnmuteTimer);
             micUnmuteTimer = undefined;
         }
+        voiceWakeSleep?.stop();
+        voiceWakeSleep = undefined;
         micGate?.stop();
         micGate?.transmitStream.getTracks().forEach((t) => {
             t.stop();
@@ -764,5 +906,9 @@ export async function connectOpenAIRealtimeVoice(
         opts.onStatus?.("Disconnected");
     }
 
-    return { disconnect };
+    return {
+        disconnect,
+        wake: () => voiceWakeSleep?.wake(),
+        sleep: () => voiceWakeSleep?.sleep("phrase"),
+    };
 }
