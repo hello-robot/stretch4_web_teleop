@@ -80,3 +80,10 @@ export declare const MACRO_MOVE_ACTIONS: readonly [
 
 export declare const VOICE_SPEEDS: readonly ["slow", "medium", "fast"];
 export declare const VOICE_SPEED_DEFAULT: "medium";
+export declare const VOICE_SLEEP_PHRASE: "bye bye stretch";
+export declare const VOICE_WAKE_PHRASE_DISPLAY: "Hello Stretch";
+export declare const VOICE_SLEEP_PHRASE_DISPLAY: "Bye bye Stretch";
+export declare const VOICE_WAKE_PHRASE_ALT: "hello robot";
+export declare const VOICE_SLEEP_PHRASE_ALT: "bye bye robot";
+export declare const VOICE_WAKE_PHRASE_ALT_DISPLAY: "Hello Robot";
+export declare const VOICE_SLEEP_PHRASE_ALT_DISPLAY: "Bye bye Robot";

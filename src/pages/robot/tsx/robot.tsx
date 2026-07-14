@@ -14,8 +14,9 @@ import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
+    getPlaybackJointVelocities,
+    getPlaybackJointVelocity,
     getStretchTool,
-    JOINT_VELOCITIES,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
@@ -24,9 +25,7 @@ import {
     ROSPose,
     StretchTool,
     ValidJoints,
-    VideoProps,
-    getPlaybackJointVelocity,
-    getPlaybackJointVelocities,
+    VideoProps
 } from "shared/util";
 import {
     RobotPose,
@@ -156,7 +155,6 @@ export class Robot extends React.Component {
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
         this.odomCallback = props.odomCallback;
-<<<<<<< HEAD
         this.moveBaseResultCallback = (goalState) => {
             if (goalState.state !== "Navigation executing!") {
                 this.moveBaseGoalID = undefined;
@@ -167,9 +165,6 @@ export class Robot extends React.Component {
             }
             props.moveBaseResultCallback(goalState);
         };
-=======
-        this.moveBaseResultCallback = props.moveBaseResultCallback;
->>>>>>> c357041 (subscribe to odom)
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
         this.modeCallback = props.modeCallback;

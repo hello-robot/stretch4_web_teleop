@@ -31,6 +31,14 @@ import {
     JOINT_DISTANCE_RAD_MIN,
     JOINT_DISTANCE_RAD_MAX,
     MACRO_MOVE_ACTIONS,
+    VOICE_WAKE_PHRASE,
+    VOICE_SLEEP_PHRASE,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    VOICE_SLEEP_PHRASE_DISPLAY,
+    VOICE_WAKE_PHRASE_ALT,
+    VOICE_SLEEP_PHRASE_ALT,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_SLEEP_PHRASE_ALT_DISPLAY,
 } from "ai-gateway/constants";
 
 /**
@@ -62,6 +70,14 @@ export {
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_RAD_MIN,
     JOINT_DISTANCE_RAD_MAX,
+    VOICE_WAKE_PHRASE,
+    VOICE_SLEEP_PHRASE,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    VOICE_SLEEP_PHRASE_DISPLAY,
+    VOICE_WAKE_PHRASE_ALT,
+    VOICE_SLEEP_PHRASE_ALT,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_SLEEP_PHRASE_ALT_DISPLAY,
 };
 
 // ── Base move types ───────────────────────────────────────────────────────────
@@ -138,6 +154,13 @@ export const VOICE_MOVE_DEDUPE_MS = 1500;
 export const VOICE_MIC_UNMUTE_COOLDOWN_MS = 500;
 
 /**
+ * Pre-roll audio retained even if gate is closed
+ * so that initial voice utterance is included.
+*/
+export const VOICE_MIC_GATE_LOOKBACK_MS = 200;
+
+
+/**
  * Minimum normalized RMS (0–1) to open mic gate toward OpenAI.
  * Example: 0.03 ≈ meter tick at 3%; normal speech near the phone must pass it, quiet chatter across the room should stay below.
  * Lower = easier to trigger; higher = fewer accidental bystander commands.
@@ -145,22 +168,88 @@ export const VOICE_MIC_UNMUTE_COOLDOWN_MS = 500;
 export const VOICE_MIC_RMS_THRESHOLD = 0.03;
 
 /**
- * Sustained loudness before gate opens (ms).
- * Example: a brief cough or clack under threshold for <80ms does not start a voice command; speaking "move forward" does.
- */
-export const VOICE_MIC_GATE_ATTACK_MS = 80;
-
-/**
  * Keep gate open briefly after level drops (ms).
  * Example: The mic will be hot for words with trailing syllables like "for-ward" and will transmit as expected.
  */
-export const VOICE_MIC_GATE_HANG_MS = 250;
+export const VOICE_MIC_GATE_HANG_MS = 200;
 
 /**
  * RMS polling interval (ms).
  * Example: mic meter updates ~10 times per second.
  */
-export const VOICE_MIC_GATE_POLL_MS = 100;
+export const VOICE_MIC_GATE_POLL_MS = 50;
+
+/** Complete set of wake phrases. */
+export const VOICE_WAKE_PHRASE_ALIASES = [
+    VOICE_WAKE_PHRASE,
+    VOICE_WAKE_PHRASE_ALT,
+    "hi stretch",
+    "hey stretch",
+    "hallo stretch",
+    "ello stretch",
+    "hi robot",
+    "hey robot",
+] as const;
+
+/** Complete set of sleep phrases. */
+export const VOICE_SLEEP_PHRASE_ALIASES = [
+    VOICE_SLEEP_PHRASE,
+    VOICE_SLEEP_PHRASE_ALT,
+    "by by stretch",
+    "bye stretch",
+    "goodbye stretch",
+    "good bye stretch",
+    "good bye robot",
+    "bye robot",
+] as const;
+
+/** Returns true when normalized text contains a wake phrase alias. */
+export function matchesWakePhrase(normalized: string): boolean {
+    return VOICE_WAKE_PHRASE_ALIASES.some((phrase) =>
+        normalized.includes(phrase),
+    );
+}
+
+/** Returns true when normalized text contains a sleep phrase alias. */
+export function matchesSleepPhrase(normalized: string): boolean {
+    return VOICE_SLEEP_PHRASE_ALIASES.some((phrase) =>
+        normalized.includes(phrase),
+    );
+}
+
+/** Auto-sleep when awake and robot motion idle for this long (ms). */
+export const VOICE_AUTO_SLEEP_IDLE_MS = 30_000;
+
+/** Debounce between repeated wake/sleep phrase detections (ms). */
+export const VOICE_PHRASE_DEBOUNCE_MS = 800;
+
+/** Idle poll interval for auto-sleep while awake (ms). */
+export const VOICE_AUTO_SLEEP_POLL_MS = 1000;
+
+/** Wait for user transcription before rejecting tool calls while asleep (ms). */
+export const VOICE_ASLEEP_TOOL_DEFER_MS = 450;
+
+/** Ignore movement tools after phrase wake — model may misfire on same utterance (ms). */
+export const VOICE_PHRASE_WAKE_TOOL_IGNORE_MS = 2000;
+
+/** Ignore sleep phrase after phrase wake — STT partials may mishear wake as sleep (ms). */
+export const VOICE_PHRASE_WAKE_SLEEP_IGNORE_MS = 500;
+
+/**
+ * Words that trigger a local stop before the Realtime `stop_motion` tool returns.
+ * One of two intentional interrupt paths (the other is accepting a new movement tool,
+ * which supersedes the active timed move). The short-utterance guard (`<= 3` words)
+ * lives in realtimeSession.ts so longer bystander chatter is less likely to false-trigger.
+ */
+export const VOICE_STOP_KEYWORDS = new Set([
+    "stop",
+    "freeze",
+    "halt",
+    "pause",
+    "cancel",
+    "enough",
+    "wait",
+]);
 
 // ── Clamp helpers ─────────────────────────────────────────────────────────────
 

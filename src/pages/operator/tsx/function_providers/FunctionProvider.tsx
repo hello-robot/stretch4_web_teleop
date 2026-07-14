@@ -1,12 +1,8 @@
 import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
-<<<<<<< HEAD
 import { RemoteRobot } from "shared/remoterobot";
 import { RobotPose, ValidJoints } from "shared/util";
 import { PilotButtonPads } from "../static_components/PilotControlsToggle";
-=======
-import { RobotPose, ValidJoints } from "shared/util";
->>>>>>> 0dc4337 (Added voice macros for center/stow wrist)
 import {
     ActionModeType,
     PilotButtonPadType,

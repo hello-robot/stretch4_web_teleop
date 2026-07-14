@@ -62,7 +62,13 @@ const EXECUTE_MACRO = "execute_macro";
 const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
 
 /** All voice Realtime tools registered in the session payload and executed on the client. */
-const VOICE_TOOLS = [EXECUTE_BASE_MOVE, EXECUTE_JOINT_MOVE, STOP_MOTION, REPEAT_BASE_MOVE, EXECUTE_MACRO];
+const VOICE_TOOLS = [
+    EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
+    STOP_MOTION,
+    REPEAT_BASE_MOVE,
+    EXECUTE_MACRO,
+];
 
 // ── Base move action enums ────────────────────────────────────────────────────
 
@@ -132,6 +138,31 @@ const VOICE_SPEEDS = ["slow", "medium", "fast"];
 /** Server schema default when the model omits speed. */
 const VOICE_SPEED_DEFAULT = "medium";
 
+/** Normalized wake phrase (substring match in client transcripts). */
+const VOICE_WAKE_PHRASE = "hello stretch";
+
+/** Normalized sleep phrase (substring match in client transcripts). */
+const VOICE_SLEEP_PHRASE = "bye bye stretch";
+
+/** User-facing wake phrase label (UI, errors, model instructions). */
+const VOICE_WAKE_PHRASE_DISPLAY = "Hello Stretch";
+
+/** User-facing sleep phrase label (UI, errors, model instructions). */
+const VOICE_SLEEP_PHRASE_DISPLAY = "Bye bye Stretch";
+
+/** Alternate normalized wake phrase (substring match in client transcripts). */
+const VOICE_WAKE_PHRASE_ALT = "hello robot";
+
+/** Alternate normalized sleep phrase (substring match in client transcripts). */
+const VOICE_SLEEP_PHRASE_ALT = "bye bye robot";
+
+/** User-facing alternate wake phrase label. */
+const VOICE_WAKE_PHRASE_ALT_DISPLAY = "Hello Robot";
+
+/** User-facing alternate sleep phrase label. */
+const VOICE_SLEEP_PHRASE_ALT_DISPLAY = "Bye bye Robot";
+
+
 module.exports = {
     VOICE_DURATION_MS_MIN,
     VOICE_DURATION_MS_MAX,
@@ -150,6 +181,7 @@ module.exports = {
     REPEAT_BASE_MOVE,
     EXECUTE_MACRO,
     VOICE_MACRO_NAMES,
+
     VOICE_TOOLS,
     BASE_TRANSLATE_ACTIONS,
     BASE_ROTATE_ACTIONS,
@@ -160,4 +192,12 @@ module.exports = {
     JOINT_MOVE_ACTIONS,
     VOICE_SPEEDS,
     VOICE_SPEED_DEFAULT,
+    VOICE_WAKE_PHRASE,
+    VOICE_SLEEP_PHRASE,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    VOICE_SLEEP_PHRASE_DISPLAY,
+    VOICE_WAKE_PHRASE_ALT,
+    VOICE_SLEEP_PHRASE_ALT,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_SLEEP_PHRASE_ALT_DISPLAY,
 };
