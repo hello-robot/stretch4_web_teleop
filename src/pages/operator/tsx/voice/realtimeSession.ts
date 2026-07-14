@@ -435,6 +435,8 @@ export type ActiveRealtimeVoiceSession = {
     sleep: () => void;
 };
 
+export type { VoiceListeningState } from "./voiceWakeSleep";
+
 export async function connectOpenAIRealtimeVoice(
     opts: RealtimeVoiceConnectOptions,
 ): Promise<ActiveRealtimeVoiceSession> {
@@ -453,8 +455,6 @@ export async function connectOpenAIRealtimeVoice(
         tokenUrl,
         voiceSessionToken,
     );
-
-    export type { VoiceListeningState } from "./voiceWakeSleep";
 
     const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
