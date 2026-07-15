@@ -20,7 +20,22 @@ import {
     VOICE_TOOLS,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
     VOICE_WAKE_PHRASE_DISPLAY,
+    type VoiceToolName,
+    type ExecuteToolResult,
+    type VoiceMoveExecutionMode,
+    type VoiceSpeed,
 } from "./constants";
+import {
+    executeBaseMoveOnProvider,
+    executeRepeatBaseMoveOnProvider,
+    setVoiceMoveExecutionContext,
+    clearLastVoiceBaseMove,
+} from "./executeBaseMove";
+import {
+    executeJointMoveOnProvider,
+    executeStopMotionOnProvider,
+    executeMacroOnProvider,
+} from "./executeJointMove";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
 import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
@@ -466,8 +481,7 @@ export async function connectOpenAIRealtimeVoice(
             onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
             onVoiceMoveFeedback: (feedback) => {
                 if (
-                    feedback.kind === "move_started" ||
-                    feedback.kind === "macro_started"
+                    feedback.kind === "move_started"
                 ) {
                     voiceWakeSleep?.notifyMotionOrCommand();
                 }
