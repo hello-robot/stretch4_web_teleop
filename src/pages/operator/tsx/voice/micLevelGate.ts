@@ -5,6 +5,7 @@
 
 import {
     VOICE_MIC_GATE_HANG_MS,
+    VOICE_MIC_GATE_LOOKBACK_MS,
     VOICE_MIC_GATE_POLL_MS,
     VOICE_MIC_RMS_THRESHOLD
 } from "./constants";
@@ -131,6 +132,9 @@ export async function createMicLevelGate(
     const liveGain = audioContext.createGain();
     liveGain.gain.value = 0;
     processor.connect(liveGain);
+
+    const destination = audioContext.createMediaStreamDestination();
+    liveGain.connect(destination);
 
     const transmitStream = destination.stream;
 
