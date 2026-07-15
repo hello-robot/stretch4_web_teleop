@@ -8,7 +8,7 @@ import {
     BASE_MOVE_ACTIONS,
     clampDistanceM,
     clampDurationMs,
-    clampRotationDeg,
+    clampRotationRad,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_MOVE_DEDUPE_MS,
     type BaseMoveAction,
@@ -70,6 +70,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         speed: VoiceSpeed;
         duration_ms: number;
         distance_m: number | undefined;
+        rotation_rad: number | undefined;
         at: number;
     } | null = null;
 
@@ -83,6 +84,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         speed: VoiceSpeed,
         duration_ms: number,
         distance_m: number | undefined,
+        rotation_rad: number | undefined,
     ): boolean {
         const last = BaseMoveExecutor.lastExecutedMove;
         if (!last) return false;
@@ -91,7 +93,8 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             last.action === action &&
             last.speed === speed &&
             last.duration_ms === duration_ms &&
-            last.distance_m === distance_m
+            last.distance_m === distance_m &&
+            last.rotation_rad === rotation_rad
         );
     }
 
@@ -120,6 +123,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         speed: VoiceSpeed;
         duration_ms: number;
         distance_m: number | undefined;
+        rotation_rad: number | undefined;
     } | null {
         const action = raw.action as string | undefined;
         if (!action || !VALID_EXECUTE_ACTIONS.has(action)) return null;
@@ -128,7 +132,9 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         const isRotation = action === "rotate_left" || action === "rotate_right";
 
         let distance_m: number | undefined;
-        if (raw.distance_m !== undefined && raw.distance_m !== null) {
+        let rotation_rad: number | undefined;
+
+        if (!isRotation && raw.distance_m !== undefined && raw.distance_m !== null) {
             const rawDist =
                 typeof raw.distance_m === "number"
                     ? raw.distance_m
@@ -136,12 +142,24 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                         ? Number.parseFloat(raw.distance_m)
                         : NaN;
             if (!Number.isNaN(rawDist) && rawDist > 0) {
-                distance_m = isRotation ? clampRotationDeg(rawDist) : clampDistanceM(rawDist);
+                distance_m = clampDistanceM(rawDist);
+            }
+        }
+
+        if (isRotation && raw.rotation_rad !== undefined && raw.rotation_rad !== null) {
+            const rawRot =
+                typeof raw.rotation_rad === "number"
+                    ? raw.rotation_rad
+                    : typeof raw.rotation_rad === "string"
+                        ? Number.parseFloat(raw.rotation_rad)
+                        : NaN;
+            if (!Number.isNaN(rawRot) && rawRot > 0) {
+                rotation_rad = clampRotationRad(rawRot);
             }
         }
 
         const duration_ms = BaseMoveExecutor.parseDurationMs(raw);
-        return { action: action as BaseMoveAction, speed, duration_ms, distance_m };
+        return { action: action as BaseMoveAction, speed, duration_ms, distance_m, rotation_rad };
     }
 
     static execute(
@@ -159,11 +177,11 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             };
         }
 
-        const { action, speed, duration_ms, distance_m } = coerced;
+        const { action, speed, duration_ms, distance_m, rotation_rad } = coerced;
 
         if (
             !opts?.skipDedupe &&
-            BaseMoveExecutor.isDuplicate(action, speed, duration_ms, distance_m)
+            BaseMoveExecutor.isDuplicate(action, speed, duration_ms, distance_m, rotation_rad)
         ) {
             BaseMoveExecutor.emitVoiceMoveFeedback({ kind: "rejected", reason: "invalid" });
             return {
@@ -176,13 +194,13 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         const mode = BaseMoveExecutor.executionMode;
         BaseMoveExecutor.prepareUi(speed);
 
-        // ── Distance-based path ───────────────────────────────────────────────
-        if (distance_m !== undefined) {
+        // ── Distance/Rotation-based path ───────────────────────────────────────────────
+        if (distance_m !== undefined || rotation_rad !== undefined) {
             const isRotation = action === "rotate_left" || action === "rotate_right";
             const { linX, linY, angVel } = BaseMoveExecutor.velocitiesForAction(action);
 
-            // For rotation the model sends degrees; convert to radians for time estimation.
-            const targetNative = isRotation ? (distance_m * Math.PI) / 180 : distance_m;
+            // For rotation we use rotation_rad (radians); for translation we use distance_m (meters).
+            const targetNative = isRotation ? (rotation_rad ?? 0) : distance_m!;
             const speed_mps = isRotation
                 ? Math.abs(angVel)
                 : Math.max(Math.abs(linX), Math.abs(linY));
@@ -206,21 +224,21 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                     });
                     return result;
                 }
-                BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms: clampedMs, distance_m };
-                BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms: clampedMs, distance_m, at: Date.now() };
+                BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms: clampedMs, distance_m, rotation_rad };
+                BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms: clampedMs, distance_m, rotation_rad, at: Date.now() };
                 BaseMoveExecutor.emitVoiceMoveFeedback({
                     kind: "move_started",
                     action,
                     speed,
                     duration_ms: clampedMs,
                     distance_display: isRotation
-                        ? `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(1)}°`
-                        : `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(2)} m`,
+                        ? `${rotation_rad !== undefined ? ((rotation_rad * 180) / Math.PI).toFixed(1) : 0}°`
+                        : `${distance_m! % 1 === 0 ? distance_m! : distance_m!.toFixed(2)} m`,
                     repeated: opts?.repeated,
                 });
                 return {
                     ok: true,
-                    detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, mode, 0, 0, 0, button),
+                    detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, rotation_rad, mode, 0, 0, 0, button),
                 };
             }
 
@@ -235,21 +253,21 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                 });
                 return result;
             }
-            BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms: clampedMs, distance_m };
-            BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms: clampedMs, distance_m, at: Date.now() };
+            BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms: clampedMs, distance_m, rotation_rad };
+            BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms: clampedMs, distance_m, rotation_rad, at: Date.now() };
             BaseMoveExecutor.emitVoiceMoveFeedback({
                 kind: "move_started",
                 action,
                 speed,
                 duration_ms: clampedMs,
                 distance_display: isRotation
-                    ? `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(1)}°`
-                    : `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(2)} m`,
+                    ? `${rotation_rad !== undefined ? ((rotation_rad * 180) / Math.PI).toFixed(1) : 0}°`
+                    : `${distance_m! % 1 === 0 ? distance_m! : distance_m!.toFixed(2)} m`,
                 repeated: opts?.repeated,
             });
             return {
                 ok: true,
-                detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, mode, linX, linY, angVel),
+                detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, rotation_rad, mode, linX, linY, angVel),
             };
         }
 
@@ -268,7 +286,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                 return result;
             }
             BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms };
-            BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms, distance_m: undefined, at: Date.now() };
+            BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms, distance_m: undefined, rotation_rad: undefined, at: Date.now() };
             BaseMoveExecutor.emitVoiceMoveFeedback({
                 kind: "move_started",
                 action,
@@ -278,7 +296,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             });
             return {
                 ok: true,
-                detail: formatMoveOkDetail(action, speed, duration_ms, undefined, mode, 0, 0, 0, button),
+                detail: formatMoveOkDetail(action, speed, duration_ms, undefined, undefined, mode, 0, 0, 0, button),
             };
         }
 
@@ -291,11 +309,11 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                 reason: FunctionProvider.robotIsConnected()
                     ? "busy"
                     : "disconnected",
-            });
+                });
             return result;
         }
         BaseMoveExecutor.lastVoiceBaseMove = { action, speed, duration_ms };
-        BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms, distance_m: undefined, at: Date.now() };
+        BaseMoveExecutor.lastExecutedMove = { action, speed, duration_ms, distance_m: undefined, rotation_rad: undefined, at: Date.now() };
         BaseMoveExecutor.emitVoiceMoveFeedback({
             kind: "move_started",
             action,
@@ -305,7 +323,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         });
         return {
             ok: true,
-            detail: formatMoveOkDetail(action, speed, duration_ms, undefined, mode, linX, linY, angVel),
+            detail: formatMoveOkDetail(action, speed, duration_ms, undefined, undefined, mode, linX, linY, angVel),
         };
     }
 }
@@ -317,6 +335,7 @@ function formatMoveOkDetail(
     speed: VoiceSpeed,
     duration_ms: number,
     distance_m: number | undefined,
+    rotation_rad: number | undefined,
     mode: VoiceMoveExecutionMode,
     linX: number,
     linY: number,
@@ -327,9 +346,12 @@ function formatMoveOkDetail(
         mode === "button_provider"
             ? ` via ${button ?? "button"}`
             : " via direct drive";
-    const distanceStr = distance_m !== undefined
-        ? ` for ${distance_m.toFixed(5)} m (odom-tracked)`
-        : ` for ${duration_ms}ms`;
+    const distanceStr =
+        rotation_rad !== undefined
+            ? ` for ${rotation_rad.toFixed(5)} rad (odom-tracked)`
+            : distance_m !== undefined
+                ? ` for ${distance_m.toFixed(5)} m (odom-tracked)`
+                : ` for ${duration_ms}ms`;
     let detail = `${action} at ${speed}${distanceStr}${via}`;
     if (mode === "direct") {
         detail += ` (~linVelX=${linX.toFixed(5)}, linVelY=${linY.toFixed(5)}`;

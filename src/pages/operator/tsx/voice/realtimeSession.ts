@@ -129,6 +129,8 @@ function formatToolCallLog(
             };
             if (parsed.distance_m !== undefined && parsed.distance_m !== null) {
                 summary.distance_m = parsed.distance_m;
+            } else if (parsed.rotation_rad !== undefined && parsed.rotation_rad !== null) {
+                summary.rotation_rad = parsed.rotation_rad;
             } else {
                 summary.duration_ms = parsed.duration_ms ?? VOICE_DURATION_MS_DEFAULT;
             }

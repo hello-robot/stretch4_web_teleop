@@ -45,6 +45,7 @@ export const robot = new Robot({
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
+    leaseStatusCallback: forwardLeaseStatus,
 });
 
 export let connection: WebRTCConnection;
@@ -150,6 +151,16 @@ function forwardIsRunStopped(isRunStopped: boolean) {
         type: "isRunStopped",
         enabled: isRunStopped,
     } as IsRunStoppedMessage);
+}
+
+function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "leaseStatus",
+        holder: holder,
+        isDriverHolding: isDriverHolding,
+    } as LeaseStatusMessage);
 }
 
 function forwardStretchTool(value: string) {

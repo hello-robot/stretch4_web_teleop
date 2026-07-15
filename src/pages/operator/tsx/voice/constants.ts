@@ -95,12 +95,16 @@ export type ExecuteBaseMoveArgs = {
     speed?: VoiceSpeed;
     duration_ms?: number;
     /**
-     * Distance-based move target.
+     * Distance-based move target in meters.
      * - Translation actions (forward/backward/strafe): meters.
-     * - Rotation actions (rotate_left/rotate_right): degrees.
      * When set, the client converts the request into an estimated timed move.
      */
     distance_m?: number;
+    /**
+     * Rotation angle target in radians.
+     * - Rotation actions (rotate_left/rotate_right): radians.
+     */
+    rotation_rad?: number;
 };
 
 /** All valid execute_joint_move.action values. */
@@ -275,6 +279,18 @@ export function clampDistanceM(d: number): number {
  */
 export function clampRotationDeg(d: number): number {
     return Math.max(VOICE_ROTATION_DEG_MIN, Math.min(VOICE_ROTATION_DEG_MAX, d));
+}
+
+/**
+ * Clamp a rotation angle in radians from tool args before robot dispatch.
+ *
+ * @param d raw rotation in radians from Realtime tool arguments
+ * @returns clamped value in radians corresponding to [VOICE_ROTATION_DEG_MIN, VOICE_ROTATION_DEG_MAX]
+ */
+export function clampRotationRad(d: number): number {
+    const minRad = (VOICE_ROTATION_DEG_MIN * Math.PI) / 180;
+    const maxRad = (VOICE_ROTATION_DEG_MAX * Math.PI) / 180;
+    return Math.max(minRad, Math.min(maxRad, d));
 }
 
 /**
