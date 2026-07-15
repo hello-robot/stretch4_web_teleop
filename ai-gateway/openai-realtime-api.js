@@ -69,7 +69,7 @@ function buildRealtimeVoiceSessionPayload() {
     return {
         session: {
             type: "realtime",
-            model: "gpt-realtime-2",
+            model: "gpt-realtime-2.1",
             // The harness!
             instructions: [
                 // Identity and tone
@@ -238,7 +238,7 @@ function buildRealtimeVoiceSessionPayload() {
             audio: {
                 input: {
                     transcription: {
-                        model: "gpt-4o-mini-transcribe",
+                        model: "gpt-4o-transcribe",
                         language: "en",
                     },
                     /** Docs: https://developers.openai.com/api/docs/guides/realtime-vad#server-vad  */
