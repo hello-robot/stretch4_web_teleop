@@ -8,7 +8,8 @@
         "paths": {
             "shared/*": ["src/shared/*"],
             "operator/*": ["src/pages/operator/*"],
-            "robot/*": ["src/pages/robot/*"]
+            "robot/*": ["src/pages/robot/*"],
+            "ai-gateway/*": ["ai-gateway/*"]
         }
     }
 }

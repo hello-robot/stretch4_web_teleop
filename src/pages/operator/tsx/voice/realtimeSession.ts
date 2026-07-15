@@ -336,55 +336,7 @@ async function mintEphemeralCredential(
     return { key, raw };
 }
 
-let voiceWakeSleep: VoiceWakeSleep | undefined;
 
-/** Cleared on wake so trailing STT events from the same utterance are ignored. */
-const transcriptByItem = new Map<string, string>();
-
-voiceWakeSleep = createVoiceWakeSleep({
-    provider: opts.voiceProvider,
-    onStateChange: (s) => {
-        opts.onListeningState?.(s);
-        if (s === "awake") {
-            transcriptByItem.clear();
-        }
-    },
-    onLog: opts.onLog,
-});
-voiceWakeSleep.start();
-
-
-let micGate: MicLevelGate | undefined;
-
-micGate = await createMicLevelGate(ms, {
-    bypassGate: () => voiceWakeSleep?.state === "asleep",
-    onGateChange: (gateOpen, level) => {
-        opts.onMicLevel?.(level, gateOpen);
-    },
-});
-
-if (
-    opts.onVoiceSpeedChange &&
-    opts.onVoicePressAndHoldRequired
-) {
-    const baseFeedback = opts.onVoiceMoveFeedback;
-    setVoiceMoveExecutionContext({
-        mode: opts.voiceMoveExecutionMode ?? "direct",
-        onSpeedChange: opts.onVoiceSpeedChange,
-        onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
-        onVoiceMoveFeedback: (feedback) => {
-            if (
-                feedback.kind === "move_started" ||
-                feedback.kind === "macro_started"
-            ) {
-                voiceWakeSleep?.notifyMotionOrCommand();
-            }
-            baseFeedback?.(feedback);
-        },
-    });
-} else {
-    setVoiceMoveExecutionContext(undefined);
-}
 
 function sendFnOutput(
     dc: RTCDataChannel,
@@ -475,14 +427,56 @@ export async function connectOpenAIRealtimeVoice(
         },
     });
 
+    let voiceWakeSleep: VoiceWakeSleep | undefined;
+
+    /** Cleared on wake so trailing STT events from the same utterance are ignored. */
+    const transcriptByItem = new Map<string, string>();
+
+    voiceWakeSleep = createVoiceWakeSleep({
+        provider: opts.voiceProvider,
+        onStateChange: (s) => {
+            opts.onListeningState?.(s);
+            if (s === "awake") {
+                transcriptByItem.clear();
+            }
+        },
+        onLog: opts.onLog,
+    });
+    voiceWakeSleep.start();
+
+
     let micUnmuteTimer: ReturnType<typeof setTimeout> | undefined;
     let micGate: MicLevelGate | undefined;
 
     micGate = await createMicLevelGate(ms, {
+        bypassGate: () => voiceWakeSleep?.state === "asleep",
         onGateChange: (gateOpen, level) => {
             opts.onMicLevel?.(level, gateOpen);
         },
     });
+
+    if (
+        opts.onVoiceSpeedChange &&
+        opts.onVoicePressAndHoldRequired
+    ) {
+        const baseFeedback = opts.onVoiceMoveFeedback;
+        setVoiceMoveExecutionContext({
+            mode: opts.voiceMoveExecutionMode ?? "direct",
+            onSpeedChange: opts.onVoiceSpeedChange,
+            onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
+            onVoiceMoveFeedback: (feedback) => {
+                if (
+                    feedback.kind === "move_started" ||
+                    feedback.kind === "macro_started"
+                ) {
+                    voiceWakeSleep?.notifyMotionOrCommand();
+                }
+                baseFeedback?.(feedback);
+            },
+        });
+    } else {
+        setVoiceMoveExecutionContext(undefined);
+    }
 
     for (const t of micGate.transmitStream.getAudioTracks()) {
         pc.addTrack(t, micGate.transmitStream);
