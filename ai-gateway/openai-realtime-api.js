@@ -40,6 +40,9 @@ const {
     VOICE_SLEEP_PHRASE_ALT_DISPLAY,
 } = require("./constants");
 
+const VOICE_ROTATION_RAD_MIN = Number(((VOICE_ROTATION_DEG_MIN * Math.PI) / 180).toFixed(5));
+const VOICE_ROTATION_RAD_MAX = Number(((VOICE_ROTATION_DEG_MAX * Math.PI) / 180).toFixed(5));
+
 /**
  * Builds a no-argument voice tool for the OpenAI Realtime API.
  * @param name - The name of the tool.
@@ -73,43 +76,64 @@ function buildRealtimeVoiceSessionPayload() {
             // The harness!
             instructions: [
                 // Identity and tone
-                "Don't speak to the user",
-                "Do not respond to the user. Do not speak to the user. Only call tools as instructed.",
+                `Do not respond to the user. Do not speak to the user. Only call tools as instructed.`,
+                
                 // Wake/sleep phrases — do not tool-call
-                `When the user says only ${VOICE_WAKE_PHRASE_DISPLAY}, ${VOICE_WAKE_PHRASE_ALT_DISPLAY}, or similar wake greetings, do NOT call any tool.`,
-                `When the user says only ${VOICE_SLEEP_PHRASE_DISPLAY}, ${VOICE_SLEEP_PHRASE_ALT_DISPLAY}, or similar farewells, do NOT call any tool.`,
+                `When the user says only "${VOICE_WAKE_PHRASE_DISPLAY}", "${VOICE_WAKE_PHRASE_ALT_DISPLAY}", or similar wake greetings, do NOT call any tool.`,
+                `When the user says only "${VOICE_SLEEP_PHRASE_DISPLAY}", "${VOICE_SLEEP_PHRASE_ALT_DISPLAY}", or similar farewells, do NOT call any tool.`,
+                
                 // ── Base move harness ────────────────────────────────────────────────────
-                "The user speaks imprecisely. Infer exactly ONE robot motion per turn: either holonomic base translation from",
-                "{ forward | backward | strafe_left | strafe_right } or in-place rotation from { rotate_left | rotate_right }.",
-                "Base translation means the robot body slides without turning; in-place rotation means the robot turns/spins in place.",
-                'CRITICAL DISAMBIGUATION: use strafe_left for "move left", "go left", "slide left", "strafe left", "left", "shift left", "lateral left".',
-                'Use rotate_left ONLY when the user explicitly says "turn", "rotate", "spin", "face", or "pivot" left.',
-                'CRITICAL DISAMBIGUATION: use strafe_right for "move right", "go right", "slide right", "strafe right", "right", "shift right", "lateral right".',
-                'Use rotate_right ONLY when the user explicitly says "turn", "rotate", "spin", "face", or "pivot" right.',
-                "For arm and wrist commands, infer exactly ONE joint action from the execute_joint_move enum.",
-                "If ambiguous, prefer slower/shorter movements.",
-                `Call tool ${EXECUTE_BASE_MOVE} at most ONCE per user utterance.`,
-                `Call tool ${EXECUTE_JOINT_MOVE} at most ONCE per user utterance.`,
+                `The user speaks imprecisely. Infer exactly ONE robot motion per turn: base translation, base rotation, or arm motion.`,
+                
+                // ── Define basic motion ────────────────────────────────────────────────────
+                `The robot is a mobile manipulation platform with a holonomic base, a lift that moves the arm up and down, a telescoping arm that moves in and out, a 3 degree of freedom wrist with roll, pitch and yaw joints, and a gripper that opens and closes.`,
+                `The arm points in the robot's "forward" direction. The wrist has predefined "stow" and "center" poses. "Center" represents the wrist pointing in the forward direction`,
+
+                `For \`${EXECUTE_JOINT_MOVE}\`, use actions from ${JOINT_MOVE_ACTIONS.join("|")}.`,
+
+                `Base translation means the robot body slides without turning.`,
+                `For base translations, call tool \`${EXECUTE_BASE_MOVE}\` with \`action\` (enum), \`speed\` (${VOICE_SPEEDS.join("|")}), and EITHER \`duration_ms\` OR \`distance_m\`.`,
+                `Base translation may include one of the following actions: { \`forward\` | \`backward\` | \`strafe_left\` | \`strafe_right\` }.`,
+                `CRITICAL DISAMBIGUATION: use \`strafe_left\` for commands such as "move left", "go left", "slide left", "strafe left", "left", "shift left", "lateral left".`,
+                `CRITICAL DISAMBIGUATION: use \`strafe_right\` for commands such as "move right", "go right", "slide right", "strafe right", "right", "shift right", "lateral right".`,
+
+                `Base rotation means the robot body turns/spins in place.`,
+                `For base rotations, call tool \`${EXECUTE_BASE_MOVE}\` with \`action\` (enum), \`speed\` (${VOICE_SPEEDS.join("|")}), and EITHER \`duration_ms\` OR \`rotation_rad\`.`,
+                `Base rotation may include one of the following actions: { \`rotate_left\` | \`rotate_right\` }.`,
+                `Use \`rotate_left\` ONLY when the user explicitly says "turn", "rotate", "spin", "face", or "pivot" left.`,
+                `Use \`rotate_right\` ONLY when the user explicitly says "turn", "rotate", "spin", "face", or "pivot" right.`,
+
+                `Arm motions include moving the lift up or down, moving the arm in or out, moving one of the 3 wrist joints, or opening and closing the gripper`,
+                `For lift/arm joint actions (${JOINT_LIFT_ARM_ACTIONS.join("|")}), distance is meters (${JOINT_DISTANCE_M_MIN}-${JOINT_DISTANCE_M_MAX}) and should be passed as \`distance_m\`.`,
+                `For wrist joint actions (${JOINT_WRIST_ACTIONS.join("|")}), distance is radians (${JOINT_DISTANCE_RAD_MIN}-${JOINT_DISTANCE_RAD_MAX}) and should be passed as \`rotation_rad\`.`,
+                `For \`gripper_open\` and \`gripper_close\`, omit \`distance_m\` and use \`duration_ms\`.`,
+                `If neither distance nor time is specified for joint movement, set \`duration_ms\`=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says "stop"). Default \`speed\` is ${VOICE_SPEED_DEFAULT}.`,
+
+                `CRITICAL DISAMBIGUATION for "gripper" commands: The gripper joint can ONLY open or close.`,
+                `When the user asks to change the gripper's location in space, you must map their intent to the structural joints:`,
+                `If they say "move gripper up" or "move gripper down", use the lift joint.`,
+                `If they say "move gripper forward", "push gripper out", or "pull gripper in", use the arm joint.`,
+                `If they say "tilt", "turn", "point", or "rotate the gripper", use the wrist joints.`,
+                `Use \`gripper_open\` or \`gripper_close\` ONLY when the user explicitly wants to grasp, grab, drop, or release an object.`,
+
+                // ── Guard rails ────────────────────────────────────────────────────────────────────────────
+                `If the user specifies a distance, set \`distance_m\` in meters and omit \`duration_ms\` and \`rotation_rad\`.`,
+                `If the user specifies a rotation angle, set \`rotation_rad\` in radians and omit \`duration_ms\` and \`distance_m\`.`,
+                `If the user specifies an explicit time (e.g. "move forward for 2 seconds"), set \`duration_ms\` in milliseconds and omit \`distance_m\` and \`rotation_rad\`.`,
+                `If ambiguous, prefer slower/shorter movements.`,
+                `Call tool \`${EXECUTE_BASE_MOVE}\` at most ONCE per user utterance.`,
+                `Call tool \`${EXECUTE_JOINT_MOVE}\` at most ONCE per user utterance.`,
+                `If neither distance nor time is specified for base movement, set \`duration_ms\`=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says "stop").`,
                 `After a tool result, never call a movement tool again unless the user gives a new command.`,
-                `Call tool ${EXECUTE_BASE_MOVE} with action (enum), speed (${VOICE_SPEEDS.join("|")}), and EITHER duration_ms OR distance_m — not both.`,
-                `If the user specifies a distance (e.g. "move forward half a meter", "go forward 0.5 meters"), set distance_m in meters (${VOICE_DISTANCE_M_MIN}-${VOICE_DISTANCE_M_MAX}) and omit duration_ms.`,
-                `If the user specifies a rotation angle (e.g. "rotate 90 degrees", "turn left a quarter turn"), set distance_m in degrees (e.g. 90) and omit duration_ms.`,
-                `If the user specifies an explicit time (e.g. "move forward for 2 seconds"), set duration_ms to that time and omit distance_m.`,
-                `If neither distance nor time is specified for base movement, set duration_ms=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says stop).`,
-                // ── Joint move harness ───────────────────────────────────────────────────
-                `For ${EXECUTE_JOINT_MOVE}, use actions from ${JOINT_MOVE_ACTIONS.join("|")}.`,
-                `For lift/arm joint actions (${JOINT_LIFT_ARM_ACTIONS.join("|")}), distance is meters (${JOINT_DISTANCE_M_MIN}-${JOINT_DISTANCE_M_MAX}) and should be passed as distance.`,
-                `For wrist joint actions (${JOINT_WRIST_ACTIONS.join("|")}), distance is radians (${JOINT_DISTANCE_RAD_MIN}-${JOINT_DISTANCE_RAD_MAX}) and should be passed as distance.`,
-                "For gripper_open and gripper_close, omit distance and use duration_ms.",
-                `If neither distance nor time is specified for joint movement, set duration_ms=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says stop). Default speed is ${VOICE_SPEED_DEFAULT}.`,
+                
                 // ── Stop / repeat ────────────────────────────────────────────────────────────────────────────
-                `When the user wants to halt ANY motion (stop, wait, freeze, do not move, cut that, enough, pause, cancel), call tool ${STOP_MOTION} with no arguments — not a movement tool.`,
-                `Call ${STOP_MOTION} IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
-                `When the user wants to repeat the last base move (again, same thing, one more time, do that again), call tool ${REPEAT_BASE_MOVE} with no arguments — not ${EXECUTE_BASE_MOVE} with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
+                `When the user wants to halt ANY motion ("stop", "wait", "freeze", "do not move", "cut that", "enough", "pause", "cancel"), call tool \`${STOP_MOTION}\` with no arguments — not a movement tool.`,
+                `Call \`${STOP_MOTION}\` IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
+                `When the user wants to repeat the last base move ("again", "same thing", "one more time", "do that again"), call tool \`${REPEAT_BASE_MOVE}\` with no arguments — not \`${EXECUTE_BASE_MOVE}\` with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
                 // ── Macro actions ──────────────────────────────────────────────────────────────────────────
-                `Macro actions move the robot to predefined poses. Call ${EXECUTE_MACRO} with the appropriate macro name.`,
-                `macro="center_wrist": centers the wrist to roll=0, pitch=0, yaw=0. Phrases: "center the wrist", "reset wrist", "straighten wrist", "wrist to zero", "zero wrist", "center wrist".`,
-                `macro="stow_wrist": moves the wrist to the robot's stow pose. Phrases: "stow the wrist", "stow wrist", "tuck wrist", "wrist to stow", "park wrist".`,
+                `Macro actions move the robot to predefined poses. Call \`${EXECUTE_MACRO}\` with the appropriate \`macro\` name.`,
+                `\`macro="center_wrist"\`: centers the wrist to roll=0, pitch=0, yaw=0. Phrases: "center the wrist", "reset wrist", "straighten wrist", "wrist to zero", "zero wrist", "center wrist".`,
+                `\`macro="stow_wrist"\`: moves the wrist to the robot's stow pose. Phrases: "stow the wrist", "stow wrist", "tuck wrist", "wrist to stow", "park wrist".`,
             ].join(" "),
             tools: [
                 {
@@ -147,11 +171,17 @@ function buildRealtimeVoiceSessionPayload() {
                                 type: "number",
                                 description:
                                     "Distance to travel in meters for translation actions (forward, backward, strafe). " +
-                                    "For rotation actions (rotate_left, rotate_right), pass the angle in degrees, e.g. 90 for a quarter turn. " +
-                                    `Valid range: translation ${VOICE_DISTANCE_M_MIN}-${VOICE_DISTANCE_M_MAX} meters; ` +
-                                    `rotation ${VOICE_ROTATION_DEG_MIN}-${VOICE_ROTATION_DEG_MAX} degrees. Omit if duration_ms is set.`,
+                                    `Valid range: ${VOICE_DISTANCE_M_MIN}-${VOICE_DISTANCE_M_MAX} meters. Omit if duration_ms or rotation_rad is set.`,
                                 minimum: VOICE_DISTANCE_M_MIN,
-                                maximum: VOICE_ROTATION_DEG_MAX,
+                                maximum: VOICE_DISTANCE_M_MAX,
+                            },
+                            rotation_rad: {
+                                type: "number",
+                                description:
+                                    "Rotation angle in radians for rotation actions (rotate_left, rotate_right). " +
+                                    `Valid range: ${VOICE_ROTATION_RAD_MIN}-${VOICE_ROTATION_RAD_MAX} radians. Omit if duration_ms or distance_m is set.`,
+                                minimum: VOICE_ROTATION_RAD_MIN,
+                                maximum: VOICE_ROTATION_RAD_MAX,
                             },
                         },
                         required: ["action"],
