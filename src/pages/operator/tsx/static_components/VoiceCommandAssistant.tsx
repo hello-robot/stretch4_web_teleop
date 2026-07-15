@@ -3,39 +3,39 @@
  * sits at the top of the screen. Very WIP.
  */
 
-import "operator/css/VoiceCommandAssistant.css";
 import React, {
     useCallback,
     useEffect,
     useRef,
     useState,
 } from "react";
-import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import { buttonFunctionProvider } from "..";
-import Ellipsis from "../basic_components/Ellipsis";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
-import type { AddToastFn } from "../layout_components/Toasts";
-import { velocityScaleForVoiceSpeed } from "../utils/action-speed-scale";
 import { ActionModeType } from "../utils/component_definitions";
-import {
-    isVoiceToolLogLine,
-    VOICE_MIC_RMS_THRESHOLD,
-    VOICE_WAKE_PHRASE_ALT_DISPLAY,
-    VOICE_WAKE_PHRASE_DISPLAY,
-    type VoiceMoveExecutionMode,
-    type VoiceSpeed,
-} from "../voice/constants";
-import { setVoiceMoveExecutionContext } from "../voice/executeBaseMove";
+import { velocityScaleForVoiceSpeed } from "../utils/action-speed-scale";
 import {
     connectOpenAIRealtimeVoice,
     type ActiveRealtimeVoiceSession,
     type VoiceListeningState,
 } from "../voice/realtimeSession";
+import { setVoiceMoveExecutionContext } from "../voice/executeBaseMove";
+import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
+import {
+    isVoiceToolLogLine,
+    VOICE_MIC_RMS_THRESHOLD,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    type VoiceSpeed,
+    type VoiceMoveExecutionMode,
+} from "../voice/constants";
 import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
 import {
     AccessibleRadioGroup,
     type AccessibleRadioOption,
 } from "./AccessibleRadioGroup";
+import Ellipsis from "../basic_components/Ellipsis";
+import type { AddToastFn } from "../layout_components/Toasts";
+import "operator/css/VoiceCommandAssistant.css";
 
 /** Explicit check to make sure operator is using
  * LAN/ngrok (LocalStorage + socket.io) and not cloud (Firebase) */
@@ -187,7 +187,7 @@ export const VoiceCommandAssistant = ({
         voiceMoveExecutionMode,
         onVoiceSpeedChange,
         onVoicePressAndHoldRequired,
-        onVoiceMoveFeedback
+        onVoiceMoveFeedback,
     ]);
 
     const robotOk = FunctionProvider.robotIsConnected();
@@ -324,7 +324,7 @@ export const VoiceCommandAssistant = ({
                             alignItems: "center",
                             gap: "6px",
                             width: "100%",
-                            height: 78,
+                            minHeight: 78,
                         }}
                     >
                         <div

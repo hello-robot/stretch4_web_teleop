@@ -1,20 +1,27 @@
 /**
  * Client-side access to the voice control assistant constants and helpers.
- * Wires in the tool names, duration bounds, and action enums for both
- * execute_base_move and execute_joint_move.
+ * Wires in the tool names, duration bounds, and action enums.
  */
 import {
     BASE_MOVE_ACTIONS,
-    VOICE_SPEED_DEFAULT,
-    VOICE_SPEEDS,
     BASE_ROTATE_ACTIONS,
     BASE_TRANSLATE_ACTIONS,
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
-    REPEAT_BASE_MOVE,
     EXECUTE_MACRO,
-    VOICE_TOOLS,
+    JOINT_DISTANCE_M_MAX,
+    JOINT_DISTANCE_M_MIN,
+    JOINT_DISTANCE_RAD_MAX,
+    JOINT_DISTANCE_RAD_MIN,
+    JOINT_GRIPPER_ACTIONS,
+    JOINT_LIFT_ARM_ACTIONS,
+    JOINT_MOVE_ACTIONS,
+    JOINT_WRIST_ACTIONS,
+    REPEAT_BASE_MOVE,
     STOP_MOTION,
+    VOICE_SPEED_DEFAULT,
+    VOICE_SPEEDS,
+    VOICE_TOOLS,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
@@ -22,15 +29,7 @@ import {
     VOICE_DISTANCE_M_MAX,
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
-    JOINT_MOVE_ACTIONS,
-    JOINT_LIFT_ARM_ACTIONS,
-    JOINT_WRIST_ACTIONS,
-    JOINT_GRIPPER_ACTIONS,
-    JOINT_DISTANCE_M_MIN,
-    JOINT_DISTANCE_M_MAX,
-    JOINT_DISTANCE_RAD_MIN,
-    JOINT_DISTANCE_RAD_MAX,
-    MACRO_MOVE_ACTIONS,
+    VOICE_MACRO_NAMES,
     VOICE_WAKE_PHRASE,
     VOICE_SLEEP_PHRASE,
     VOICE_WAKE_PHRASE_DISPLAY,
@@ -44,17 +43,25 @@ import {
 /**
  * Re-export constants from ai-gateway/constants.js
  * for usage in other parts of the teleop webapp.
- */
+*/
 export {
     BASE_MOVE_ACTIONS,
-    VOICE_SPEED_DEFAULT,
-    VOICE_SPEEDS,
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
-    REPEAT_BASE_MOVE,
     EXECUTE_MACRO,
-    VOICE_TOOLS,
+    JOINT_DISTANCE_M_MAX,
+    JOINT_DISTANCE_M_MIN,
+    JOINT_DISTANCE_RAD_MAX,
+    JOINT_DISTANCE_RAD_MIN,
+    JOINT_GRIPPER_ACTIONS,
+    JOINT_LIFT_ARM_ACTIONS,
+    JOINT_MOVE_ACTIONS,
+    JOINT_WRIST_ACTIONS,
+    REPEAT_BASE_MOVE,
     STOP_MOTION,
+    VOICE_SPEED_DEFAULT,
+    VOICE_SPEEDS,
+    VOICE_TOOLS,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN,
@@ -62,14 +69,7 @@ export {
     VOICE_DISTANCE_M_MAX,
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
-    JOINT_MOVE_ACTIONS,
-    JOINT_LIFT_ARM_ACTIONS,
-    JOINT_WRIST_ACTIONS,
-    JOINT_GRIPPER_ACTIONS,
-    JOINT_DISTANCE_M_MIN,
-    JOINT_DISTANCE_M_MAX,
-    JOINT_DISTANCE_RAD_MIN,
-    JOINT_DISTANCE_RAD_MAX,
+    VOICE_MACRO_NAMES,
     VOICE_WAKE_PHRASE,
     VOICE_SLEEP_PHRASE,
     VOICE_WAKE_PHRASE_DISPLAY,
@@ -79,8 +79,6 @@ export {
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
     VOICE_SLEEP_PHRASE_ALT_DISPLAY,
 };
-
-// ── Base move types ───────────────────────────────────────────────────────────
 
 /** Derived from ai-gateway action/speed enums (operator client). */
 export type BaseTranslateAction = (typeof BASE_TRANSLATE_ACTIONS)[number];
@@ -99,14 +97,11 @@ export type ExecuteBaseMoveArgs = {
     /**
      * Distance-based move target.
      * - Translation actions (forward/backward/strafe): meters.
-     * - Rotation actions (rotate_left/rotate_right): degrees (converted to radians client-side).
-     * When set, the robot moves until odom confirms the target is reached instead of relying
-     * on a fixed time duration. Falls back to an estimated duration if odom is unavailable.
+     * - Rotation actions (rotate_left/rotate_right): degrees.
+     * When set, the client converts the request into an estimated timed move.
      */
     distance_m?: number;
 };
-
-// ── Joint move types ──────────────────────────────────────────────────────────
 
 /** All valid execute_joint_move.action values. */
 export type JointMoveAction = (typeof JOINT_MOVE_ACTIONS)[number];
@@ -135,10 +130,8 @@ export type ExecuteToolResult =
         ignored?: boolean;
     };
 
-// ── Macro move types ──────────────────────────────────────────────────────────
-export type MacroMoveAction = (typeof MACRO_MOVE_ACTIONS)[number];
-
-// ── Dedupe / timing constants ─────────────────────────────────────────────────
+/** All valid execute_macro.action values. */
+export type MacroMoveAction = (typeof VOICE_MACRO_NAMES)[number];
 
 /**
  * Suppress duplicate execute_base_move with identical args within this window (echo safety net).
@@ -159,13 +152,13 @@ export const VOICE_MIC_UNMUTE_COOLDOWN_MS = 500;
 */
 export const VOICE_MIC_GATE_LOOKBACK_MS = 200;
 
-
 /**
  * Minimum normalized RMS (0–1) to open mic gate toward OpenAI.
  * Example: 0.03 ≈ meter tick at 3%; normal speech near the phone must pass it, quiet chatter across the room should stay below.
  * Lower = easier to trigger; higher = fewer accidental bystander commands.
  */
 export const VOICE_MIC_RMS_THRESHOLD = 0.03;
+
 
 /**
  * Keep gate open briefly after level drops (ms).
@@ -251,8 +244,6 @@ export const VOICE_STOP_KEYWORDS = new Set([
     "wait",
 ]);
 
-// ── Clamp helpers ─────────────────────────────────────────────────────────────
-
 /**
  * Clamp raw duration_ms from tool args before robot dispatch.
  * OpenAI may omit duration_ms (VOICE_DURATION_MS_DEFAULT); callers apply defaults before clamping when needed.
@@ -267,11 +258,9 @@ export function clampDurationMs(ms: number): number {
 }
 
 /**
- * Clamp a distance_m value from tool args before robot dispatch.
- * - For translation: value is in meters.
- * - For rotation: value is in degrees (caller converts to radians).
+ * Clamp a translation distance from tool args before robot dispatch.
  *
- * @param d raw distance from Realtime tool arguments
+ * @param d raw distance in meters from Realtime tool arguments
  * @returns clamped value in [VOICE_DISTANCE_M_MIN, VOICE_DISTANCE_M_MAX]
  */
 export function clampDistanceM(d: number): number {
@@ -279,7 +268,7 @@ export function clampDistanceM(d: number): number {
 }
 
 /**
- * Clamp a rotation degrees value from tool args before robot dispatch.
+ * Clamp a rotation angle from tool args before robot dispatch.
  *
  * @param d raw rotation in degrees from Realtime tool arguments
  * @returns clamped value in [VOICE_ROTATION_DEG_MIN, VOICE_ROTATION_DEG_MAX]
@@ -289,9 +278,9 @@ export function clampRotationDeg(d: number): number {
 }
 
 /**
- * Clamp a joint distance (meters) for lift/arm moves.
+ * Clamp a lift/arm joint distance from tool args before robot dispatch.
  *
- * @param d raw distance from tool arguments
+ * @param d raw distance in meters from Realtime tool arguments
  * @returns clamped value in [JOINT_DISTANCE_M_MIN, JOINT_DISTANCE_M_MAX]
  */
 export function clampJointDistanceM(d: number): number {
@@ -299,23 +288,21 @@ export function clampJointDistanceM(d: number): number {
 }
 
 /**
- * Clamp a joint distance (radians) for wrist moves.
+ * Clamp a wrist joint angle from tool args before robot dispatch.
  *
- * @param d raw angle from tool arguments
+ * @param d raw angle in radians from Realtime tool arguments
  * @returns clamped value in [JOINT_DISTANCE_RAD_MIN, JOINT_DISTANCE_RAD_MAX]
  */
 export function clampJointDistanceRad(d: number): number {
     return Math.max(JOINT_DISTANCE_RAD_MIN, Math.min(JOINT_DISTANCE_RAD_MAX, d));
 }
 
-// ── Tool set helpers ──────────────────────────────────────────────────────────
-
 /** Union of tool names in VOICE_TOOLS; used for typed dispatch in realtimeSession.ts. */
 export type VoiceToolName = (typeof VOICE_TOOLS)[number];
 
 /**
  * Tools that omit arguments — streamed "{}" is valid completion (realtimeSession.ts).
- * Contrast with execute_base_move / execute_joint_move, which require real JSON via isPlaceholderArgs.
+ * Contrast with execute_base_move, which requires real JSON via isPlaceholderArgs.
  */
 export const NO_ARG_VOICE_TOOLS = new Set<string>([
     STOP_MOTION,

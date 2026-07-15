@@ -7,7 +7,7 @@ import {
     VOICE_MIC_GATE_HANG_MS,
     VOICE_MIC_GATE_LOOKBACK_MS,
     VOICE_MIC_GATE_POLL_MS,
-    VOICE_MIC_RMS_THRESHOLD
+    VOICE_MIC_RMS_THRESHOLD,
 } from "./constants";
 
 export type MicLevelGateOptions = {
@@ -44,7 +44,6 @@ function computeRms(analyser: AnalyserNode, buffer: Float32Array<ArrayBuffer>): 
     }
     return Math.sqrt(sum / buffer.length);
 }
-
 
 /**
  * Fixed-size buffer that stores the pre-gate audio
@@ -97,11 +96,10 @@ class PreGateAudioBuffer {
     }
 }
 
-
 /**
  * RMS volume gate: meters from the live input track; uplink is gated via GainNode
  * (input track stays enabled so the analyser always sees real audio).
- *  Opens instantly on threshold; flushes a short lookback so onset is not clipped.
+ * Opens instantly on threshold; flushes a short lookback so onset is not clipped.
  */
 export async function createMicLevelGate(
     stream: MediaStream,
@@ -109,8 +107,9 @@ export async function createMicLevelGate(
 ): Promise<MicLevelGate> {
     const rmsThreshold = opts.rmsThreshold ?? VOICE_MIC_RMS_THRESHOLD;
     const hangMs = opts.hangMs ?? VOICE_MIC_GATE_HANG_MS;
-    const pollMs = opts.pollIntervalMs ?? VOICE_MIC_GATE_POLL_MS;
     const lookbackMs = opts.lookbackMs ?? VOICE_MIC_GATE_LOOKBACK_MS;
+    const pollMs = opts.pollIntervalMs ?? VOICE_MIC_GATE_POLL_MS;
+
     const audioContext = new AudioContext();
     await audioContext.resume();
 
@@ -212,6 +211,7 @@ export async function createMicLevelGate(
 
     const tick = () => {
         currentLevel = computeRms(analyser, rmsBuffer);
+
         if (forceClosed) {
             if (gateOpen) {
                 gateOpen = false;
@@ -258,7 +258,7 @@ export async function createMicLevelGate(
             if (closed) {
                 gateOpen = false;
                 belowThresholdSince = null;
-                stopFlushSource()
+                stopFlushSource();
             }
             applyLiveGain();
         },

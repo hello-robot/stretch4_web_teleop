@@ -1,48 +1,48 @@
 /**
- * OpenAI Realtime WebRTC client (speech-in / speech-out + function tools).
+ * OpenAI Realtime WebRTC client (speech input and tools-calling only)
  *
  * Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
  */
 
-import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import {
-    EXECUTE_BASE_MOVE,
-    EXECUTE_JOINT_MOVE,
-    isPlaceholderArgs,
-    NO_ARG_VOICE_TOOLS,
-    STOP_MOTION,
-    VOICE_ASLEEP_TOOL_DEFER_MS,
-    VOICE_DURATION_MS_DEFAULT,
-    VOICE_MIC_UNMUTE_COOLDOWN_MS,
-    VOICE_SPEED_DEFAULT,
-    VOICE_STOP_KEYWORDS,
-    VOICE_TOOLS,
-    VOICE_WAKE_PHRASE_ALT_DISPLAY,
-    VOICE_WAKE_PHRASE_DISPLAY,
-    type VoiceToolName,
-    type ExecuteToolResult,
-    type VoiceMoveExecutionMode,
-    type VoiceSpeed,
-} from "./constants";
-import {
+    clearLastVoiceBaseMove,
     executeBaseMoveOnProvider,
     executeRepeatBaseMoveOnProvider,
     setVoiceMoveExecutionContext,
-    clearLastVoiceBaseMove,
 } from "./executeBaseMove";
 import {
+    executeMacroOnProvider,
     executeJointMoveOnProvider,
     executeStopMotionOnProvider,
-    executeMacroOnProvider,
 } from "./executeJointMove";
+import {
+    EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
+    EXECUTE_MACRO,
+    isPlaceholderArgs,
+    NO_ARG_VOICE_TOOLS,
+    STOP_MOTION,
+    type ExecuteToolResult,
+    type VoiceSpeed,
+    type VoiceMoveExecutionMode,
+    type VoiceToolName,
+    VOICE_SPEED_DEFAULT,
+    VOICE_DURATION_MS_DEFAULT,
+    VOICE_TOOLS,
+    VOICE_ASLEEP_TOOL_DEFER_MS,
+    VOICE_STOP_KEYWORDS,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+} from "./constants";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
-import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
     createVoiceWakeSleep,
     type VoiceListeningState,
     type VoiceWakeSleep,
 } from "./voiceWakeSleep";
+import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
+import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
@@ -155,6 +155,16 @@ function formatToolCallLog(
         } catch {
             //
         }
+    } else if (fc.name === EXECUTE_MACRO) {
+        try {
+            const parsed = JSON.parse(fc.arguments || "{}") as Record<
+                string,
+                unknown
+            >;
+            argsSummary = JSON.stringify({ macro: parsed.macro });
+        } catch {
+            //
+        }
     }
     return `[Realtime] ${ts} Tool ${fc.name} ${fc.call_id} src=${source} args=${argsSummary}`;
 }
@@ -196,6 +206,19 @@ function tryFinalizeNoArgToolCall(
     } catch {
         return "partial";
     }
+}
+
+function parsedArgsCompleteForTool(
+    nameVal: string,
+    parsed: Record<string, unknown>,
+): boolean {
+    if (nameVal === EXECUTE_BASE_MOVE || nameVal === EXECUTE_JOINT_MOVE) {
+        return typeof parsed.action === "string" && parsed.action.length > 0;
+    }
+    if (nameVal === EXECUTE_MACRO) {
+        return typeof parsed.macro === "string" && parsed.macro.length > 0;
+    }
+    return false;
 }
 
 /** Back-compat shim for stray events carrying a complete function_call item (rare vs .done stream). */
@@ -250,7 +273,11 @@ function accumulateFunctionCalls(
         if (
             typeof callId === "string" &&
             typeof nameVal === "string" &&
-            nameVal === EXECUTE_BASE_MOVE &&
+            (
+                nameVal === EXECUTE_BASE_MOVE ||
+                nameVal === EXECUTE_JOINT_MOVE ||
+                nameVal === EXECUTE_MACRO
+            ) &&
             typeof argsRaw === "string"
         ) {
             /** Skip placeholder streaming frames ({}); wait for streamed JSON or `.done`. */
@@ -275,10 +302,7 @@ function accumulateFunctionCalls(
                 }
                 return;
             }
-            if (
-                typeof parsedProb.action !== "string" ||
-                parsedProb.action.length === 0
-            ) {
+            if (!parsedArgsCompleteForTool(nameVal, parsedProb)) {
                 for (const v of Object.values(obj)) {
                     visit(v);
                 }
@@ -351,15 +375,12 @@ async function mintEphemeralCredential(
     return { key, raw };
 }
 
-
-
+/** Send tool result to Realtime without requesting a spoken response. */
 function sendFnOutput(
     dc: RTCDataChannel,
     callId: string,
     output: ExecuteToolResult,
-    // onAssistantResponseStart?: () => void,
 ) {
-    // onAssistantResponseStart?.();
     dc.send(
         JSON.stringify({
             type: "conversation.item.create",
@@ -370,7 +391,6 @@ function sendFnOutput(
             },
         }),
     );
-    // dc.send(JSON.stringify({ type: "response.create", response: {} }));
 }
 
 export type RealtimeVoiceConnectOptions = {
@@ -428,11 +448,7 @@ export async function connectOpenAIRealtimeVoice(
         bundlePolicy: "max-bundle",
     });
 
-    const remoteAudioEl = document.createElement("audio");
-    remoteAudioEl.autoplay = true;
-    pc.ontrack = (ev) => {
-        remoteAudioEl.srcObject = ev.streams[0];
-    };
+    pc.ontrack = () => { };
 
     const ms = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -459,8 +475,6 @@ export async function connectOpenAIRealtimeVoice(
     });
     voiceWakeSleep.start();
 
-
-    let micUnmuteTimer: ReturnType<typeof setTimeout> | undefined;
     let micGate: MicLevelGate | undefined;
 
     micGate = await createMicLevelGate(ms, {
@@ -481,7 +495,8 @@ export async function connectOpenAIRealtimeVoice(
             onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
             onVoiceMoveFeedback: (feedback) => {
                 if (
-                    feedback.kind === "move_started"
+                    feedback.kind === "move_started" ||
+                    feedback.kind === "macro_started"
                 ) {
                     voiceWakeSleep?.notifyMotionOrCommand();
                 }
@@ -495,24 +510,6 @@ export async function connectOpenAIRealtimeVoice(
     for (const t of micGate.transmitStream.getAudioTracks()) {
         pc.addTrack(t, micGate.transmitStream);
     }
-
-    // const muteMicForAssistant = () => {
-    //     if (micUnmuteTimer) {
-    //         clearTimeout(micUnmuteTimer);
-    //         micUnmuteTimer = undefined;
-    //     }
-    //     micGate?.setForceClosed(true);
-    // };
-
-    const scheduleMicUnmute = () => {
-        if (micUnmuteTimer) {
-            clearTimeout(micUnmuteTimer);
-        }
-        micUnmuteTimer = setTimeout(() => {
-            micUnmuteTimer = undefined;
-            micGate?.resumeAfterForceClose();
-        }, VOICE_MIC_UNMUTE_COOLDOWN_MS);
-    };
 
     opts.onStatus?.("Negotiating WebRTC…");
 
@@ -580,7 +577,6 @@ export async function connectOpenAIRealtimeVoice(
             return executeMacroOnProvider(voiceProvider, rawArgs);
         },
     };
-
 
     /** `item_id` → accumulated transcript from streaming deltas. */
     const handleUserTranscription = (
@@ -702,12 +698,6 @@ export async function connectOpenAIRealtimeVoice(
     const handleRealtimeDataMessage = async (blob: Record<string, unknown>) => {
         const eventType = String(blob.type ?? "");
 
-        // if (
-        //     eventType === "response.done" ||
-        //     eventType === "output_audio_buffer.stopped"
-        // ) {
-        //     scheduleMicUnmute();
-        // }
         if (eventType.includes("input_audio_transcription")) {
             handleUserTranscription(blob, eventType);
             if (voiceWakeSleep?.state !== "awake") {
@@ -731,7 +721,8 @@ export async function connectOpenAIRealtimeVoice(
                 const words = transcript.trim().toLowerCase().split(/\s+/);
                 if (
                     words.length <= 3 &&
-                    words.some((w) => VOICE_STOP_KEYWORDS.has(w))) {
+                    words.some((w) => VOICE_STOP_KEYWORDS.has(w))
+                ) {
                     opts.onLog?.(
                         `[Realtime] Fast-path stop triggered by transcript: "${transcript.trim()}"`,
                     );
@@ -792,7 +783,7 @@ export async function connectOpenAIRealtimeVoice(
                 const dead: ExecuteToolResult = {
                     ok: false,
                     detail:
-                        "Empty or interrupted execute_base_move arguments (Realtime .done emitted before streaming finished).",
+                        "Empty or interrupted voice tool arguments (Realtime .done emitted before streaming finished).",
                     ignored: true,
                 };
                 opts.onLog?.(
@@ -888,10 +879,6 @@ export async function connectOpenAIRealtimeVoice(
     opts.onStatus?.("Connected (Realtime)");
 
     async function disconnect() {
-        if (micUnmuteTimer) {
-            clearTimeout(micUnmuteTimer);
-            micUnmuteTimer = undefined;
-        }
         voiceWakeSleep?.stop();
         voiceWakeSleep = undefined;
         micGate?.stop();
@@ -902,11 +889,6 @@ export async function connectOpenAIRealtimeVoice(
         setVoiceMoveExecutionContext(undefined);
         clearLastVoiceBaseMove();
         dc.close();
-        try {
-            remoteAudioEl.srcObject = null;
-        } catch {
-            //
-        }
         ms.getTracks().forEach((t) => {
             t.stop();
         });
