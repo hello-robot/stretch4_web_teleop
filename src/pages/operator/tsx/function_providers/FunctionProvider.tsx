@@ -99,9 +99,8 @@ export abstract class FunctionProvider {
 
     /**
      * Drive base continuously for durationMs then stop sending velocity.
-     * Also, rejects overlapping calls while timedVoiceMoveActive.
-     *
-     * @returns false if overlap or no RemoteRobot attached
+    * Supersedes any active timed voice move so a new command can interrupt.
+     * @returns false if no RemoteRobot attached
      */
     public timedBaseDrive(
         linVelX: number,
@@ -110,9 +109,6 @@ export abstract class FunctionProvider {
         angVel: number = 0
     ): boolean {
         if (!FunctionProvider.remoteRobot) {
-            return false;
-        }
-        if (this.timedVoiceMoveActive) {
             return false;
         }
 
