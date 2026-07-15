@@ -106,6 +106,7 @@ export type WebRTCMessage =
     | ModeMessage
     | IsHomedMessage
     | IsRunStoppedMessage
+    | LeaseStatusMessage
     | StretchToolMessage
     | ActionStateMessage
     | OdomMessage
@@ -141,6 +142,12 @@ export interface IsHomedMessage {
 export interface IsRunStoppedMessage {
     type: "isRunStopped";
     enabled: boolean;
+}
+
+export interface LeaseStatusMessage {
+    type: "leaseStatus";
+    holder: string;
+    isDriverHolding: boolean;
 }
 
 export interface StretchToolMessage {

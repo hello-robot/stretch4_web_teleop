@@ -174,6 +174,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "isRunStopped":
             remoteRobot.sensors.setRunStopState(message.enabled);
             break;
+        case "leaseStatus":
+            remoteRobot.sensors.setLeaseStatus(message.holder, message.isDriverHolding);
+            break;
         case "stretchTool":
             console.log("index stretchTool", message.value);
             stretchTool = getStretchTool(message.value);
@@ -259,6 +262,13 @@ function configureRemoteRobot() {
     );
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
         runStopFunctionProvider.updateRunStopState
+    );
+    remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
+        (holder, isDriverHolding) => {
+            if (!isDriverHolding) {
+                buttonFunctionProvider.stopCurrentAction(true);
+            }
+        }
     );
 }
 

@@ -27,6 +27,7 @@ const VOICE_ROTATION_DEG_MIN = 1.0;
 /** Maximum rotation (degrees) for distance-based base rotation. */
 const VOICE_ROTATION_DEG_MAX = 360.0;
 
+
 // ── Joint move distance bounds ────────────────────────────────────────────────
 
 /** Minimum travel (meters) for lift / arm extension joint moves. */

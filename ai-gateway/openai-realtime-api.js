@@ -77,14 +77,14 @@ function buildRealtimeVoiceSessionPayload() {
             instructions: [
                 // Identity and tone
                 `Do not respond to the user. Do not speak to the user. Only call tools as instructed.`,
-                
+
                 // Wake/sleep phrases — do not tool-call
                 `When the user says only "${VOICE_WAKE_PHRASE_DISPLAY}", "${VOICE_WAKE_PHRASE_ALT_DISPLAY}", or similar wake greetings, do NOT call any tool.`,
                 `When the user says only "${VOICE_SLEEP_PHRASE_DISPLAY}", "${VOICE_SLEEP_PHRASE_ALT_DISPLAY}", or similar farewells, do NOT call any tool.`,
-                
+
                 // ── Base move harness ────────────────────────────────────────────────────
                 `The user speaks imprecisely. Infer exactly ONE robot motion per turn: base translation, base rotation, or arm motion.`,
-                
+
                 // ── Define basic motion ────────────────────────────────────────────────────
                 `The robot is a mobile manipulation platform with a holonomic base, a lift that moves the arm up and down, a telescoping arm that moves in and out, a 3 degree of freedom wrist with roll, pitch and yaw joints, and a gripper that opens and closes.`,
                 `The arm points in the robot's "forward" direction. The wrist has predefined "stow" and "center" poses. "Center" represents the wrist pointing in the forward direction`,
@@ -125,7 +125,7 @@ function buildRealtimeVoiceSessionPayload() {
                 `Call tool \`${EXECUTE_JOINT_MOVE}\` at most ONCE per user utterance.`,
                 `If neither distance nor time is specified for base movement, set \`duration_ms\`=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says "stop").`,
                 `After a tool result, never call a movement tool again unless the user gives a new command.`,
-                
+
                 // ── Stop / repeat ────────────────────────────────────────────────────────────────────────────
                 `When the user wants to halt ANY motion ("stop", "wait", "freeze", "do not move", "cut that", "enough", "pause", "cancel"), call tool \`${STOP_MOTION}\` with no arguments — not a movement tool.`,
                 `Call \`${STOP_MOTION}\` IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
@@ -270,6 +270,7 @@ function buildRealtimeVoiceSessionPayload() {
                     transcription: {
                         model: "gpt-4o-transcribe",
                         language: "en",
+                        prompt: "Output in English.",
                     },
                     /** Docs: https://developers.openai.com/api/docs/guides/realtime-vad#server-vad  */
                     turn_detection: {

@@ -96,6 +96,7 @@ export class Robot extends React.Component {
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
+    private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam: Param;
     private modeParam: Param;
@@ -118,6 +119,7 @@ export class Robot extends React.Component {
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
+        leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -131,6 +133,7 @@ export class Robot extends React.Component {
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
+        this.leaseStatusCallback = props.leaseStatusCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -260,6 +263,7 @@ export class Robot extends React.Component {
         this.subscribeToOdom();
         this.subscribeToMode();
         this.subscribetoJointStateDiagnostics();
+        this.subscribeToLeaseHolder();
         this.subscribeToActionResult(
             moveBaseActionName,
             this.moveBaseResultCallback,
@@ -382,6 +386,30 @@ export class Robot extends React.Component {
 
         modeTopic.subscribe((msg) => {
             if (this.modeCallback) this.modeCallback(msg.data);
+        });
+    }
+
+    subscribeToLeaseHolder() {
+        const leaseHolderTopic: Topic = new Topic({
+            ros: this.ros,
+            name: "/server_lease_holder",
+            messageType: "diagnostic_msgs/msg/DiagnosticStatus",
+        });
+        this.subscriptions.push(leaseHolderTopic);
+
+        leaseHolderTopic.subscribe((message: Message) => {
+            const status = message as any;
+            let leaseHolder = "none";
+            if (status && status.values) {
+                const holderPair = status.values.find((pair: any) => pair.key === "lease_holder");
+                if (holderPair) {
+                    leaseHolder = holderPair.value;
+                }
+            }
+            const isDriverHolding = leaseHolder === "ros2_driver" || leaseHolder === "None" || leaseHolder === "none";
+            if (this.leaseStatusCallback) {
+                this.leaseStatusCallback(leaseHolder, isDriverHolding);
+            }
         });
     }
 
