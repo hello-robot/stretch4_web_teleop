@@ -1,12 +1,14 @@
-# Overview
+# README
+
+## Overview
 
 This interface enables a user to remotely teleoperate a Stretch robot through a web browser. This website can be set up to teleoperate the robot remotely from anywhere in the world with an internet connection, or simply eyes-off teleop from the next room on a local network. The codebase is built on ROS2, WebRTC, Nav2, and TypeScript.
 
-# Setup & Installation
+## Setup & Installation
 
 The interface is compatible with the Stretch 4. It currently only supports Ubuntu 24.04 and ROS2 Humble. Upgrade your operating system if necessary ([instructions](https://docs.hello-robot.com/0.3/installation/robot_install/)) and create/update the Stretch ROS2 Humble workspace ([instructions](https://docs.hello-robot.com/0.3/installation/ros_workspace/)). This will install all package dependencies and install the web teleop interface.
 
-# Launching the Interface
+## Launching the Interface
 
 First, navigate to the folder containing the codebase using:
 
@@ -17,7 +19,7 @@ colcon_cd stretch4_web_teleop
 Next, launch the interface:
 
 ```
-./launch_interface
+./launch_interface.sh
 ```
 
 In the terminal, you will see output similar to:
@@ -38,7 +40,7 @@ Once you're done with the interface, close the browser and run:
 
 **Note:** Only one browser can be connected to the interface at a time.
 
-# Using the Interface Remotely
+## Using the Interface Remotely
 
 **WARNING: This is prototype code and there are security issues. Deploy this code at your own risk.**
 
@@ -52,7 +54,7 @@ ngrok http --basic-auth="user:password" --domain=<NGROK_DOMAIN> 443
 
 In your browser, open `https://<NGROK_DOMAIN>/operator` to see the interface. You will then be prompted to enter the appropriate username and password. Note, anyone in the world with internet access can open this link.
 
-## Storing Ngrok Tunnel Configuration
+### Storing Ngrok Tunnel Configuration
 
 To store this configuration, open the ngrok config file:
 
@@ -78,26 +80,26 @@ tunnels:
 
 Now run `ngrok start stretch-web-teleop` to start the tunnel and navigate to `https://<NGROK_DOMAIN>/operator`. You will then be prompted to enter the appropriate username and password.
 
-# Developer Docs
+## Developer Docs
 
 The following primers provide a high-level introduction to the codebase for developers.
 
-| Primer | Description |
-| :--- | :--- |
-| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the robot browser, operator browser, ROS2, and WebRTC fit together. Includes a render logic flow diagram showing how `MobileOperator` is structured into scenes, function providers, and the global footer. |
-| [Operator Page](src/primer_operator.md) | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`), the entry point (`index.tsx`), function providers, component folders, storage handler, and a step-by-step guide for adding new features. |
-| [Robot Page](src/primer_robot.md) | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and the full bidirectional data flow between ROS2 and the operator browser. |
+| Primer                                                       | Description                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the robot browser, operator browser, ROS2, and WebRTC fit together. Includes a render logic flow diagram showing how `MobileOperator` is structured into scenes, function providers, and the global footer.                             |
+| [Operator Page](src/primer_operator.md)                      | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`), the entry point (`index.tsx`), function providers, component folders, storage handler, and a step-by-step guide for adding new features. |
+| [Robot Page](src/primer_robot.md)                            | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and the full bidirectional data flow between ROS2 and the operator browser.                                                  |
 
-# Contributing
+## Contributing
 
 - This repository uses pre-commit hooks to enforce consistent formatting and style.
   - Install pre-commit: `python3 -m pip install pre-commit`
   - Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
   - Moving forward, pre-commit hooks will run before you create any commit.
 
-# Troubleshooting
+## Troubleshooting
 
-## Collecting logs
+### Collecting logs
 
 First, ensure that your robot has the latest version of Web Teleop by [updating your ROS workspace](https://docs.hello-robot.com/0.3/installation/ros_workspace/).
 
@@ -105,7 +107,7 @@ Then, launch the program normally, and if you see "FAILURE. COULD NOT LAUNCH WEB
 
 To locate the logs, open a file explorer, go into "Home", go into "stretch_user", go into "log", go into "web_teleop", locate the folder with the latest timestamp, and send "stretch4_web_teleop_logs.zip" to the support team.
 
-# Licenses
+## Licenses
 
 The following license applies to the contents of this directory written by Vinitha Ranganeni, Noah Ponto, authors associated with the University of Washington, and authors associated with Hello Robot Inc. (the "Contents"). This software is intended for use with Stretch ® mobile manipulators produced and sold by Hello Robot ®.
 
