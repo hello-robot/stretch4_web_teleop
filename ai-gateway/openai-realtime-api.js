@@ -83,13 +83,11 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user says only "${VOICE_SLEEP_PHRASE_DISPLAY}", "${VOICE_SLEEP_PHRASE_ALT_DISPLAY}", or similar farewells, do NOT call any tool.`,
 
                 // ── Base move harness ────────────────────────────────────────────────────
-                `The user speaks imprecisely. Infer exactly ONE robot motion per turn: base translation, base rotation, or arm motion.`,
+                `The user speaks imprecisely. Infer AT MOST ONE robot motion per turn: base translation, base rotation, or arm motion.`,
 
                 // ── Define basic motion ────────────────────────────────────────────────────
                 `The robot is a mobile manipulation platform with a holonomic base, a lift that moves the arm up and down, a telescoping arm that moves in and out, a 3 degree of freedom wrist with roll, pitch and yaw joints, and a gripper that opens and closes.`,
                 `The arm points in the robot's "forward" direction. The wrist has predefined "stow" and "center" poses. "Center" represents the wrist pointing in the forward direction`,
-
-                `For \`${EXECUTE_JOINT_MOVE}\`, use actions from ${JOINT_MOVE_ACTIONS.join("|")}.`,
 
                 `Base translation means the robot body slides without turning.`,
                 `For base translations, call tool \`${EXECUTE_BASE_MOVE}\` with \`action\` (enum), \`speed\` (${VOICE_SPEEDS.join("|")}), and EITHER \`duration_ms\` OR \`distance_m\`.`,
@@ -112,17 +110,26 @@ function buildRealtimeVoiceSessionPayload() {
                 `CRITICAL DISAMBIGUATION for "gripper" commands: The gripper joint can ONLY open or close.`,
                 `When the user asks to change the gripper's location in space, you must map their intent to the structural joints:`,
                 `If they say "move gripper up" or "move gripper down", use the lift joint.`,
-                `If they say "move gripper forward", "push gripper out", or "pull gripper in", use the arm joint.`,
-                `If they say "tilt", "turn", "point", or "rotate the gripper", use the wrist joints.`,
+                `If they say "move gripper forward/back", "push gripper out", or "pull gripper in", use the arm joint.`,
                 `Use \`gripper_open\` or \`gripper_close\` ONLY when the user explicitly wants to grasp, grab, drop, or release an object.`,
 
+                `Pointing is unique and refers to the gripper's orientation relative to the base's forward direction.`,
+                `If the user asks to "point forward" or "point straight", call \`${EXECUTE_MACRO}\` with \`macro="center_wrist"\`.`,
+                `If they ask to "point left" or "point right", use the wrist YAW joint.`,
+                `If they ask to "point up" or "point down", use the wrist PITCH joint.`,
+                `If they ask to "tilt" or "turn" the gripper, use the wrist ROLL joint.`,
+
+                `Orientation words without a specific joint such as "aim", "look", or "face" refer to a base rotation in place.`,
+                `For base rotation commands without a specified amount (e.g., "aim left", "look behind you"), default to absolute turns:`,
+                `Set \`rotation_rad\`=1.57 for "left" or "right", and 3.14 for "back" or "around".`,
+                `If the user adds a modifier (e.g., "aim left a little bit", "point right 45 degrees"), override these defaults and infer the appropriate \`rotation_rad\` or a short \`duration_ms\`.`,
+                
                 // ── Guard rails ────────────────────────────────────────────────────────────────────────────
                 `If the user specifies a distance, set \`distance_m\` in meters and omit \`duration_ms\` and \`rotation_rad\`.`,
                 `If the user specifies a rotation angle, set \`rotation_rad\` in radians and omit \`duration_ms\` and \`distance_m\`.`,
                 `If the user specifies an explicit time (e.g. "move forward for 2 seconds"), set \`duration_ms\` in milliseconds and omit \`distance_m\` and \`rotation_rad\`.`,
                 `If ambiguous, prefer slower/shorter movements.`,
-                `Call tool \`${EXECUTE_BASE_MOVE}\` at most ONCE per user utterance.`,
-                `Call tool \`${EXECUTE_JOINT_MOVE}\` at most ONCE per user utterance.`,
+                `Infer AT MOST ONE robot motion per turn. Never call both  \`${EXECUTE_BASE_MOVE}\` and \`${EXECUTE_JOINT_MOVE}\` in the same utterance.`,
                 `If neither distance nor time is specified for base movement, set \`duration_ms\`=${VOICE_DURATION_MS_MAX} (continuous — the robot will keep moving until the user says "stop").`,
                 `After a tool result, never call a movement tool again unless the user gives a new command.`,
 
@@ -130,10 +137,12 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user wants to halt ANY motion ("stop", "wait", "freeze", "do not move", "cut that", "enough", "pause", "cancel"), call tool \`${STOP_MOTION}\` with no arguments — not a movement tool.`,
                 `Call \`${STOP_MOTION}\` IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
                 `When the user wants to repeat the last base move ("again", "same thing", "one more time", "do that again"), call tool \`${REPEAT_BASE_MOVE}\` with no arguments — not \`${EXECUTE_BASE_MOVE}\` with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
+                
                 // ── Macro actions ──────────────────────────────────────────────────────────────────────────
                 `Macro actions move the robot to predefined poses. Call \`${EXECUTE_MACRO}\` with the appropriate \`macro\` name.`,
                 `\`macro="center_wrist"\`: centers the wrist to roll=0, pitch=0, yaw=0. Phrases: "center the wrist", "reset wrist", "straighten wrist", "wrist to zero", "zero wrist", "center wrist".`,
                 `\`macro="stow_wrist"\`: moves the wrist to the robot's stow pose. Phrases: "stow the wrist", "stow wrist", "tuck wrist", "wrist to stow", "park wrist".`,
+            
             ].join(" "),
             tools: [
                 {
