@@ -1,7 +1,7 @@
 import { StorageHandler } from "./StorageHandler";
 import { LayoutDefinition } from "../utils/component_definitions";
 import { RobotPose } from "shared/util";
-import ROSLIB from "roslib";
+import { Transform } from "roslib";
 
 /** One row in `user_pose_recording_names` (localStorage JSON array). */
 export type RecordingListEntry = {
@@ -72,7 +72,7 @@ export class LocalStorageHandler extends StorageHandler {
 
     public saveMapPose(
         poseName: string,
-        pose: ROSLIB.Transform,
+        pose: Transform,
         poseType: string
     ) {
         const poseNames = this.getMapPoseNames();
@@ -105,15 +105,15 @@ export class LocalStorageHandler extends StorageHandler {
         return JSON.parse(storedJson);
     }
 
-    public getMapPose(poseName: string): ROSLIB.Transform {
+    public getMapPose(poseName: string): Transform {
         const storedJson = localStorage.getItem(`map_${poseName}`);
         if (!storedJson) throw new Error(`Could not load pose ${poseName}`);
-        return JSON.parse(storedJson) as ROSLIB.Transform;
+        return JSON.parse(storedJson) as Transform;
     }
 
-    public getMapPoses(): ROSLIB.Transform[] {
+    public getMapPoses(): Transform[] {
         const poseNames = this.getMapPoseNames();
-        var poses: ROSLIB.Transform[] = [];
+        var poses: Transform[] = [];
         poseNames.forEach((poseName) => {
             const pose = this.getMapPose(poseName);
             poses.push(pose);

@@ -1,4 +1,4 @@
-import ROSLIB, { Message } from "roslib";
+import { Transform, Message } from "roslib";
 import { cmd } from "./commands";
 
 export type ValidJoints =
@@ -92,9 +92,7 @@ export interface SignallingMessage {
     cameraInfo?: CameraInfo;
 }
 
-export interface Transform {
-    transform: ROSLIB.Transform;
-}
+
 
 export type WebRTCMessage =
     | ValidJointStateMessage
@@ -178,7 +176,7 @@ export interface OccupancyGridMessage {
 
 export interface MapPoseMessage {
     type: "amclPose";
-    message: ROSLIB.Transform;
+    message: Transform;
 }
 
 export interface BatteryVoltageMessage {

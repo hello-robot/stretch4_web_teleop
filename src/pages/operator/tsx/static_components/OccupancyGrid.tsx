@@ -3,7 +3,7 @@
 import React from "react";
 import createjs from "createjs-module";
 import { ROSOccupancyGrid, ROSPoint, ROSPose } from "shared/util";
-import ROSLIB from "roslib";
+import { Pose, Vector3, Quaternion, Transform } from "roslib";
 import { MapFunctions } from "../layout_components/AutoNav";
 import hexToRgbArray from "../utils/hex-to-rgb-array";
 
@@ -17,7 +17,7 @@ export class OccupancyGrid extends React.Component {
     // The createjs stage (canvas root)
     private rootObject: createjs.Stage;
     // The origin of the map in ROS coordinates
-    private origin?: ROSLIB.Pose;
+    private origin?: Pose;
     // The bitmap image of the occupancy grid
     private bitmap?: createjs.Bitmap;
     // Map dimensions in cells
@@ -192,7 +192,7 @@ export class OccupancyGrid extends React.Component {
         }
 
         // Save the map origin (position and orientation) from ROS map metadata
-        this.origin = new ROSLIB.Pose({
+        this.origin = new Pose({
             position: this.map.info.origin.position,
             orientation: this.map.info.origin.orientation,
         });
@@ -283,7 +283,7 @@ export class OccupancyGrid extends React.Component {
             return;
         }
 
-        this.origin = new ROSLIB.Pose({
+        this.origin = new Pose({
             position: this.map.info.origin.position,
             orientation: this.map.info.origin.orientation,
         });
@@ -318,7 +318,7 @@ export class OccupancyGrid extends React.Component {
     /**
      * Converts a ROS translation (Vector3) to global canvas coordinates.
      */
-    rosToGlobal(translation: ROSLIB.Vector3) {
+    rosToGlobal(translation: Vector3) {
         var x =
             (this.width * this.scaleX! -
                 (-translation.x +
@@ -340,7 +340,7 @@ export class OccupancyGrid extends React.Component {
      * Converts a ROS quaternion to a global theta (angle in degrees).
      * See: https://github.com/RobotWebTools/ros2djs/blob/develop/src/Ros2D.js#L34C1-L44C3
      */
-    rosQuaternionToGlobalTheta(orientation: ROSLIB.Quaternion) {
+    rosQuaternionToGlobalTheta(orientation: Quaternion) {
         // See https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Rotation_matrices
         // here we use [x y z] = R * [1 0 0]
         var w = orientation.w;
@@ -400,7 +400,7 @@ export class OccupancyGrid extends React.Component {
      */
     public displayPoseMarkers(
         display: boolean,
-        poses: ROSLIB.Transform[],
+        poses: Transform[],
         poseNames: string[],
         poseTypes: string[],
     ) {
@@ -460,7 +460,7 @@ export class OccupancyGrid extends React.Component {
                 x: x,
                 y: y,
                 z: 0,
-            } as ROSLIB.Vector3);
+            } as Vector3);
         if (this.getGoalReached) clearInterval(this.getGoalReached);
         if (this.goalMarker) this.rootObject.removeChild(this.goalMarker);
         this.goalMarker = this.drawNavigationArrow(true, color);

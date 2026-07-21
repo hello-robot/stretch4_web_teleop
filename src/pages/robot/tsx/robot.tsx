@@ -485,6 +485,7 @@ export class Robot extends React.Component {
         getMapService?.callService(
             request,
             (response: { map: ROSOccupancyGrid }) => {
+                this.subscribeToMapTF();
                 if (this.occupancyGridCallback)
                     this.occupancyGridCallback(response.map);
             }
