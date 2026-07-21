@@ -703,6 +703,7 @@ export class Robot extends React.Component {
     }
 
     subscribeToMapTF() {
+        this.createMapFrameTFClient();
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
         });
