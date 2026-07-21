@@ -20,7 +20,6 @@ module.exports = (env) => {
 
     return {
         mode: "development",
-        devtool: "eval-source-map",
         entry: pages.reduce((config, page) => {
             config[page] = `./src/pages/${page}/tsx/index.tsx`;
             return config;
@@ -28,7 +27,6 @@ module.exports = (env) => {
         output: {
             filename: "[name]/bundle.js",
             path: path.resolve(__dirname, "dist"),
-            devtoolModuleFilenameTemplate: "webpack:///[resource-path]?[loaders]",
         },
         optimization: {
             splitChunks: {
