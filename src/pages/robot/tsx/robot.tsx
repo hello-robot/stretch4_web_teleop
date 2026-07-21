@@ -13,18 +13,15 @@ import {
 import {
     ActionState,
     ActionStatusList,
-    DiagnosticArray,
     getStretchTool,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
-    ROSOdometry,
     ROSPose,
     StretchTool,
     ValidJoints,
     VideoProps,
-    JOINT_VELOCITIES,
 } from "shared/util";
 import {
     RobotPose,
@@ -63,6 +60,7 @@ export class Robot extends React.Component {
     private rosReconnectTimerID?: ReturnType<typeof setTimeout>;
     private onRosConnectCallback?: () => Promise<void>;
     private jointLimits: { [key in ValidJoints]?: [number, number] } = {};
+    private diagnosticJointLimits: { [key in ValidJoints]?: [boolean, boolean] } = {};
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
     private poseGoalID?: string;
@@ -432,6 +430,15 @@ export class Robot extends React.Component {
                     let isHomed = status.values.every((v) => v.value == 'True');
                     if (this.isHomedCallback) this.isHomedCallback(isHomed);
                 }
+                if (status.name == "at_limit") {
+                    status.values.forEach((v) => {
+                        let jointName = v.key as ValidJoints;
+                        let valStr = v.value;
+                        let isPos = valStr.includes("'pos': True") || valStr.includes('"pos": true') || valStr.includes("'pos': true") || valStr.includes('"pos": True');
+                        let isNeg = valStr.includes("'neg': True") || valStr.includes('"neg": true') || valStr.includes("'neg': true") || valStr.includes('"neg": True');
+                        this.diagnosticJointLimits[jointName] = [!isNeg, !isPos];
+                    });
+                }
             });
         });
     }
@@ -492,25 +499,7 @@ export class Robot extends React.Component {
         );
     }
 
-    getJointLimits() {
-        console.log("Getting joint limits");
-        let getJointLimitsService = new Service({
-            ros: this.ros,
-            name: "/get_joint_states",
-            serviceType: "std_srvs/Trigger",
-        });
 
-        var request = {};
-        getJointLimitsService.callService(
-            request,
-            () => {
-                console.log("Got joint limits service succeeded");
-            },
-            (error) => {
-                console.log("Got joint limits service failed", error);
-            }
-        );
-    }
 
     subscribeToActionResult(
         actionName: string,
@@ -584,8 +573,8 @@ export class Robot extends React.Component {
     createMoveBaseClient() {
         this.moveBaseClient = new Action({
             ros: this.ros,
-            serverName: moveBaseActionName,
-            actionName: "nav2_msgs/action/NavigateToPose",
+            name: moveBaseActionName,
+            actionType: "nav2_msgs/action/NavigateToPose",
             // timeout: 100
         });
     }
@@ -1194,6 +1183,10 @@ export class Robot extends React.Component {
     }
 
     inJointLimitsHelper(jointValue: number, jointName: ValidJoints) {
+        if (this.diagnosticJointLimits[jointName] !== undefined) {
+            return this.diagnosticJointLimits[jointName];
+        }
+
         let jointLimits = this.jointLimits[jointName];
         if (!jointLimits) return;
 
