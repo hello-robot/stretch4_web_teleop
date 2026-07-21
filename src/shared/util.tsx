@@ -259,9 +259,10 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     lift_joint: 0.04,
     wrist_roll_joint: 0.5,
     wrist_pitch_joint: 0.5,
-    wrist_yaw_joint: 1.5,
+    wrist_yaw_joint: 1.0,
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.3,
+    stretch_gripper_joint: 0.1,
 };
 
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {

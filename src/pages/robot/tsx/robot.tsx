@@ -24,6 +24,7 @@ import {
     StretchTool,
     ValidJoints,
     VideoProps,
+    JOINT_VELOCITIES,
 } from "shared/util";
 import {
     RobotPose,
@@ -813,7 +814,7 @@ export class Robot extends React.Component {
         let jointVelocities = {
             joint_names: [jointName],
             velocities: [velocity],
-            duration: 0.15  // multiple of a heartbeat (0.025s)
+            duration: 0.05  // multiple of a heartbeat (0.025s)
         };
         if (!this.jointVelTopic) throw "jointVelTopic is undefined";
         this.jointVelTopic.publish(jointVelocities);
@@ -883,12 +884,35 @@ export class Robot extends React.Component {
     makePoseGoal(pose: RobotPose) {
         let jointNames: ValidJoints[] = [];
         let jointPositions: number[] = [];
+        let maxDuration = 0.1; // minimum threshold to prevent division by zero or excessive acceleration
+
         for (let key in pose) {
-            jointNames.push(key as ValidJoints);
-            jointPositions.push(pose[key as ValidJoints]!);
+            const jointName = key as ValidJoints;
+            jointNames.push(jointName);
+            const targetPos = pose[jointName]!;
+            jointPositions.push(targetPos);
+
+            try {
+                const currentPos = this.getJointValue(jointName);
+                const distance = Math.abs(targetPos - currentPos);
+                const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
+                
+                if (velocityLimit > 0) {
+                    const jointDuration = distance / velocityLimit;
+                    if (jointDuration > maxDuration) {
+                        maxDuration = jointDuration;
+                    }
+                }
+            } catch (e) {
+                console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
+            }
         }
 
-        console.log(jointNames, jointPositions);
+        const secs = Math.floor(maxDuration);
+        const nsecs = Math.round((maxDuration - secs) * 1e9);
+
+        console.log("Calculated synchronized trajectory duration:", maxDuration, "secs:", secs, "nsecs:", nsecs);
+
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         let newGoal = {
             trajectory: {
@@ -902,10 +926,9 @@ export class Robot extends React.Component {
                 points: [
                     {
                         positions: jointPositions,
-                        // The following might causing the jumpiness in continuous motions
                         time_from_start: {
-                            secs: 1,
-                            nsecs: 0,
+                            secs: secs,
+                            nsecs: nsecs,
                         },
                     },
                 ],
@@ -1071,7 +1094,7 @@ export class Robot extends React.Component {
     }
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        // this.switchToNavigationMode();
+        this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1084,6 +1107,8 @@ export class Robot extends React.Component {
                     ": " +
                     result.error_string
                 );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             },
             (feedback) => {
                 console.log(
@@ -1092,6 +1117,16 @@ export class Robot extends React.Component {
                     ": " +
                     feedback
                 );
+            },
+            (error) => {
+                console.log(
+                    "Error for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    error
+                );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             }
         );
     }
@@ -1133,7 +1168,21 @@ export class Robot extends React.Component {
             return 0;
         }
 
-        let jointIndex = this.jointState.name.indexOf(jointName);
+        let name: string = jointName;
+        if (name === "arm_joint" || name === "wrist_extension") {
+            let total = 0;
+            let foundAny = false;
+            for (let link of ["arm_l1_joint", "arm_l2_joint", "arm_l3_joint", "arm_l4_joint"]) {
+                let idx = this.jointState.name.indexOf(link as ValidJoints);
+                if (idx !== -1) {
+                    total += this.jointState.position[idx];
+                    foundAny = true;
+                }
+            }
+            if (foundAny) return total * 1.25;  // Scale factor to account for the number of links (5/4)
+        }
+
+        let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
         return this.jointState.position[jointIndex];
     }
 

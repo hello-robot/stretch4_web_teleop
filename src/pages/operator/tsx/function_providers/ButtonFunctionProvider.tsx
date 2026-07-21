@@ -285,11 +285,11 @@ export class ButtonFunctionProvider extends FunctionProvider {
             : 1;
         const velocity =
             multiplier *
-            JOINT_VELOCITIES[jointName]! *
+            (JOINT_VELOCITIES[jointName] ?? 0.1) *
             FunctionProvider.velocityScale;
         const increment =
             multiplier *
-            JOINT_INCREMENTS[jointName]! *
+            (JOINT_INCREMENTS[jointName] ?? 0.1) *
             FunctionProvider.velocityScale;
 
         switch (FunctionProvider.actionMode) {
@@ -322,7 +322,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     case ButtonPadButton.GripperOpen:
                     case ButtonPadButton.GripperClose:
                         action = () =>
-                            this.incrementalJointMovement(jointName, increment);
+                            this.incrementalJointMove(jointName, increment);
                         break;
                 }
                 return {
@@ -368,7 +368,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     case ButtonPadButton.GripperOpen:
                     case ButtonPadButton.GripperClose:
                         action = () =>
-                            this.continuousJointMovement(jointName, increment);
+                            this.continuousJointMovement(jointName, velocity);
                         break;
                 }
 

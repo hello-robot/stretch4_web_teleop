@@ -178,6 +178,28 @@ export abstract class FunctionProvider {
         return true;
     }
 
+    /**
+     * Move a joint incrementally using the trajectory action server.
+     * Stops any ongoing velocity or trajectory action first.
+     * 
+     * @param jointName the joint to actuate
+     * @param increment the incremental distance/rotation (m or rad)
+     * @returns false if no robot attached
+     */
+    public incrementalJointMove(
+        jointName: ValidJoints,
+        increment: number,
+    ): boolean {
+        if (!FunctionProvider.remoteRobot) {
+            return false;
+        }
+
+        this.stopCurrentAction(true);
+        this.activeVelocityAction =
+            FunctionProvider.remoteRobot.incrementalMove(jointName, increment);
+        return true;
+    }
+
     // NOTE: When we undo this temp fix (of not stopping the
     // trajectory client) we also need to undo it in robot.jsx
     // `stopExecution()`.

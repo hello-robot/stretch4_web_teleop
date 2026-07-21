@@ -228,14 +228,20 @@ function buildRealtimeVoiceSessionPayload() {
                                 maximum: VOICE_DURATION_MS_MAX,
                                 default: VOICE_DURATION_MS_MAX,
                             },
-                            distance: {
+                            distance_m: {
                                 type: "number",
                                 description:
-                                    "Distance for lift/arm in meters or wrist angle in radians. " +
-                                    `Lift/arm range: ${JOINT_DISTANCE_M_MIN}-${JOINT_DISTANCE_M_MAX} meters. ` +
-                                    `Wrist range: ${JOINT_DISTANCE_RAD_MIN}-${JOINT_DISTANCE_RAD_MAX} radians. ` +
-                                    "Omit for gripper actions and when duration_ms is set.",
+                                    `Distance to travel in meters for lift/arm joint actions (${JOINT_LIFT_ARM_ACTIONS.join("|")}). ` +
+                                    `Valid range: ${JOINT_DISTANCE_M_MIN}-${JOINT_DISTANCE_M_MAX} meters. Omit if rotation_rad or duration_ms is set.`,
                                 minimum: JOINT_DISTANCE_M_MIN,
+                                maximum: JOINT_DISTANCE_M_MAX,
+                            },
+                            rotation_rad: {
+                                type: "number",
+                                description:
+                                    `Rotation angle in radians for wrist joint actions (${JOINT_WRIST_ACTIONS.join("|")}). ` +
+                                    `Valid range: ${JOINT_DISTANCE_RAD_MIN}-${JOINT_DISTANCE_RAD_MAX} radians. Omit if distance_m or duration_ms is set.`,
+                                minimum: JOINT_DISTANCE_RAD_MIN,
                                 maximum: JOINT_DISTANCE_RAD_MAX,
                             },
                         },

@@ -122,18 +122,25 @@ class JointMoveExecutor extends VoiceMoveExecutor {
 
         // Parse distance — only meaningful for m/rad units.
         let distance: number | undefined;
-        if (meta.unit !== "duration" && raw.distance !== undefined && raw.distance !== null) {
-            const rawDist =
-                typeof raw.distance === "number"
-                    ? raw.distance
-                    : typeof raw.distance === "string"
-                        ? Number.parseFloat(raw.distance)
-                        : NaN;
-            if (!Number.isNaN(rawDist) && rawDist > 0) {
-                distance =
-                    meta.unit === "m"
-                        ? clampJointDistanceM(rawDist)
-                        : clampJointDistanceRad(rawDist);
+        if (meta.unit !== "duration") {
+            const rawVal =
+                meta.unit === "m"
+                    ? (raw.distance_m ?? raw.distance)
+                    : (raw.rotation_rad ?? raw.distance);
+
+            if (rawVal !== undefined && rawVal !== null) {
+                const rawDist =
+                    typeof rawVal === "number"
+                        ? rawVal
+                        : typeof rawVal === "string"
+                            ? Number.parseFloat(rawVal)
+                            : NaN;
+                if (!Number.isNaN(rawDist) && rawDist > 0) {
+                    distance =
+                        meta.unit === "m"
+                            ? clampJointDistanceM(rawDist)
+                            : clampJointDistanceRad(rawDist);
+                }
             }
         }
 
@@ -189,9 +196,9 @@ class JointMoveExecutor extends VoiceMoveExecutor {
                     : duration_ms;
             const clampedMs = clampDurationMs(estimatedMs);
 
-            const started = provider.timedJointMove(meta.jointName, velocity, clampedMs);
+            const started = provider.incrementalJointMove(meta.jointName, meta.sign * distance);
             if (!started) {
-                const result = JointMoveExecutor.busyOrDisconnected("timedJointMove");
+                const result = JointMoveExecutor.busyOrDisconnected("incrementalJointMove");
                 JointMoveExecutor.emitVoiceMoveFeedback({
                     kind: "rejected",
                     reason: FunctionProvider.robotIsConnected()
@@ -215,7 +222,7 @@ class JointMoveExecutor extends VoiceMoveExecutor {
                 ok: true,
                 detail:
                     `${action} at ${speed} for ${distance.toFixed(4)} ${meta.unit}` +
-                    ` (~${clampedMs}ms, vel=${velocity.toFixed(5)} ${meta.unit}/s)`,
+                    ` (~${clampedMs}ms, incremental move via trajectory action server)`,
             };
         }
 
