@@ -2,12 +2,12 @@
 
 /**
  * Test Harness for OpenAI Realtime Voice Teleop Prompts
- * 
+ *
  * This command-line utility imports the actual system instructions and tool
  * definitions from `./ai-gateway/openai-realtime-api.js` and allows you to
- * test sending arbitrary text prompts to see how they map to structured tool-call 
+ * test sending arbitrary text prompts to see how they map to structured tool-call
  * payloads—without running any robot sockets or services.
- * 
+ *
  * Usage:
  *   node test-harness.js
  */
@@ -167,7 +167,7 @@ async function main() {
                 message.tool_calls.forEach((toolCall, idx) => {
                     const { name, arguments: argString } = toolCall.function;
                     console.log(`   ${colors.bright}[${idx + 1}] Tool:${colors.reset} ${colors.fgCyan}${name}${colors.reset}`);
-                    
+
                     try {
                         const parsedArgs = JSON.parse(argString);
                         console.log(`       ${colors.bright}Arguments:${colors.reset}`);

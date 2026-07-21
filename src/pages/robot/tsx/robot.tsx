@@ -896,7 +896,7 @@ export class Robot extends React.Component {
                 const currentPos = this.getJointValue(jointName);
                 const distance = Math.abs(targetPos - currentPos);
                 const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
-                
+
                 if (velocityLimit > 0) {
                     const jointDuration = distance / velocityLimit;
                     if (jointDuration > maxDuration) {

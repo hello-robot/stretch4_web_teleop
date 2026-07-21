@@ -181,7 +181,7 @@ export abstract class FunctionProvider {
     /**
      * Move a joint incrementally using the trajectory action server.
      * Stops any ongoing velocity or trajectory action first.
-     * 
+     *
      * @param jointName the joint to actuate
      * @param increment the incremental distance/rotation (m or rad)
      * @returns false if no robot attached

@@ -123,7 +123,7 @@ function buildRealtimeVoiceSessionPayload() {
                 `For base rotation commands without a specified amount (e.g., "aim left", "look behind you"), default to absolute turns:`,
                 `Set \`rotation_rad\`=1.57 for "left" or "right", and 3.14 for "back" or "around".`,
                 `If the user adds a modifier (e.g., "aim left a little bit", "point right 45 degrees"), override these defaults and infer the appropriate \`rotation_rad\` or a short \`duration_ms\`.`,
-                
+
                 // ── Guard rails ────────────────────────────────────────────────────────────────────────────
                 `If the user specifies a distance, set \`distance_m\` in meters and omit \`duration_ms\` and \`rotation_rad\`.`,
                 `If the user specifies a rotation angle, set \`rotation_rad\` in radians and omit \`duration_ms\` and \`distance_m\`.`,
@@ -137,12 +137,12 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user wants to halt ANY motion ("stop", "wait", "freeze", "do not move", "cut that", "enough", "pause", "cancel"), call tool \`${STOP_MOTION}\` with no arguments — not a movement tool.`,
                 `Call \`${STOP_MOTION}\` IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
                 `When the user wants to repeat the last base move ("again", "same thing", "one more time", "do that again"), call tool \`${REPEAT_BASE_MOVE}\` with no arguments — not \`${EXECUTE_BASE_MOVE}\` with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
-                
+
                 // ── Macro actions ──────────────────────────────────────────────────────────────────────────
                 `Macro actions move the robot to predefined poses. Call \`${EXECUTE_MACRO}\` with the appropriate \`macro\` name.`,
                 `\`macro="center_wrist"\`: centers the wrist to roll=0, pitch=0, yaw=0. Phrases: "center the wrist", "reset wrist", "straighten wrist", "wrist to zero", "zero wrist", "center wrist".`,
                 `\`macro="stow_wrist"\`: moves the wrist to the robot's stow pose. Phrases: "stow the wrist", "stow wrist", "tuck wrist", "wrist to stow", "park wrist".`,
-            
+
             ].join(" "),
             tools: [
                 {
