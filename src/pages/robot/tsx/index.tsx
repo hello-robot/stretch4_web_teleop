@@ -25,7 +25,7 @@ import {
 } from "shared/util";
 import { AllVideoStreamComponent, VideoStream } from "./videostreams";
 import { AudioStream } from "./audiostreams";
-import ROSLIB from "roslib";
+import { Transform } from "roslib";
 import { StretchToolMessage } from "../../../shared/util";
 import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
 
@@ -210,7 +210,7 @@ function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {
     // } as OccupancyGridMessage);
 }
 
-function forwardAMCLPose(transform: ROSLIB.Transform) {
+function forwardAMCLPose(transform: Transform) {
     if (!connection) throw "WebRTC connection undefined";
 
     connection.sendData({

@@ -5,6 +5,7 @@ import MagneticWrapper from '../static_components/MagneticWrapper';
 import {
     ROSPoint,
 } from 'shared/util';
+import { Transform } from 'roslib';
 import "operator/css/FooterAutoNav.css";
 import { motion } from 'framer-motion';
 import InputFluid from '../basic_components/InputFluid';
@@ -512,7 +513,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
 
     React.useEffect(() => {
         if (selectedLocationMenuItem) {
-            let pose: ROSLIB.Transform = functs.LoadGoal(selectedLocationMenuItem)!;
+            let pose: Transform = functs.LoadGoal(selectedLocationMenuItem)!;
             functs.DisplayGoalMarker(pose.translation);
         }
     }, [selectedLocationMenuItem]);
@@ -524,7 +525,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         // ...when selecting from Locations Menu
         if (!isCurrentlyMoving && selectedLocationMenuItem !== undefined) {
 
-            let pose: ROSLIB.Transform = functs.LoadGoal(selectedLocationMenuItem)!;
+            let pose: Transform = functs.LoadGoal(selectedLocationMenuItem)!;
             functs.NavigateToPose(pose)
             // functs.DisplayGoalMarker(pose.translation);
             isCurrentlyMovingSet(true);

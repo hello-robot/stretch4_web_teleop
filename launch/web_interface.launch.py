@@ -4,15 +4,15 @@ import sys
 
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
-from launch_ros.actions import Node
-from stretch4_body.core.robot_params import RobotParams
-
-from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
+    GroupAction,
     IncludeLaunchDescription,
+    OpaqueFunction,
 )
+from launch.conditions import IfCondition, UnlessCondition
+from launch.launch_context import LaunchContext
 from launch.launch_description_sources import (
     FrontendLaunchDescriptionSource,
     PythonLaunchDescriptionSource,
@@ -20,8 +20,13 @@ from launch.launch_description_sources import (
 from launch.substitutions import (
     FindExecutable,
     LaunchConfiguration,
+    NotEqualsSubstitution,
     PathJoinSubstitution,
 )
+from launch_ros.actions import Node
+from stretch4_body.core.robot_params import RobotParams
+
+from launch import LaunchDescription
 
 
 def symlinks_to_has_head_cams():
@@ -69,6 +74,7 @@ def check_valid_configuration(model, tool, has_head_cams):
             file=sys.stderr,
         )
         sys.exit(1)
+
 
 
 def generate_launch_description():
@@ -125,6 +131,20 @@ def generate_launch_description():
         description="Full path to the BT file to use for nav2_bt_navigator",
     )
 
+    # Error out if the map file does not exist
+    def map_file_check(context: LaunchContext):
+        map_path = LaunchConfiguration("map_yaml").perform(context)
+        if map_path == "":
+            return
+        if not os.path.exists(map_path):
+            msg = "Map file not found in given path: {}".format(map_path)
+            raise FileNotFoundError(msg)
+        if not map_path.endswith(".yaml"):
+            msg = "Map file is not a yaml file: {}".format(map_path)
+            raise FileNotFoundError(msg)
+
+    map_path_check_action = OpaqueFunction(function=map_file_check)
+
     # Start collecting nodes to launch
     ld = LaunchDescription(
         [
@@ -134,6 +154,7 @@ def generate_launch_description():
             certfile_arg,
             keyfile_arg,
             bt_param,
+            map_path_check_action,
         ]
     )
 
@@ -148,6 +169,9 @@ def generate_launch_description():
     stretch_driver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([core_package, "launch", "stretch_driver.launch.py"])
+        ),
+        condition=UnlessCondition(
+            NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
         ),
         # TODO: The tablet_placement code should change the mode, not the launch file
         launch_arguments={
@@ -231,6 +255,29 @@ def generate_launch_description():
             ],
         )
         ld.add_action(configure_video_streams_node)
+
+    navigation_bringup_launch = GroupAction(
+            condition=IfCondition(
+                NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
+            ),
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        [
+                            stretch_navigation_path,
+                            "/launch/navigation_mppi.launch.py",
+                        ]
+                    ),
+                    launch_arguments={
+                        "use_sim_time": "false",
+                        "autostart": "true",
+                        "map": LaunchConfiguration("map_yaml"),
+                        "use_rviz": "false",
+                    }.items(),
+                ),
+            ],
+        )
+    ld.add_action(navigation_bringup_launch)
 
     ld.add_action(
         ExecuteProcess(

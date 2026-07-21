@@ -15,7 +15,7 @@ import {
     ROSPose,
     ROSPoint,
 } from 'shared/util';
-import ROSLIB from "roslib";
+import { Transform, Vector3 } from 'roslib';
 import '../../css/AutoNav.css';
 
 interface AutoNavProps {
@@ -44,19 +44,19 @@ export interface AutoNavFunctions {
     DeleteGoal: (goalId: number) => void;
     DeleteMapPose: (poseName: string) => void;
     SaveGoal: (locationName: string) => void;
-    LoadGoal: (poseName: string) => ROSLIB.Transform;
-    NavigateToPose: (pose: ROSLIB.Transform) => void;
-    GetPose: () => ROSLIB.Transform;
+    LoadGoal: (poseName: string) => Transform;
+    NavigateToPose: (pose: Transform) => void;
+    GetPose: () => Transform;
     GetSavedPoseNames: () => string[];
     GetSavedPoseTypes: () => string[];
-    GetSavedPoses: () => ROSLIB.Transform[];
+    GetSavedPoses: () => Transform[];
     DisplayPoseMarkers: (
         toggle: boolean,
-        poses: ROSLIB.Transform[],
+        poses: Transform[],
         poseNames: string[],
         poseTypes: string[],
     ) => void;
-    DisplayGoalMarker: (pose: ROSLIB.Vector3) => void;
+    DisplayGoalMarker: (pose: Vector3) => void;
     Play: () => void;
     RemoveGoalMarker: () => void;
     GoalReached: () => Promise<boolean>;
@@ -65,7 +65,7 @@ export interface AutoNavFunctions {
 
 export interface MapFunctions {
     GetMap: ROSOccupancyGrid;
-    GetPose: () => ROSLIB.Transform;
+    GetPose: () => Transform;
     MoveBase: (pose: ROSPose) => void;
     GoalReached: () => boolean;
     SelectGoal: () => boolean;
@@ -151,13 +151,13 @@ const AutoNav: React.FC<AutoNavProps> = ({
         ) as (locationName: string) => void,
         LoadGoal: underMapFunctionProvider.provideFunctions(
             UnderMapButton.LoadGoal,
-        ) as (poseName: string) => ROSLIB.Transform,
+        ) as (poseName: string) => Transform,
         NavigateToPose: underMapFunctionProvider.provideFunctions(
             UnderMapButton.NavigateToPose,
-        ) as (pose: ROSLIB.Transform) => void,
+        ) as (pose: Transform) => void,
         GetPose: underMapFunctionProvider.provideFunctions(
             UnderMapButton.GetPose,
-        ) as () => ROSLIB.Transform,
+        ) as () => Transform,
         GetSavedPoseNames: underMapFunctionProvider.provideFunctions(
             UnderMapButton.GetSavedPoseNames,
         ) as () => string[],
@@ -166,14 +166,14 @@ const AutoNav: React.FC<AutoNavProps> = ({
         ) as () => string[],
         GetSavedPoses: underMapFunctionProvider.provideFunctions(
             UnderMapButton.GetSavedPoses,
-        ) as () => ROSLIB.Transform[],
+        ) as () => Transform[],
 
         /**
          * Display pose markers on the map. Requires occupancyGrid to be set.
          */
         DisplayPoseMarkers: (
             toggle: boolean,
-            poses: ROSLIB.Transform[],
+            poses: Transform[],
             poseNames: string[],
             poseTypes: string[],
         ) => {
@@ -187,7 +187,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
         /**
          * Display a goal marker on the map at the given pose.
          */
-        DisplayGoalMarker: (pose: ROSLIB.Vector3) =>
+        DisplayGoalMarker: (pose: Vector3) =>
             occupancyGrid!.createGoalMarker(pose.x, pose.y, true),
 
         /**
@@ -210,7 +210,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
      * @param pose - Pose to navigate to
     */
 
-    underMapFunctionProvider.setMapPoseCallback((pose: ROSLIB.Vector3) => {
+    underMapFunctionProvider.setMapPoseCallback((pose: Vector3) => {
         functs.DisplayGoalMarker(pose);
         isCurrentlyMovingSet(true);
         isSelectingGoalSet(false);
@@ -241,7 +241,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
         ) as ROSOccupancyGrid,
         GetPose: mapFunctionProvider.provideFunctions(
             MapFunction.GetPose,
-        ) as () => ROSLIB.Transform,
+        ) as () => Transform,
         MoveBase: mapFunctionProvider.provideFunctions(
             MapFunction.MoveBase,
         ) as (pose: ROSPose) => void,
