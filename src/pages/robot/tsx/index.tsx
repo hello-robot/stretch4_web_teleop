@@ -73,7 +73,6 @@ robot.setOnRosConnectCallback(async () => {
     audioStream.start();
 
     robot.getOccupancyGrid();
-    robot.getJointLimits();
 
     console.log(
         "Waiting for configured signaler (i.e. logging in if using Firebase)"

@@ -102,6 +102,7 @@ module.exports = (env) => {
                 operator: path.resolve(__dirname, "./src/pages/operator/"),
                 robot: path.resolve(__dirname, "./src/pages/robot/"),
                 home: path.resolve(__dirname, "./src/pages/home/"),
+                "ai-gateway": path.resolve(__dirname, "./ai-gateway/"),
             },
             fallback: {
                 fs: false,
