@@ -1555,8 +1555,8 @@ export class Robot extends React.Component {
         );
     }
 
-    async executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        await this.switchToNavigationMode();
+    executeIncrementalMove(jointName: ValidJoints, increment: number) {
+        this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
