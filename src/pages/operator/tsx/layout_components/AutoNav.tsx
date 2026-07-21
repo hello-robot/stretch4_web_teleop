@@ -1,32 +1,31 @@
-import React, {
-    useEffect,
-    useRef,
-    useState,
-    Dispatch,
-    SetStateAction,
-} from 'react'
-import { Canvas } from "../static_components/Canvas";
-import { Map } from './Map';
-import { ComponentType, MapDefinition } from '../utils/component_definitions';
-import { SharedState } from './CustomizableComponent';
-import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
-import type { AddToastFn } from './Toasts';
 import {
     isOccupancyGridReady,
     mapFunctionProvider,
     subscribeOccupancyGridReady,
     underMapFunctionProvider,
 } from 'operator/tsx/index';
-import { OccupancyGrid } from '../static_components/OccupancyGrid';
-import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
+import React, {
+    Dispatch,
+    SetStateAction,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
+import { Quaternion, Transform, Vector3 } from 'roslib';
 import {
     ActionState,
     ROSOccupancyGrid,
-    ROSPose,
     ROSPoint,
+    ROSPose,
 } from 'shared/util';
-import { Quaternion, Transform, Vector3 } from 'roslib';
 import '../../css/AutoNav.css';
+import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
+import { Canvas } from "../static_components/Canvas";
+import { OccupancyGrid } from '../static_components/OccupancyGrid';
+import { SharedState } from './CustomizableComponent';
+import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
+import { Map } from './Map';
+import type { AddToastFn } from './Toasts';
 
 interface AutoNavProps {
     sharedState: SharedState;
@@ -106,13 +105,10 @@ const AutoNav: React.FC<AutoNavProps> = ({
     sceneSelected,
     onSceneSelectedChange,
     addToast,
-<<<<<<< HEAD
     isModalLocationsMenuVisible,
     isModalLocationsMenuVisibleSet,
     onRegisterAutoNavNavControls,
     moveBaseState,
-=======
->>>>>>> 560c377 (Added toasts for command execution)
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -141,15 +137,12 @@ const AutoNav: React.FC<AutoNavProps> = ({
         };
     }, [occupancyGrid]);
 
-<<<<<<< HEAD
     useEffect(() => {
         return subscribeOccupancyGridReady(() => {
             mapReadySet(true);
         });
     }, []);
 
-=======
->>>>>>> 560c377 (Added toasts for command execution)
     /**
      * All navigation-related functions, provided by underMapFunctionProvider.
      * Many of these are ROS actions or service calls.
