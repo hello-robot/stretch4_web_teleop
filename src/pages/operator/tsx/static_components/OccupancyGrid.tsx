@@ -70,8 +70,11 @@ export class OccupancyGrid extends React.Component {
      * @param y Y coordinate
      * @param color RGB color array
      * @param text Label text
+     * @param rotation Optional rotation quaternion (SE2 transform support)
      */
-    drawSavedPoseMarker(x: number, y: number, color: number[], text: string) {
+    drawSavedPoseMarker(x: number, y: number, color: number[], text: string, rotation?: Quaternion) {
+        var container = new createjs.Container();
+
         var circle = new createjs.Shape();
         var radius = 30;
 
@@ -80,13 +83,34 @@ export class OccupancyGrid extends React.Component {
             createjs.Graphics.getRGB(color[0], color[1], color[2], 0.5),
         );
         graphics.drawCircle(0, 0, radius);
+        graphics.endFill();
 
         createjs.Shape.call(circle, graphics);
+        container.addChild(circle);
 
-        circle.x = x;
-        circle.y = y;
-        circle.scaleX = 1.0 / this.rootObject.scaleX;
-        circle.scaleY = 1.0 / this.rootObject.scaleY;
+        if (rotation) {
+            var arrow = new createjs.Shape();
+            var arrowGraphics = new createjs.Graphics();
+            var size = 20;
+            var arrowColor = createjs.Graphics.getRGB(color[0], color[1], color[2], 0.9);
+            arrowGraphics.beginFill(arrowColor);
+            arrowGraphics.moveTo(0, size);
+            arrowGraphics.lineTo(-size / 2, -size / 2);
+            arrowGraphics.lineTo(size / 2, -size / 2);
+            arrowGraphics.lineTo(0, size);
+            arrowGraphics.closePath();
+            arrowGraphics.endFill();
+            createjs.Shape.call(arrow, arrowGraphics);
+
+            let theta = this.rosQuaternionToGlobalTheta(rotation);
+            arrow.rotation = theta - 90.0;
+            container.addChild(arrow);
+        }
+
+        container.x = x;
+        container.y = y;
+        container.scaleX = 1.0 / this.rootObject.scaleX;
+        container.scaleY = 1.0 / this.rootObject.scaleY;
 
         var label = new createjs.Text(text, "bold 40px Arial", "#ff7700");
         label.x = x;
@@ -96,13 +120,13 @@ export class OccupancyGrid extends React.Component {
         label.scaleY = 1.0 / this.rootObject.scaleY;
         label.textBaseline = "alphabetic";
 
-        circle.on("mouseover", (event) => {
+        container.on("mouseover", (event) => {
             label.visible = true;
         });
-        circle.on("mouseout", (event) => {
+        container.on("mouseout", (event) => {
             label.visible = false;
         });
-        return { circle, label };
+        return { circle: container, label };
     }
 
     /**
@@ -420,6 +444,7 @@ export class OccupancyGrid extends React.Component {
                     globalCoord.y,
                     color,
                     poseNames[index],
+                    pose.rotation,
                 );
                 poseMarker.circle.visible = true;
                 poseMarker.label.visible = false;
@@ -452,7 +477,7 @@ export class OccupancyGrid extends React.Component {
      * @param y Y coordinate
      * @param ros Whether the coordinates are in ROS space
      */
-    public createGoalMarker(x: number, y: number, ros: boolean) {
+    public createGoalMarker(x: number, y: number, ros: boolean, rotation?: Quaternion) {
         const color = hexToRgbArray('#2EE4C8');
         let globalCoord = { x: x, y: y };
         if (ros)
@@ -466,6 +491,10 @@ export class OccupancyGrid extends React.Component {
         this.goalMarker = this.drawNavigationArrow(true, color);
         this.goalMarker.x = globalCoord.x;
         this.goalMarker.y = globalCoord.y;
+        if (rotation) {
+            let theta = this.rosQuaternionToGlobalTheta(rotation);
+            this.goalMarker.rotation = theta - 90.0;
+        }
         this.goalMarker.scaleX = 1.0 / this.rootObject.scaleX;
         this.goalMarker.scaleY = 1.0 / this.rootObject.scaleY;
         this.goalMarker.visible = true;
