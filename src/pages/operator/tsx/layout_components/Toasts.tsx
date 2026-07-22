@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import genUUID from '../utils/genUUID';
+import { AnimatePresence, motion } from 'framer-motion';
+import React, { useCallback, useEffect, useState } from 'react';
 import '../../css/Toasts.css';
+import genUUID from '../utils/genUUID';
 
 export type ToastVariant = 'voice';
 
@@ -30,27 +30,6 @@ export function useToasts() {
         toastsSet((prevToasts) => [
             ...prevToasts,
             { id, type, message, duration, variant },
-        ]);
-    }, []);
-
-    return { toasts, toastsSet, addToast };
-}
-
-export type AddToastFn = (
-    type: Toast['type'],
-    message: string,
-    duration?: number,
-) => void;
-
-/** Toast queue state and enqueue helper for operator-level hosts. */
-export function useToasts() {
-    const [toasts, toastsSet] = useState<Toast[]>([]);
-
-    const addToast = useCallback<AddToastFn>((type, message, duration) => {
-        const id = genUUID();
-        toastsSet((prevToasts) => [
-            ...prevToasts,
-            { id, type, message, duration },
         ]);
     }, []);
 

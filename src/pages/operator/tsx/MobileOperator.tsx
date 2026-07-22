@@ -123,7 +123,6 @@ export const MobileOperator = (props: {
 
     const { toasts, toastsSet, addToast } = useToasts();
 
-<<<<<<< HEAD
     // Close Saved Locations when leaving AutoNav
     React.useEffect(() => {
         if (sceneSelected !== "autonav") {
@@ -179,10 +178,7 @@ export const MobileOperator = (props: {
         },
         [],
     );
-    const alertTimeoutDuration = 100; // milliseconds
-=======
     const alertTimeoutDuration = 5000; // milliseconds
->>>>>>> 560c377 (Added toasts for command execution)
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);

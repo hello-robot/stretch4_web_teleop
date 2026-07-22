@@ -277,11 +277,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             : 1;
         const velocity =
             multiplier *
-<<<<<<< HEAD
-            JOINT_VELOCITIES[jointName] *
-=======
             (JOINT_VELOCITIES[jointName] ?? 0.1) *
->>>>>>> bb9b748 (fix incremental and continuous joint moves to work with stretch4_ros2 driver patch)
             FunctionProvider.velocityScale;
 
         if (velocity === undefined) {
@@ -290,11 +286,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
 
         const increment =
             multiplier *
-<<<<<<< HEAD
-            JOINT_INCREMENTS[jointName] *
-=======
             (JOINT_INCREMENTS[jointName] ?? 0.1) *
->>>>>>> bb9b748 (fix incremental and continuous joint moves to work with stretch4_ros2 driver patch)
             FunctionProvider.velocityScale;
 
         if (increment === undefined) {

@@ -17,7 +17,11 @@ export type MicLevelGateOptions = {
     pollIntervalMs?: number;
     /** When true, uplink transmits even if RMS gate is closed (e.g. asleep wake listening). */
     bypassGate?: () => boolean;
-    /** level = RMS (always); gateOpen = volume threshold met (not force-closed state). */
+    /**
+     * level = RMS (always).
+     * gateOpen = RMS threshold met (not force-closed). Does **not** include
+     * wake-sleep bypass — uplink may still transmit when this is false.
+     */
     onGateChange?: (gateOpen: boolean, level: number) => void;
 };
 
@@ -172,7 +176,9 @@ export async function createMicLevelGate(
         const shouldTransmit =
             !forceClosed && !flushing && (gateOpen || bypass);
         liveGain.gain.value = shouldTransmit ? 1 : 0;
-        opts.onGateChange?.(gateOpen || bypass, currentLevel);
+        // Report threshold gate only (not wake-sleep bypass). UI should pulse
+        // when RMS exceeds VOICE_MIC_RMS_THRESHOLD, not while bypass is open.
+        opts.onGateChange?.(gateOpen, currentLevel);
     };
 
     const flushLookback = () => {
