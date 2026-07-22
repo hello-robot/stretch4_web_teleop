@@ -62,11 +62,20 @@ const EXECUTE_MACRO = "execute_macro";
 /** Switch the operator UI scene (Pilot / AutoNav). */
 const SWITCH_SCENE = "switch_scene";
 
+/** Save the robot's current map pose under a user-provided label. */
+const SAVE_MAP_LOCATION = "save_map_location";
+
+/** Open or close the Saved Locations modal (AutoNav only). */
+const SET_SAVED_LOCATIONS_MODAL = "set_saved_locations_modal";
+
 /** Names of available macros (matches voiceMacros.ts on the client). */
 const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
 
 /** Valid switch_scene.scene values (maps to operator scene ids on the client). */
 const VOICE_SCENE_NAMES = ["pilot", "autonav"];
+
+/** Valid set_saved_locations_modal.action values. */
+const SAVED_LOCATIONS_MODAL_ACTIONS = ["open", "close"];
 
 /** All voice Realtime tools registered in the session payload and executed on the client. */
 const VOICE_TOOLS = [
@@ -76,6 +85,8 @@ const VOICE_TOOLS = [
     REPEAT_BASE_MOVE,
     EXECUTE_MACRO,
     SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
 ];
 
 // ── Base move action enums ────────────────────────────────────────────────────
@@ -189,8 +200,11 @@ module.exports = {
     REPEAT_BASE_MOVE,
     EXECUTE_MACRO,
     SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
 
     VOICE_TOOLS,
     BASE_TRANSLATE_ACTIONS,

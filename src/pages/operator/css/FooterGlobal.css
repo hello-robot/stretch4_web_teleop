@@ -134,7 +134,7 @@
     justify-content: center;
     flex-shrink: 0;
     width: 14px;
-    margin-right: 8px;
+    margin-right: 4px;
     transform-origin: left center;
     will-change: transform, opacity;
 }

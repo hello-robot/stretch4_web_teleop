@@ -34,8 +34,11 @@ const {
     VOICE_ROTATION_DEG_MAX,
     EXECUTE_MACRO,
     SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_SLEEP_PHRASE_DISPLAY,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
@@ -150,6 +153,18 @@ function buildRealtimeVoiceSessionPayload() {
                 `\`scene="pilot"\`: switch to Pilot mode. Phrases: "switch to Pilot", "go to Pilot", "open Pilot", "Pilot mode", "pilot".`,
                 `\`scene="autonav"\`: switch to AutoNav. Phrases: "switch to AutoNav", "go to AutoNav", "open AutoNav", "AutoNav mode", "autonav".`,
                 `Speech-to-text often mishears AutoNav as "auto now", "auto nav", "auto-nav", or "auto nap" — treat those as \`scene="autonav"\`.`,
+
+                // ── Save map location ──────────────────────────────────────────────────────────────────────
+                `When the user wants to save or bookmark the robot's current place with a name, call tool \`${SAVE_MAP_LOCATION}\` with \`label\`. Do not call a movement tool. Do not ask them to use the Add Location UI.`,
+                `Extract the label from phrases like: "add this location as …", "save this spot as …", "name this location …", "save this location as …", "bookmark this as …".`,
+                `\`label\` must be the location name only (e.g. "Kitchen", "Docking station"). Do not call the tool if no name was given.`,
+
+                // ── Saved Locations modal ──────────────────────────────────────────────────────────────────
+                `When the user wants to open or close the Saved Locations list/modal (not change scenes), call tool \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action\`. Do not call a movement tool. Do not use \`${SWITCH_SCENE}\` for this.`,
+                `\`action="open"\`: Phrases: "open saved locations", "show saved locations", "open the locations list", "show my locations".`,
+                `\`action="close"\`: Phrases: "close saved locations", "hide saved locations", "close the locations list", "dismiss saved locations".`,
+                `CRITICAL DISAMBIGUATION: "open AutoNav" / "go to AutoNav" → \`${SWITCH_SCENE}\` with \`scene="autonav"\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action="open"\`.`,
+                `The client rejects this tool if the user is not on AutoNav — do not call \`${SWITCH_SCENE}\` as a substitute.`,
 
             ].join(" "),
             tools: [
@@ -298,6 +313,43 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                         },
                         required: ["scene"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: SAVE_MAP_LOCATION,
+                    description:
+                        "Save the robot's current map pose under a user-provided label. Use for requests like 'add this location as Kitchen' or 'save this spot as Docking station'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            label: {
+                                type: "string",
+                                description:
+                                    "Name for the saved location (e.g. Kitchen, Docking station).",
+                            },
+                        },
+                        required: ["label"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: SET_SAVED_LOCATIONS_MODAL,
+                    description:
+                        "Open or close the Saved Locations modal in AutoNav. Use for requests like 'open saved locations' or 'close saved locations'. Do not use for switching Pilot/AutoNav scenes.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: SAVED_LOCATIONS_MODAL_ACTIONS,
+                                description:
+                                    "Whether to open or close the Saved Locations modal.",
+                            },
+                        },
+                        required: ["action"],
                         additionalProperties: false,
                     },
                 },

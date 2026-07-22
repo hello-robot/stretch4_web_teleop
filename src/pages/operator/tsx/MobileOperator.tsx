@@ -54,6 +54,10 @@ import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
 import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
+import type {
+    SavedLocationsModalAction,
+    SetSavedLocationsModalResult,
+} from "./voice/constants";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -113,8 +117,6 @@ export const MobileOperator = (props: {
     // Saved Locations modal (owned here so voice can open/close with AutoNav gate)
     const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
         useState(false);
-
-
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
@@ -177,6 +179,27 @@ export const MobileOperator = (props: {
         },
         [],
     );
+
+    const handleSetSavedLocationsModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saved Locations is only available in AutoNav",
+                };
+            }
+            isModalLocationsMenuVisibleSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Locations."
+                        : "Closed Saved Locations.",
+            };
+        },
+        [],
+    );
+
     const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
@@ -338,6 +361,7 @@ export const MobileOperator = (props: {
                         swipeableViewsIdxSet(1);
                     }
                 }}
+                onSetSavedLocationsModal={handleSetSavedLocationsModal}
             />
             <HomingBanner
                 robotIsHomed={robotIsHomed}

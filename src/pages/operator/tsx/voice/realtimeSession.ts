@@ -17,14 +17,23 @@ import {
     executeStopMotionOnProvider,
 } from "./executeJointMove";
 import {
+    executeSaveMapLocation,
+    type SaveMapLocationResult,
+} from "./executeSaveMapLocation";
+import {
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
     SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
     isPlaceholderArgs,
     NO_ARG_VOICE_TOOLS,
     STOP_MOTION,
     type ExecuteToolResult,
+    type SavedLocationsModalAction,
+    type SetSavedLocationsModalResult,
     type VoiceSceneName,
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
@@ -436,6 +445,15 @@ export type RealtimeVoiceConnectOptions = {
     onVoiceMoveFeedback?: (feedback: VoiceMoveFeedback) => void;
     /** Switch operator UI scene (Pilot / AutoNav). */
     onSwitchScene?: (scene: VoiceSceneName) => void;
+    /** Toast UX after save_map_location succeeds or fails. */
+    onSaveMapLocationResult?: (result: SaveMapLocationResult) => void;
+    /**
+     * Open/close Saved Locations modal (AutoNav-gated in MobileOperator).
+     * Return result for tool output; VoiceCommandAssistant toasts errors.
+     */
+    onSetSavedLocationsModal?: (
+        action: SavedLocationsModalAction,
+    ) => SetSavedLocationsModalResult;
     /** Asleep/awake listening mode (wake/sleep phrases). */
     onListeningState?: (state: VoiceListeningState) => void;
 };
@@ -631,6 +649,67 @@ export async function connectOpenAIRealtimeVoice(
             }
             opts.onSwitchScene(scene as VoiceSceneName);
             return { ok: true, detail: `Switched to ${scene}.` };
+        },
+        save_map_location: (_voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                opts.onLog?.(
+                    `[Realtime] Bad JSON arguments for ${SAVE_MAP_LOCATION}: ${fc.arguments}`,
+                );
+                rawArgs = {};
+            }
+            const result = executeSaveMapLocation(rawArgs);
+            opts.onSaveMapLocationResult?.({
+                ok: result.ok,
+                label: result.label,
+                detail: result.detail,
+            });
+            return result;
+        },
+        set_saved_locations_modal: (_voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                opts.onLog?.(
+                    `[Realtime] Bad JSON arguments for ${SET_SAVED_LOCATIONS_MODAL}: ${fc.arguments}`,
+                );
+                rawArgs = {};
+            }
+            const action =
+                typeof rawArgs.action === "string" ? rawArgs.action : "";
+            if (
+                !(SAVED_LOCATIONS_MODAL_ACTIONS as readonly string[]).includes(
+                    action,
+                )
+            ) {
+                return {
+                    ok: false,
+                    detail: `Unknown action: "${action}".`,
+                    ignored: true,
+                };
+            }
+            if (!opts.onSetSavedLocationsModal) {
+                return {
+                    ok: false,
+                    detail: "Saved Locations modal is unavailable.",
+                    ignored: true,
+                };
+            }
+            const result = opts.onSetSavedLocationsModal(
+                action as SavedLocationsModalAction,
+            );
+            return result.ok
+                ? { ok: true, detail: result.detail }
+                : { ok: false, detail: result.detail, ignored: true };
         },
     };
 
