@@ -310,7 +310,7 @@ export class Robot extends React.Component {
         // unreliable; Nav2 /_action/status is the durable path for Stop UI.
         this.subscribeToActionResult(
             moveBaseActionName,
-            this.moveBaseResultCallback,
+            this.handleMoveBaseResult.bind(this),
             "Navigation executing!",
             "Navigation canceled!",
             "Navigation succeeded!",
@@ -972,6 +972,22 @@ export class Robot extends React.Component {
         );
     }
 
+    private handleMoveBaseResult(goalState: ActionState) {
+        if (goalState.state === "Navigation executing!") {
+            this.toggleBaseOnlyCollision(false);
+        } else if (
+            goalState.state === "Navigation succeeded!" ||
+            goalState.state === "Navigation canceled!" ||
+            goalState.state === "Navigation failed!"
+        ) {
+            console.log(`Navigation finished with state: ${goalState.state}. Restoring base-only collision.`);
+            this.toggleBaseOnlyCollision(true);
+        }
+
+        if (this.moveBaseResultCallback) {
+            this.moveBaseResultCallback(goalState);
+        }
+    }
 
     /**
      * In navigation mode, you can send position commands to the arm and
