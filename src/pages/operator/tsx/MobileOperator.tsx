@@ -54,7 +54,6 @@ import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
 import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
-import Toasts, { useToasts } from "./layout_components/Toasts";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -234,6 +233,9 @@ export const MobileOperator = (props: {
     }
     underMapFunctionProvider.setOperatorCallback(moveBaseStateCallback);
     let moveBaseAlertTimeout: NodeJS.Timeout;
+    React.useEffect(() => {
+        console.log("moveBaseState updated:", moveBaseState);
+    }, [moveBaseState]);
     React.useEffect(() => {
         if (moveBaseState && moveBaseState.alert_type != "info") {
             if (moveBaseAlertTimeout) clearTimeout(moveBaseAlertTimeout);

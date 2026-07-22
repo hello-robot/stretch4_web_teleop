@@ -54,18 +54,6 @@ export const movementStatesTransitory: MovementState[] = [MovementState.Executin
 
 export const movementStatesAll = Object.values(MovementState);
 
-// ROS 2 action_msgs/msg/GoalStatus values.
-// Reference: https://github.com/ros2/rcl_interfaces/blob/humble/action_msgs/msg/GoalStatus.msg
-export enum GoalStatus {
-    STATUS_UNKNOWN = 0,
-    STATUS_ACCEPTED = 1,
-    STATUS_EXECUTING = 2,
-    STATUS_CANCELING = 3,
-    STATUS_SUCCEEDED = 4,
-    STATUS_CANCELED = 5,
-    STATUS_ABORTED = 6,
-}
-
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
@@ -103,7 +91,6 @@ export class Robot extends React.Component {
     private useRightCameraService?: Service;
     private setExpandedGripperService?: Service;
     private setRunStopService?: Service;
-    private toggleBaseOnlyCollisionService?: Service;
     private robotFrameTfClient?: ROS2TFClient;
     private mapFrameTfClient?: ROS2TFClient;
     private linkGripperFingerLeftTF?: Transform;
@@ -324,8 +311,6 @@ export class Robot extends React.Component {
         this.createUseRightCameraService();
         this.createExpandedGripperService();
         this.createRunStopService();
-        this.createToggleBaseOnlyCollisionService();
-        this.toggleBaseOnlyCollision(true);
         // this.createRobotFrameTFClient();
         // this.createMapFrameTFClient();
         // this.subscribeToHeadTiltTF();
@@ -858,14 +843,6 @@ export class Robot extends React.Component {
         this.setRunStopService = new Service({
             ros: this.ros,
             name: "/runstop_the_robot",
-            serviceType: "std_srvs/srv/SetBool",
-        });
-    }
-
-    createToggleBaseOnlyCollisionService() {
-        this.toggleBaseOnlyCollisionService = new Service({
-            ros: this.ros,
-            name: "/joystick_control",
             serviceType: "std_srvs/srv/SetBool",
         });
     }
