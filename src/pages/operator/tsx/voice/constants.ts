@@ -335,7 +335,7 @@ export function isPlaceholderArgs(s: string): boolean {
 }
 
 /**
- * UI / devtools: lines worth surfacing as "Last tool/trace" in VoiceCommandAssistant.tsx.
+ * Devtools: tool/trace log lines from the headless voice session controller.
  */
 export function isVoiceToolLogLine(line: string): boolean {
     return (

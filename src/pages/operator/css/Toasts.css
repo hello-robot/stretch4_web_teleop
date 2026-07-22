@@ -8,7 +8,9 @@
     flex-direction: column;
     align-items: center;
     padding: 1rem;
-    width: 300px;
+    width: auto;
+    min-width: 300px;
+    max-width: 360px;
 }
 
 .toast-notification {
@@ -20,7 +22,7 @@
     border-radius: 20px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     font-weight: 600;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(5px);
     line-height: 140%;
 }
 
@@ -34,6 +36,54 @@
 
 .toast-info {
     background-color: hsl(0deg 0% 0% / 65%);
+}
+
+/* Voice Pilot move-feedback toast (Figma ToastVoice) */
+.toast-voice {
+    position: relative;
+    isolation: isolate;
+    width: auto;
+    max-width: 360px;
+    justify-content: center;
+    border: none;
+    border-radius: 38px;
+    background: transparent;
+    /* Outer bloom only; inset glow lives on the fill layer (::after) */
+    box-shadow: 0 -5px 30px -5px hsla(204, 80%, 50%, 1);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 22px;
+    text-align: center;
+}
+
+/* Gradient stroke ring behind the fill */
+.toast-voice::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, hsla(204, 100%, 70%, 0.9) 1%, hsla(204, 100%, 50%, 0.5) 40%, hsla(204, 80%, 50%, 1) 100%);
+    pointer-events: none;
+    opacity: 0.9;
+}
+
+/* Solid fill inset so the ::before gradient reads as a 1px border */
+.toast-voice::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    z-index: 0;
+    border-radius: inherit;
+    background-color: hsla(204, 50%, 40%, 0.8);
+    box-shadow: inset 0 -5px 10px 0px hsla(204, 100%, 60%, 0.7);
+    pointer-events: none;
+}
+
+.toast-voice .toast-message {
+    position: relative;
+    z-index: 1;
+    white-space: nowrap;
 }
 
 .toast {

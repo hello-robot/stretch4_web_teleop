@@ -7,6 +7,7 @@ import SceneCarousel, {
     SceneItem,
 } from "../basic_components/SceneCarousel";
 import MagneticWrapper from "../static_components/MagneticWrapper";
+import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
@@ -35,7 +36,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         () => [
             {
                 id: "pilot-mode",
-                name: "Pilot Mode",
+                name: "Pilot",
                 description: "TextDescription",
                 onClick: () => {
                     swipeableViewsIdxSet(0);
@@ -111,8 +112,10 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="scene-menu-button"
                     onPointerUp={() => isMainMenuOpenSet(true)}
                 >
-                    {sceneNameCurrent}
-                    <div className="fancy-border" />
+                    <VoicePilotSceneChrome
+                        sceneSelected={sceneSelected}
+                        fallbackName={sceneNameCurrent}
+                    />
                 </button>
                 <MainMenu
                     isOpen={isMainMenuOpen}

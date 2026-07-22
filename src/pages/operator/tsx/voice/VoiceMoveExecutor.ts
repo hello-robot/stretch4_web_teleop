@@ -51,9 +51,9 @@ export abstract class VoiceMoveExecutor {
         VoiceMoveExecutor._context = ctx;
     }
 
-    /** Current execution mode, defaulting to "direct". */
+    /** Current execution mode, defaulting to "button_provider". */
     protected static get executionMode(): VoiceMoveExecutionMode {
-        return VoiceMoveExecutor._context?.mode ?? "direct";
+        return VoiceMoveExecutor._context?.mode ?? "button_provider";
     }
 
     // ── Shared helpers ────────────────────────────────────────────────────────
