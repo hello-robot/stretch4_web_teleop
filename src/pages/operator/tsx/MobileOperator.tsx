@@ -266,6 +266,15 @@ export const MobileOperator = (props: {
                 onVelocityScaleApplied={applyVelocityScale}
                 setActionMode={setActionMode}
                 addToast={addToast}
+                onSwitchScene={(scene) => {
+                    if (scene === "pilot") {
+                        swipeableViewsIdxSet(0);
+                        setSceneSelected("pilot-mode");
+                    } else {
+                        setSceneSelected("autonav");
+                        swipeableViewsIdxSet(1);
+                    }
+                }}
             />
             <HomingBanner
                 robotIsHomed={robotIsHomed}
