@@ -78,6 +78,7 @@ export class Robot extends React.Component {
     private poseGoalID?: string;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
+    private moveBaseGoalID?: string;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     private cmdVelTopic?: Topic;
@@ -138,7 +139,13 @@ export class Robot extends React.Component {
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
         this.odomCallback = props.odomCallback;
-        this.moveBaseResultCallback = props.moveBaseResultCallback;
+        this.moveBaseResultCallback = (goalState) => {
+            if (goalState.state !== "Navigation executing!") {
+                this.moveBaseGoalID = undefined;
+                this.moveBaseGoal = undefined;
+            }
+            props.moveBaseResultCallback(goalState);
+        };
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
         this.modeCallback = props.modeCallback;
@@ -276,14 +283,6 @@ export class Robot extends React.Component {
         this.subscribeToMode();
         this.subscribetoJointStateDiagnostics();
         this.subscribeToLeaseHolder();
-        this.subscribeToActionResult(
-            moveBaseActionName,
-            this.handleMoveBaseResult.bind(this),
-            "Navigation executing!",
-            "Navigation canceled!",
-            "Navigation succeeded!",
-            "Navigation failed!"
-        );
         this.createTrajectoryClient();
         this.createMoveBaseClient();
         this.createCmdVelTopic();
@@ -754,6 +753,7 @@ export class Robot extends React.Component {
     }
 
     toggleBaseOnlyCollision(bool: boolean) {
+        console.log("toggleBaseOnlyCollision called with value:", bool);
         var request = { data: bool };
         this.toggleBaseOnlyCollisionService?.callService(
             request,
@@ -768,22 +768,6 @@ export class Robot extends React.Component {
         );
     }
 
-    private handleMoveBaseResult(goalState: ActionState) {
-        if (goalState.state === "Navigation executing!") {
-            this.toggleBaseOnlyCollision(false);
-        } else if (
-            goalState.state === "Navigation succeeded!" ||
-            goalState.state === "Navigation canceled!" ||
-            goalState.state === "Navigation failed!"
-        ) {
-            console.log(`Navigation finished with state: ${goalState.state}. Restoring base-only collision.`);
-            this.toggleBaseOnlyCollision(true);
-        }
-
-        if (this.moveBaseResultCallback) {
-            this.moveBaseResultCallback(goalState);
-        }
-    }
 
     /**
      * In navigation mode, you can send position commands to the arm and
@@ -1137,12 +1121,47 @@ export class Robot extends React.Component {
         // this.switchToNavigationMode();
         // this.stopExecution()
 
-         // Toggle base-only collision when publication starts (set to false to enforce full-body collision)
+        // Toggle base-only collision when publication starts (set to false to enforce full-body collision)
         this.toggleBaseOnlyCollision(false);
 
         this.moveBaseGoal = this.makeMoveBaseGoal(pose);
 
-        this.moveBaseClient.sendGoal(this.moveBaseGoal);
+        // Immediately notify operator that navigation has started executing
+        this.moveBaseResultCallback({
+            state: "Navigation executing!",
+            alert_type: "info",
+        });
+
+        this.moveBaseGoalID = this.moveBaseClient.sendGoal(
+            this.moveBaseGoal,
+            (result) => {
+                console.log("Navigation succeeded:", result);
+                this.moveBaseResultCallback({
+                    state: "Navigation succeeded!",
+                    alert_type: "success",
+                });
+                this.toggleBaseOnlyCollision(true);
+            },
+            (feedback) => {
+                console.log("Navigation feedback:", feedback);
+                this.toggleBaseOnlyCollision(true);
+            },
+            (error) => {
+                console.log("Navigation failed/canceled:", error);
+                if (error && (error.includes("canceled") || error.includes("cancel"))) {
+                    this.moveBaseResultCallback({
+                        state: "Navigation canceled!",
+                        alert_type: "error",
+                    });
+                } else {
+                    this.moveBaseResultCallback({
+                        state: "Navigation failed!",
+                        alert_type: "error",
+                    });
+                }
+                this.toggleBaseOnlyCollision(true);
+            }
+        );
     }
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
@@ -1206,8 +1225,9 @@ export class Robot extends React.Component {
 
     stopMoveBaseClient() {
         if (!this.moveBaseClient) throw "moveBaseClient is undefined";
-        if (this.moveBaseGoal) {
-            this.moveBaseClient.cancelGoal();
+        if (this.moveBaseGoalID) {
+            this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
+            this.moveBaseGoalID = undefined;
             this.moveBaseGoal = undefined;
         }
     }
