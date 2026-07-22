@@ -46,7 +46,13 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                     this.selectGoal = toggle;
                 };
             case UnderMapButton.CancelGoal:
-                return () => FunctionProvider.remoteRobot?.stopMoveBase();
+                return () => {
+                    this.setMoveBaseState({
+                        state: "Navigation canceled!",
+                        alert_type: "error",
+                    });
+                    FunctionProvider.remoteRobot?.stopMoveBase();
+                };
 
             case UnderMapButton.DeleteGoal:
                 return (idx: number) => {
@@ -73,6 +79,10 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                 };
             case UnderMapButton.NavigateToPose:
                 return (pose: Transform) => {
+                    this.setMoveBaseState({
+                        state: "Navigation executing!",
+                        alert_type: "info",
+                    });
                     let rosPose = {
                         position: {
                             x: pose.translation.x,
@@ -112,6 +122,7 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                                 FunctionProvider.remoteRobot?.isGoalReached();
                             if (goalReached) {
                                 clearInterval(interval);
+                                FunctionProvider.remoteRobot?.setGoalReached(false);
                                 resolve(true);
                             }
                         });

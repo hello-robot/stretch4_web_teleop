@@ -522,7 +522,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     React.useEffect(() => {
         if (selectedLocationMenuItem) {
             let pose: Transform = functs.LoadGoal(selectedLocationMenuItem)!;
-            functs.DisplayGoalMarker(pose.translation);
+            functs.DisplayGoalMarker(pose.translation, pose.rotation);
         }
     }, [selectedLocationMenuItem]);
 
