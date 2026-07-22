@@ -24,6 +24,8 @@ interface AutoNavProps {
     sceneSelected: string;
     onSceneSelectedChange: Dispatch<SetStateAction<string>>;
     addToast: AddToastFn;
+    isModalLocationsMenuVisible: boolean;
+    isModalLocationsMenuVisibleSet: Dispatch<SetStateAction<boolean>>;
 }
 
 export enum MapFunction {
@@ -88,6 +90,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
     sceneSelected,
     onSceneSelectedChange,
     addToast,
+    isModalLocationsMenuVisible,
+    isModalLocationsMenuVisibleSet,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -248,8 +252,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // Modal visibility state for adding a location
     const [isModalAddLocationVisible, isModalAddLocationVisibleSet] = useState<boolean>(false);
-    // Modal visibility state for locations menu
-    const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] = useState<boolean>(false);
     // Whether to display all goal markers on the map
     const [displayGoals, displayGoalsSet] = useState<boolean>(false);
     // Navigation goal selection state (true if selecting a goal).

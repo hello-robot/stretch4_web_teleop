@@ -15,8 +15,11 @@ export declare const STOP_MOTION: "stop_motion";
 export declare const REPEAT_BASE_MOVE: "repeat_base_move";
 export declare const EXECUTE_MACRO: "execute_macro";
 export declare const SWITCH_SCENE: "switch_scene";
+export declare const SAVE_MAP_LOCATION: "save_map_location";
+export declare const SET_SAVED_LOCATIONS_MODAL: "set_saved_locations_modal";
 export declare const VOICE_MACRO_NAMES: readonly ["center_wrist", "stow_wrist"];
 export declare const VOICE_SCENE_NAMES: readonly ["pilot", "autonav"];
+export declare const SAVED_LOCATIONS_MODAL_ACTIONS: readonly ["open", "close"];
 export declare const VOICE_TOOLS: readonly [
     typeof EXECUTE_BASE_MOVE,
     typeof EXECUTE_JOINT_MOVE,
@@ -24,6 +27,8 @@ export declare const VOICE_TOOLS: readonly [
     typeof REPEAT_BASE_MOVE,
     typeof EXECUTE_MACRO,
     typeof SWITCH_SCENE,
+    typeof SAVE_MAP_LOCATION,
+    typeof SET_SAVED_LOCATIONS_MODAL,
 ];
 
 export declare const BASE_TRANSLATE_ACTIONS: readonly [

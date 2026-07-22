@@ -19,11 +19,14 @@ import { setVoiceStatus } from "../voice/voiceStatusStore";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
+    type SavedLocationsModalAction,
+    type SetSavedLocationsModalResult,
     type VoiceSceneName,
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
 import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
+import type { SaveMapLocationResult } from "../voice/executeSaveMapLocation";
 import type { AddToastFn } from "../layout_components/Toasts";
 
 const SCENE_TOAST_LABELS: Record<VoiceSceneName, string> = {
@@ -53,6 +56,9 @@ export type VoiceCommandAssistantProps = {
     setActionMode: (mode: ActionModeType) => void;
     addToast: AddToastFn;
     onSwitchScene: (scene: VoiceSceneName) => void;
+    onSetSavedLocationsModal: (
+        action: SavedLocationsModalAction,
+    ) => SetSavedLocationsModalResult;
 };
 
 /** OpenAI speech-to-speech voice session controller (Realtime WebRTC). */
@@ -61,6 +67,7 @@ export const VoiceCommandAssistant = ({
     setActionMode,
     addToast,
     onSwitchScene,
+    onSetSavedLocationsModal,
 }: VoiceCommandAssistantProps) => {
     const sessionRef =
         useRef<ActiveRealtimeVoiceSession | null>(null);
@@ -135,6 +142,34 @@ export const VoiceCommandAssistant = ({
         [onSwitchScene, addToast],
     );
 
+    const handleSaveMapLocationResult = useCallback(
+        (result: SaveMapLocationResult) => {
+            if (result.ok) {
+                const label = result.label ?? "";
+                addToast(
+                    "info",
+                    `Location "${label}" added.`,
+                    undefined,
+                    "voice",
+                );
+                return;
+            }
+            addToast("error", result.detail, undefined, "voice");
+        },
+        [addToast],
+    );
+
+    const handleSetSavedLocationsModal = useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            const result = onSetSavedLocationsModal(action);
+            if (!result.ok) {
+                addToast("error", result.detail, undefined, "voice");
+            }
+            return result;
+        },
+        [onSetSavedLocationsModal, addToast],
+    );
+
     const connect = useCallback(async () => {
         if (phase === "connecting" || phase === "live") {
             return;
@@ -148,6 +183,8 @@ export const VoiceCommandAssistant = ({
                 onVoicePressAndHoldRequired,
                 onVoiceMoveFeedback,
                 onSwitchScene: handleSwitchScene,
+                onSaveMapLocationResult: handleSaveMapLocationResult,
+                onSetSavedLocationsModal: handleSetSavedLocationsModal,
                 onListeningState: (listeningState) => {
                     setVoiceStatus({ listeningState });
                 },
@@ -190,6 +227,8 @@ export const VoiceCommandAssistant = ({
         onVoicePressAndHoldRequired,
         onVoiceMoveFeedback,
         handleSwitchScene,
+        handleSaveMapLocationResult,
+        handleSetSavedLocationsModal,
     ]);
 
     const canConnectVoice =
