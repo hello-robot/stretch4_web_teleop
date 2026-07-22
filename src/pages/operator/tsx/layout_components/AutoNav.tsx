@@ -2,10 +2,9 @@ import React, { useEffect, useState, Dispatch, SetStateAction } from 'react'
 import { Canvas } from "../static_components/Canvas";
 import { Map } from './Map';
 import { ComponentType, MapDefinition } from '../utils/component_definitions';
-import genUUID from '../utils/genUUID';
 import { SharedState } from './CustomizableComponent';
 import FooterAutoNav from './FooterAutoNav';
-import Toasts, { Toast } from './Toasts';
+import type { AddToastFn } from './Toasts';
 import { mapFunctionProvider } from 'operator/tsx/index';
 import { OccupancyGrid } from '../static_components/OccupancyGrid';
 import { underMapFunctionProvider } from 'operator/tsx/index';
@@ -15,7 +14,7 @@ import {
     ROSPose,
     ROSPoint,
 } from 'shared/util';
-import { Transform, Vector3, Quaternion } from 'roslib';
+import { Transform, Vector3 } from 'roslib';
 import '../../css/AutoNav.css';
 
 interface AutoNavProps {
@@ -24,6 +23,9 @@ interface AutoNavProps {
     swipeableViewsIdxSet: Dispatch<SetStateAction<number>>;
     sceneSelected: string;
     onSceneSelectedChange: Dispatch<SetStateAction<string>>;
+    addToast: AddToastFn;
+    isModalLocationsMenuVisible: boolean;
+    isModalLocationsMenuVisibleSet: Dispatch<SetStateAction<boolean>>;
 }
 
 export enum MapFunction {
@@ -56,7 +58,7 @@ export interface AutoNavFunctions {
         poseNames: string[],
         poseTypes: string[],
     ) => void;
-    DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) => void;
+    DisplayGoalMarker: (pose: Vector3) => void;
     Play: () => void;
     RemoveGoalMarker: () => void;
     GoalReached: () => Promise<boolean>;
@@ -87,6 +89,9 @@ const AutoNav: React.FC<AutoNavProps> = ({
     swipeableViewsIdxSet,
     sceneSelected,
     onSceneSelectedChange,
+    addToast,
+    isModalLocationsMenuVisible,
+    isModalLocationsMenuVisibleSet,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -94,9 +99,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // Manage goal position
     const [goalPosition, goalPositionSet] = useState<ROSPoint | undefined>(undefined);
-
-    // Manage toast notifications for <Toasts>
-    const [toasts, toastsSet] = useState<Toast[]>([]);
 
     // OccupancyGrid instance for map and marker operations
     const [occupancyGrid, occupancyGridSet] = useState<OccupancyGrid>();
@@ -113,20 +115,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
             if (unsubscribeOnUnmount) unsubscribeOnUnmount();
         };
     }, [occupancyGrid]);
-
-    // Function to add a toast notification
-    const addToast = (
-        type: 'success' | 'error' | 'info',
-        message: string,
-        duration?: number
-    ) => {
-        // Generate a unique ID for toast
-        const id = genUUID();
-        // Add the toast to the state!
-        toastsSet((prevToasts) => (
-            [...prevToasts, { id, type, message, duration }]
-        ));
-    };
 
     /**
      * All navigation-related functions, provided by underMapFunctionProvider.
@@ -187,8 +175,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
         /**
          * Display a goal marker on the map at the given pose.
          */
-        DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) =>
-            occupancyGrid!.createGoalMarker(pose.x, pose.y, true, rotation),
+        DisplayGoalMarker: (pose: Vector3) =>
+            occupancyGrid!.createGoalMarker(pose.x, pose.y, true),
 
         /**
          * Play the current navigation sequence (if supported by occupancyGrid).
@@ -264,8 +252,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // Modal visibility state for adding a location
     const [isModalAddLocationVisible, isModalAddLocationVisibleSet] = useState<boolean>(false);
-    // Modal visibility state for locations menu
-    const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] = useState<boolean>(false);
     // Whether to display all goal markers on the map
     const [displayGoals, displayGoalsSet] = useState<boolean>(false);
     // Navigation goal selection state (true if selecting a goal).
@@ -311,7 +297,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     return (
         <div className='auto-nav'>
-            <Toasts toasts={toasts} toastsSet={toastsSet} />
             <div className="map-wrapper">
                 <Map />
             </div>

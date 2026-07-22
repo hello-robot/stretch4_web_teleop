@@ -53,6 +53,10 @@ import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
 import Toasts, { useToasts } from "./layout_components/Toasts";
+import type {
+    SavedLocationsModalAction,
+    SetSavedLocationsModalResult,
+} from "./voice/constants";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -105,12 +109,46 @@ export const MobileOperator = (props: {
 
     // State for selected scene
     const [sceneSelected, setSceneSelected] = useState<string>("pilot-mode");
+    /** Live scene for voice tools (connect opts capture callbacks, not render values). */
+    const sceneSelectedRef = React.useRef(sceneSelected);
+    sceneSelectedRef.current = sceneSelected;
+
+    // Saved Locations modal (owned here so voice can open/close with AutoNav gate)
+    const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
+        useState(false);
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
 
     const { toasts, toastsSet, addToast } = useToasts();
+
+    // Close Saved Locations when leaving AutoNav
+    React.useEffect(() => {
+        if (sceneSelected !== "autonav") {
+            isModalLocationsMenuVisibleSet(false);
+        }
+    }, [sceneSelected]);
+
+    const handleSetSavedLocationsModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saved Locations is only available in AutoNav",
+                };
+            }
+            isModalLocationsMenuVisibleSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Locations."
+                        : "Closed Saved Locations.",
+            };
+        },
+        [],
+    );
 
     const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
@@ -275,6 +313,7 @@ export const MobileOperator = (props: {
                         swipeableViewsIdxSet(1);
                     }
                 }}
+                onSetSavedLocationsModal={handleSetSavedLocationsModal}
             />
             <HomingBanner
                 robotIsHomed={robotIsHomed}
@@ -379,6 +418,12 @@ export const MobileOperator = (props: {
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
                             addToast={addToast}
+                            isModalLocationsMenuVisible={
+                                isModalLocationsMenuVisible
+                            }
+                            isModalLocationsMenuVisibleSet={
+                                isModalLocationsMenuVisibleSet
+                            }
                         />
                     </div>
                 </SwipeableViews>

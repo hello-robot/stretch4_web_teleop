@@ -10,6 +10,9 @@ import {
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
     SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -52,6 +55,9 @@ export {
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
     SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -143,6 +149,16 @@ export type MacroMoveAction = (typeof VOICE_MACRO_NAMES)[number];
 
 /** All valid switch_scene.scene values. */
 export type VoiceSceneName = (typeof VOICE_SCENE_NAMES)[number];
+
+/** All valid set_saved_locations_modal.action values. */
+export type SavedLocationsModalAction =
+    (typeof SAVED_LOCATIONS_MODAL_ACTIONS)[number];
+
+/** Result of set_saved_locations_modal for toast UX. */
+export type SetSavedLocationsModalResult = {
+    ok: boolean;
+    detail: string;
+};
 
 /**
  * Suppress duplicate execute_base_move with identical args within this window (echo safety net).

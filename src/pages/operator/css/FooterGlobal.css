@@ -104,6 +104,8 @@
     align-items: center;
     width: 100%;
     height: 65px;
+    /* Tighter than browser default so waveform + "Voice AutoNav" fit on one line */
+    padding: 0 4px;
     background-color: hsl(204 90% 5% / 1);
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
@@ -123,6 +125,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    white-space: nowrap;
 }
 
 .footer-global .scene-menu-button-container .voice-pilot-mic-icon-wrap {
@@ -131,7 +134,7 @@
     justify-content: center;
     flex-shrink: 0;
     width: 14px;
-    margin-right: 8px;
+    margin-right: 4px;
     transform-origin: left center;
     will-change: transform, opacity;
 }

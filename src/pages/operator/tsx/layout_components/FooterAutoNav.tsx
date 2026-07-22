@@ -21,6 +21,7 @@ import { set } from 'firebase/database';
 import StartNavIcon from '../../icons/StartNavIcon.svg';
 import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
 import AddLocationIcon from '../../icons/AddLocationIcon.svg';
+import { LocalStorageHandler } from '../storage_handler/LocalStorageHandler';
 
 interface FooterAutoNavProps {
     handleSelectGoal: (selectGoal: boolean) => void;
@@ -408,6 +409,13 @@ const ModalLocationsMenu: React.FC<ModalLocationsMenuProps> = ({
         }
     }, [isModalLocationsMenuVisible]);
 
+    // Reload from storage whenever the menu opens (e.g. after a voice save).
+    useEffect(() => {
+        if (isModalLocationsMenuVisible) {
+            getPosesLatest();
+        }
+    }, [isModalLocationsMenuVisible, getPosesLatest]);
+
     const Footer = () => (
         <MagneticWrapper>
             <button
@@ -456,7 +464,7 @@ const ModalLocationsMenu: React.FC<ModalLocationsMenuProps> = ({
         <ModalMobile
             isOpen={isModalLocationsMenuVisible}
             onClose={closeModal}
-            title="Select Location"
+            title="Saved Locations"
             subtitle="AUTONAV"
             HeaderControls={<HeaderControls />}
             footer={<Footer />}
@@ -571,7 +579,22 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         const poses = functs.GetSavedPoseNames();
         // Update local state with latest poses...
         posesSet(poses);
-    }, []);
+    }, [functs]);
+
+    // Voice (and other non-UI) saves write storage without updating React state.
+    useEffect(() => {
+        const onMapPosesChanged = () => getPosesLatest();
+        window.addEventListener(
+            LocalStorageHandler.MAP_POSES_CHANGED_EVENT,
+            onMapPosesChanged,
+        );
+        return () => {
+            window.removeEventListener(
+                LocalStorageHandler.MAP_POSES_CHANGED_EVENT,
+                onMapPosesChanged,
+            );
+        };
+    }, [getPosesLatest]);
 
     return (
         <div className="footer-auto-nav">
