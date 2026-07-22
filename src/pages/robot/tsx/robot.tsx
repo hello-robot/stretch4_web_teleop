@@ -50,18 +50,6 @@ export const movementStatesTransitory: MovementState[] = [MovementState.Executin
 
 export const movementStatesAll = Object.values(MovementState);
 
-// ROS 2 action_msgs/msg/GoalStatus values.
-// Reference: https://github.com/ros2/rcl_interfaces/blob/humble/action_msgs/msg/GoalStatus.msg
-export enum GoalStatus {
-    STATUS_UNKNOWN = 0,
-    STATUS_ACCEPTED = 1,
-    STATUS_EXECUTING = 2,
-    STATUS_CANCELING = 3,
-    STATUS_SUCCEEDED = 4,
-    STATUS_CANCELED = 5,
-    STATUS_ABORTED = 6,
-}
-
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
@@ -78,6 +66,7 @@ export class Robot extends React.Component {
     private poseGoalID?: string;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
+    private moveBaseGoalID?: string;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     private cmdVelTopic?: Topic;
@@ -87,7 +76,6 @@ export class Robot extends React.Component {
     private useRightCameraService?: Service;
     private setExpandedGripperService?: Service;
     private setRunStopService?: Service;
-    private toggleBaseOnlyCollisionService?: Service;
     private robotFrameTfClient?: ROS2TFClient;
     private mapFrameTfClient?: ROS2TFClient;
     private linkGripperFingerLeftTF?: Transform;
@@ -100,6 +88,7 @@ export class Robot extends React.Component {
     ) => void;
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+    private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
@@ -107,6 +96,7 @@ export class Robot extends React.Component {
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
+    private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam: Param;
     private modeParam: Param;
@@ -121,6 +111,7 @@ export class Robot extends React.Component {
         ) => void;
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+        odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
@@ -128,18 +119,27 @@ export class Robot extends React.Component {
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
+        leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
-        this.moveBaseResultCallback = props.moveBaseResultCallback;
+        this.odomCallback = props.odomCallback;
+        this.moveBaseResultCallback = (goalState) => {
+            if (goalState.state !== "Navigation executing!") {
+                this.moveBaseGoalID = undefined;
+                this.moveBaseGoal = undefined;
+            }
+            props.moveBaseResultCallback(goalState);
+        };
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
         this.modeCallback = props.modeCallback;
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
+        this.leaseStatusCallback = props.leaseStatusCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -266,16 +266,10 @@ export class Robot extends React.Component {
         this.subscribeToJointState();
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
+        this.subscribeToOdom();
         this.subscribeToMode();
         this.subscribetoJointStateDiagnostics();
-        this.subscribeToActionResult(
-            moveBaseActionName,
-            this.handleMoveBaseResult.bind(this),
-            "Navigation executing!",
-            "Navigation canceled!",
-            "Navigation succeeded!",
-            "Navigation failed!"
-        );
+        this.subscribeToLeaseHolder();
         this.createTrajectoryClient();
         this.createMoveBaseClient();
         this.createCmdVelTopic();
@@ -285,8 +279,6 @@ export class Robot extends React.Component {
         this.createUseRightCameraService();
         this.createExpandedGripperService();
         this.createRunStopService();
-        this.createToggleBaseOnlyCollisionService();
-        this.toggleBaseOnlyCollision(true);
         // this.createRobotFrameTFClient();
         // this.createMapFrameTFClient();
         // this.subscribeToHeadTiltTF();
@@ -370,6 +362,19 @@ export class Robot extends React.Component {
         });
     }
 
+    subscribeToOdom() {
+        const odomTopic: Topic<ROSOdometry> = new Topic({
+            ros: this.ros,
+            name: "/wheel_odom",
+            messageType: "nav_msgs/msg/Odometry",
+        });
+        this.subscriptions.push(odomTopic);
+
+        odomTopic.subscribe((msg: ROSOdometry) => {
+            if (this.odomCallback) this.odomCallback(msg);
+        });
+    }
+
     subscribeToMode() {
         const modeTopic: Topic = new Topic({
             ros: this.ros,
@@ -380,6 +385,30 @@ export class Robot extends React.Component {
 
         modeTopic.subscribe((msg) => {
             if (this.modeCallback) this.modeCallback(msg.data);
+        });
+    }
+
+    subscribeToLeaseHolder() {
+        const leaseHolderTopic: Topic = new Topic({
+            ros: this.ros,
+            name: "/server_lease_holder",
+            messageType: "diagnostic_msgs/msg/DiagnosticStatus",
+        });
+        this.subscriptions.push(leaseHolderTopic);
+
+        leaseHolderTopic.subscribe((message: Message) => {
+            const status = message as any;
+            let leaseHolder = "none";
+            if (status && status.values) {
+                const holderPair = status.values.find((pair: any) => pair.key === "lease_holder");
+                if (holderPair) {
+                    leaseHolder = holderPair.value;
+                }
+            }
+            const isDriverHolding = leaseHolder === "ros2_driver" || leaseHolder === "None" || leaseHolder === "none";
+            if (this.leaseStatusCallback) {
+                this.leaseStatusCallback(leaseHolder, isDriverHolding);
+            }
         });
     }
 
@@ -508,22 +537,22 @@ export class Robot extends React.Component {
             let status = msg.status_list.pop()?.status;
             console.log("For action ", actionName, "got status ", status);
             if (callback) {
-                if (status == GoalStatus.STATUS_EXECUTING)
+                if (status == 2)
                     callback({
                         state: executingMsg,
                         alert_type: "info",
                     });
-                else if (status == GoalStatus.STATUS_SUCCEEDED)
+                else if (status == 4)
                     callback({
                         state: successMsg,
                         alert_type: "success",
                     });
-                else if (status == GoalStatus.STATUS_CANCELED)
+                else if (status == 5)
                     callback({
                         state: cancelMsg,
                         alert_type: "error",
                     });
-                else if (status == GoalStatus.STATUS_ABORTED)
+                else if (status == 6)
                     callback({
                         state: failureMsg,
                         alert_type: "error",
@@ -553,7 +582,7 @@ export class Robot extends React.Component {
     createCmdVelTopic() {
         this.cmdVelTopic = new Topic({
             ros: this.ros,
-            name: "/cmd_vel_nav",
+            name: "/cmd_vel",
             messageType: "geometry_msgs/Twist",
         });
     }
@@ -610,14 +639,6 @@ export class Robot extends React.Component {
         this.setRunStopService = new Service({
             ros: this.ros,
             name: "/runstop_the_robot",
-            serviceType: "std_srvs/srv/SetBool",
-        });
-    }
-
-    createToggleBaseOnlyCollisionService() {
-        this.toggleBaseOnlyCollisionService = new Service({
-            ros: this.ros,
-            name: "/joystick_control",
             serviceType: "std_srvs/srv/SetBool",
         });
     }
@@ -708,38 +729,6 @@ export class Robot extends React.Component {
         this.setRunStopService?.callService(request, (response: boolean) => { });
     }
 
-    toggleBaseOnlyCollision(bool: boolean) {
-        var request = { data: bool };
-        this.toggleBaseOnlyCollisionService?.callService(
-            request,
-            (response: boolean) => {
-                response
-                    ? console.log(
-                        "Successfully toggled base only collision to",
-                        bool
-                    )
-                    : console.log("Failed to toggle base only collision to", bool);
-            }
-        );
-    }
-
-    private handleMoveBaseResult(goalState: ActionState) {
-        if (goalState.state === "Navigation executing!") {
-            this.toggleBaseOnlyCollision(false);
-        } else if (
-            goalState.state === "Navigation succeeded!" ||
-            goalState.state === "Navigation canceled!" ||
-            goalState.state === "Navigation failed!"
-        ) {
-            console.log(`Navigation finished with state: ${goalState.state}. Restoring base-only collision.`);
-            this.toggleBaseOnlyCollision(true);
-        }
-
-        if (this.moveBaseResultCallback) {
-            this.moveBaseResultCallback(goalState);
-        }
-    }
-
     /**
      * In navigation mode, you can send position commands to the arm and
      * velocity commands to the base.
@@ -816,6 +805,7 @@ export class Robot extends React.Component {
         let jointVelocities = {
             joint_names: [jointName],
             velocities: [velocity],
+            duration: 0.05  // multiple of a heartbeat (0.025s)
         };
         if (!this.jointVelTopic) throw "jointVelTopic is undefined";
         this.jointVelTopic.publish(jointVelocities);
@@ -885,12 +875,35 @@ export class Robot extends React.Component {
     makePoseGoal(pose: RobotPose) {
         let jointNames: ValidJoints[] = [];
         let jointPositions: number[] = [];
+        let maxDuration = 0.1; // minimum threshold to prevent division by zero or excessive acceleration
+
         for (let key in pose) {
-            jointNames.push(key as ValidJoints);
-            jointPositions.push(pose[key as ValidJoints]!);
+            const jointName = key as ValidJoints;
+            jointNames.push(jointName);
+            const targetPos = pose[jointName]!;
+            jointPositions.push(targetPos);
+
+            try {
+                const currentPos = this.getJointValue(jointName);
+                const distance = Math.abs(targetPos - currentPos);
+                const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
+
+                if (velocityLimit > 0) {
+                    const jointDuration = distance / velocityLimit;
+                    if (jointDuration > maxDuration) {
+                        maxDuration = jointDuration;
+                    }
+                }
+            } catch (e) {
+                console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
+            }
         }
 
-        console.log(jointNames, jointPositions);
+        const secs = Math.floor(maxDuration);
+        const nsecs = Math.round((maxDuration - secs) * 1e9);
+
+        console.log("Calculated synchronized trajectory duration:", maxDuration, "secs:", secs, "nsecs:", nsecs);
+
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         let newGoal = {
             trajectory: {
@@ -904,10 +917,9 @@ export class Robot extends React.Component {
                 points: [
                     {
                         positions: jointPositions,
-                        // The following might causing the jumpiness in continuous motions
                         time_from_start: {
-                            secs: 1,
-                            nsecs: 0,
+                            secs: secs,
+                            nsecs: nsecs,
                         },
                     },
                 ],
@@ -1068,17 +1080,45 @@ export class Robot extends React.Component {
     executeMoveBaseGoal(pose: ROSPose) {
         // this.switchToNavigationMode();
         // this.stopExecution()
-
-         // Toggle base-only collision when publication starts (set to false to enforce full-body collision)
-        this.toggleBaseOnlyCollision(false);
-
         this.moveBaseGoal = this.makeMoveBaseGoal(pose);
 
-        this.moveBaseClient.sendGoal(this.moveBaseGoal);
+        // Immediately notify operator that navigation has started executing
+        this.moveBaseResultCallback({
+            state: "Navigation executing!",
+            alert_type: "info",
+        });
+
+        this.moveBaseGoalID = this.moveBaseClient.sendGoal(
+            this.moveBaseGoal,
+            (result) => {
+                console.log("Navigation succeeded:", result);
+                this.moveBaseResultCallback({
+                    state: "Navigation succeeded!",
+                    alert_type: "success",
+                });
+            },
+            (feedback) => {
+                console.log("Navigation feedback:", feedback);
+            },
+            (error) => {
+                console.log("Navigation failed/canceled:", error);
+                if (error && (error.includes("canceled") || error.includes("cancel"))) {
+                    this.moveBaseResultCallback({
+                        state: "Navigation canceled!",
+                        alert_type: "error",
+                    });
+                } else {
+                    this.moveBaseResultCallback({
+                        state: "Navigation failed!",
+                        alert_type: "error",
+                    });
+                }
+            }
+        );
     }
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        // this.switchToNavigationMode();
+        this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1091,6 +1131,8 @@ export class Robot extends React.Component {
                     ": " +
                     result.error_string
                 );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             },
             (feedback) => {
                 console.log(
@@ -1099,6 +1141,16 @@ export class Robot extends React.Component {
                     ": " +
                     feedback
                 );
+            },
+            (error) => {
+                console.log(
+                    "Error for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    error
+                );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             }
         );
     }
@@ -1126,8 +1178,9 @@ export class Robot extends React.Component {
 
     stopMoveBaseClient() {
         if (!this.moveBaseClient) throw "moveBaseClient is undefined";
-        if (this.moveBaseGoal) {
-            this.moveBaseClient.cancelGoal();
+        if (this.moveBaseGoalID) {
+            this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
+            this.moveBaseGoalID = undefined;
             this.moveBaseGoal = undefined;
         }
     }
@@ -1140,7 +1193,21 @@ export class Robot extends React.Component {
             return 0;
         }
 
-        let jointIndex = this.jointState.name.indexOf(jointName);
+        let name: string = jointName;
+        if (name === "arm_joint" || name === "wrist_extension") {
+            let total = 0;
+            let foundAny = false;
+            for (let link of ["arm_l1_joint", "arm_l2_joint", "arm_l3_joint", "arm_l4_joint"]) {
+                let idx = this.jointState.name.indexOf(link as ValidJoints);
+                if (idx !== -1) {
+                    total += this.jointState.position[idx];
+                    foundAny = true;
+                }
+            }
+            if (foundAny) return total * 1.25;  // Scale factor to account for the number of links (5/4)
+        }
+
+        let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
         return this.jointState.position[jointIndex];
     }
 

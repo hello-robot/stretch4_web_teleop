@@ -171,6 +171,7 @@ export class RemoteRobot extends React.Component<{}, any> {
     }
 
     moveBase(pose: ROSPose) {
+        this.setGoalReached(false);
         let cmd: MoveBaseCommand = {
             type: "moveBase",
             pose: pose,
