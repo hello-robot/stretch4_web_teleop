@@ -67,7 +67,8 @@ export abstract class VoiceMoveExecutor {
         VoiceMoveExecutor._context?.onSpeedChange(speed);
     }
 
-    protected static emitVoiceMoveFeedback(feedback: VoiceMoveFeedback): void {
+    /** Emit structured feedback for operator toasts (also used by stop/macro free helpers). */
+    public static emitVoiceMoveFeedback(feedback: VoiceMoveFeedback): void {
         VoiceMoveExecutor._context?.onVoiceMoveFeedback?.(feedback);
     }
     /**
