@@ -234,9 +234,6 @@ export const MobileOperator = (props: {
     underMapFunctionProvider.setOperatorCallback(moveBaseStateCallback);
     let moveBaseAlertTimeout: NodeJS.Timeout;
     React.useEffect(() => {
-        console.log("moveBaseState updated:", moveBaseState);
-    }, [moveBaseState]);
-    React.useEffect(() => {
         if (moveBaseState && moveBaseState.alert_type != "info") {
             if (moveBaseAlertTimeout) clearTimeout(moveBaseAlertTimeout);
             moveBaseAlertTimeout = setTimeout(() => {
@@ -332,6 +329,15 @@ export const MobileOperator = (props: {
                 onVelocityScaleApplied={applyVelocityScale}
                 setActionMode={setActionMode}
                 addToast={addToast}
+                onSwitchScene={(scene) => {
+                    if (scene === "pilot") {
+                        swipeableViewsIdxSet(0);
+                        setSceneSelected("pilot-mode");
+                    } else {
+                        setSceneSelected("autonav");
+                        swipeableViewsIdxSet(1);
+                    }
+                }}
             />
             <HomingBanner
                 robotIsHomed={robotIsHomed}
@@ -404,7 +410,7 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-                            setVelocityScale={applyVelocityScale}
+                            onVelocityScaleChange={applyVelocityScale}
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}

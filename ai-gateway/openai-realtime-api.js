@@ -33,7 +33,9 @@ const {
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
     VOICE_MACRO_NAMES,
+    VOICE_SCENE_NAMES,
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_SLEEP_PHRASE_DISPLAY,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
@@ -142,6 +144,12 @@ function buildRealtimeVoiceSessionPayload() {
                 `Macro actions move the robot to predefined poses. Call \`${EXECUTE_MACRO}\` with the appropriate \`macro\` name.`,
                 `\`macro="center_wrist"\`: centers the wrist to roll=0, pitch=0, yaw=0. Phrases: "center the wrist", "reset wrist", "straighten wrist", "wrist to zero", "zero wrist", "center wrist".`,
                 `\`macro="stow_wrist"\`: moves the wrist to the robot's stow pose. Phrases: "stow the wrist", "stow wrist", "tuck wrist", "wrist to stow", "park wrist".`,
+
+                // ── Scene switching ────────────────────────────────────────────────────────────────────────
+                `When the user wants to change the operator UI scene (not robot motion), call tool \`${SWITCH_SCENE}\` with \`scene\`. Do not call a movement tool. Call this tool even if the utterance is only a scene switch.`,
+                `\`scene="pilot"\`: switch to Pilot mode. Phrases: "switch to Pilot", "go to Pilot", "open Pilot", "Pilot mode", "pilot".`,
+                `\`scene="autonav"\`: switch to AutoNav. Phrases: "switch to AutoNav", "go to AutoNav", "open AutoNav", "AutoNav mode", "autonav".`,
+                `Speech-to-text often mishears AutoNav as "auto now", "auto nav", "auto-nav", or "auto nap" — treat those as \`scene="autonav"\`.`,
 
             ].join(" "),
             tools: [
@@ -272,6 +280,24 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                         },
                         required: ["macro"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: SWITCH_SCENE,
+                    description:
+                        "Switch the operator UI between Pilot and AutoNav scenes. Use for requests like 'switch to AutoNav' or 'go to Pilot'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            scene: {
+                                type: "string",
+                                enum: VOICE_SCENE_NAMES,
+                                description: "Operator scene to show.",
+                            },
+                        },
+                        required: ["scene"],
                         additionalProperties: false,
                     },
                 },

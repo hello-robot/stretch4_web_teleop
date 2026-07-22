@@ -19,11 +19,17 @@ import { setVoiceStatus } from "../voice/voiceStatusStore";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
+    type VoiceSceneName,
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
 import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
 import type { AddToastFn } from "../layout_components/Toasts";
+
+const SCENE_TOAST_LABELS: Record<VoiceSceneName, string> = {
+    pilot: "Switching to Pilot",
+    autonav: "Switching to AutoNav",
+};
 
 /** Explicit check to make sure operator is using
  * LAN/ngrok (LocalStorage + socket.io) and not cloud (Firebase) */
@@ -46,6 +52,7 @@ export type VoiceCommandAssistantProps = {
     onVelocityScaleApplied: (scale: number) => void;
     setActionMode: (mode: ActionModeType) => void;
     addToast: AddToastFn;
+    onSwitchScene: (scene: VoiceSceneName) => void;
 };
 
 /** OpenAI speech-to-speech voice session controller (Realtime WebRTC). */
@@ -53,6 +60,7 @@ export const VoiceCommandAssistant = ({
     onVelocityScaleApplied,
     setActionMode,
     addToast,
+    onSwitchScene,
 }: VoiceCommandAssistantProps) => {
     const sessionRef =
         useRef<ActiveRealtimeVoiceSession | null>(null);
@@ -119,6 +127,14 @@ export const VoiceCommandAssistant = ({
         [addToast],
     );
 
+    const handleSwitchScene = useCallback(
+        (scene: VoiceSceneName) => {
+            onSwitchScene(scene);
+            addToast("info", SCENE_TOAST_LABELS[scene], undefined, "voice");
+        },
+        [onSwitchScene, addToast],
+    );
+
     const connect = useCallback(async () => {
         if (phase === "connecting" || phase === "live") {
             return;
@@ -131,6 +147,7 @@ export const VoiceCommandAssistant = ({
                 onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
                 onVoiceMoveFeedback,
+                onSwitchScene: handleSwitchScene,
                 onListeningState: (listeningState) => {
                     setVoiceStatus({ listeningState });
                 },
@@ -172,6 +189,7 @@ export const VoiceCommandAssistant = ({
         onVoiceSpeedChange,
         onVoicePressAndHoldRequired,
         onVoiceMoveFeedback,
+        handleSwitchScene,
     ]);
 
     const canConnectVoice =

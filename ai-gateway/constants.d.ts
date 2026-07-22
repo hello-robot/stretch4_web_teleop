@@ -14,13 +14,16 @@ export declare const EXECUTE_JOINT_MOVE: "execute_joint_move";
 export declare const STOP_MOTION: "stop_motion";
 export declare const REPEAT_BASE_MOVE: "repeat_base_move";
 export declare const EXECUTE_MACRO: "execute_macro";
+export declare const SWITCH_SCENE: "switch_scene";
 export declare const VOICE_MACRO_NAMES: readonly ["center_wrist", "stow_wrist"];
+export declare const VOICE_SCENE_NAMES: readonly ["pilot", "autonav"];
 export declare const VOICE_TOOLS: readonly [
     typeof EXECUTE_BASE_MOVE,
     typeof EXECUTE_JOINT_MOVE,
     typeof STOP_MOTION,
     typeof REPEAT_BASE_MOVE,
     typeof EXECUTE_MACRO,
+    typeof SWITCH_SCENE,
 ];
 
 export declare const BASE_TRANSLATE_ACTIONS: readonly [
@@ -80,6 +83,7 @@ export declare const MACRO_MOVE_ACTIONS: readonly [
 
 export declare const VOICE_SPEEDS: readonly ["slow", "medium", "fast"];
 export declare const VOICE_SPEED_DEFAULT: "medium";
+export declare const VOICE_WAKE_PHRASE: "hello stretch";
 export declare const VOICE_SLEEP_PHRASE: "bye bye stretch";
 export declare const VOICE_WAKE_PHRASE_DISPLAY: "Hello Stretch";
 export declare const VOICE_SLEEP_PHRASE_DISPLAY: "Bye bye Stretch";

@@ -59,8 +59,14 @@ const REPEAT_BASE_MOVE = "repeat_base_move";
 /** Run a named macro that moves the robot to a predefined pose. */
 const EXECUTE_MACRO = "execute_macro";
 
+/** Switch the operator UI scene (Pilot / AutoNav). */
+const SWITCH_SCENE = "switch_scene";
+
 /** Names of available macros (matches voiceMacros.ts on the client). */
 const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
+
+/** Valid switch_scene.scene values (maps to operator scene ids on the client). */
+const VOICE_SCENE_NAMES = ["pilot", "autonav"];
 
 /** All voice Realtime tools registered in the session payload and executed on the client. */
 const VOICE_TOOLS = [
@@ -69,6 +75,7 @@ const VOICE_TOOLS = [
     STOP_MOTION,
     REPEAT_BASE_MOVE,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
 ];
 
 // ── Base move action enums ────────────────────────────────────────────────────
@@ -181,7 +188,9 @@ module.exports = {
     STOP_MOTION,
     REPEAT_BASE_MOVE,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
     VOICE_MACRO_NAMES,
+    VOICE_SCENE_NAMES,
 
     VOICE_TOOLS,
     BASE_TRANSLATE_ACTIONS,
