@@ -50,7 +50,7 @@
     background: transparent;
     /* Outer bloom only; inset glow lives on the fill layer (::after) */
     box-shadow: 0 -5px 30px -5px hsla(204, 80%, 50%, 1);
-    font-size: 14px;
+    font-size: 1rem;
     font-weight: 600;
     line-height: 22px;
     text-align: center;

@@ -51,6 +51,8 @@ import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
 import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
+import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
+import Toasts, { useToasts } from "./layout_components/Toasts";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -69,6 +71,10 @@ export const MobileOperator = (props: {
     const [velocityScale, setVelocityScale] = React.useState<number>(
         FunctionProvider.velocityScale
     );
+    const applyVelocityScale = React.useCallback((scale: number) => {
+        setVelocityScale(scale);
+        FunctionProvider.velocityScale = scale;
+    }, []);
     const [activeMainGroupTab, setActiveMainGroupTab] =
         React.useState<number>(0);
     const [activeControlTab, setActiveControlTab] = React.useState<number>(0);
@@ -103,6 +109,8 @@ export const MobileOperator = (props: {
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
+
+    const { toasts, toastsSet, addToast } = useToasts();
 
     const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
@@ -142,11 +150,12 @@ export const MobileOperator = (props: {
      * Updates the action mode in the layout (visually) and in the function
      * provider (functionally).
      */
-    function setActionMode(actionMode: ActionModeType) {
+    const setActionMode = React.useCallback((actionMode: ActionModeType) => {
         layout.current.actionMode = actionMode;
         FunctionProvider.actionMode = actionMode;
         props.storageHandler.saveCurrentLayout(layout.current);
-    }
+        setButtonStateMapRerender((r) => !r);
+    }, [props.storageHandler]);
 
     function setPilotControlsCurrent(pilotControlsCurrent: string) {
         layout.current.pilotControlsCurrent = pilotControlsCurrent;
@@ -156,16 +165,11 @@ export const MobileOperator = (props: {
         setButtonStateMapRerender(!buttonStateMapRerender);
     }
 
-
-
     function moveBaseStateCallback(state: MoveBaseState) {
         setMoveBaseState(state);
     }
     underMapFunctionProvider.setOperatorCallback(moveBaseStateCallback);
     let moveBaseAlertTimeout: NodeJS.Timeout;
-    React.useEffect(() => {
-        console.log("moveBaseState updated:", moveBaseState);
-    }, [moveBaseState]);
     React.useEffect(() => {
         if (moveBaseState && moveBaseState.alert_type != "info") {
             if (moveBaseAlertTimeout) clearTimeout(moveBaseAlertTimeout);
@@ -257,7 +261,22 @@ export const MobileOperator = (props: {
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
-             <HomingBanner
+            <Toasts toasts={toasts} toastsSet={toastsSet} />
+            <VoiceCommandAssistant
+                onVelocityScaleApplied={applyVelocityScale}
+                setActionMode={setActionMode}
+                addToast={addToast}
+                onSwitchScene={(scene) => {
+                    if (scene === "pilot") {
+                        swipeableViewsIdxSet(0);
+                        setSceneSelected("pilot-mode");
+                    } else {
+                        setSceneSelected("autonav");
+                        swipeableViewsIdxSet(1);
+                    }
+                }}
+            />
+            <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
             />
@@ -328,7 +347,7 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-                            setVelocityScale={setVelocityScale}
+                            onVelocityScaleChange={applyVelocityScale}
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
@@ -359,6 +378,7 @@ export const MobileOperator = (props: {
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
+                            addToast={addToast}
                         />
                     </div>
                 </SwipeableViews>

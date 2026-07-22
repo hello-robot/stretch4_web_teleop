@@ -20,13 +20,16 @@ import {
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
     isPlaceholderArgs,
     NO_ARG_VOICE_TOOLS,
     STOP_MOTION,
     type ExecuteToolResult,
+    type VoiceSceneName,
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
     type VoiceToolName,
+    VOICE_SCENE_NAMES,
     VOICE_SPEED_DEFAULT,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_TOOLS,
@@ -167,6 +170,16 @@ function formatToolCallLog(
         } catch {
             //
         }
+    } else if (fc.name === SWITCH_SCENE) {
+        try {
+            const parsed = JSON.parse(fc.arguments || "{}") as Record<
+                string,
+                unknown
+            >;
+            argsSummary = JSON.stringify({ scene: parsed.scene });
+        } catch {
+            //
+        }
     }
     return `[Realtime] ${ts} Tool ${fc.name} ${fc.call_id} src=${source} args=${argsSummary}`;
 }
@@ -219,6 +232,9 @@ function parsedArgsCompleteForTool(
     }
     if (nameVal === EXECUTE_MACRO) {
         return typeof parsed.macro === "string" && parsed.macro.length > 0;
+    }
+    if (nameVal === SWITCH_SCENE) {
+        return typeof parsed.scene === "string" && parsed.scene.length > 0;
     }
     return false;
 }
@@ -278,7 +294,8 @@ function accumulateFunctionCalls(
             (
                 nameVal === EXECUTE_BASE_MOVE ||
                 nameVal === EXECUTE_JOINT_MOVE ||
-                nameVal === EXECUTE_MACRO
+                nameVal === EXECUTE_MACRO ||
+                nameVal === SWITCH_SCENE
             ) &&
             typeof argsRaw === "string"
         ) {
@@ -417,6 +434,8 @@ export type RealtimeVoiceConnectOptions = {
     onVoicePressAndHoldRequired?: () => void;
     /** Structured feedback when a voice move is accepted or rejected (toast UX). */
     onVoiceMoveFeedback?: (feedback: VoiceMoveFeedback) => void;
+    /** Switch operator UI scene (Pilot / AutoNav). */
+    onSwitchScene?: (scene: VoiceSceneName) => void;
     /** Asleep/awake listening mode (wake/sleep phrases). */
     onListeningState?: (state: VoiceListeningState) => void;
 };
@@ -581,6 +600,37 @@ export async function connectOpenAIRealtimeVoice(
                 rawArgs = {};
             }
             return executeMacroOnProvider(voiceProvider, rawArgs);
+        },
+        switch_scene: (_voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                opts.onLog?.(
+                    `[Realtime] Bad JSON arguments for switch_scene: ${fc.arguments}`,
+                );
+                rawArgs = {};
+            }
+            const scene = typeof rawArgs.scene === "string" ? rawArgs.scene : "";
+            if (!(VOICE_SCENE_NAMES as readonly string[]).includes(scene)) {
+                return {
+                    ok: false,
+                    detail: `Unknown scene: "${scene}".`,
+                    ignored: true,
+                };
+            }
+            if (!opts.onSwitchScene) {
+                return {
+                    ok: false,
+                    detail: "Scene switching is unavailable.",
+                    ignored: true,
+                };
+            }
+            opts.onSwitchScene(scene as VoiceSceneName);
+            return { ok: true, detail: `Switched to ${scene}.` };
         },
     };
 
