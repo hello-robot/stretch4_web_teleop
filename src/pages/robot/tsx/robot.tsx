@@ -1144,7 +1144,6 @@ export class Robot extends React.Component {
             },
             (feedback) => {
                 console.log("Navigation feedback:", feedback);
-                this.toggleBaseOnlyCollision(true);
             },
             (error) => {
                 console.log("Navigation failed/canceled:", error);
