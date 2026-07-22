@@ -66,6 +66,7 @@ export class Robot extends React.Component {
     private poseGoalID?: string;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
+    private moveBaseGoalID?: string;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     private cmdVelTopic?: Topic;
@@ -125,7 +126,13 @@ export class Robot extends React.Component {
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
         this.odomCallback = props.odomCallback;
-        this.moveBaseResultCallback = props.moveBaseResultCallback;
+        this.moveBaseResultCallback = (goalState) => {
+            if (goalState.state !== "Navigation executing!") {
+                this.moveBaseGoalID = undefined;
+                this.moveBaseGoal = undefined;
+            }
+            props.moveBaseResultCallback(goalState);
+        };
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
         this.modeCallback = props.modeCallback;
@@ -263,13 +270,6 @@ export class Robot extends React.Component {
         this.subscribeToMode();
         this.subscribetoJointStateDiagnostics();
         this.subscribeToLeaseHolder();
-        this.subscribeToActionResult(
-            moveBaseActionName,
-            this.moveBaseResultCallback,
-            "Navigation canceled!",
-            "Navigation succeeded!",
-            "Navigation failed!"
-        );
         this.createTrajectoryClient();
         this.createMoveBaseClient();
         this.createCmdVelTopic();
@@ -1081,7 +1081,40 @@ export class Robot extends React.Component {
         // this.switchToNavigationMode();
         // this.stopExecution()
         this.moveBaseGoal = this.makeMoveBaseGoal(pose);
-        this.moveBaseClient.sendGoal(this.moveBaseGoal);
+
+        // Immediately notify operator that navigation has started executing
+        this.moveBaseResultCallback({
+            state: "Navigation executing!",
+            alert_type: "info",
+        });
+
+        this.moveBaseGoalID = this.moveBaseClient.sendGoal(
+            this.moveBaseGoal,
+            (result) => {
+                console.log("Navigation succeeded:", result);
+                this.moveBaseResultCallback({
+                    state: "Navigation succeeded!",
+                    alert_type: "success",
+                });
+            },
+            (feedback) => {
+                console.log("Navigation feedback:", feedback);
+            },
+            (error) => {
+                console.log("Navigation failed/canceled:", error);
+                if (error && (error.includes("canceled") || error.includes("cancel"))) {
+                    this.moveBaseResultCallback({
+                        state: "Navigation canceled!",
+                        alert_type: "error",
+                    });
+                } else {
+                    this.moveBaseResultCallback({
+                        state: "Navigation failed!",
+                        alert_type: "error",
+                    });
+                }
+            }
+        );
     }
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
@@ -1145,8 +1178,9 @@ export class Robot extends React.Component {
 
     stopMoveBaseClient() {
         if (!this.moveBaseClient) throw "moveBaseClient is undefined";
-        if (this.moveBaseGoal) {
-            this.moveBaseClient.cancelGoal();
+        if (this.moveBaseGoalID) {
+            this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
+            this.moveBaseGoalID = undefined;
             this.moveBaseGoal = undefined;
         }
     }
