@@ -50,6 +50,18 @@ export const movementStatesTransitory: MovementState[] = [MovementState.Executin
 
 export const movementStatesAll = Object.values(MovementState);
 
+// ROS 2 action_msgs/msg/GoalStatus values.
+// Reference: https://github.com/ros2/rcl_interfaces/blob/humble/action_msgs/msg/GoalStatus.msg
+export enum GoalStatus {
+    STATUS_UNKNOWN = 0,
+    STATUS_ACCEPTED = 1,
+    STATUS_EXECUTING = 2,
+    STATUS_CANCELING = 3,
+    STATUS_SUCCEEDED = 4,
+    STATUS_CANCELED = 5,
+    STATUS_ABORTED = 6,
+}
+
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
@@ -75,6 +87,7 @@ export class Robot extends React.Component {
     private useRightCameraService?: Service;
     private setExpandedGripperService?: Service;
     private setRunStopService?: Service;
+    private toggleBaseOnlyCollisionService?: Service;
     private robotFrameTfClient?: ROS2TFClient;
     private mapFrameTfClient?: ROS2TFClient;
     private linkGripperFingerLeftTF?: Transform;
@@ -265,7 +278,8 @@ export class Robot extends React.Component {
         this.subscribeToLeaseHolder();
         this.subscribeToActionResult(
             moveBaseActionName,
-            this.moveBaseResultCallback,
+            this.handleMoveBaseResult.bind(this),
+            "Navigation executing!",
             "Navigation canceled!",
             "Navigation succeeded!",
             "Navigation failed!"
@@ -279,6 +293,8 @@ export class Robot extends React.Component {
         this.createUseRightCameraService();
         this.createExpandedGripperService();
         this.createRunStopService();
+        this.createToggleBaseOnlyCollisionService();
+        this.toggleBaseOnlyCollision(true);
         // this.createRobotFrameTFClient();
         // this.createMapFrameTFClient();
         // this.subscribeToHeadTiltTF();
@@ -537,22 +553,22 @@ export class Robot extends React.Component {
             let status = msg.status_list.pop()?.status;
             console.log("For action ", actionName, "got status ", status);
             if (callback) {
-                if (status == 2)
+                if (status == GoalStatus.STATUS_EXECUTING)
                     callback({
                         state: executingMsg,
                         alert_type: "info",
                     });
-                else if (status == 4)
+                else if (status == GoalStatus.STATUS_SUCCEEDED)
                     callback({
                         state: successMsg,
                         alert_type: "success",
                     });
-                else if (status == 5)
+                else if (status == GoalStatus.STATUS_CANCELED)
                     callback({
                         state: cancelMsg,
                         alert_type: "error",
                     });
-                else if (status == 6)
+                else if (status == GoalStatus.STATUS_ABORTED)
                     callback({
                         state: failureMsg,
                         alert_type: "error",
@@ -582,7 +598,7 @@ export class Robot extends React.Component {
     createCmdVelTopic() {
         this.cmdVelTopic = new Topic({
             ros: this.ros,
-            name: "/cmd_vel",
+            name: "/cmd_vel_nav",
             messageType: "geometry_msgs/Twist",
         });
     }
@@ -639,6 +655,14 @@ export class Robot extends React.Component {
         this.setRunStopService = new Service({
             ros: this.ros,
             name: "/runstop_the_robot",
+            serviceType: "std_srvs/srv/SetBool",
+        });
+    }
+
+    createToggleBaseOnlyCollisionService() {
+        this.toggleBaseOnlyCollisionService = new Service({
+            ros: this.ros,
+            name: "/joystick_control",
             serviceType: "std_srvs/srv/SetBool",
         });
     }
@@ -727,6 +751,38 @@ export class Robot extends React.Component {
     setRunStop(toggle: boolean) {
         var request = { data: toggle };
         this.setRunStopService?.callService(request, (response: boolean) => { });
+    }
+
+    toggleBaseOnlyCollision(bool: boolean) {
+        var request = { data: bool };
+        this.toggleBaseOnlyCollisionService?.callService(
+            request,
+            (response: boolean) => {
+                response
+                    ? console.log(
+                        "Successfully toggled base only collision to",
+                        bool
+                    )
+                    : console.log("Failed to toggle base only collision to", bool);
+            }
+        );
+    }
+
+    private handleMoveBaseResult(goalState: ActionState) {
+        if (goalState.state === "Navigation executing!") {
+            this.toggleBaseOnlyCollision(false);
+        } else if (
+            goalState.state === "Navigation succeeded!" ||
+            goalState.state === "Navigation canceled!" ||
+            goalState.state === "Navigation failed!"
+        ) {
+            console.log(`Navigation finished with state: ${goalState.state}. Restoring base-only collision.`);
+            this.toggleBaseOnlyCollision(true);
+        }
+
+        if (this.moveBaseResultCallback) {
+            this.moveBaseResultCallback(goalState);
+        }
     }
 
     /**
@@ -1080,7 +1136,12 @@ export class Robot extends React.Component {
     executeMoveBaseGoal(pose: ROSPose) {
         // this.switchToNavigationMode();
         // this.stopExecution()
+
+         // Toggle base-only collision when publication starts (set to false to enforce full-body collision)
+        this.toggleBaseOnlyCollision(false);
+
         this.moveBaseGoal = this.makeMoveBaseGoal(pose);
+
         this.moveBaseClient.sendGoal(this.moveBaseGoal);
     }
 
