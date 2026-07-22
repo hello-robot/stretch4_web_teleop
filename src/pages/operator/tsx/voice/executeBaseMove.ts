@@ -24,7 +24,7 @@ import {
     type VoiceMoveExecutionContext,
 } from "./VoiceMoveExecutor";
 
-// Re-export type for backward compatibility with VoiceCommandAssistant.tsx and callers.
+// Re-export type for callers of the voice move execution API.
 export type { VoiceMoveExecutionContext };
 
 // ── Base-move-specific lookup tables ─────────────────────────────────────────

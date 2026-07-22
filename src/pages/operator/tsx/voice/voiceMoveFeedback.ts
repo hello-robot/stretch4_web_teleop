@@ -7,7 +7,7 @@ export type VoiceMoveFeedback =
         speed: VoiceSpeed;
         duration_ms: number;
         /** Pre-formatted user-facing distance string (e.g. "5°", "0.3 m", "1.2 rad").
-         *  When present the toast shows this instead of the computed duration. */
+         *  When present the toast shows this (compacted) instead of the computed duration. */
         distance_display?: string;
         repeated?: boolean;
     }
@@ -58,6 +58,11 @@ function formatDurationMs(ms: number): string {
     return `${ms} ms`;
 }
 
+/** Compact distance units for toast copy ("0.3 m" → "0.3m"). */
+function formatDistanceDisplay(distanceDisplay: string): string {
+    return distanceDisplay.replace(/\s+(m|rad)\b/g, "$1");
+}
+
 export type VoiceMoveToast = {
     type: "success" | "error" | "info";
     message: string;
@@ -73,11 +78,11 @@ export function voiceMoveFeedbackToToast(
             const action = ACTION_LABELS[feedback.action];
             const speed = SPEED_LABELS[feedback.speed];
             const distPart = feedback.distance_display
-                ? feedback.distance_display
+                ? `for ${formatDistanceDisplay(feedback.distance_display)}`
                 : `for ${formatDurationMs(feedback.duration_ms)}`;
             return {
                 type: "info",
-                message: `${prefix}${action}, ${speed}, ${distPart}`,
+                message: `${prefix}${action} ${speed} ${distPart}`,
             };
         }
         case "stop":

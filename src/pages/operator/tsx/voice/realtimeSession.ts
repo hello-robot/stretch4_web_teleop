@@ -403,7 +403,11 @@ export type RealtimeVoiceConnectOptions = {
     voiceProvider: ButtonFunctionProvider;
     onStatus?: (s: string) => void;
     onLog?: (s: string) => void;
-    /** Normalized mic RMS (0–1) and whether the volume gate is transmitting. */
+    /**
+     * Normalized mic RMS (0–1) and whether the RMS threshold gate is open
+     * (for UI). Uplink may still transmit while asleep via wake-sleep bypass
+     * even when gateOpen is false.
+     */
     onMicLevel?: (level: number, gateOpen: boolean) => void;
     /** Temporary POC: direct timedBaseDrive vs directional pad button path */
     voiceMoveExecutionMode?: VoiceMoveExecutionMode;
@@ -492,7 +496,7 @@ export async function connectOpenAIRealtimeVoice(
     ) {
         const baseFeedback = opts.onVoiceMoveFeedback;
         setVoiceMoveExecutionContext({
-            mode: opts.voiceMoveExecutionMode ?? "direct",
+            mode: opts.voiceMoveExecutionMode ?? "button_provider",
             onSpeedChange: opts.onVoiceSpeedChange,
             onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
             onVoiceMoveFeedback: (feedback) => {
