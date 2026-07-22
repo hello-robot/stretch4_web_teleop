@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import genUUID from '../utils/genUUID';
 import '../../css/Toasts.css';
+
+export type ToastVariant = 'voice';
 
 export interface Toast {
     id: string;
@@ -8,6 +11,29 @@ export interface Toast {
     message: string;
     duration?: number;
     closeButton?: boolean;
+    variant?: ToastVariant;
+}
+
+export type AddToastFn = (
+    type: Toast['type'],
+    message: string,
+    duration?: number,
+    variant?: ToastVariant,
+) => void;
+
+/** Toast queue state and enqueue helper for operator-level hosts. */
+export function useToasts() {
+    const [toasts, toastsSet] = useState<Toast[]>([]);
+
+    const addToast = useCallback<AddToastFn>((type, message, duration, variant) => {
+        const id = genUUID();
+        toastsSet((prevToasts) => [
+            ...prevToasts,
+            { id, type, message, duration, variant },
+        ]);
+    }, []);
+
+    return { toasts, toastsSet, addToast };
 }
 
 /**
@@ -20,7 +46,8 @@ const Toast: React.FC<Toast> = ({
     type = 'info',
     message,
     duration = 3000,
-    closeButton = false
+    closeButton = false,
+    variant,
 }) => {
     const [isVisible, setIsVisible] = useState<boolean>(true);
 
@@ -38,6 +65,8 @@ const Toast: React.FC<Toast> = ({
         }
     }, [id, duration]);
 
+    const typeClass = variant === 'voice' ? 'toast-voice' : `toast-${type}`;
+
     return (
         <AnimatePresence>
             {isVisible && (
@@ -47,7 +76,7 @@ const Toast: React.FC<Toast> = ({
                     exit={{ opacity: 0, y: -3 }}
                     transition={{ duration: 0.3 }}
                     layout
-                    className={`toast-notification toast-${type}`}
+                    className={`toast-notification ${typeClass}`}
                     aria-hidden
                 >
                     <span className="toast-message">{message}</span>
@@ -93,6 +122,7 @@ const Toasts: React.FC<ToastsProps> = ({ toasts, toastsSet }) => {
                             type={toast.type}
                             message={toast.message}
                             duration={toast.duration}
+                            variant={toast.variant}
                         />
                     </motion.div>
                 ))}
