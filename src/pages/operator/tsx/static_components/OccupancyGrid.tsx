@@ -137,13 +137,9 @@ export class OccupancyGrid extends React.Component {
     drawNavigationArrow(pulse: boolean, color: number[]) {
         var arrow = new createjs.Shape();
         var size = 40;
-        var strokeSize = 0;
-        var strokeColor = createjs.Graphics.getRGB(
-            color[0],
-            color[1],
-            color[2],
-            0.85,
-        );
+        var strokeSize = 6;
+        var cornerRadius = 10;
+        var strokeColor = createjs.Graphics.getRGB(255, 255, 255, 0.7);
         var fillColor = createjs.Graphics.getRGB(
             color[0],
             color[1],
@@ -151,17 +147,43 @@ export class OccupancyGrid extends React.Component {
             0.85,
         );
 
-        // draw the arrow
-        var graphics = new createjs.Graphics();
+        // Tip / left / right — same geometry as before, with rounded corners.
+        const vertices = [
+            { x: 0.0, y: size / 1.5 },
+            { x: -size / 2.0, y: -size / 2.0 },
+            { x: size / 2.0, y: -size / 2.0 },
+        ];
 
-        // line width
-        graphics.setStrokeStyle(strokeSize);
-        graphics.moveTo(0.0, size / 1.5);
+        var graphics = new createjs.Graphics();
+        graphics.setStrokeStyle(strokeSize, "round", "round");
         graphics.beginStroke(strokeColor);
         graphics.beginFill(fillColor);
-        graphics.lineTo(-size / 2.0, -size / 2.0);
-        graphics.lineTo(size / 2.0, -size / 2.0);
-        graphics.lineTo(0.0, size / 1.5);
+
+        const n = vertices.length;
+        for (let i = 0; i < n; i++) {
+            const curr = vertices[i];
+            const prev = vertices[(i + n - 1) % n];
+            const next = vertices[(i + 1) % n];
+            const toPrev = { x: prev.x - curr.x, y: prev.y - curr.y };
+            const toNext = { x: next.x - curr.x, y: next.y - curr.y };
+            const lenPrev = Math.hypot(toPrev.x, toPrev.y);
+            const lenNext = Math.hypot(toNext.x, toNext.y);
+            const r = Math.min(cornerRadius, lenPrev / 2, lenNext / 2);
+            const p1 = {
+                x: curr.x + (toPrev.x / lenPrev) * r,
+                y: curr.y + (toPrev.y / lenPrev) * r,
+            };
+            const p2 = {
+                x: curr.x + (toNext.x / lenNext) * r,
+                y: curr.y + (toNext.y / lenNext) * r,
+            };
+            if (i === 0) {
+                graphics.moveTo(p1.x, p1.y);
+            } else {
+                graphics.lineTo(p1.x, p1.y);
+            }
+            graphics.quadraticCurveTo(curr.x, curr.y, p2.x, p2.y);
+        }
         graphics.closePath();
         graphics.endFill();
         graphics.endStroke();
