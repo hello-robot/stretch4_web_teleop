@@ -33,6 +33,7 @@ export class RemoteRobot extends React.Component<{}, any> {
     mapPose: Transform;
     moveBaseGoalReached: boolean;
     moveBaseState?: string;
+    private mapPoseListeners: Set<(pose: Transform) => void> = new Set();
 
     constructor(props: { robotChannel: robotMessageChannel }) {
         super(props);
@@ -208,10 +209,27 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     setMapPose(pose: Transform) {
         this.mapPose = pose;
+        this.mapPoseListeners.forEach((listener) => {
+            try {
+                listener(pose);
+            } catch (err) {
+                console.warn("mapPose listener failed:", err);
+            }
+        });
     }
 
     getMapPose() {
         return this.mapPose;
+    }
+
+    /**
+     * Subscribe to map pose (amcl) updates. Returns an unsubscribe function.
+     */
+    addMapPoseListener(listener: (pose: Transform) => void): () => void {
+        this.mapPoseListeners.add(listener);
+        return () => {
+            this.mapPoseListeners.delete(listener);
+        };
     }
 
     stopTrajectory() {
