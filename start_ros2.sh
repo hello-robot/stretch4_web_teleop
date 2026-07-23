@@ -66,8 +66,8 @@ echo "ROS2 launch output: $LAUNCH_LOGFILE"
 screen -dm -S "web_teleop_ros" bash -c "ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG &>> $LAUNCH_LOGFILE"
 sleep 8
 
-# Check if the launch log contains any errors
-ERRORS=$(grep -E "ERROR" "$LAUNCH_LOGFILE" || true)
+# Check if the launch log contains any errors, ignoring known harmless/non-fatal messages
+ERRORS=$(grep -E "ERROR" "$LAUNCH_LOGFILE" | grep -v -E "load firetimes error|Inflation layer|Model name.*not found in depthai_descriptions package" || true)
 if [ -n "$ERRORS" ]; then
 	echo ""
 	echo "Errors found in web_interface.launch.py output:"

@@ -22,7 +22,6 @@ export abstract class FunctionProvider {
     public static pilotControlsCurrent: PilotButtonPadType;
     public activeButtonPadFunction: ButtonPadButton;
     public activeVelocityAction?: VelocityCommand;
-    public velocityExecutionHeartbeat?: number; // ReturnType<typeof setInterval>
     // Used for managing voice-controleld moves since
     // they are inherently *timed* moves, and therefore
     // needed in order to measure movement / stopped.
@@ -67,7 +66,6 @@ export abstract class FunctionProvider {
     public isMotionActive(): boolean {
         return (
             this.timedVoiceMoveActive ||
-            this.velocityExecutionHeartbeat !== undefined ||
             this.activeVelocityAction !== undefined
         );
     }
@@ -88,13 +86,11 @@ export abstract class FunctionProvider {
 
     public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {
         this.stopCurrentAction();
-        this.velocityExecutionHeartbeat = window.setInterval(() => {
-            this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
-                linVelX,
-                linVelY,
-                angVel
-            );
-        }, 25);
+        this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
+            linVelX,
+            linVelY,
+            angVel
+        );
     }
 
     /**
@@ -137,13 +133,11 @@ export abstract class FunctionProvider {
 
     public continuousJointMovement(jointName: ValidJoints, velocity: number) {
         this.stopCurrentAction();
-        this.velocityExecutionHeartbeat = window.setInterval(() => {
-            this.activeVelocityAction =
-                FunctionProvider.remoteRobot?.setJointVelocity(
-                    jointName,
-                    velocity
-                );
-        }, 50);
+        this.activeVelocityAction =
+            FunctionProvider.remoteRobot?.setJointVelocity(
+                jointName,
+                velocity
+            );
     }
 
     /**
@@ -211,11 +205,6 @@ export abstract class FunctionProvider {
             // which means we are unnecessarily calling it twice.
             if (send_stop_command) this.activeVelocityAction.stop();
             this.activeVelocityAction = undefined;
-        }
-
-        if (this.velocityExecutionHeartbeat) {
-            clearInterval(this.velocityExecutionHeartbeat);
-            this.velocityExecutionHeartbeat = undefined;
         }
 
         /**

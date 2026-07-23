@@ -97,8 +97,10 @@ export class Robot extends React.Component {
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
-    private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+    private onPreemptedCallback?: () => void;
     private subscriptions: Topic[] = [];
+    private baseVelocityInterval?: ReturnType<typeof setInterval>;
+    private jointVelocityInterval?: ReturnType<typeof setInterval>;
     private stretchToolParam: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
@@ -120,7 +122,7 @@ export class Robot extends React.Component {
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
-        leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+        onPreemptedCallback: () => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -134,7 +136,7 @@ export class Robot extends React.Component {
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
-        this.leaseStatusCallback = props.leaseStatusCallback;
+        this.onPreemptedCallback = props.onPreemptedCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -388,9 +390,7 @@ export class Robot extends React.Component {
         modeTopic.subscribe((msg) => {
             if (this.modeCallback) this.modeCallback(msg.data);
         });
-    }
-
-    subscribeToLeaseHolder() {
+    }    subscribeToLeaseHolder() {
         const leaseHolderTopic: Topic = new Topic({
             ros: this.ros,
             name: "/server_lease_holder",
@@ -401,18 +401,34 @@ export class Robot extends React.Component {
         leaseHolderTopic.subscribe((message: Message) => {
             const status = message as any;
             let leaseHolder = "none";
+            let leaseExpired = true;
             if (status && status.values) {
                 const holderPair = status.values.find((pair: any) => pair.key === "lease_holder");
                 if (holderPair) {
                     leaseHolder = holderPair.value;
                 }
+                const expiredPair = status.values.find((pair: any) => pair.key === "expired");
+                if (expiredPair) {
+                    leaseExpired = expiredPair.value.toLowerCase() === "true";
+                }
             }
-            const isDriverHolding = leaseHolder === "ros2_driver" || leaseHolder === "None" || leaseHolder === "none";
-            if (this.leaseStatusCallback) {
-                this.leaseStatusCallback(leaseHolder, isDriverHolding);
+            
+            const isDriver = leaseHolder === "ros2_driver" || leaseHolder === "None" || leaseHolder === "none";
+            
+            // We ONLY preempt and stop local commands if the lease is actively held by some OTHER node.
+            // That means: (NOT driver) AND (NOT expired).
+            const isPreemptedByOther = !isDriver && !leaseExpired;
+
+            if (isPreemptedByOther) {
+                console.log("Lease actively held by another node (holder: " + leaseHolder + "). Actively stopping local velocity heartbeats.");
+                this.stopExecution(false);
+                if (this.onPreemptedCallback) {
+                    this.onPreemptedCallback();
+                }
             }
         });
     }
+
 
     subscribetoJointStateDiagnostics() {
         const jointStateDiagnosticsTopic: Topic = new Topic({
@@ -790,6 +806,12 @@ export class Robot extends React.Component {
     }): void => {
         this.switchToVelocityMode();
         this.stopExecution();
+        
+        if (this.baseVelocityInterval) {
+            clearInterval(this.baseVelocityInterval);
+            this.baseVelocityInterval = undefined;
+        }
+
         let twist = {
             linear: {
                 x: props.linVelX,
@@ -804,20 +826,44 @@ export class Robot extends React.Component {
         };
 
         if (!this.cmdVelTopic) throw "cmdVelTopic is undefined";
-        console.log("Publishing base velocity twist message");
-        this.cmdVelTopic.publish(twist);
+
+        if (props.linVelX !== 0 || props.linVelY !== 0 || props.angVel !== 0) {
+            console.log("Publishing base velocity twist message");
+            this.cmdVelTopic.publish(twist);
+            this.baseVelocityInterval = setInterval(() => {
+                this.cmdVelTopic!.publish(twist);
+            }, 25);
+        } else {
+            console.log("Publishing base velocity stop twist message");
+            this.cmdVelTopic.publish(twist);
+        }
     };
 
     setJointVelocity(jointName: ValidJoints, velocity: number) {
         this.switchToVelocityMode();
         this.stopExecution();
+
+        if (this.jointVelocityInterval) {
+            clearInterval(this.jointVelocityInterval);
+            this.jointVelocityInterval = undefined;
+        }
+
         let jointVelocities = {
             joint_names: [jointName],
             velocities: [velocity],
-            duration: 0.05  // multiple of a heartbeat (0.025s)
+            duration: 0.1  // 100ms duration per command
         };
+
         if (!this.jointVelTopic) throw "jointVelTopic is undefined";
-        this.jointVelTopic.publish(jointVelocities);
+
+        if (velocity !== 0) {
+            this.jointVelTopic.publish(jointVelocities);
+            this.jointVelocityInterval = setInterval(() => {
+                this.jointVelTopic!.publish(jointVelocities);
+            }, 50);
+        } else {
+            this.jointVelTopic.publish(jointVelocities);
+        }
     }
 
     makeIncrementalMoveGoal(
@@ -1134,6 +1180,22 @@ export class Robot extends React.Component {
     stopExecution(stop_trajectory_client: boolean = false) {
         if (stop_trajectory_client) this.stopTrajectoryClient();
         this.stopAutonomousClients();
+
+        if (this.baseVelocityInterval) {
+            clearInterval(this.baseVelocityInterval);
+            this.baseVelocityInterval = undefined;
+            if (this.cmdVelTopic) {
+                this.cmdVelTopic.publish({
+                    linear: { x: 0, y: 0, z: 0 },
+                    angular: { x: 0, y: 0, z: 0 },
+                });
+            }
+        }
+
+        if (this.jointVelocityInterval) {
+            clearInterval(this.jointVelocityInterval);
+            this.jointVelocityInterval = undefined;
+        }
     }
 
     stopAutonomousClients() {

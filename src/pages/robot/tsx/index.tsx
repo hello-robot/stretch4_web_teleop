@@ -45,7 +45,7 @@ export const robot = new Robot({
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
-    leaseStatusCallback: forwardLeaseStatus,
+    onPreemptedCallback: forwardPreempted,
 });
 
 export let connection: WebRTCConnection;
@@ -127,6 +127,14 @@ function forwardActionState(state: ActionState, type: string) {
     } as ActionStateMessage);
 }
 
+function forwardPreempted() {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "actionPreempted",
+    } as ActionPreemptedMessage);
+}
+
 function forwardMode(mode: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
@@ -152,16 +160,6 @@ function forwardIsRunStopped(isRunStopped: boolean) {
         type: "isRunStopped",
         enabled: isRunStopped,
     } as IsRunStoppedMessage);
-}
-
-function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
-    if (!connection) throw "WebRTC connection undefined!";
-
-    connection.sendData({
-        type: "leaseStatus",
-        holder: holder,
-        isDriverHolding: isDriverHolding,
-    } as LeaseStatusMessage);
 }
 
 function forwardStretchTool(value: string) {
@@ -302,11 +300,13 @@ function handleMessage(message: WebRTCMessage) {
 }
 
 function disconnectFromRobot() {
+    robot.stopExecution(true);
     robot.closeROSConnection();
     connection.hangup();
 }
 
 window.onbeforeunload = () => {
+    robot.stopExecution(true);
     robot.closeROSConnection();
     connection.hangup();
 };
