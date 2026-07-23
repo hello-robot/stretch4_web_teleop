@@ -9,6 +9,13 @@ import {
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -30,6 +37,7 @@ import {
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
     VOICE_MACRO_NAMES,
+    VOICE_SCENE_NAMES,
     VOICE_WAKE_PHRASE,
     VOICE_SLEEP_PHRASE,
     VOICE_WAKE_PHRASE_DISPLAY,
@@ -49,6 +57,13 @@ export {
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -70,6 +85,7 @@ export {
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
     VOICE_MACRO_NAMES,
+    VOICE_SCENE_NAMES,
     VOICE_WAKE_PHRASE,
     VOICE_SLEEP_PHRASE,
     VOICE_WAKE_PHRASE_DISPLAY,
@@ -136,6 +152,36 @@ export type ExecuteToolResult =
 
 /** All valid execute_macro.action values. */
 export type MacroMoveAction = (typeof VOICE_MACRO_NAMES)[number];
+
+/** All valid switch_scene.scene values. */
+export type VoiceSceneName = (typeof VOICE_SCENE_NAMES)[number];
+
+/** All valid set_saved_locations_modal.action values. */
+export type SavedLocationsModalAction =
+    (typeof SAVED_LOCATIONS_MODAL_ACTIONS)[number];
+
+/** Result of set_saved_locations_modal for toast UX. */
+export type SetSavedLocationsModalResult = {
+    ok: boolean;
+    detail: string;
+};
+
+/** All valid control_autonav.action values. */
+export type ControlAutoNavAction = (typeof AUTONAV_NAV_ACTIONS)[number];
+
+/** Result of control_autonav for toast UX. */
+export type ControlAutoNavResult = {
+    ok: boolean;
+    detail: string;
+};
+
+/** Result of load_autonav_location for toast UX. */
+export type LoadAutoNavLocationResult = {
+    ok: boolean;
+    detail: string;
+    /** Resolved saved pose name when ok. */
+    label?: string;
+};
 
 /**
  * Suppress duplicate execute_base_move with identical args within this window (echo safety net).

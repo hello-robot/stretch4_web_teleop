@@ -19,11 +19,23 @@ import { setVoiceStatus } from "../voice/voiceStatusStore";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
+    type ControlAutoNavAction,
+    type ControlAutoNavResult,
+    type LoadAutoNavLocationResult,
+    type SavedLocationsModalAction,
+    type SetSavedLocationsModalResult,
+    type VoiceSceneName,
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
 import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
+import type { SaveMapLocationResult } from "../voice/executeSaveMapLocation";
 import type { AddToastFn } from "../layout_components/Toasts";
+
+const SCENE_TOAST_LABELS: Record<VoiceSceneName, string> = {
+    pilot: "Switching to Pilot",
+    autonav: "Switching to AutoNav",
+};
 
 /** Explicit check to make sure operator is using
  * LAN/ngrok (LocalStorage + socket.io) and not cloud (Firebase) */
@@ -46,6 +58,14 @@ export type VoiceCommandAssistantProps = {
     onVelocityScaleApplied: (scale: number) => void;
     setActionMode: (mode: ActionModeType) => void;
     addToast: AddToastFn;
+    onSwitchScene: (scene: VoiceSceneName) => void;
+    onSetSavedLocationsModal: (
+        action: SavedLocationsModalAction,
+    ) => SetSavedLocationsModalResult;
+    onControlAutoNav: (action: ControlAutoNavAction) => ControlAutoNavResult;
+    onCancelAutoNavOnStop: () => ControlAutoNavResult;
+    onGetAutoNavSavedPoseNames: () => string[] | null;
+    onLoadAutoNavLocation: (poseName: string) => LoadAutoNavLocationResult;
 };
 
 /** OpenAI speech-to-speech voice session controller (Realtime WebRTC). */
@@ -53,6 +73,12 @@ export const VoiceCommandAssistant = ({
     onVelocityScaleApplied,
     setActionMode,
     addToast,
+    onSwitchScene,
+    onSetSavedLocationsModal,
+    onControlAutoNav,
+    onCancelAutoNavOnStop,
+    onGetAutoNavSavedPoseNames,
+    onLoadAutoNavLocation,
 }: VoiceCommandAssistantProps) => {
     const sessionRef =
         useRef<ActiveRealtimeVoiceSession | null>(null);
@@ -119,6 +145,89 @@ export const VoiceCommandAssistant = ({
         [addToast],
     );
 
+    const handleSwitchScene = useCallback(
+        (scene: VoiceSceneName) => {
+            onSwitchScene(scene);
+            addToast("info", SCENE_TOAST_LABELS[scene], undefined, "voice");
+        },
+        [onSwitchScene, addToast],
+    );
+
+    const handleSaveMapLocationResult = useCallback(
+        (result: SaveMapLocationResult) => {
+            if (result.ok) {
+                const label = result.label ?? "";
+                addToast(
+                    "info",
+                    `Location "${label}" added.`,
+                    undefined,
+                    "voice",
+                );
+                return;
+            }
+            addToast("error", result.detail, undefined, "voice");
+        },
+        [addToast],
+    );
+
+    const handleSetSavedLocationsModal = useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            const result = onSetSavedLocationsModal(action);
+            if (!result.ok) {
+                addToast("error", result.detail, undefined, "voice");
+            }
+            return result;
+        },
+        [onSetSavedLocationsModal, addToast],
+    );
+
+    const handleControlAutoNav = useCallback(
+        (action: ControlAutoNavAction): ControlAutoNavResult => {
+            const result = onControlAutoNav(action);
+            if (!result.ok) {
+                addToast("error", result.detail, undefined, "voice");
+            } else {
+                addToast(
+                    "info",
+                    action === "start"
+                        ? "Starting AutoNav"
+                        : "Cancelling AutoNav",
+                    undefined,
+                    "voice",
+                );
+            }
+            return result;
+        },
+        [onControlAutoNav, addToast],
+    );
+
+    /** Bare stop: cancel AutoNav only when navigating; never toast failures. */
+    const handleCancelAutoNavOnStop = useCallback((): ControlAutoNavResult => {
+        const result = onCancelAutoNavOnStop();
+        if (result.ok) {
+            addToast("info", "Cancelling AutoNav", undefined, "voice");
+        }
+        return result;
+    }, [onCancelAutoNavOnStop, addToast]);
+
+    const handleLoadAutoNavLocation = useCallback(
+        (poseName: string): LoadAutoNavLocationResult => {
+            const result = onLoadAutoNavLocation(poseName);
+            // Success only — unknown/ambiguous/prefix failures stay silent.
+            if (result.ok) {
+                const label = result.label ?? poseName;
+                addToast(
+                    "info",
+                    `Selected "${label}"`,
+                    undefined,
+                    "voice",
+                );
+            }
+            return result;
+        },
+        [onLoadAutoNavLocation, addToast],
+    );
+
     const connect = useCallback(async () => {
         if (phase === "connecting" || phase === "live") {
             return;
@@ -131,6 +240,13 @@ export const VoiceCommandAssistant = ({
                 onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
                 onVoiceMoveFeedback,
+                onSwitchScene: handleSwitchScene,
+                onSaveMapLocationResult: handleSaveMapLocationResult,
+                onSetSavedLocationsModal: handleSetSavedLocationsModal,
+                onControlAutoNav: handleControlAutoNav,
+                onCancelAutoNavOnStop: handleCancelAutoNavOnStop,
+                onGetAutoNavSavedPoseNames,
+                onLoadAutoNavLocation: handleLoadAutoNavLocation,
                 onListeningState: (listeningState) => {
                     setVoiceStatus({ listeningState });
                 },
@@ -172,6 +288,13 @@ export const VoiceCommandAssistant = ({
         onVoiceSpeedChange,
         onVoicePressAndHoldRequired,
         onVoiceMoveFeedback,
+        handleSwitchScene,
+        handleSaveMapLocationResult,
+        handleSetSavedLocationsModal,
+        handleControlAutoNav,
+        handleCancelAutoNavOnStop,
+        onGetAutoNavSavedPoseNames,
+        handleLoadAutoNavLocation,
     ]);
 
     const canConnectVoice =

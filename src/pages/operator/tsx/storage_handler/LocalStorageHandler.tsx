@@ -17,6 +17,8 @@ export class LocalStorageHandler extends StorageHandler {
     public static MAP_POSE_NAMES_KEY = "user_map_pose_names";
     public static MAP_POSE_TYPES_KEY = "user_map_pose_types";
     public static POSE_RECORDING_NAMES_KEY = "user_pose_recording_names";
+    /** Dispatched on window after map pose create/update/delete/rename. */
+    public static MAP_POSES_CHANGED_EVENT = "stretch:map-poses-changed";
 
     constructor(onStorageHandlerReadyCallback: () => void) {
         super(onStorageHandlerReadyCallback);
@@ -95,6 +97,9 @@ export class LocalStorageHandler extends StorageHandler {
             JSON.stringify(poseTypes)
         );
         localStorage.setItem("map_" + poseName, JSON.stringify(pose));
+        window.dispatchEvent(
+            new CustomEvent(LocalStorageHandler.MAP_POSES_CHANGED_EVENT),
+        );
     }
 
     public getMapPoseNames(): string[] {
@@ -145,6 +150,9 @@ export class LocalStorageHandler extends StorageHandler {
             LocalStorageHandler.MAP_POSE_TYPES_KEY,
             JSON.stringify(poseTypes)
         );
+        window.dispatchEvent(
+            new CustomEvent(LocalStorageHandler.MAP_POSES_CHANGED_EVENT),
+        );
     }
 
     /**
@@ -174,6 +182,9 @@ export class LocalStorageHandler extends StorageHandler {
             JSON.stringify(poseTypes)
         );
         localStorage.setItem("map_" + poseNameNew, JSON.stringify(pose));
+        window.dispatchEvent(
+            new CustomEvent(LocalStorageHandler.MAP_POSES_CHANGED_EVENT),
+        );
     }
 
     private readRecordingEntries(): RecordingListEntry[] {

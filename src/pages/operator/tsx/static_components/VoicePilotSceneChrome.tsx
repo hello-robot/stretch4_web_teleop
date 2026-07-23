@@ -8,8 +8,14 @@ type VoicePilotSceneChromeProps = {
     fallbackName: string | undefined;
 };
 
+/** Scene ids that show "Voice …" chrome while the Realtime session is connected. */
+const VOICE_SCENE_LABELS: Record<string, string> = {
+    "pilot-mode": "Voice Pilot",
+    autonav: "Voice AutoNav",
+};
+
 /**
- * Pilot scene-button label + fancy-border mic glow.
+ * Scene-button label + fancy-border mic glow for voice-enabled scenes.
  * Owns voice chrome so FooterGlobal stays layout-only.
  */
 const VoicePilotSceneChrome: React.FC<VoicePilotSceneChromeProps> = ({
@@ -17,20 +23,20 @@ const VoicePilotSceneChrome: React.FC<VoicePilotSceneChromeProps> = ({
     fallbackName,
 }) => {
     const { connected, micGateOpen, listeningState } = useVoiceStatus();
-    const showVoicePilot =
-        sceneSelected === "pilot-mode" && connected;
-    const showWaveform = showVoicePilot && listeningState === "awake";
+    const voiceLabel = VOICE_SCENE_LABELS[sceneSelected];
+    const showVoiceChrome = Boolean(voiceLabel) && connected;
+    const showWaveform = showVoiceChrome && listeningState === "awake";
     const showMicGateGlow = showWaveform && micGateOpen;
 
     return (
         <>
             <span className="scene-menu-button__label">
-                {showVoicePilot ? (
+                {showVoiceChrome ? (
                     <>
                         <AnimatePresence initial={false} mode="popLayout">
                             {showWaveform ? (
                                 <motion.span
-                                    key="voice-pilot-mic"
+                                    key="voice-scene-mic"
                                     className="voice-pilot-mic-icon-wrap"
                                     initial={{ opacity: 0, scaleX: 0 }}
                                     animate={{ opacity: 1, scaleX: 1 }}
@@ -51,7 +57,7 @@ const VoicePilotSceneChrome: React.FC<VoicePilotSceneChromeProps> = ({
                                 ease: "easeOut",
                             }}
                         >
-                            Voice Pilot
+                            {voiceLabel}
                         </motion.span>
                     </>
                 ) : (
