@@ -414,13 +414,18 @@ export class Robot extends React.Component {
         leaseHolderTopic.subscribe((message: Message) => {
             const status = message as any;
             let leaseHolder = "none";
+            let leaseExpired = false;
             if (status && status.values) {
                 const holderPair = status.values.find((pair: any) => pair.key === "lease_holder");
                 if (holderPair) {
                     leaseHolder = holderPair.value;
                 }
+                const expiredPair = status.values.find((pair: any) => pair.key === "lease_expired");
+                if (expiredPair) {
+                    leaseExpired = expiredPair.value.toLowerCase() === "true";
+                }
             }
-            const isDriverHolding = leaseHolder === "ros2_driver" || leaseHolder === "None" || leaseHolder === "none";
+            const isDriverHolding = leaseHolder === "ros2_driver" || leaseExpired;
             if (this.leaseStatusCallback) {
                 this.leaseStatusCallback(leaseHolder, isDriverHolding);
             }
