@@ -68,6 +68,12 @@ const SAVE_MAP_LOCATION = "save_map_location";
 /** Open or close the Saved Locations modal (AutoNav only). */
 const SET_SAVED_LOCATIONS_MODAL = "set_saved_locations_modal";
 
+/** Start or cancel AutoNav navigation (AutoNav only; requires a loaded pose for start). */
+const CONTROL_AUTONAV = "control_autonav";
+
+/** Load a Saved Location pose in AutoNav (requires "Navigate to …" / "Navigate to the …" utterance). */
+const LOAD_AUTONAV_LOCATION = "load_autonav_location";
+
 /** Names of available macros (matches voiceMacros.ts on the client). */
 const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
 
@@ -76,6 +82,9 @@ const VOICE_SCENE_NAMES = ["pilot", "autonav"];
 
 /** Valid set_saved_locations_modal.action values. */
 const SAVED_LOCATIONS_MODAL_ACTIONS = ["open", "close"];
+
+/** Valid control_autonav.action values. */
+const AUTONAV_NAV_ACTIONS = ["start", "cancel"];
 
 /** All voice Realtime tools registered in the session payload and executed on the client. */
 const VOICE_TOOLS = [
@@ -87,6 +96,8 @@ const VOICE_TOOLS = [
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
 ];
 
 // ── Base move action enums ────────────────────────────────────────────────────
@@ -202,9 +213,12 @@ module.exports = {
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
 
     VOICE_TOOLS,
     BASE_TRANSLATE_ACTIONS,
