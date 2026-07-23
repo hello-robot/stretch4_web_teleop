@@ -12,7 +12,10 @@ import {
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -57,7 +60,10 @@ export {
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -158,6 +164,23 @@ export type SavedLocationsModalAction =
 export type SetSavedLocationsModalResult = {
     ok: boolean;
     detail: string;
+};
+
+/** All valid control_autonav.action values. */
+export type ControlAutoNavAction = (typeof AUTONAV_NAV_ACTIONS)[number];
+
+/** Result of control_autonav for toast UX. */
+export type ControlAutoNavResult = {
+    ok: boolean;
+    detail: string;
+};
+
+/** Result of load_autonav_location for toast UX. */
+export type LoadAutoNavLocationResult = {
+    ok: boolean;
+    detail: string;
+    /** Resolved saved pose name when ok. */
+    label?: string;
 };
 
 /**

@@ -36,9 +36,12 @@ const {
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_SLEEP_PHRASE_DISPLAY,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
@@ -141,6 +144,7 @@ function buildRealtimeVoiceSessionPayload() {
                 // ── Stop / repeat ────────────────────────────────────────────────────────────────────────────
                 `When the user wants to halt ANY motion ("stop", "wait", "freeze", "do not move", "cut that", "enough", "pause", "cancel"), call tool \`${STOP_MOTION}\` with no arguments — not a movement tool.`,
                 `Call \`${STOP_MOTION}\` IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
+                `The client also cancels active AutoNav navigation when \`${STOP_MOTION}\` runs — bare "stop" is enough while AutoNav is navigating. Explicit "AutoNav stop" / "AutoNav cancel" may still use \`${CONTROL_AUTONAV}\` with \`action="cancel"\`.`,
                 `When the user wants to repeat the last base move ("again", "same thing", "one more time", "do that again"), call tool \`${REPEAT_BASE_MOVE}\` with no arguments — not \`${EXECUTE_BASE_MOVE}\` with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
 
                 // ── Macro actions ──────────────────────────────────────────────────────────────────────────
@@ -151,8 +155,9 @@ function buildRealtimeVoiceSessionPayload() {
                 // ── Scene switching ────────────────────────────────────────────────────────────────────────
                 `When the user wants to change the operator UI scene (not robot motion), call tool \`${SWITCH_SCENE}\` with \`scene\`. Do not call a movement tool. Call this tool even if the utterance is only a scene switch.`,
                 `\`scene="pilot"\`: switch to Pilot mode. Phrases: "switch to Pilot", "go to Pilot", "open Pilot", "Pilot mode", "pilot".`,
-                `\`scene="autonav"\`: switch to AutoNav. Phrases: "switch to AutoNav", "go to AutoNav", "open AutoNav", "AutoNav mode", "autonav".`,
-                `Speech-to-text often mishears AutoNav as "auto now", "auto nav", "auto-nav", or "auto nap" — treat those as \`scene="autonav"\`.`,
+                `\`scene="autonav"\`: switch to AutoNav scene ONLY for bare scene switches: "switch to AutoNav", "go to AutoNav", "open AutoNav", "AutoNav mode", or a lone "autonav" / "auto-nav" with no place name after it.`,
+                `Speech-to-text often mishears AutoNav as "auto now", "auto nav", "auto-nav", or "auto nap". For bare scene switches, treat those as \`scene="autonav"\`.`,
+                `CRITICAL: If the utterance is "Navigate to …" / "Navigate to the …" / "navigated to …" followed by a place name, do NOT call \`${SWITCH_SCENE}\` — call \`${LOAD_AUTONAV_LOCATION}\` instead.`,
 
                 // ── Save map location ──────────────────────────────────────────────────────────────────────
                 `When the user wants to save or bookmark the robot's current place with a name, call tool \`${SAVE_MAP_LOCATION}\` with \`label\`. Do not call a movement tool. Do not ask them to use the Add Location UI.`,
@@ -163,8 +168,22 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user wants to open or close the Saved Locations list/modal (not change scenes), call tool \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action\`. Do not call a movement tool. Do not use \`${SWITCH_SCENE}\` for this.`,
                 `\`action="open"\`: Phrases: "open saved locations", "show saved locations", "open the locations list", "show my locations".`,
                 `\`action="close"\`: Phrases: "close saved locations", "hide saved locations", "close the locations list", "dismiss saved locations".`,
-                `CRITICAL DISAMBIGUATION: "open AutoNav" / "go to AutoNav" → \`${SWITCH_SCENE}\` with \`scene="autonav"\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action="open"\`.`,
+                `CRITICAL DISAMBIGUATION: "open AutoNav" / "go to AutoNav" (no place) → \`${SWITCH_SCENE}\` with \`scene="autonav"\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action="open"\`. "Navigate to the living room" / "Navigate to middle of living room" → \`${LOAD_AUTONAV_LOCATION}\`, never \`${SWITCH_SCENE}\`.`,
                 `The client rejects this tool if the user is not on AutoNav — do not call \`${SWITCH_SCENE}\` as a substitute.`,
+
+                // ── AutoNav start / cancel ─────────────────────────────────────────────────────────────────
+                `When the user wants to start or cancel AutoNav navigation (not change scenes, not halt Pilot motion), call tool \`${CONTROL_AUTONAV}\` with \`action\`. Do not call a movement tool. Do not use \`${SWITCH_SCENE}\` or \`${STOP_MOTION}\` for this.`,
+                `\`action="start"\`: Phrases: "AutoNav start", "start AutoNav", "start navigation", "start autonav". Requires a loaded pose/goal; the client rejects if none is loaded.`,
+                `\`action="cancel"\`: Phrases: "AutoNav cancel", "AutoNav stop", "cancel AutoNav", "stop AutoNav", "cancel navigation", "stop autonav". Cancels the current AutoNav goal.`,
+                `CRITICAL DISAMBIGUATION: "open AutoNav" / "go to AutoNav" (no place) → \`${SWITCH_SCENE}\`. "AutoNav start" → \`${CONTROL_AUTONAV}\` start. "AutoNav cancel" / "AutoNav stop" → \`${CONTROL_AUTONAV}\` cancel. "Navigate to …" / "Navigate to the …" → \`${LOAD_AUTONAV_LOCATION}\`. Bare "stop" / "cancel" → \`${STOP_MOTION}\` (also cancels AutoNav if navigating).`,
+                `The client rejects this tool if the user is not on AutoNav — do not call \`${SWITCH_SCENE}\` as a substitute.`,
+
+                // ── Load Saved Location ────────────────────────────────────────────────────────────────────
+                `When the user wants to load a Saved Location pose (not start navigating, not change scenes), call tool \`${LOAD_AUTONAV_LOCATION}\` with \`label\`. Do not call a movement tool. Do not call \`${CONTROL_AUTONAV}\` start. Do not call \`${SWITCH_SCENE}\`.`,
+                `ONLY call this tool when the utterance has the required prefix "Navigate to …" or "Navigate to the …" (STT may hear "navigated to …"). Examples: "Navigate to the office", "Navigate to middle of living room", "Navigate to the front of the kitchen island".`,
+                `Do NOT call this tool for "go to the office", "take me to the kitchen", "AutoNav to the office", or any phrase missing "Navigate to".`,
+                `\`label\` must be the place name only after the prefix (e.g. "office", "middle of living room", "front of the kitchen island"). This only loads the pose/goal marker; the user must say "AutoNav start" separately to navigate.`,
+                `CRITICAL: "Navigate to the living room" → \`${LOAD_AUTONAV_LOCATION}\` with \`label="living room"\`. "Navigate to middle of living room" → \`label="middle of living room"\`. NEVER \`${SWITCH_SCENE}\` for these. Bare "open AutoNav" (no place) → \`${SWITCH_SCENE}\`. "AutoNav start" → \`${CONTROL_AUTONAV}\` start.`,
 
             ].join(" "),
             tools: [
@@ -302,7 +321,7 @@ function buildRealtimeVoiceSessionPayload() {
                     type: "function",
                     name: SWITCH_SCENE,
                     description:
-                        "Switch the operator UI between Pilot and AutoNav scenes. Use for requests like 'switch to AutoNav' or 'go to Pilot'.",
+                        "Switch the operator UI between Pilot and AutoNav scenes. Use for bare scene switches like 'switch to AutoNav' or 'go to Pilot'. Do NOT use for 'Navigate to …' / 'Navigate to the …' place phrases — those use load_autonav_location.",
                     parameters: {
                         type: "object",
                         properties: {
@@ -350,6 +369,43 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                         },
                         required: ["action"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: CONTROL_AUTONAV,
+                    description:
+                        "Start or cancel AutoNav navigation when a pose/goal is loaded. Use for 'AutoNav start', 'AutoNav cancel', or 'AutoNav stop'. Bare 'stop' should use stop_motion (client also cancels AutoNav if navigating). Do not use for switching Pilot/AutoNav scenes.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: AUTONAV_NAV_ACTIONS,
+                                description:
+                                    "Whether to start navigation to the loaded pose/goal or cancel the current AutoNav goal.",
+                            },
+                        },
+                        required: ["action"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: LOAD_AUTONAV_LOCATION,
+                    description:
+                        "Load a Saved Location pose/goal marker in AutoNav. Use for 'Navigate to …' or 'Navigate to the …' plus a place name (e.g. office, middle of living room). Does not start navigation. Never use switch_scene for these phrases.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            label: {
+                                type: "string",
+                                description:
+                                    "Place name after 'Navigate to' / 'Navigate to the' (e.g. office, middle of living room).",
+                            },
+                        },
+                        required: ["label"],
                         additionalProperties: false,
                     },
                 },
