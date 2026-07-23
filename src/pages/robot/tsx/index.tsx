@@ -261,7 +261,7 @@ function amclPoseMovedEnough(transform: Transform): boolean {
     const dist = Math.hypot(dx, dy);
     let dyaw = Math.abs(
         yawFromQuaternion(transform.rotation) -
-        yawFromQuaternion(lastAmclPoseSent.rotation),
+            yawFromQuaternion(lastAmclPoseSent.rotation),
     );
     if (dyaw > Math.PI) {
         dyaw = 2 * Math.PI - dyaw;

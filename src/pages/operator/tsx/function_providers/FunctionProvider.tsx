@@ -82,8 +82,10 @@ export abstract class FunctionProvider {
         return FunctionProvider.remoteRobot !== undefined;
     }
 
+    /** True while a timed voice move or continuous velocity heartbeat is active. */
     public isMotionActive(): boolean {
         return (
+            this.timedVoiceMoveActive ||
             this.velocityExecutionHeartbeat !== undefined ||
             this.activeVelocityAction !== undefined
         );
@@ -164,24 +166,34 @@ export abstract class FunctionProvider {
     }
 
     /**
-     * Move a joint incrementally using the trajectory action server.
-     * Stops any ongoing velocity or trajectory action first.
+     * Move a joint continuously for durationMs then stop.
+     * Uses the same timedVoiceMoveActive guard as timedBaseDrive so base and
+     * joint timed moves are mutually exclusive.
      *
      * @param jointName the joint to actuate
-     * @param increment the incremental distance/rotation (m or rad)
+     * @param velocity  signed velocity in joint units/s (m/s for linear, rad/s for rotary)
+     * @param durationMs how long to apply velocity (clamped internally)
      * @returns false if no robot attached
      */
-    public incrementalJointMove(
+    public timedJointMove(
         jointName: ValidJoints,
-        increment: number,
+        velocity: number,
+        durationMs: number,
     ): boolean {
         if (!FunctionProvider.remoteRobot) {
             return false;
         }
 
+        const clampedMs = clampDurationMs(durationMs);
+
         this.stopCurrentAction(true);
-        this.activeVelocityAction =
-            FunctionProvider.remoteRobot.incrementalMove(jointName, increment);
+        this.timedVoiceMoveActive = true;
+        this.continuousJointMovement(jointName, velocity);
+        this.timedVoiceMoveTimer = setTimeout(() => {
+            this.timedVoiceMoveTimer = undefined;
+            this.timedVoiceMoveActive = false;
+            this.stopCurrentAction(true);
+        }, clampedMs);
         return true;
     }
 
@@ -225,5 +237,14 @@ export abstract class FunctionProvider {
             this.velocityExecutionHeartbeat = undefined;
         }
 
+        /**
+         * clearTimeout() to prevent the timed voice move
+         * from being executed.
+         */
+        if (this.timedVoiceMoveTimer) {
+            clearTimeout(this.timedVoiceMoveTimer);
+            this.timedVoiceMoveTimer = undefined;
+        }
+        this.timedVoiceMoveActive = false;
     }
 }

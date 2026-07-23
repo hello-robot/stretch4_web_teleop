@@ -6,6 +6,7 @@ import { Pose, Quaternion, Transform, Vector3 } from "roslib";
 import { ROSOccupancyGrid, ROSPoint, ROSPose } from "shared/util";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { MapFunctions } from "../layout_components/AutoNav";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import hexToRgbArray from "../utils/hex-to-rgb-array";
 
 /** Arrow size in map coords. */
