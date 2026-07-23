@@ -5,6 +5,7 @@ import createjs from "createjs-module";
 import { ROSOccupancyGrid, ROSPoint, ROSPose } from "shared/util";
 import { Pose, Vector3, Quaternion, Transform } from "roslib";
 import { MapFunctions } from "../layout_components/AutoNav";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import hexToRgbArray from "../utils/hex-to-rgb-array";
 
 /**
@@ -30,8 +31,12 @@ export class OccupancyGrid extends React.Component {
     private map: ROSOccupancyGrid;
     // The createjs shape for the goal marker
     private goalMarker?: createjs.Shape;
-    // Interval for checking if the goal is reached
-    private getGoalReached?: NodeJS.Timeout;
+    // The createjs shape for the robot's current pose
+    private robotMarker?: createjs.Shape;
+    // Fallback poll when amclPose events are sparse
+    private setPoseInterval?: ReturnType<typeof setInterval>;
+    // Unsubscribe from RemoteRobot map-pose listeners
+    private mapPoseUnsubscribe?: () => void;
     // List of saved pose markers (shapes and labels)
     private savedPoseMarkers: {
         circle: createjs.Shape;
@@ -416,24 +421,64 @@ export class OccupancyGrid extends React.Component {
     }
 
     /**
-     * Adds a marker for the robot's current pose and updates it periodically.
+     * Apply a map pose to the robot marker (null-safe).
+     */
+    updateRobotMarker(pose?: Transform | null) {
+        if (!this.robotMarker || !pose?.translation || !pose?.rotation) {
+            return;
+        }
+        try {
+            const globalCoord = this.rosToGlobal(pose.translation);
+            this.robotMarker.x = globalCoord.x;
+            this.robotMarker.y = globalCoord.y;
+            const theta = this.rosQuaternionToGlobalTheta(pose.rotation);
+            this.robotMarker.rotation = theta - 90.0;
+            this.robotMarker.scaleX = 1.0 / this.rootObject.scaleX;
+            this.robotMarker.scaleY = 1.0 / this.rootObject.scaleY;
+            this.robotMarker.visible = true;
+            // Keep the robot marker above goal / saved-pose markers.
+            const top = this.rootObject.numChildren - 1;
+            if (top >= 0) {
+                this.rootObject.setChildIndex(this.robotMarker, top);
+            }
+            this.rootObject.update();
+        } catch (err) {
+            console.warn("updateRobotMarker failed:", err);
+        }
+    }
+
+    private trySubscribeMapPoseUpdates() {
+        if (this.mapPoseUnsubscribe) {
+            return;
+        }
+        const unsubscribe = FunctionProvider.subscribeMapPose((pose) => {
+            this.updateRobotMarker(pose);
+        });
+        if (!unsubscribe) {
+            return;
+        }
+        this.mapPoseUnsubscribe = unsubscribe;
+        this.updateRobotMarker(FunctionProvider.getMapPose());
+    }
+
+    /**
+     * Adds a marker for the robot's current pose and updates it from amclPose
+     * events (with a slow null-safe poll as backup).
      */
     addCurrentPoseMarker() {
-        const color = hexToRgbArray('#008AE5');
-        var robotMarker = this.drawNavigationArrow(false, color);
-        this.rootObject.addChild(robotMarker);
+        const color = hexToRgbArray("#008AE5");
+        this.robotMarker = this.drawNavigationArrow(false, color);
+        this.rootObject.addChild(this.robotMarker);
 
-        const setPoseInterval = setInterval(() => {
-            let pose = this.functs.GetPose();
-            let globalCoord = this.rosToGlobal(pose.translation);
-            robotMarker.x = globalCoord.x;
-            robotMarker.y = globalCoord.y;
-            let theta = this.rosQuaternionToGlobalTheta(pose.rotation);
-            robotMarker.rotation = theta - 90.0;
-            robotMarker.scaleX = 1.0 / this.rootObject.scaleX;
-            robotMarker.scaleY = 1.0 / this.rootObject.scaleY;
-            robotMarker.visible = true;
-            this.rootObject.update();
+        this.trySubscribeMapPoseUpdates();
+        this.setPoseInterval = setInterval(() => {
+            this.trySubscribeMapPoseUpdates();
+            try {
+                const pose = this.functs.GetPose();
+                this.updateRobotMarker(pose);
+            } catch {
+                // Pose may be unavailable before WebRTC map TF arrives.
+            }
         }, 1000);
     }
 
@@ -508,7 +553,8 @@ export class OccupancyGrid extends React.Component {
                 y: y,
                 z: 0,
             } as Vector3);
-        if (this.getGoalReached) clearInterval(this.getGoalReached);
+        // Preview / active goal draw only — do not poll GoalReached here
+        // (that raced with FooterAutoNav and stole nav-complete events).
         if (this.goalMarker) this.rootObject.removeChild(this.goalMarker);
         this.goalMarker = this.drawNavigationArrow(true, color);
         this.goalMarker.x = globalCoord.x;
@@ -521,12 +567,13 @@ export class OccupancyGrid extends React.Component {
         this.goalMarker.scaleY = 1.0 / this.rootObject.scaleY;
         this.goalMarker.visible = true;
         this.rootObject.addChild(this.goalMarker);
-        this.getGoalReached = setInterval(() => {
-            if (this.functs.GoalReached()) {
-                this.rootObject.removeChild(this.goalMarker!);
-                clearInterval(this.getGoalReached);
+        if (this.robotMarker) {
+            const top = this.rootObject.numChildren - 1;
+            if (top >= 0) {
+                this.rootObject.setChildIndex(this.robotMarker, top);
             }
-        }, 1000);
+        }
+        this.rootObject.update();
     }
 
     /**
@@ -576,7 +623,11 @@ export class OccupancyGrid extends React.Component {
      */
     removeGoalMarker() {
         this.goalPositionSet(undefined);
-        if (this.goalMarker) this.rootObject.removeChild(this.goalMarker);
+        if (this.goalMarker) {
+            this.rootObject.removeChild(this.goalMarker);
+            this.goalMarker = undefined;
+            this.rootObject.update();
+        }
     }
 
     /**

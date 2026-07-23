@@ -516,6 +516,7 @@ export const MobileOperator = (props: {
                             onRegisterAutoNavNavControls={
                                 registerAutoNavNavControls
                             }
+                            moveBaseState={moveBaseState}
                         />
                     </div>
                 </SwipeableViews>

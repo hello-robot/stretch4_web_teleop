@@ -1,3 +1,4 @@
+import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
 import { RobotPose, ValidJoints } from "shared/util";
@@ -37,6 +38,24 @@ export abstract class FunctionProvider {
      */
     static addRemoteRobot(remoteRobot: RemoteRobot) {
         FunctionProvider.remoteRobot = remoteRobot;
+    }
+
+    /**
+     * Subscribe to map pose (amcl) updates from the remote robot.
+     * Returns a no-op unsubscribe when the robot is not connected yet.
+     */
+    static subscribeMapPose(
+        listener: (pose: Transform) => void,
+    ): (() => void) | undefined {
+        if (!FunctionProvider.remoteRobot) {
+            return undefined;
+        }
+        return FunctionProvider.remoteRobot.addMapPoseListener(listener);
+    }
+
+    /** Latest cached map pose, if the remote robot is connected. */
+    static getMapPose(): Transform | undefined {
+        return FunctionProvider.remoteRobot?.getMapPose();
     }
 
     /**

@@ -10,6 +10,7 @@ import { OccupancyGrid } from '../static_components/OccupancyGrid';
 import { underMapFunctionProvider } from 'operator/tsx/index';
 import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
 import {
+    ActionState,
     ROSOccupancyGrid,
     ROSPose,
     ROSPoint,
@@ -27,6 +28,8 @@ interface AutoNavProps {
     isModalLocationsMenuVisible: boolean;
     isModalLocationsMenuVisibleSet: Dispatch<SetStateAction<boolean>>;
     onRegisterAutoNavNavControls?: (controls: AutoNavNavControls | null) => void;
+    /** Terminal move-base alerts clear AutoNav Start/Stop UI. */
+    moveBaseState?: ActionState;
 }
 
 export enum MapFunction {
@@ -94,6 +97,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
     isModalLocationsMenuVisible,
     isModalLocationsMenuVisibleSet,
     onRegisterAutoNavNavControls,
+    moveBaseState,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -194,24 +198,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
     };
 
     /**
-     * Callback to set the map pose and navigate to the selected goal
-     * Sets goal marker & initiates navigation to selected location.
-     *
-     * @param pose - Pose to navigate to
-    */
-
-    underMapFunctionProvider.setMapPoseCallback((pose: Vector3) => {
-        functs.DisplayGoalMarker(pose);
-        isCurrentlyMovingSet(true);
-        isSelectingGoalSet(false);
-        functs
-            .GoalReached()
-            .then((goalReached) => {
-                isCurrentlyMovingSet(false)
-            });
-    })
-
-    /**
      * Callback to update the goal selection state and update mapFn.SelectGoal.
      */
     const handleSelectGoal = (isSelectingGoal: boolean) => {
@@ -260,6 +246,30 @@ const AutoNav: React.FC<AutoNavProps> = ({
     const [isSelectingGoal, isSelectingGoalSet] = useState<boolean>(true);
     // Whether the robot is currently auto-navigating
     const [isCurrentlyMoving, isCurrentlyMovingSet] = useState<boolean>(false);
+
+    // Drive Start/Stop from terminal Nav2 / cancel alerts (not GoalReached flag race).
+    useEffect(() => {
+        if (!moveBaseState) {
+            return;
+        }
+        const alertType = moveBaseState.alert_type;
+        if (
+            alertType !== "success" &&
+            alertType !== "warning" &&
+            alertType !== "error"
+        ) {
+            return;
+        }
+        isCurrentlyMovingSet(false);
+        isSelectingGoalSet(true);
+        occupancyGrid?.removeGoalMarker();
+        // Force a marker refresh in case the last amclPose was dropped in flight.
+        try {
+            occupancyGrid?.updateRobotMarker(functs.GetPose());
+        } catch {
+            // Pose may be unavailable before WebRTC map TF arrives.
+        }
+    }, [moveBaseState, occupancyGrid]);
 
     /**
      * On mount, create the canvas and OccupancyGrid for the map.

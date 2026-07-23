@@ -567,10 +567,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
             isCurrentlyMovingSet(true);
             isSelectingGoalSet(false);
             selectedLocationMenuItemSet(undefined);
-            functs.GoalReached().then(() => {
-                isCurrentlyMovingSet(false);
-                isSelectingGoalSet(true);
-            });
+            // Completion clears via terminal moveBaseState in AutoNav.
             return { ok: true, detail: "Started AutoNav." };
         }
         // When selecting manually on map...
@@ -578,10 +575,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
             functs.Play();
             isCurrentlyMovingSet(true);
             isSelectingGoalSet(false);
-            functs.GoalReached().then(() => {
-                isCurrentlyMovingSet(false);
-                isSelectingGoalSet(true);
-            });
+            // Completion clears via terminal moveBaseState in AutoNav.
             return { ok: true, detail: "Started AutoNav." };
         }
         return {
@@ -607,6 +601,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
             };
         }
         functs.CancelGoal();
+        functs.RemoveGoalMarker();
         isCurrentlyMovingSet(false);
         isSelectingGoalSet(true);
         return { ok: true, detail: "Cancelled AutoNav." };

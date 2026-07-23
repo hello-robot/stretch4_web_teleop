@@ -232,9 +232,63 @@ function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {
     // } as OccupancyGridMessage);
 }
 
+// Keep amclPose on the data channel during nav (joint state is chatty).
+const AMCL_POSE_MIN_INTERVAL_MS = 500; // ~2 Hz max
+const AMCL_POSE_HEARTBEAT_MS = 1000; // refresh even if nearly static
+const AMCL_POSE_MIN_TRANSLATION_M = 0.02;
+const AMCL_POSE_MIN_YAW_RAD = 0.03;
+let lastAmclPoseSentAt = 0;
+let lastAmclPoseSent: Transform | undefined;
+
+function yawFromQuaternion(rotation: {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+}): number {
+    const sinyCosp = 2 * (rotation.w * rotation.z + rotation.x * rotation.y);
+    const cosyCosp =
+        1 - 2 * (rotation.y * rotation.y + rotation.z * rotation.z);
+    return Math.atan2(sinyCosp, cosyCosp);
+}
+
+function amclPoseMovedEnough(transform: Transform): boolean {
+    if (!lastAmclPoseSent) {
+        return true;
+    }
+    const dx = transform.translation.x - lastAmclPoseSent.translation.x;
+    const dy = transform.translation.y - lastAmclPoseSent.translation.y;
+    const dist = Math.hypot(dx, dy);
+    let dyaw = Math.abs(
+        yawFromQuaternion(transform.rotation) -
+            yawFromQuaternion(lastAmclPoseSent.rotation),
+    );
+    if (dyaw > Math.PI) {
+        dyaw = 2 * Math.PI - dyaw;
+    }
+    return (
+        dist >= AMCL_POSE_MIN_TRANSLATION_M || dyaw >= AMCL_POSE_MIN_YAW_RAD
+    );
+}
+
 function forwardAMCLPose(transform: Transform) {
     if (!connection) throw "WebRTC connection undefined";
 
+    const now = Date.now();
+    const elapsed = now - lastAmclPoseSentAt;
+    if (elapsed < AMCL_POSE_MIN_INTERVAL_MS) {
+        return;
+    }
+    if (
+        lastAmclPoseSent &&
+        !amclPoseMovedEnough(transform) &&
+        elapsed < AMCL_POSE_HEARTBEAT_MS
+    ) {
+        return;
+    }
+
+    lastAmclPoseSentAt = now;
+    lastAmclPoseSent = transform;
     connection.sendData({
         type: "amclPose",
         message: transform,
