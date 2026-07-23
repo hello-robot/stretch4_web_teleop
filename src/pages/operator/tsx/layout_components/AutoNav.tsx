@@ -3,7 +3,7 @@ import { Canvas } from "../static_components/Canvas";
 import { Map } from './Map';
 import { ComponentType, MapDefinition } from '../utils/component_definitions';
 import { SharedState } from './CustomizableComponent';
-import FooterAutoNav from './FooterAutoNav';
+import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
 import type { AddToastFn } from './Toasts';
 import { mapFunctionProvider } from 'operator/tsx/index';
 import { OccupancyGrid } from '../static_components/OccupancyGrid';
@@ -26,6 +26,7 @@ interface AutoNavProps {
     addToast: AddToastFn;
     isModalLocationsMenuVisible: boolean;
     isModalLocationsMenuVisibleSet: Dispatch<SetStateAction<boolean>>;
+    onRegisterAutoNavNavControls?: (controls: AutoNavNavControls | null) => void;
 }
 
 export enum MapFunction {
@@ -92,6 +93,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
     addToast,
     isModalLocationsMenuVisible,
     isModalLocationsMenuVisibleSet,
+    onRegisterAutoNavNavControls,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -318,6 +320,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
                 swipeableViewsIdxSet={swipeableViewsIdxSet}
                 sceneSelected={sceneSelected}
                 onSceneSelectedChange={onSceneSelectedChange}
+                onRegisterAutoNavNavControls={onRegisterAutoNavNavControls}
             />
         </div>
     );
