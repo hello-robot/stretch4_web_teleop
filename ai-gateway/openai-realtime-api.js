@@ -123,7 +123,7 @@ function buildRealtimeVoiceSessionPayload() {
 
                 `Pointing is unique and refers to the gripper's orientation relative to the base's forward direction.`,
                 `If the user asks to "point forward" or "point straight", call \`${EXECUTE_MACRO}\` with \`macro="center_wrist"\`.`,
-                `If they ask to "point left" or "point right", use the wrist YAW joint.`,
+                `If they ask to "point left" or "point right", use the wrist YAW joint. Use "wrist_yaw_in" for pointing left, and "wrist_yaw_out" for pointing right.`,
                 `If they ask to "point up" or "point down", use the wrist PITCH joint.`,
                 `If they ask to "tilt" or "turn" the gripper, use the wrist ROLL joint.`,
 
