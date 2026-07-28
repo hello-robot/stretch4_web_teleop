@@ -299,6 +299,8 @@ export class Robot extends React.Component {
 
     async onConnect() {
         console.log("onConnect");
+        const mapLoaded= await this.isMapLoaded();
+
         this.subscribeToJointState();
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
@@ -318,7 +320,8 @@ export class Robot extends React.Component {
             "Navigation succeeded!",
             "Navigation failed!",
         );
-        this.createCmdVelTopic();
+
+        this.createCmdVelTopic(mapLoaded);
         this.createJointVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
@@ -760,10 +763,10 @@ export class Robot extends React.Component {
         });
     }
 
-    createCmdVelTopic() {
+    createCmdVelTopic(use_vel_nav: boolean = true) {
         this.cmdVelTopic = new Topic({
             ros: this.ros,
-            name: "/cmd_vel_nav",
+            name: use_vel_nav ? "/cmd_vel_nav" : "/cmd_vel",
             messageType: "geometry_msgs/Twist",
         });
     }
@@ -1524,6 +1527,17 @@ export class Robot extends React.Component {
             this.jointState.effort[jointIndex] > MAX_EFFORTS[jointName]![1];
 
         return inCollision;
+    }
+
+    async isMapLoaded(): Promise<boolean> {
+        return new Promise((resolve) => {
+            this.ros.getServices(
+                (services: string[]) => {
+                    resolve(services.includes("/map_server/map"));
+                },
+                () => resolve(false)
+            );
+        });
     }
 
     /**
