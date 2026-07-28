@@ -62,6 +62,7 @@ import {
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
 } from "./constants";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
+import { bumpVoiceCommandActivity } from "./voiceCommandActivity";
 import {
     createVoiceWakeSleep,
     type VoiceListeningState,
@@ -520,6 +521,8 @@ export type ActiveRealtimeVoiceSession = {
     /** Manual wake when Web Speech API is unavailable. */
     wake: () => void;
     sleep: () => void;
+    /** Force-close mic uplink (no audio to OpenAI) while session stays up. */
+    setMicMuted: (muted: boolean) => void;
 };
 
 export type { VoiceListeningState } from "./voiceWakeSleep";
@@ -730,7 +733,7 @@ export async function connectOpenAIRealtimeVoice(
                     feedback.kind === "move_started" ||
                     feedback.kind === "macro_started"
                 ) {
-                    voiceWakeSleep?.notifyMotionOrCommand();
+                    bumpVoiceCommandActivity();
                 }
                 baseFeedback?.(feedback);
             },
@@ -1127,7 +1130,7 @@ export async function connectOpenAIRealtimeVoice(
             : voiceToolRunners[fc.name](opts.voiceProvider, fc);
 
         if (result.ok) {
-            voiceWakeSleep?.notifyMotionOrCommand();
+            bumpVoiceCommandActivity();
         }
 
         opts.onLog?.(
@@ -1344,5 +1347,8 @@ export async function connectOpenAIRealtimeVoice(
         disconnect,
         wake: () => voiceWakeSleep?.wake(),
         sleep: () => voiceWakeSleep?.sleep("phrase"),
+        setMicMuted: (muted: boolean) => {
+            micGate?.setForceClosed(muted);
+        },
     };
 }

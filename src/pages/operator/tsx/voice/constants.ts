@@ -263,6 +263,9 @@ export function matchesSleepPhrase(normalized: string): boolean {
 /** Auto-sleep when awake and robot motion idle for this long (ms). */
 export const VOICE_AUTO_SLEEP_IDLE_MS = 30_000;
 
+/** Auto-mute mic uplink when unmuted with no successful voice tool for this long (ms). */
+export const VOICE_AUTO_MUTE_IDLE_MS = 60_000;
+
 /** Debounce between repeated wake/sleep phrase detections (ms). */
 export const VOICE_PHRASE_DEBOUNCE_MS = 800;
 

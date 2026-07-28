@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import MicIcon from "@mui/icons-material/Mic";
+import MicOffIcon from "@mui/icons-material/MicOff";
 
 import MainMenu from "../basic_components/MainMenu";
 import SceneCarousel, {
@@ -17,6 +19,12 @@ import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
 import { MapFunction } from "./AutoNav";
 import { ActionState } from "shared/util";
+import {
+    getVoiceStatusSnapshot,
+    setVoiceStatus,
+    useVoiceStatus,
+} from "../voice/voiceStatusStore";
+import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
 
@@ -39,6 +47,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     const localizeSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
     localizeStatusRef.current = localizeStatus;
+    const { connected: voiceConnected, micMuted } = useVoiceStatus();
 
     runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
@@ -119,6 +128,20 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 status: localizeStatus,
             },
             {
+                id: "mic-mute",
+                name: micMuted ? "Unmute" : "Mute",
+                description: "Toggle microphone uplink to OpenAI",
+                onClick: () => {
+                    const nextMuted = !getVoiceStatusSnapshot().micMuted;
+                    if (!nextMuted) {
+                        bumpVoiceCommandActivity();
+                    }
+                    setVoiceStatus({ micMuted: nextMuted });
+                },
+                icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                enabled: voiceConnected,
+            },
+            {
                 id: "finedex-gripper",
                 name: "FineDex Gripper",
                 description: "TextDescription",
@@ -155,6 +178,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             localizeStatus,
             onSceneSelectedChange,
             swipeableViewsIdxSet,
+            micMuted,
+            voiceConnected,
         ]
     );
 
@@ -165,6 +190,11 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 return;
             }
             scene.onClick?.();
+            return;
+        }
+        if (scene.id === "mic-mute") {
+            scene.onClick?.();
+            isMainMenuOpenSet(false);
             return;
         }
         onSceneSelectedChange(scene.id);
