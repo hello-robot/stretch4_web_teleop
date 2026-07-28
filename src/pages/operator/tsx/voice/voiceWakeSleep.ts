@@ -15,6 +15,7 @@ import {
     VOICE_PHRASE_WAKE_TOOL_IGNORE_MS,
 } from "./constants";
 import { normalizePhrase } from "./phraseUtils";
+import { subscribeVoiceCommandActivity } from "./voiceCommandActivity";
 
 export type VoiceListeningState = "asleep" | "awake";
 
@@ -48,6 +49,7 @@ export function createVoiceWakeSleep(
     let lastSleepPhraseAt = 0;
     let phraseWakeAt = 0;
     let idlePollTimer: ReturnType<typeof setInterval> | undefined;
+    let unsubCommandActivity: (() => void) | undefined;
     const recentFragments: string[] = [];
 
     const log = (message: string) => {
@@ -174,6 +176,10 @@ export function createVoiceWakeSleep(
     };
 
     const start = () => {
+        unsubCommandActivity?.();
+        unsubCommandActivity = subscribeVoiceCommandActivity(() => {
+            lastMotionAt = Date.now();
+        });
         idlePollTimer = setInterval(tickIdle, VOICE_AUTO_SLEEP_POLL_MS);
         sleep("disconnect");
     };
@@ -183,6 +189,8 @@ export function createVoiceWakeSleep(
             clearInterval(idlePollTimer);
             idlePollTimer = undefined;
         }
+        unsubCommandActivity?.();
+        unsubCommandActivity = undefined;
         sleep("disconnect");
     };
 

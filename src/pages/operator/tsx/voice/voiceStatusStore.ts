@@ -14,14 +14,20 @@ export type VoiceStatusSnapshot = {
     connected: boolean;
     /** RMS threshold gate open (footer waveform / glow); not uplink bypass. */
     micGateOpen: boolean;
-    /** asleep | waking | awake — drives footer copy and mic glow. */
+    /** asleep | waking | awake — wake/sleep mode for tools / transcripts. */
     listeningState: VoiceListeningState;
+    /**
+     * Operator mute: when true, mic uplink is force-closed (no audio to OpenAI).
+     * Survives disconnect/reconnect; default true to avoid always-hot billing.
+     */
+    micMuted: boolean;
 };
 
 const DEFAULT_STATUS: VoiceStatusSnapshot = {
     connected: false,
     micGateOpen: false,
     listeningState: "asleep",
+    micMuted: true,
 };
 
 /** Current status; mutated only via setVoiceStatus. */
@@ -59,11 +65,13 @@ export function setVoiceStatus(
         connected: patch.connected ?? snapshot.connected,
         micGateOpen: patch.micGateOpen ?? snapshot.micGateOpen,
         listeningState: patch.listeningState ?? snapshot.listeningState,
+        micMuted: patch.micMuted ?? snapshot.micMuted,
     };
     if (
         next.connected === snapshot.connected &&
         next.micGateOpen === snapshot.micGateOpen &&
-        next.listeningState === snapshot.listeningState
+        next.listeningState === snapshot.listeningState &&
+        next.micMuted === snapshot.micMuted
     ) {
         return;
     }
