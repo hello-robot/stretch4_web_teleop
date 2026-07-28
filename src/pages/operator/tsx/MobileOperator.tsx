@@ -52,15 +52,7 @@ import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
 import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
-import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
 import Toasts, { useToasts } from "./layout_components/Toasts";
-import type {
-    ControlAutoNavAction,
-    ControlAutoNavResult,
-    LoadAutoNavLocationResult,
-    SavedLocationsModalAction,
-    SetSavedLocationsModalResult,
-} from "./voice/constants";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -121,14 +113,7 @@ export const MobileOperator = (props: {
     const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
         useState(false);
 
-    /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
-    const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
-    const registerAutoNavNavControls = React.useCallback(
-        (controls: AutoNavNavControls | null) => {
-            autoNavNavControlsRef.current = controls;
-        },
-        [],
-    );
+
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
@@ -143,94 +128,7 @@ export const MobileOperator = (props: {
         }
     }, [sceneSelected]);
 
-    const handleSetSavedLocationsModal = React.useCallback(
-        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
-            if (sceneSelectedRef.current !== "autonav") {
-                return {
-                    ok: false,
-                    detail: "Saved Locations is only available in AutoNav",
-                };
-            }
-            isModalLocationsMenuVisibleSet(action === "open");
-            return {
-                ok: true,
-                detail:
-                    action === "open"
-                        ? "Opened Saved Locations."
-                        : "Closed Saved Locations.",
-            };
-        },
-        [],
-    );
 
-    const handleControlAutoNav = React.useCallback(
-        (action: ControlAutoNavAction): ControlAutoNavResult => {
-            if (sceneSelectedRef.current !== "autonav") {
-                return {
-                    ok: false,
-                    detail: "AutoNav controls are only available in AutoNav",
-                };
-            }
-            const controls = autoNavNavControlsRef.current;
-            if (!controls) {
-                return {
-                    ok: false,
-                    detail: "AutoNav is not ready.",
-                };
-            }
-            return action === "start" ? controls.start() : controls.cancel();
-        },
-        [],
-    );
-
-    /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
-    const handleCancelAutoNavOnStop =
-        React.useCallback((): ControlAutoNavResult => {
-            const controls = autoNavNavControlsRef.current;
-            if (!controls) {
-                return {
-                    ok: false,
-                    detail: "AutoNav is not ready.",
-                };
-            }
-            return controls.cancel();
-        }, []);
-
-    const handleGetAutoNavSavedPoseNames = React.useCallback(():
-        | string[]
-        | null => {
-        if (sceneSelectedRef.current !== "autonav") {
-            return null;
-        }
-        const controls = autoNavNavControlsRef.current;
-        if (!controls) {
-            return null;
-        }
-        return controls.getSavedPoseNames();
-    }, []);
-
-    const handleLoadAutoNavLocation = React.useCallback(
-        (poseName: string): LoadAutoNavLocationResult => {
-            if (sceneSelectedRef.current !== "autonav") {
-                return {
-                    ok: false,
-                    detail: "AutoNav location loading is only available in AutoNav",
-                };
-            }
-            const controls = autoNavNavControlsRef.current;
-            if (!controls) {
-                return {
-                    ok: false,
-                    detail: "AutoNav is not ready.",
-                };
-            }
-            const result = controls.loadLocation(poseName);
-            return result.ok
-                ? { ok: true, detail: result.detail, label: poseName }
-                : { ok: false, detail: result.detail };
-        },
-        [],
-    );
 
     const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
@@ -382,25 +280,7 @@ export const MobileOperator = (props: {
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <Toasts toasts={toasts} toastsSet={toastsSet} />
-            <VoiceCommandAssistant
-                onVelocityScaleApplied={applyVelocityScale}
-                setActionMode={setActionMode}
-                addToast={addToast}
-                onSwitchScene={(scene) => {
-                    if (scene === "pilot") {
-                        swipeableViewsIdxSet(0);
-                        setSceneSelected("pilot-mode");
-                    } else {
-                        setSceneSelected("autonav");
-                        swipeableViewsIdxSet(1);
-                    }
-                }}
-                onSetSavedLocationsModal={handleSetSavedLocationsModal}
-                onControlAutoNav={handleControlAutoNav}
-                onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
-                onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
-                onLoadAutoNavLocation={handleLoadAutoNavLocation}
-            />
+
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
@@ -510,9 +390,7 @@ export const MobileOperator = (props: {
                             isModalLocationsMenuVisibleSet={
                                 isModalLocationsMenuVisibleSet
                             }
-                            onRegisterAutoNavNavControls={
-                                registerAutoNavNavControls
-                            }
+
                             moveBaseState={moveBaseState}
                         />
                     </div>

@@ -7,7 +7,6 @@ import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
-import { clampDurationMs } from "../voice/constants";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
 
 const x = PilotButtonPads;
@@ -24,11 +23,6 @@ export abstract class FunctionProvider {
     public activeButtonPadFunction: ButtonPadButton;
     public activeVelocityAction?: VelocityCommand;
     public velocityExecutionHeartbeat?: number; // ReturnType<typeof setInterval>
-    // Used for managing voice-controleld moves since
-    // they are inherently *timed* moves, and therefore
-    // needed in order to measure movement / stopped.
-    public timedVoiceMoveActive = false;
-    protected timedVoiceMoveTimer?: ReturnType<typeof setTimeout>;
     /**
      * Adds a remote robot instance to this function provider. This must be called
      * before any components of the interface will be able to execute functions
@@ -82,10 +76,8 @@ export abstract class FunctionProvider {
         return FunctionProvider.remoteRobot !== undefined;
     }
 
-    /** True while a timed voice move or continuous velocity heartbeat is active. */
     public isMotionActive(): boolean {
         return (
-            this.timedVoiceMoveActive ||
             this.velocityExecutionHeartbeat !== undefined ||
             this.activeVelocityAction !== undefined
         );
@@ -116,38 +108,6 @@ export abstract class FunctionProvider {
         }, 25);
     }
 
-    /**
-     * Drive base continuously for durationMs then stop sending velocity.
-    * Supersedes any active timed voice move so a new command can interrupt.
-     * @returns false if no RemoteRobot attached
-     */
-    public timedBaseDrive(
-        linVelX: number,
-        linVelY: number,
-        durationMs: number,
-        angVel: number = 0
-    ): boolean {
-        if (!FunctionProvider.remoteRobot) {
-            return false;
-        }
-
-        const clampedMs = clampDurationMs(durationMs);
-
-        this.stopCurrentAction(true);
-        this.timedVoiceMoveActive = true;
-        this.setBaseVelocity(
-            linVelX,
-            linVelY,
-            angVel
-        );
-        this.timedVoiceMoveTimer = setTimeout(() => {
-            this.timedVoiceMoveTimer = undefined;
-            this.timedVoiceMoveActive = false;
-            this.stopCurrentAction(true);
-        }, clampedMs);
-        return true;
-    }
-
     public incrementalJointMovement(jointName: ValidJoints, velocity: number) {
         this.stopCurrentAction(true);
         this.activeVelocityAction =
@@ -165,37 +125,7 @@ export abstract class FunctionProvider {
         }, 50);
     }
 
-    /**
-     * Move a joint continuously for durationMs then stop.
-     * Uses the same timedVoiceMoveActive guard as timedBaseDrive so base and
-     * joint timed moves are mutually exclusive.
-     *
-     * @param jointName the joint to actuate
-     * @param velocity  signed velocity in joint units/s (m/s for linear, rad/s for rotary)
-     * @param durationMs how long to apply velocity (clamped internally)
-     * @returns false if no robot attached
-     */
-    public timedJointMove(
-        jointName: ValidJoints,
-        velocity: number,
-        durationMs: number,
-    ): boolean {
-        if (!FunctionProvider.remoteRobot) {
-            return false;
-        }
 
-        const clampedMs = clampDurationMs(durationMs);
-
-        this.stopCurrentAction(true);
-        this.timedVoiceMoveActive = true;
-        this.continuousJointMovement(jointName, velocity);
-        this.timedVoiceMoveTimer = setTimeout(() => {
-            this.timedVoiceMoveTimer = undefined;
-            this.timedVoiceMoveActive = false;
-            this.stopCurrentAction(true);
-        }, clampedMs);
-        return true;
-    }
 
     /**
      * Move a joint incrementally using the trajectory action server.
@@ -237,14 +167,5 @@ export abstract class FunctionProvider {
             this.velocityExecutionHeartbeat = undefined;
         }
 
-        /**
-         * clearTimeout() to prevent the timed voice move
-         * from being executed.
-         */
-        if (this.timedVoiceMoveTimer) {
-            clearTimeout(this.timedVoiceMoveTimer);
-            this.timedVoiceMoveTimer = undefined;
-        }
-        this.timedVoiceMoveActive = false;
     }
 }
