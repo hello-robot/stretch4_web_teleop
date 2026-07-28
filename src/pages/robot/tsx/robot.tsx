@@ -1,34 +1,35 @@
 import React from "react";
 import {
-    Ros,
     Action,
     Goal,
-    Topic,
-    Service,
-    ROS2TFClient,
-    Transform,
-    Param,
     Message,
+    Param,
+    Ros,
+    ROS2TFClient,
+    Service,
+    Topic,
+    Transform,
 } from "roslib";
 import {
-    ROSJointState,
-    ROSCompressedImage,
-    ValidJoints,
-    VideoProps,
-    ROSOccupancyGrid,
-    ROSPose,
     ActionState,
     ActionStatusList,
-    ROSBatteryState,
-    StretchTool,
-    getStretchTool,
     DiagnosticArray,
+    getStretchTool,
+    ROSBatteryState,
+    ROSCompressedImage,
+    ROSJointState,
+    ROSOccupancyGrid,
+    ROSOdometry,
+    ROSPose,
+    StretchTool,
+    ValidJoints,
+    VideoProps,
+    JOINT_VELOCITIES,
 } from "shared/util";
 import {
-    rosJointStatetoRobotPose,
-    ValidJointStateDict,
     RobotPose,
-    IsRunStoppedMessage,
+    rosJointStatetoRobotPose,
+    ValidJointStateDict
 } from "../../../shared/util";
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
@@ -88,6 +89,7 @@ export class Robot extends React.Component {
     ) => void;
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+    private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
@@ -95,6 +97,7 @@ export class Robot extends React.Component {
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
+    private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam: Param;
     private modeParam: Param;
@@ -109,6 +112,7 @@ export class Robot extends React.Component {
         ) => void;
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+        odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
@@ -116,11 +120,13 @@ export class Robot extends React.Component {
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
+        leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
+        this.odomCallback = props.odomCallback;
         this.moveBaseResultCallback = props.moveBaseResultCallback;
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
@@ -128,6 +134,7 @@ export class Robot extends React.Component {
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
+        this.leaseStatusCallback = props.leaseStatusCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -254,8 +261,10 @@ export class Robot extends React.Component {
         this.subscribeToJointState();
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
+        this.subscribeToOdom();
         this.subscribeToMode();
         this.subscribetoJointStateDiagnostics();
+        this.subscribeToLeaseHolder();
         this.subscribeToActionResult(
             moveBaseActionName,
             this.moveBaseResultCallback,
@@ -355,6 +364,19 @@ export class Robot extends React.Component {
         });
     }
 
+    subscribeToOdom() {
+        const odomTopic: Topic<ROSOdometry> = new Topic({
+            ros: this.ros,
+            name: "/wheel_odom",
+            messageType: "nav_msgs/msg/Odometry",
+        });
+        this.subscriptions.push(odomTopic);
+
+        odomTopic.subscribe((msg: ROSOdometry) => {
+            if (this.odomCallback) this.odomCallback(msg);
+        });
+    }
+
     subscribeToMode() {
         const modeTopic: Topic = new Topic({
             ros: this.ros,
@@ -365,6 +387,30 @@ export class Robot extends React.Component {
 
         modeTopic.subscribe((msg) => {
             if (this.modeCallback) this.modeCallback(msg.data);
+        });
+    }
+
+    subscribeToLeaseHolder() {
+        const leaseHolderTopic: Topic = new Topic({
+            ros: this.ros,
+            name: "/server_lease_holder",
+            messageType: "diagnostic_msgs/msg/DiagnosticStatus",
+        });
+        this.subscriptions.push(leaseHolderTopic);
+
+        leaseHolderTopic.subscribe((message: Message) => {
+            const status = message as any;
+            let leaseHolder = "none";
+            if (status && status.values) {
+                const holderPair = status.values.find((pair: any) => pair.key === "lease_holder");
+                if (holderPair) {
+                    leaseHolder = holderPair.value;
+                }
+            }
+            const isDriverHolding = leaseHolder === "ros2_driver" || leaseHolder === "None" || leaseHolder === "none";
+            if (this.leaseStatusCallback) {
+                this.leaseStatusCallback(leaseHolder, isDriverHolding);
+            }
         });
     }
 
@@ -768,6 +814,7 @@ export class Robot extends React.Component {
         let jointVelocities = {
             joint_names: [jointName],
             velocities: [velocity],
+            duration: 0.05  // multiple of a heartbeat (0.025s)
         };
         if (!this.jointVelTopic) throw "jointVelTopic is undefined";
         this.jointVelTopic.publish(jointVelocities);
@@ -837,12 +884,35 @@ export class Robot extends React.Component {
     makePoseGoal(pose: RobotPose) {
         let jointNames: ValidJoints[] = [];
         let jointPositions: number[] = [];
+        let maxDuration = 0.1; // minimum threshold to prevent division by zero or excessive acceleration
+
         for (let key in pose) {
-            jointNames.push(key as ValidJoints);
-            jointPositions.push(pose[key as ValidJoints]!);
+            const jointName = key as ValidJoints;
+            jointNames.push(jointName);
+            const targetPos = pose[jointName]!;
+            jointPositions.push(targetPos);
+
+            try {
+                const currentPos = this.getJointValue(jointName);
+                const distance = Math.abs(targetPos - currentPos);
+                const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
+                
+                if (velocityLimit > 0) {
+                    const jointDuration = distance / velocityLimit;
+                    if (jointDuration > maxDuration) {
+                        maxDuration = jointDuration;
+                    }
+                }
+            } catch (e) {
+                console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
+            }
         }
 
-        console.log(jointNames, jointPositions);
+        const secs = Math.floor(maxDuration);
+        const nsecs = Math.round((maxDuration - secs) * 1e9);
+
+        console.log("Calculated synchronized trajectory duration:", maxDuration, "secs:", secs, "nsecs:", nsecs);
+
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         let newGoal = {
             trajectory: {
@@ -856,10 +926,9 @@ export class Robot extends React.Component {
                 points: [
                     {
                         positions: jointPositions,
-                        // The following might causing the jumpiness in continuous motions
                         time_from_start: {
-                            secs: 1,
-                            nsecs: 0,
+                            secs: secs,
+                            nsecs: nsecs,
                         },
                     },
                 ],
@@ -1025,7 +1094,7 @@ export class Robot extends React.Component {
     }
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        // this.switchToNavigationMode();
+        this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1038,6 +1107,8 @@ export class Robot extends React.Component {
                     ": " +
                     result.error_string
                 );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             },
             (feedback) => {
                 console.log(
@@ -1046,6 +1117,16 @@ export class Robot extends React.Component {
                     ": " +
                     feedback
                 );
+            },
+            (error) => {
+                console.log(
+                    "Error for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    error
+                );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             }
         );
     }
@@ -1087,7 +1168,21 @@ export class Robot extends React.Component {
             return 0;
         }
 
-        let jointIndex = this.jointState.name.indexOf(jointName);
+        let name: string = jointName;
+        if (name === "arm_joint" || name === "wrist_extension") {
+            let total = 0;
+            let foundAny = false;
+            for (let link of ["arm_l1_joint", "arm_l2_joint", "arm_l3_joint", "arm_l4_joint"]) {
+                let idx = this.jointState.name.indexOf(link as ValidJoints);
+                if (idx !== -1) {
+                    total += this.jointState.position[idx];
+                    foundAny = true;
+                }
+            }
+            if (foundAny) return total * 1.25;  // Scale factor to account for the number of links (5/4)
+        }
+
+        let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
         return this.jointState.position[jointIndex];
     }
 
