@@ -36,27 +36,6 @@ export function useToasts() {
     return { toasts, toastsSet, addToast };
 }
 
-export type AddToastFn = (
-    type: Toast['type'],
-    message: string,
-    duration?: number,
-) => void;
-
-/** Toast queue state and enqueue helper for operator-level hosts. */
-export function useToasts() {
-    const [toasts, toastsSet] = useState<Toast[]>([]);
-
-    const addToast = useCallback<AddToastFn>((type, message, duration) => {
-        const id = genUUID();
-        toastsSet((prevToasts) => [
-            ...prevToasts,
-            { id, type, message, duration },
-        ]);
-    }, []);
-
-    return { toasts, toastsSet, addToast };
-}
-
 /**
  * Toast component that displays a notification message.
  * @param {ToastProps} props - The properties for the toast.
