@@ -92,10 +92,10 @@ The following primers provide a high-level introduction to the codebase for deve
 
 ## Contributing
 
-* This repository uses pre-commit hooks to enforce consistent formatting and style.
-  * Install pre-commit: `python3 -m pip install pre-commit`
-  * Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
-  * Moving forward, pre-commit hooks will run before you create any commit.
+- This repository uses pre-commit hooks to enforce consistent formatting and style.
+  - Install pre-commit: `python3 -m pip install pre-commit`
+  - Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
+  - Moving forward, pre-commit hooks will run before you create any commit.
 
 ## Troubleshooting
 
@@ -105,7 +105,7 @@ First, ensure that your robot has the latest version of Web Teleop by [updating 
 
 Then, launch the program normally, and if you see "FAILURE. COULD NOT LAUNCH WEB TELEOP.", then locate the zipped-up logs file and send them to Hello Robot Support (support@hello-robot.com).
 
-To locate the logs, open a file explorer, go into "Home", go into "stretch\_user", go into "log", go into "web\_teleop", locate the folder with the latest timestamp, and send "stretch4\_web\_teleop\_logs.zip" to the support team.
+To locate the logs, open a file explorer, go into "Home", go into "stretch_user", go into "log", go into "web_teleop", locate the folder with the latest timestamp, and send "stretch4_web_teleop_logs.zip" to the support team.
 
 ## Licenses
 
@@ -123,12 +123,12 @@ Unless required by applicable law or agreed to in writing, the Contents are dist
 
 Some of the contents of this directory derive from the following repositories:
 
-https://github.com/hello-robot/stretch\_web\_teleop
+https://github.com/hello-robot/stretch_web_teleop
 
-https://github.com/hello-robot/stretch\_web\_interface
+https://github.com/hello-robot/stretch_web_interface
 
-https://github.com/hcrlab/stretch\_web\_interface
+https://github.com/hcrlab/stretch_web_interface
 
-https://github.com/hcrlab/stretch\_teleop\_interface
+https://github.com/hcrlab/stretch_teleop_interface
 
 Text from relevant license files found in these repositories.

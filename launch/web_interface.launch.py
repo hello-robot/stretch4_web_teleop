@@ -76,7 +76,6 @@ def check_valid_configuration(model, tool, has_head_cams):
         sys.exit(1)
 
 
-
 def generate_launch_description():
     teleop_interface_package = str(get_package_share_path("stretch4_web_teleop"))
     core_package = str(get_package_share_path("stretch_core"))
@@ -257,26 +256,26 @@ def generate_launch_description():
         ld.add_action(configure_video_streams_node)
 
     navigation_bringup_launch = GroupAction(
-            condition=IfCondition(
-                NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
-            ),
-            actions=[
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        [
-                            stretch_navigation_path,
-                            "/launch/navigation_mppi.launch.py",
-                        ]
-                    ),
-                    launch_arguments={
-                        "use_sim_time": "false",
-                        "autostart": "true",
-                        "map": LaunchConfiguration("map_yaml"),
-                        "use_rviz": "false",
-                    }.items(),
+        condition=IfCondition(
+            NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
+        ),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [
+                        stretch_navigation_path,
+                        "/launch/navigation_mppi.launch.py",
+                    ]
                 ),
-            ],
-        )
+                launch_arguments={
+                    "use_sim_time": "false",
+                    "autostart": "true",
+                    "map": LaunchConfiguration("map_yaml"),
+                    "use_rviz": "false",
+                }.items(),
+            ),
+        ],
+    )
     ld.add_action(navigation_bringup_launch)
 
     ld.add_action(
