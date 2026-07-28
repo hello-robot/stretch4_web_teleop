@@ -1,4 +1,4 @@
-import ROSLIB from "roslib";
+import { Transform } from "roslib";
 import { ArucoMarkersInfo } from "shared/util";
 
 export const ARUCO_MARKER_INFO: ArucoMarkersInfo = {
@@ -38,7 +38,7 @@ export const ARUCO_MARKER_INFO: ArucoMarkersInfo = {
             use_rgb_only: false,
             name: "docking_station",
             pose: {
-                transform: new ROSLIB.Transform({
+                transform: new Transform({
                     translation: {
                         x: 0.0,
                         y: -0.5,
@@ -156,7 +156,7 @@ export const ARUCO_MARKER_INFO: ArucoMarkersInfo = {
             use_rgb_only: false,
             name: "Tool Shelf",
             pose: {
-                transform: new ROSLIB.Transform({
+                transform: new Transform({
                     translation: {
                         x: 0.0,
                         y: -1.2395535657717278,

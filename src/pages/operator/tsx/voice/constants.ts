@@ -9,6 +9,13 @@ import {
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -30,6 +37,7 @@ import {
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
     VOICE_MACRO_NAMES,
+    VOICE_SCENE_NAMES,
     VOICE_WAKE_PHRASE,
     VOICE_SLEEP_PHRASE,
     VOICE_WAKE_PHRASE_DISPLAY,
@@ -43,12 +51,19 @@ import {
 /**
  * Re-export constants from ai-gateway/constants.js
  * for usage in other parts of the teleop webapp.
-*/
+ */
 export {
     BASE_MOVE_ACTIONS,
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
+    SWITCH_SCENE,
+    SAVE_MAP_LOCATION,
+    SET_SAVED_LOCATIONS_MODAL,
+    CONTROL_AUTONAV,
+    LOAD_AUTONAV_LOCATION,
+    SAVED_LOCATIONS_MODAL_ACTIONS,
+    AUTONAV_NAV_ACTIONS,
     JOINT_DISTANCE_M_MAX,
     JOINT_DISTANCE_M_MIN,
     JOINT_DISTANCE_RAD_MAX,
@@ -70,6 +85,7 @@ export {
     VOICE_ROTATION_DEG_MIN,
     VOICE_ROTATION_DEG_MAX,
     VOICE_MACRO_NAMES,
+    VOICE_SCENE_NAMES,
     VOICE_WAKE_PHRASE,
     VOICE_SLEEP_PHRASE,
     VOICE_WAKE_PHRASE_DISPLAY,
@@ -137,6 +153,36 @@ export type ExecuteToolResult =
 /** All valid execute_macro.action values. */
 export type MacroMoveAction = (typeof VOICE_MACRO_NAMES)[number];
 
+/** All valid switch_scene.scene values. */
+export type VoiceSceneName = (typeof VOICE_SCENE_NAMES)[number];
+
+/** All valid set_saved_locations_modal.action values. */
+export type SavedLocationsModalAction =
+    (typeof SAVED_LOCATIONS_MODAL_ACTIONS)[number];
+
+/** Result of set_saved_locations_modal for toast UX. */
+export type SetSavedLocationsModalResult = {
+    ok: boolean;
+    detail: string;
+};
+
+/** All valid control_autonav.action values. */
+export type ControlAutoNavAction = (typeof AUTONAV_NAV_ACTIONS)[number];
+
+/** Result of control_autonav for toast UX. */
+export type ControlAutoNavResult = {
+    ok: boolean;
+    detail: string;
+};
+
+/** Result of load_autonav_location for toast UX. */
+export type LoadAutoNavLocationResult = {
+    ok: boolean;
+    detail: string;
+    /** Resolved saved pose name when ok. */
+    label?: string;
+};
+
 /**
  * Suppress duplicate execute_base_move with identical args within this window (echo safety net).
  * Example: assistant echo triggers a second "forward, medium, 800ms" within 1.5s → second move is ignored.
@@ -153,7 +199,7 @@ export const VOICE_MIC_UNMUTE_COOLDOWN_MS = 500;
 /**
  * Pre-roll audio retained even if gate is closed
  * so that initial voice utterance is included.
-*/
+ */
 export const VOICE_MIC_GATE_LOOKBACK_MS = 200;
 
 /**
@@ -216,6 +262,9 @@ export function matchesSleepPhrase(normalized: string): boolean {
 
 /** Auto-sleep when awake and robot motion idle for this long (ms). */
 export const VOICE_AUTO_SLEEP_IDLE_MS = 30_000;
+
+/** Auto-mute mic uplink when unmuted with no successful voice tool for this long (ms). */
+export const VOICE_AUTO_MUTE_IDLE_MS = 60_000;
 
 /** Debounce between repeated wake/sleep phrase detections (ms). */
 export const VOICE_PHRASE_DEBOUNCE_MS = 800;
@@ -335,7 +384,7 @@ export function isPlaceholderArgs(s: string): boolean {
 }
 
 /**
- * UI / devtools: lines worth surfacing as "Last tool/trace" in VoiceCommandAssistant.tsx.
+ * Devtools: tool/trace log lines from the headless voice session controller.
  */
 export function isVoiceToolLogLine(line: string): boolean {
     return (

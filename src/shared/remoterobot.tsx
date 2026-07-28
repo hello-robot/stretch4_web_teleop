@@ -1,5 +1,5 @@
 import React from "react";
-import ROSLIB from "roslib";
+import { Transform, Vector3, Quaternion } from "roslib";
 import {
     cmd,
     DriveCommand,
@@ -31,9 +31,10 @@ export class RemoteRobot extends React.Component<{}, any> {
     sensors: RobotSensors;
     isRunStopped: boolean;
     batteryVoltage: number;
-    mapPose: ROSLIB.Transform;
+    mapPose: Transform;
     moveBaseGoalReached: boolean;
     moveBaseState?: string;
+    private mapPoseListeners: Set<(pose: Transform) => void> = new Set();
 
     constructor(props: { robotChannel: robotMessageChannel }) {
         super(props);
@@ -46,14 +47,14 @@ export class RemoteRobot extends React.Component<{}, any> {
                 x: 0,
                 y: 0,
                 z: 0,
-            } as ROSLIB.Vector3,
+            } as Vector3,
             rotation: {
                 x: 0,
                 y: 0,
                 z: 0,
                 w: 0,
-            } as ROSLIB.Quaternion,
-        } as ROSLIB.Transform;
+            } as Quaternion,
+        } as Transform;
         this.moveBaseGoalReached = false;
     }
 
@@ -185,6 +186,7 @@ export class RemoteRobot extends React.Component<{}, any> {
     }
 
     moveBase(pose: ROSPose) {
+        this.setGoalReached(false);
         let cmd: MoveBaseCommand = {
             type: "moveBase",
             pose: pose,
@@ -219,12 +221,29 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
-    setMapPose(pose: ROSLIB.Transform) {
+    setMapPose(pose: Transform) {
         this.mapPose = pose;
+        this.mapPoseListeners.forEach((listener) => {
+            try {
+                listener(pose);
+            } catch (err) {
+                console.warn("mapPose listener failed:", err);
+            }
+        });
     }
 
     getMapPose() {
         return this.mapPose;
+    }
+
+    /**
+     * Subscribe to map pose (amcl) updates. Returns an unsubscribe function.
+     */
+    addMapPoseListener(listener: (pose: Transform) => void): () => void {
+        this.mapPoseListeners.add(listener);
+        return () => {
+            this.mapPoseListeners.delete(listener);
+        };
     }
 
     stopTrajectory() {

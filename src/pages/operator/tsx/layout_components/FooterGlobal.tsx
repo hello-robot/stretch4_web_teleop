@@ -1,18 +1,27 @@
 import React, { useMemo, useState } from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import MicIcon from "@mui/icons-material/Mic";
+import MicOffIcon from "@mui/icons-material/MicOff";
 
 import MainMenu from "../basic_components/MainMenu";
 import SceneCarousel, {
     SceneItem,
 } from "../basic_components/SceneCarousel";
 import MagneticWrapper from "../static_components/MagneticWrapper";
+import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
 import { runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import {
+    getVoiceStatusSnapshot,
+    setVoiceStatus,
+    useVoiceStatus,
+} from "../voice/voiceStatusStore";
+import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
@@ -27,6 +36,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
+    const { connected: voiceConnected, micMuted } = useVoiceStatus();
 
     runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
@@ -35,7 +45,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         () => [
             {
                 id: "pilot-mode",
-                name: "Pilot Mode",
+                name: "Pilot",
                 description: "TextDescription",
                 onClick: () => {
                     swipeableViewsIdxSet(0);
@@ -54,6 +64,20 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 },
                 icon: <CheckCircleIcon />,
                 enabled: true
+            },
+            {
+                id: "mic-mute",
+                name: micMuted ? "Unmute" : "Mute",
+                description: "Toggle microphone uplink to OpenAI",
+                onClick: () => {
+                    const nextMuted = !getVoiceStatusSnapshot().micMuted;
+                    if (!nextMuted) {
+                        bumpVoiceCommandActivity();
+                    }
+                    setVoiceStatus({ micMuted: nextMuted });
+                },
+                icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                enabled: voiceConnected,
             },
             {
                 id: "finedex-gripper",
@@ -88,10 +112,20 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: false
             }
         ],
-        [onSceneSelectedChange, swipeableViewsIdxSet]
+        [
+            onSceneSelectedChange,
+            swipeableViewsIdxSet,
+            micMuted,
+            voiceConnected,
+        ]
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
+        if (scene.id === "mic-mute") {
+            scene.onClick?.();
+            isMainMenuOpenSet(false);
+            return;
+        }
         onSceneSelectedChange(scene.id);
         scene.onClick?.();
         isMainMenuOpenSet(false);
@@ -111,8 +145,10 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="scene-menu-button"
                     onPointerUp={() => isMainMenuOpenSet(true)}
                 >
-                    {sceneNameCurrent}
-                    <div className="fancy-border" />
+                    <VoicePilotSceneChrome
+                        sceneSelected={sceneSelected}
+                        fallbackName={sceneNameCurrent}
+                    />
                 </button>
                 <MainMenu
                     isOpen={isMainMenuOpen}

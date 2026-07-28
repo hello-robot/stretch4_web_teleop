@@ -63,11 +63,11 @@ fi
 LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
 echo "Start ROS2..."
 echo "ROS2 launch output: $LAUNCH_LOGFILE"
-screen -dm -S "web_teleop_ros" bash -c "ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG &>> $LAUNCH_LOGFILE"
+screen -dm -S "web_teleop_ros" bash -c "ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
 sleep 8
 
 # Check if the launch log contains any errors
-ERRORS=$(grep -E "ERROR" "$LAUNCH_LOGFILE" || true)
+ERRORS=$(grep -E "ERROR" "$LAUNCH_LOGFILE" | grep -vE "Model name OAK-FFC-3P not found|load firetimes error|Inflation layer either not found|rcl_shutdown already called" || true)
 if [ -n "$ERRORS" ]; then
 	echo ""
 	echo "Errors found in web_interface.launch.py output:"

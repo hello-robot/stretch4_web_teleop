@@ -1,7 +1,4 @@
-/**
- * This is the voice command assistant component that
- * sits at the top of the screen. Very WIP.
- */
+/** Headless auto-connect lifecycle for the OpenAI Realtime voice session. */
 
 import React, {
     useCallback,
@@ -16,84 +13,96 @@ import { velocityScaleForVoiceSpeed } from "../utils/action-speed-scale";
 import {
     connectOpenAIRealtimeVoice,
     type ActiveRealtimeVoiceSession,
-    type VoiceListeningState,
 } from "../voice/realtimeSession";
 import { setVoiceMoveExecutionContext } from "../voice/executeBaseMove";
+import {
+    getVoiceStatusSnapshot,
+    setVoiceStatus,
+    subscribeVoiceStatus,
+} from "../voice/voiceStatusStore";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
-    VOICE_MIC_RMS_THRESHOLD,
-    VOICE_WAKE_PHRASE_DISPLAY,
-    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_AUTO_MUTE_IDLE_MS,
+    VOICE_AUTO_SLEEP_POLL_MS,
+    type ControlAutoNavAction,
+    type ControlAutoNavResult,
+    type LoadAutoNavLocationResult,
+    type SavedLocationsModalAction,
+    type SetSavedLocationsModalResult,
+    type VoiceSceneName,
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
-import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
 import {
-    AccessibleRadioGroup,
-    type AccessibleRadioOption,
-} from "./AccessibleRadioGroup";
-import Ellipsis from "../basic_components/Ellipsis";
+    bumpVoiceCommandActivity,
+    getLastVoiceCommandActivityAt,
+} from "../voice/voiceCommandActivity";
+import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
+import type { SaveMapLocationResult } from "../voice/executeSaveMapLocation";
 import type { AddToastFn } from "../layout_components/Toasts";
-import "operator/css/VoiceCommandAssistant.css";
+
+const SCENE_TOAST_LABELS: Record<VoiceSceneName, string> = {
+    pilot: "Switching to Pilot",
+    autonav: "Switching to AutoNav",
+};
 
 /** Explicit check to make sure operator is using
  * LAN/ngrok (LocalStorage + socket.io) and not cloud (Firebase) */
 const isFirebaseStorage = process.env.storage === "firebase";
 
+/** Product default; "direct" remains available for future user preferences. */
+const VOICE_MOVE_EXECUTION_MODE: VoiceMoveExecutionMode = "button_provider";
+
+/** Cooldown before auto-retry after a failed connect (no manual retry UI). */
+const CONNECT_RETRY_MS = 3000;
+
+const clearVoiceUiStatus = () =>
+    setVoiceStatus({
+        connected: false,
+        micGateOpen: false,
+        listeningState: "asleep",
+    });
+
 export type VoiceCommandAssistantProps = {
     onVelocityScaleApplied: (scale: number) => void;
     setActionMode: (mode: ActionModeType) => void;
     addToast: AddToastFn;
+    onSwitchScene: (scene: VoiceSceneName) => void;
+    onSetSavedLocationsModal: (
+        action: SavedLocationsModalAction,
+    ) => SetSavedLocationsModalResult;
+    onControlAutoNav: (action: ControlAutoNavAction) => ControlAutoNavResult;
+    onCancelAutoNavOnStop: () => ControlAutoNavResult;
+    onGetAutoNavSavedPoseNames: () => string[] | null;
+    onLoadAutoNavLocation: (poseName: string) => LoadAutoNavLocationResult;
 };
 
-/** The use of `style` props will be moved to CSS when the VC feature becomes stable. */
-const styleButton = {
-    fontWeight: "bold" as const,
-    width: "100%",
-    height: 43,
-    backgroundColor: "hsla(184, 100%, 50%, 1)",
-    color: "hsl(0deg 0% 0% / 75%)",
-};
-
-const VOICE_MOVE_EXECUTION_OPTIONS: AccessibleRadioOption[] = [
-    {
-        value: "direct",
-        label: "Direct",
-        ariaLabel: "Direct",
-    },
-    {
-        value: "button_provider",
-        label: "Button Pad",
-        ariaLabel: "Button Pad",
-    },
-];
-
-/** OpenAI speech-to-speech voice POC overlay (Realtime WebRTC). */
+/** OpenAI speech-to-speech voice session controller (Realtime WebRTC). */
 export const VoiceCommandAssistant = ({
     onVelocityScaleApplied,
     setActionMode,
     addToast,
+    onSwitchScene,
+    onSetSavedLocationsModal,
+    onControlAutoNav,
+    onCancelAutoNavOnStop,
+    onGetAutoNavSavedPoseNames,
+    onLoadAutoNavLocation,
 }: VoiceCommandAssistantProps) => {
     const sessionRef =
         useRef<ActiveRealtimeVoiceSession | null>(null);
+    const connectInFlightRef = useRef(false);
+    const retryTimeoutRef = useRef<number | null>(null);
     const [phase, phaseSet] = useState<
         "idle" | "connecting" | "live" | "error"
     >("idle");
-    const [statusLine, statusLineSet] =
-        useState<string>("Connect");
-    const [micLevel, micLevelSet] = useState(0);
-    const [micGateOpen, micGateOpenSet] = useState(false);
     const [voiceSessionReady, voiceSessionReadySet] = useState(() =>
         Boolean(getOperatorVoiceSessionToken()),
     );
-    const [voiceMoveExecutionMode, voiceMoveExecutionModeSet] =
-        useState<VoiceMoveExecutionMode>("direct");
-    const [listeningState, listeningStateSet] =
-        useState<VoiceListeningState>("asleep");
-
-    const executionModeLocked =
-        phase === "connecting" || phase === "live";
+    const [robotOk, robotOkSet] = useState(() =>
+        FunctionProvider.robotIsConnected(),
+    );
 
     useEffect(() => {
         if (isFirebaseStorage) {
@@ -101,20 +110,22 @@ export const VoiceCommandAssistant = ({
         }
         const id = window.setInterval(() => {
             voiceSessionReadySet(Boolean(getOperatorVoiceSessionToken()));
+            robotOkSet(FunctionProvider.robotIsConnected());
         }, 500);
         return () => window.clearInterval(id);
     }, []);
 
     const disconnect = useCallback(async () => {
+        if (retryTimeoutRef.current !== null) {
+            window.clearTimeout(retryTimeoutRef.current);
+            retryTimeoutRef.current = null;
+        }
         if (sessionRef.current) {
             await sessionRef.current.disconnect().catch(() => undefined);
             sessionRef.current = null;
         }
         phaseSet("idle");
-        statusLineSet("Connect");
-        micLevelSet(0);
-        micGateOpenSet(false);
-        listeningStateSet("asleep");
+        clearVoiceUiStatus();
     }, []);
 
     useEffect(() => {
@@ -138,10 +149,93 @@ export const VoiceCommandAssistant = ({
         (feedback: VoiceMoveFeedback) => {
             const toast = voiceMoveFeedbackToToast(feedback);
             if (toast) {
-                addToast(toast.type, toast.message);
+                addToast(toast.type, toast.message, undefined, "voice");
             }
         },
         [addToast],
+    );
+
+    const handleSwitchScene = useCallback(
+        (scene: VoiceSceneName) => {
+            onSwitchScene(scene);
+            addToast("info", SCENE_TOAST_LABELS[scene], undefined, "voice");
+        },
+        [onSwitchScene, addToast],
+    );
+
+    const handleSaveMapLocationResult = useCallback(
+        (result: SaveMapLocationResult) => {
+            if (result.ok) {
+                const label = result.label ?? "";
+                addToast(
+                    "info",
+                    `Location "${label}" added.`,
+                    undefined,
+                    "voice",
+                );
+                return;
+            }
+            addToast("error", result.detail, undefined, "voice");
+        },
+        [addToast],
+    );
+
+    const handleSetSavedLocationsModal = useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            const result = onSetSavedLocationsModal(action);
+            if (!result.ok) {
+                addToast("error", result.detail, undefined, "voice");
+            }
+            return result;
+        },
+        [onSetSavedLocationsModal, addToast],
+    );
+
+    const handleControlAutoNav = useCallback(
+        (action: ControlAutoNavAction): ControlAutoNavResult => {
+            const result = onControlAutoNav(action);
+            if (!result.ok) {
+                addToast("error", result.detail, undefined, "voice");
+            } else {
+                addToast(
+                    "info",
+                    action === "start"
+                        ? "Starting AutoNav"
+                        : "Cancelling AutoNav",
+                    undefined,
+                    "voice",
+                );
+            }
+            return result;
+        },
+        [onControlAutoNav, addToast],
+    );
+
+    /** Bare stop: cancel AutoNav only when navigating; never toast failures. */
+    const handleCancelAutoNavOnStop = useCallback((): ControlAutoNavResult => {
+        const result = onCancelAutoNavOnStop();
+        if (result.ok) {
+            addToast("info", "Cancelling AutoNav", undefined, "voice");
+        }
+        return result;
+    }, [onCancelAutoNavOnStop, addToast]);
+
+    const handleLoadAutoNavLocation = useCallback(
+        (poseName: string): LoadAutoNavLocationResult => {
+            const result = onLoadAutoNavLocation(poseName);
+            // Success only — unknown/ambiguous/prefix failures stay silent.
+            if (result.ok) {
+                const label = result.label ?? poseName;
+                addToast(
+                    "info",
+                    `Selected "${label}"`,
+                    undefined,
+                    "voice",
+                );
+            }
+            return result;
+        },
+        [onLoadAutoNavLocation, addToast],
     );
 
     const connect = useCallback(async () => {
@@ -150,14 +244,22 @@ export const VoiceCommandAssistant = ({
         }
         try {
             phaseSet("connecting");
-            statusLineSet("Connecting…");
             const s = await connectOpenAIRealtimeVoice({
                 voiceProvider: buttonFunctionProvider,
-                voiceMoveExecutionMode,
+                voiceMoveExecutionMode: VOICE_MOVE_EXECUTION_MODE,
                 onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
                 onVoiceMoveFeedback,
-                onListeningState: listeningStateSet,
+                onSwitchScene: handleSwitchScene,
+                onSaveMapLocationResult: handleSaveMapLocationResult,
+                onSetSavedLocationsModal: handleSetSavedLocationsModal,
+                onControlAutoNav: handleControlAutoNav,
+                onCancelAutoNavOnStop: handleCancelAutoNavOnStop,
+                onGetAutoNavSavedPoseNames,
+                onLoadAutoNavLocation: handleLoadAutoNavLocation,
+                onListeningState: (listeningState) => {
+                    setVoiceStatus({ listeningState });
+                },
                 onLog: (lg) => {
                     if (
                         lg.includes("[WakeSleep]") ||
@@ -167,259 +269,105 @@ export const VoiceCommandAssistant = ({
                         console.log("[VoiceCommandAssistant]", lg.slice(0, 240));
                     }
                 },
-                onMicLevel: (level, gateOpen) => {
-                    micLevelSet(level);
-                    micGateOpenSet(gateOpen);
+                onMicLevel: (_level, gateOpen) => {
+                    setVoiceStatus({ micGateOpen: gateOpen });
                 },
             });
             sessionRef.current = s;
+            s.setMicMuted(getVoiceStatusSnapshot().micMuted);
             phaseSet("live");
+            setVoiceStatus({ connected: true });
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error("[VoiceCommandAssistant] connect failed", e);
             setVoiceMoveExecutionContext(undefined);
             phaseSet("error");
-            statusLineSet(`Error: ${msg}`);
             sessionRef.current = null;
+            clearVoiceUiStatus();
+            if (retryTimeoutRef.current !== null) {
+                window.clearTimeout(retryTimeoutRef.current);
+            }
+            retryTimeoutRef.current = window.setTimeout(() => {
+                retryTimeoutRef.current = null;
+                phaseSet((current) =>
+                    current === "error" ? "idle" : current,
+                );
+            }, CONNECT_RETRY_MS);
         }
     }, [
         phase,
-        voiceMoveExecutionMode,
         onVoiceSpeedChange,
         onVoicePressAndHoldRequired,
         onVoiceMoveFeedback,
+        handleSwitchScene,
+        handleSaveMapLocationResult,
+        handleSetSavedLocationsModal,
+        handleControlAutoNav,
+        handleCancelAutoNavOnStop,
+        onGetAutoNavSavedPoseNames,
+        handleLoadAutoNavLocation,
     ]);
 
-    const robotOk = FunctionProvider.robotIsConnected();
-    const voiceSessionOk = voiceSessionReady;
     const canConnectVoice =
-        !isFirebaseStorage && robotOk && voiceSessionOk;
+        !isFirebaseStorage && robotOk && voiceSessionReady;
 
-    const meterFill = Math.min(1, Math.max(0, micLevel));
-
-    const micGateHint =
-        phase !== "live"
-            ? ""
-            : listeningState === "asleep"
-                ? `Asleep — say "${VOICE_WAKE_PHRASE_DISPLAY}" or "${VOICE_WAKE_PHRASE_ALT_DISPLAY}" to wake (or tap Wake)`
-                : micGateOpen
-                    ? "Listening..."
-                    : "Awake — speak your command";
-
-    const primaryButtonLabel =
-        phase === "live"
-            ? "Disconnect"
-            : phase === "connecting"
-                ? "Connecting…"
-                : statusLine;
-    const primaryButtonAriaLabel =
-        phase === "connecting" ? "Connecting" : primaryButtonLabel;
-
-    const onPrimaryButtonClick = () => {
-        if (phase === "live") {
-            void disconnect();
+    useEffect(() => {
+        if (
+            !canConnectVoice ||
+            phase !== "idle" ||
+            connectInFlightRef.current
+        ) {
             return;
         }
-        if (phase !== "connecting") {
-            void connect();
+        connectInFlightRef.current = true;
+        void connect().finally(() => {
+            connectInFlightRef.current = false;
+        });
+    }, [canConnectVoice, phase, connect]);
+
+    useEffect(() => {
+        return subscribeVoiceStatus(() => {
+            sessionRef.current?.setMicMuted(
+                getVoiceStatusSnapshot().micMuted,
+            );
+        });
+    }, []);
+
+    useEffect(() => {
+        let wasMuted = getVoiceStatusSnapshot().micMuted;
+        const onStatus = () => {
+            const { micMuted } = getVoiceStatusSnapshot();
+            if (wasMuted && !micMuted) {
+                bumpVoiceCommandActivity();
+            }
+            wasMuted = micMuted;
+        };
+        const unsub = subscribeVoiceStatus(onStatus);
+        onStatus();
+        return unsub;
+    }, []);
+
+    useEffect(() => {
+        if (phase !== "live") {
+            return;
         }
-    };
+        const id = window.setInterval(() => {
+            const { connected, micMuted } = getVoiceStatusSnapshot();
+            if (!connected || micMuted) {
+                return;
+            }
+            const lastAt = getLastVoiceCommandActivityAt();
+            if (
+                lastAt > 0 &&
+                Date.now() - lastAt >= VOICE_AUTO_MUTE_IDLE_MS
+            ) {
+                setVoiceStatus({ micMuted: true });
+            }
+        }, VOICE_AUTO_SLEEP_POLL_MS);
+        return () => window.clearInterval(id);
+    }, [phase]);
 
-    const primaryButtonDisabled =
-        phase === "connecting" ||
-        (phase !== "live" && !canConnectVoice);
-
-    return (
-        <div
-            style={{
-                zIndex: 10000,
-                position: "absolute",
-                bottom: 0,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "hsla(0, 0%, 0%, 1)",
-                backdropFilter: "blur(30px)",
-                width: "100%",
-                padding: "0px 20px 20px",
-            }}
-        >
-            <div
-                style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    fontWeight: 600,
-                    width: "100%",
-                    maxWidth: 520,
-                }}
-            >
-                <div
-                    style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        gap: "20px",
-                        margin: "10px 0 0",
-                        width: "100%",
-                    }}
-                >
-                    <button
-                        className="voice-command-assistant__primary-button"
-                        style={styleButton}
-                        type="button"
-                        disabled={primaryButtonDisabled}
-                        aria-label={primaryButtonAriaLabel}
-                        aria-busy={phase === "connecting"}
-                        onClick={onPrimaryButtonClick}
-                    >
-                        {phase === "connecting" ? (
-                            <>
-                                <span
-                                    className="voice-command-assistant__spinner"
-                                    aria-hidden
-                                />
-                                <span className="voice-command-assistant__connecting-label">
-                                    Connecting
-                                    <span
-                                        className="voice-command-assistant__connecting-ellipsis"
-                                        aria-hidden="true"
-                                    >
-                                        <Ellipsis
-                                            size={2}
-                                            gap={1}
-                                            color="hsl(0deg 0% 0% / 75%)"
-                                        />
-                                    </span>
-                                </span>
-                            </>
-                        ) : (
-                            primaryButtonLabel
-                        )}
-                    </button>
-                </div>
-                {robotOk && voiceSessionOk && phase !== "live" ? (
-                    <AccessibleRadioGroup
-                        className="voice-move-execution-mode"
-                        legend="Movement Execution Mode"
-                        name="voiceMoveExecutionMode"
-                        options={VOICE_MOVE_EXECUTION_OPTIONS}
-                        value={voiceMoveExecutionMode}
-                        onChange={(value) =>
-                            voiceMoveExecutionModeSet(
-                                value as VoiceMoveExecutionMode,
-                            )
-                        }
-                        disabled={executionModeLocked}
-                        padding={8}
-                        hasRipple
-                        layout="horizontal"
-                    />
-                ) : null}
-                {phase === "live" ? (
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            gap: "6px",
-                            width: "100%",
-                            minHeight: 78,
-                        }}
-                    >
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "10px",
-                                width: "100%",
-                            }}
-                        >
-                            <span
-                                style={{
-                                    fontSize: "0.82em",
-                                    color: "hsl(184deg 60% 87%)",
-                                    minWidth: "2.5em",
-                                }}
-                            >
-                                Mic
-                            </span>
-                            <div
-                                role="meter"
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-valuenow={Math.round(micLevel * 100)}
-                                aria-label="Microphone input level"
-                                style={{
-                                    flex: 1,
-                                    height: "8px",
-                                    borderRadius: "4px",
-                                    backgroundColor: "hsla(0, 0%, 100%, 0.15)",
-                                    overflow: "hidden",
-                                    position: "relative",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        height: "100%",
-                                        width: "100%",
-                                        transformOrigin: "left center",
-                                        transform: `scaleX(${meterFill})`,
-                                        backgroundColor: micGateOpen
-                                            ? "hsl(184deg 100% 50%)"
-                                            : listeningState === "asleep"
-                                                ? "hsla(184, 100%, 50%, 0.2)"
-                                                : "hsla(184, 100%, 50%, 0.45)",
-                                        transition: "transform 0.05s linear",
-                                        willChange: "transform",
-                                    }}
-                                />
-                                <div
-                                    style={{
-                                        position: "absolute",
-                                        left: `${Math.round(VOICE_MIC_RMS_THRESHOLD * 100)}%`,
-                                        top: 0,
-                                        bottom: 0,
-                                        width: "2px",
-                                        backgroundColor:
-                                            "hsla(0, 0%, 100%, 0.55)",
-                                    }}
-                                    title="Volume gate threshold"
-                                />
-                            </div>
-                        </div>
-                        <p
-                            style={{
-                                fontWeight: 400,
-                                fontSize: "0.82em",
-                                margin: 0,
-                                color:
-                                    listeningState === "awake" && micGateOpen
-                                        ? "hsl(184deg 100% 50%)"
-                                        : "hsl(184deg 60% 87%)",
-                            }}
-                        >
-                            {micGateHint}
-                        </p>
-                        {listeningState === "asleep" ? (
-                            <button
-                                type="button"
-                                style={{
-                                    ...styleButton,
-                                    height: 36,
-                                    fontSize: "0.9em",
-                                    marginTop: 4,
-                                }}
-                                onClick={() => sessionRef.current?.wake()}
-                            >
-                                Wake
-                            </button>
-                        ) : null}
-                    </div>
-                ) : null}
-            </div>
-        </div>
-    );
+    return null;
 };
 
 export default VoiceCommandAssistant;
