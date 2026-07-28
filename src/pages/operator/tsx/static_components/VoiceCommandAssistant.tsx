@@ -15,10 +15,16 @@ import {
     type ActiveRealtimeVoiceSession,
 } from "../voice/realtimeSession";
 import { setVoiceMoveExecutionContext } from "../voice/executeBaseMove";
-import { setVoiceStatus } from "../voice/voiceStatusStore";
+import {
+    getVoiceStatusSnapshot,
+    setVoiceStatus,
+    subscribeVoiceStatus,
+} from "../voice/voiceStatusStore";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
+    VOICE_AUTO_MUTE_IDLE_MS,
+    VOICE_AUTO_SLEEP_POLL_MS,
     type ControlAutoNavAction,
     type ControlAutoNavResult,
     type LoadAutoNavLocationResult,
@@ -28,6 +34,10 @@ import {
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
 } from "../voice/constants";
+import {
+    bumpVoiceCommandActivity,
+    getLastVoiceCommandActivityAt,
+} from "../voice/voiceCommandActivity";
 import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
 import type { SaveMapLocationResult } from "../voice/executeSaveMapLocation";
 import type { AddToastFn } from "../layout_components/Toasts";
@@ -264,6 +274,7 @@ export const VoiceCommandAssistant = ({
                 },
             });
             sessionRef.current = s;
+            s.setMicMuted(getVoiceStatusSnapshot().micMuted);
             phaseSet("live");
             setVoiceStatus({ connected: true });
         } catch (e) {
@@ -313,6 +324,48 @@ export const VoiceCommandAssistant = ({
             connectInFlightRef.current = false;
         });
     }, [canConnectVoice, phase, connect]);
+
+    useEffect(() => {
+        return subscribeVoiceStatus(() => {
+            sessionRef.current?.setMicMuted(
+                getVoiceStatusSnapshot().micMuted,
+            );
+        });
+    }, []);
+
+    useEffect(() => {
+        let wasMuted = getVoiceStatusSnapshot().micMuted;
+        const onStatus = () => {
+            const { micMuted } = getVoiceStatusSnapshot();
+            if (wasMuted && !micMuted) {
+                bumpVoiceCommandActivity();
+            }
+            wasMuted = micMuted;
+        };
+        const unsub = subscribeVoiceStatus(onStatus);
+        onStatus();
+        return unsub;
+    }, []);
+
+    useEffect(() => {
+        if (phase !== "live") {
+            return;
+        }
+        const id = window.setInterval(() => {
+            const { connected, micMuted } = getVoiceStatusSnapshot();
+            if (!connected || micMuted) {
+                return;
+            }
+            const lastAt = getLastVoiceCommandActivityAt();
+            if (
+                lastAt > 0 &&
+                Date.now() - lastAt >= VOICE_AUTO_MUTE_IDLE_MS
+            ) {
+                setVoiceStatus({ micMuted: true });
+            }
+        }, VOICE_AUTO_SLEEP_POLL_MS);
+        return () => window.clearInterval(id);
+    }, [phase]);
 
     return null;
 };

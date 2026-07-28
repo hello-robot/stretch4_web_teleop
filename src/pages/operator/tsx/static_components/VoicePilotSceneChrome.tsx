@@ -16,17 +16,22 @@ const VOICE_SCENE_LABELS: Record<string, string> = {
 
 /**
  * Scene-button label + fancy-border mic glow for voice-enabled scenes.
+ * "Voice …" label only while unmuted; waveform also needs awake;
+ * border glow pulses on RMS gate (even asleep).
  * Owns voice chrome so FooterGlobal stays layout-only.
  */
 const VoicePilotSceneChrome: React.FC<VoicePilotSceneChromeProps> = ({
     sceneSelected,
     fallbackName,
 }) => {
-    const { connected, micGateOpen, listeningState } = useVoiceStatus();
+    const { connected, micGateOpen, micMuted, listeningState } =
+        useVoiceStatus();
     const voiceLabel = VOICE_SCENE_LABELS[sceneSelected];
-    const showVoiceChrome = Boolean(voiceLabel) && connected;
-    const showWaveform = showVoiceChrome && listeningState === "awake";
-    const showMicGateGlow = showWaveform && micGateOpen;
+    const showVoiceChrome =
+        Boolean(voiceLabel) && connected && !micMuted;
+    const showWaveform =
+        showVoiceChrome && listeningState === "awake";
+    const showMicGateGlow = showVoiceChrome && micGateOpen;
 
     return (
         <>
