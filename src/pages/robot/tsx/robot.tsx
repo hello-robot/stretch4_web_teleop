@@ -299,7 +299,7 @@ export class Robot extends React.Component {
 
     async onConnect() {
         console.log("onConnect");
-        const mapLoaded= await this.isMapLoaded();
+        const collisionMonitorActive = await this.isCollisionMonitorActive();
 
         this.subscribeToJointState();
         this.subscribeToJointLimits();
@@ -321,7 +321,7 @@ export class Robot extends React.Component {
             "Navigation failed!",
         );
 
-        this.createCmdVelTopic(mapLoaded);
+        this.createCmdVelTopic(collisionMonitorActive);
         this.createJointVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
@@ -1529,15 +1529,34 @@ export class Robot extends React.Component {
         return inCollision;
     }
 
-    async isMapLoaded(): Promise<boolean> {
-        return new Promise((resolve) => {
-            this.ros.getServices(
-                (services: string[]) => {
-                    resolve(services.includes("/map_server/map"));
-                },
-                () => resolve(false)
-            );
-        });
+    async isCollisionMonitorActive(timeoutMs: number = 3000): Promise<boolean> {
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < timeoutMs) {
+            const isActive = await new Promise<boolean>((resolve) => {
+                const rosAny = this.ros as any;
+                if (rosAny.getNodes !== undefined) {
+                    rosAny.getNodes(
+                        (nodes: string[]) => {
+                            resolve(nodes.some((node: string) => node.endsWith("collision_monitor")));
+                        },
+                        () => resolve(false)
+                    );
+                } else {
+                    resolve(false);
+                }
+            });
+
+            if (isActive) {
+                return true;
+            }
+
+            // Wait 500ms before checking again
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        console.log("Timed out waiting for collision_monitor node. Defaulting to /cmd_vel.");
+        return false;
     }
 
     /**
