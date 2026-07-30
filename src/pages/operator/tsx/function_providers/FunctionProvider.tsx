@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 import { Transform } from "roslib";
+=======
+>>>>>>> main
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
 import { RobotPose, ValidJoints } from "shared/util";
@@ -125,8 +128,11 @@ export abstract class FunctionProvider {
         }, 50);
     }
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> main
     /**
      * Move a joint incrementally using the trajectory action server.
      * Stops any ongoing velocity or trajectory action first.

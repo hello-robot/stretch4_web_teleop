@@ -13,15 +13,18 @@ import {
 import {
     ActionState,
     ActionStatusList,
+    DiagnosticArray,
     getStretchTool,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
+    ROSOdometry,
     ROSPose,
     StretchTool,
     ValidJoints,
     VideoProps,
+    JOINT_VELOCITIES,
 } from "shared/util";
 import {
     RobotPose,
@@ -1472,7 +1475,7 @@ export class Robot extends React.Component {
                     foundAny = true;
                 }
             }
-            if (foundAny) return total * 1.25;  // Scale factor to account for the number of links (5/4)
+            if (foundAny) return total;
         }
 
         let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
