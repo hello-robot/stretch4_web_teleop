@@ -254,12 +254,21 @@ export class ButtonFunctionProvider extends FunctionProvider {
             : 1;
         const velocity =
             multiplier *
-            JOINT_VELOCITIES[jointName]! *
+            JOINT_VELOCITIES[jointName] *
             FunctionProvider.velocityScale;
+
+        if (velocity === undefined) {
+            throw new Error(`ButtonFunctionProvider::provideFunctions: Velocity for joint ${jointName} is undefined!`);
+        }
+
         const increment =
             multiplier *
-            JOINT_INCREMENTS[jointName]! *
+            JOINT_INCREMENTS[jointName] *
             FunctionProvider.velocityScale;
+
+        if (increment === undefined) {
+            throw new Error(`ButtonFunctionProvider::provideFunctions: Increment for joint ${jointName} is undefined!`);
+        }
 
         switch (FunctionProvider.actionMode) {
             case ActionModeType.StepActions:
@@ -291,7 +300,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     case ButtonPadButton.GripperOpen:
                     case ButtonPadButton.GripperClose:
                         action = () =>
-                            this.incrementalJointMovement(jointName, increment);
+                            this.incrementalJointMove(jointName, increment);
                         break;
                 }
                 return {
@@ -337,7 +346,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     case ButtonPadButton.GripperOpen:
                     case ButtonPadButton.GripperClose:
                         action = () =>
-                            this.continuousJointMovement(jointName, increment);
+                            this.continuousJointMovement(jointName, velocity);
                         break;
                 }
 

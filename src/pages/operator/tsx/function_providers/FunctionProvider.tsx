@@ -1,12 +1,12 @@
-import { RemoteRobot } from "shared/remoterobot";
 import { VelocityCommand } from "shared/commands";
-import { ValidJoints } from "shared/util";
+import { RemoteRobot } from "shared/remoterobot";
+import { RobotPose, ValidJoints } from "shared/util";
+import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
-import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 
 const x = PilotButtonPads;
 
@@ -76,7 +76,29 @@ export abstract class FunctionProvider {
                     jointName,
                     velocity
                 );
-        }, 25);
+        }, 50);
+    }
+
+    /**
+     * Move a joint incrementally using the trajectory action server.
+     * Stops any ongoing velocity or trajectory action first.
+     *
+     * @param jointName the joint to actuate
+     * @param increment the incremental distance/rotation (m or rad)
+     * @returns false if no robot attached
+     */
+    public incrementalJointMove(
+        jointName: ValidJoints,
+        increment: number,
+    ): boolean {
+        if (!FunctionProvider.remoteRobot) {
+            return false;
+        }
+
+        this.stopCurrentAction(true);
+        this.activeVelocityAction =
+            FunctionProvider.remoteRobot.incrementalMove(jointName, increment);
+        return true;
     }
 
     // NOTE: When we undo this temp fix (of not stopping the
@@ -90,11 +112,6 @@ export abstract class FunctionProvider {
             // which means we are unnecessarily calling it twice.
             if (send_stop_command) this.activeVelocityAction.stop();
             this.activeVelocityAction = undefined;
-        }
-
-        if (this.velocityExecutionTimeout) {
-            clearTimeout(this.velocityExecutionTimeout);
-            this.velocityExecutionTimeout = undefined;
         }
 
         if (this.velocityExecutionHeartbeat) {
