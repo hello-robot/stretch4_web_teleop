@@ -1283,6 +1283,29 @@ export async function connectOpenAIRealtimeVoice(
         opts.onStatus?.(
             `Data channel ready — say ${VOICE_WAKE_PHRASE_DISPLAY} or ${VOICE_WAKE_PHRASE_ALT_DISPLAY} to wake`,
         );
+        (window as any).spoofVoiceCommand = (text: string) => {
+            if (dc.readyState !== "open") {
+                console.error("[Spoof] Voice connection is not open.");
+                return;
+            }
+            console.log(`[Spoof] Sending text command: "${text}"`);
+            dc.send(
+                JSON.stringify({
+                    type: "conversation.item.create",
+                    item: {
+                        type: "message",
+                        role: "user",
+                        content: [
+                            {
+                                type: "input_text",
+                                text: text,
+                            },
+                        ],
+                    },
+                }),
+            );
+            dc.send(JSON.stringify({ type: "response.create" }));
+        };
     });
 
     const offer = await pc.createOffer({
@@ -1326,6 +1349,7 @@ export async function connectOpenAIRealtimeVoice(
     opts.onStatus?.("Connected (Realtime)");
 
     async function disconnect() {
+        delete (window as any).spoofVoiceCommand;
         voiceWakeSleep?.stop();
         voiceWakeSleep = undefined;
         micGate?.stop();
