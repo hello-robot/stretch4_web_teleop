@@ -69,11 +69,6 @@ export enum GoalStatus {
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
 
-// Pose-proximity arrival (primary completion when rosbridge action status/result fail).
-// Slightly above Nav2 xy_goal_tolerance (0.25m); streak avoids a single noisy TF sample.
-const MOVE_BASE_GOAL_XY_TOL_M = 0.35;
-const MOVE_BASE_GOAL_INSIDE_STREAK = 5;
-
 export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
@@ -97,9 +92,6 @@ export class Robot extends React.Component {
     private moveBaseStatusLastEmitted?: number;
     /** Count of terminal statuses when this goal session began (stale SUCCEEDED pile). */
     private moveBaseTerminalBaseline?: number;
-    /** Goal XY for pose-proximity arrival detection. */
-    private moveBaseGoalXY?: { x: number; y: number };
-    private moveBaseInsideTolStreak = 0;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     private cmdVelTopic?: Topic;
@@ -167,8 +159,6 @@ export class Robot extends React.Component {
                 this.moveBaseStatusWatching = false;
                 this.moveBaseStatusSeenActive = false;
                 this.moveBaseTerminalBaseline = undefined;
-                this.moveBaseGoalXY = undefined;
-                this.moveBaseInsideTolStreak = 0;
             }
             props.moveBaseResultCallback(goalState);
         };
@@ -901,39 +891,7 @@ export class Robot extends React.Component {
         this.createMapFrameTFClient();
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
-            this.maybeCompleteMoveBaseByProximity(transform);
         });
-    }
-
-    /**
-     * Primary AutoNav completion path: emit success when map→base_link stays
-     * within XY tolerance of the goal. Independent of rosbridge action status.
-     */
-    private maybeCompleteMoveBaseByProximity(transform: Transform) {
-        if (!this.moveBaseStatusWatching || !this.moveBaseGoalXY) {
-            return;
-        }
-        const dx = transform.translation.x - this.moveBaseGoalXY.x;
-        const dy = transform.translation.y - this.moveBaseGoalXY.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > MOVE_BASE_GOAL_XY_TOL_M) {
-            this.moveBaseInsideTolStreak = 0;
-            return;
-        }
-        this.moveBaseInsideTolStreak += 1;
-        if (this.moveBaseInsideTolStreak < MOVE_BASE_GOAL_INSIDE_STREAK) {
-            return;
-        }
-        console.log(
-            "Navigation succeeded via pose proximity:",
-            dist.toFixed(3),
-            "m",
-        );
-        this.moveBaseResultCallback({
-            state: "Navigation succeeded!",
-            alert_type: "success",
-        });
-        this.toggleBaseOnlyCollision(true);
     }
 
     setExpandedGripper(toggle: boolean) {
@@ -1336,11 +1294,6 @@ export class Robot extends React.Component {
         this.moveBaseStatusSeenActive = false;
         this.moveBaseStatusLastEmitted = undefined;
         this.moveBaseTerminalBaseline = undefined;
-        this.moveBaseGoalXY = {
-            x: pose.position.x,
-            y: pose.position.y,
-        };
-        this.moveBaseInsideTolStreak = 0;
 
         // Immediately notify operator that navigation has started executing
         this.moveBaseResultCallback({
@@ -1451,8 +1404,6 @@ export class Robot extends React.Component {
             this.moveBaseStatusWatching = false;
             this.moveBaseStatusSeenActive = false;
             this.moveBaseTerminalBaseline = undefined;
-            this.moveBaseGoalXY = undefined;
-            this.moveBaseInsideTolStreak = 0;
         }
     }
 
