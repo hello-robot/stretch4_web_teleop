@@ -427,7 +427,8 @@ export class Robot extends React.Component {
         });
         this.subscriptions.push(modeTopic);
 
-        modeTopic.subscribe((msg) => {
+        modeTopic.subscribe((msg: any) => {
+            robotMode = msg.data;
             if (this.modeCallback) this.modeCallback(msg.data);
         });
     }
