@@ -1,17 +1,17 @@
-import { LoginHandler } from "./LoginHandler";
-import { initializeApp, FirebaseOptions } from "firebase/app";
+import { FirebaseOptions, initializeApp } from "firebase/app";
 import {
-    getAuth,
-    signInWithEmailAndPassword,
-    onAuthStateChanged,
-    sendPasswordResetEmail,
-    signOut,
-    setPersistence,
+    Auth,
     browserLocalPersistence,
     browserSessionPersistence,
-    Auth,
+    getAuth,
+    onAuthStateChanged,
+    sendPasswordResetEmail,
+    setPersistence,
+    signInWithEmailAndPassword,
+    signOut,
 } from "firebase/auth";
-import { getDatabase, ref, onValue, set, Database } from "firebase/database";
+import { Database, getDatabase, onValue, ref, set } from "firebase/database";
+import { LoginHandler } from "./LoginHandler";
 
 export class FirebaseLoginHandler extends LoginHandler {
     private auth: Auth;
@@ -32,6 +32,9 @@ export class FirebaseLoginHandler extends LoginHandler {
         onAuthStateChanged(this.auth, (user) => {
             this.uid = user ? user.uid : undefined;
             this._loginState = user ? "authenticated" : "not_authenticated";
+            if (user) {
+                console.log("[LOGIN] Logged in user UID:", user.uid);
+            }
             this.onReadyCallback();
         });
     }
@@ -47,19 +50,39 @@ export class FirebaseLoginHandler extends LoginHandler {
             );
         }
 
-        onValue(
-            ref(this.db, "assignments/" + this.uid + "/robots"),
-            (snapshot) => {
-                let robots = snapshot.val();
-                Object.entries(robots).forEach(([robo_uid, is_active]) => {
-                    onValue(ref(this.db, "robots/" + robo_uid), (snapshot2) => {
-                        let robo_info = snapshot2.val();
-                        robo_info["is_active"] = is_active;
-                        resultCallback(robo_uid, robo_info);
+        console.log("[listRooms] Querying: uids/" + this.uid);
+        onValue(ref(this.db, "uids/" + this.uid), (uidSnapshot) => {
+            const alias = uidSnapshot.val() || this.uid;
+            console.log("[listRooms] Resolved alias:", alias);
+            console.log("[listRooms] Querying: assignments/" + alias + "/robots");
+            onValue(
+                ref(this.db, "assignments/" + alias + "/robots"),
+                (snapshot) => {
+                    let robots = snapshot.val();
+                    console.log("[listRooms] Assignments robots result:", robots);
+                    if (!robots) {
+                        console.warn("[listRooms] No robots found under assignments/" + alias + "/robots");
+                        return;
+                    }
+                    Object.entries(robots).forEach(([robo_uid, is_active]) => {
+                        console.log("[listRooms] Querying: robots/" + robo_uid);
+                        onValue(ref(this.db, "robots/" + robo_uid), (snapshot2) => {
+                            let robo_info = snapshot2.val() || { name: robo_uid, status: "offline" };
+                            console.log("[listRooms] Robot info for " + robo_uid + ":", robo_info);
+                            robo_info["is_active"] = is_active;
+                            resultCallback(robo_uid, robo_info);
+                        }, (err) => {
+                            console.error("[listRooms] Error reading robots/" + robo_uid + ":", err.message);
+                        });
                     });
-                });
-            },
-        );
+                },
+                (err) => {
+                    console.error("[listRooms] Error reading assignments/" + alias + "/robots:", err.message);
+                }
+            );
+        }, (err) => {
+            console.error("[listRooms] Error reading uids/" + this.uid + ":", err.message);
+        });
     }
 
     public logout(): Promise<undefined> {

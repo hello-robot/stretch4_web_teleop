@@ -45,9 +45,14 @@ export class FirebaseSignaling extends BaseSignaling {
     private db: Database;
     private uid: string;
     private role: string;
+    private robot_name: string;
     private prevSignal;
     private room_uid: string;
     private is_joined: boolean;
+
+    private get robot_key(): string {
+        return (this.role === "robot" && this.robot_name) ? this.robot_name : this.uid;
+    }
 
     constructor(props: SignalingProps, config: FirebaseOptions) {
         super(props);
@@ -62,26 +67,30 @@ export class FirebaseSignaling extends BaseSignaling {
             if (this.role === "robot") {
                 resolve(this.uid);
             } else if (this.role === "operator") {
-                get(ref(this.db, "assignments/" + this.uid + "/robots")).then(
-                    (snapshot) => {
-                        let robots = snapshot.val();
-                        Object.entries(robots).forEach(
-                            ([robo_uid, is_active]) => {
-                                get(ref(this.db, "robots/" + robo_uid))
-                                    .then((snapshot2) => {
-                                        let robo_info = snapshot2.val();
-                                        if (robo_info["name"] === room_name) {
-                                            resolve(robo_uid);
-                                        }
-                                    })
-                                    .catch((error) => {
-                                        // We can ignore the robots the operator cannot access
-                                        // console.error(error.message, "Cannot access: ", "robots/" + robo_uid);
-                                    });
-                            },
-                        );
-                    },
-                );
+                get(ref(this.db, "uids/" + this.uid)).then((uidSnapshot) => {
+                    const alias = uidSnapshot.val() || this.uid;
+                    get(ref(this.db, "assignments/" + alias + "/robots")).then(
+                        (snapshot) => {
+                            let robots = snapshot.val();
+                            if (!robots) return;
+                            Object.entries(robots).forEach(
+                                ([robo_uid, is_active]) => {
+                                    get(ref(this.db, "robots/" + robo_uid))
+                                        .then((snapshot2) => {
+                                            let robo_info = snapshot2.val();
+                                            if (robo_info && (robo_info["name"] || robo_uid) === room_name) {
+                                                resolve(robo_info["uid"] || robo_uid);
+                                            }
+                                        })
+                                        .catch((error) => {
+                                            // We can ignore the robots the operator cannot access
+                                            // console.error(error.message, "Cannot access: ", "robots/" + robo_uid);
+                                        });
+                                },
+                            );
+                        },
+                    );
+                });
             }
         });
     }
@@ -94,122 +103,147 @@ export class FirebaseSignaling extends BaseSignaling {
                 this._loginState = user ? "authenticated" : "not_authenticated";
 
                 if (this._loginState === "authenticated") {
-                    // get my role + set up listeners
-                    get(ref(this.db, "assignments/" + this.uid + "/role")).then(
-                        (snapshot) => {
-                            this.role = snapshot.val();
-                            console.log(`My role: ${this.role}`);
-                            if (!["robot", "operator"].includes(this.role)) {
-                                console.error("ERROR: invalid role");
-                                throw new Error("Invalid role");
-                            }
+                    get(ref(this.db, "uids/" + this.uid)).then((uidSnapshot) => {
+                        const alias = uidSnapshot.val() || this.uid;
+                        get(ref(this.db, "assignments/" + alias)).then(
+                            (snapshot) => {
+                                const assignment = snapshot.val() || {};
+                                this.role = assignment.role;
+                                this.robot_name = assignment.name;
 
-                            this._get_room_uid(room_name).then((room_uid) => {
-                                this.room_uid = room_uid;
-                                let opposite_role =
-                                    this.role === "robot"
-                                        ? "operator"
-                                        : "robot";
-                                onValue(
-                                    ref(
-                                        this.db,
-                                        "rooms/" +
-                                            this.room_uid +
-                                            "/" +
-                                            opposite_role,
-                                    ),
-                                    (snapshot) => {
-                                        if (this.is_joined) {
-                                            // Filter out what's changed
-                                            let currSignal = snapshot.val();
-                                            let changes = {};
-                                            for (const key in currSignal) {
-                                                if (
-                                                    !this.prevSignal ||
-                                                    !(key in this.prevSignal) ||
-                                                    !isEqual(
-                                                        currSignal[key],
-                                                        this.prevSignal[key],
-                                                    )
-                                                ) {
-                                                    changes[key] =
-                                                        currSignal[key];
-                                                }
-                                            }
-                                            this.prevSignal = currSignal;
+                                const continueConfigure = () => {
+                                    console.log(`My role: ${this.role}, My name: ${this.robot_name}`);
+                                    if (!["robot", "operator"].includes(this.role)) {
+                                        console.error("ERROR: invalid role");
+                                        throw new Error("Invalid role");
+                                    }
 
-                                            // Trigger callbacks based on what's changed
-                                            if (
-                                                Object.keys(changes).includes(
-                                                    "candidate",
-                                                ) ||
-                                                Object.keys(changes).includes(
-                                                    "sessionDescription",
-                                                ) ||
-                                                Object.keys(changes).includes(
-                                                    "cameraInfo",
-                                                )
-                                            ) {
-                                                if (
-                                                    Object.keys(
-                                                        changes,
-                                                    ).includes("active")
-                                                ) {
-                                                    delete changes["active"];
+                                    this._get_room_uid(room_name).then((room_uid) => {
+                                        this.room_uid = room_uid;
+                                        let opposite_role =
+                                            this.role === "robot"
+                                                ? "operator"
+                                                : "robot";
+                                        onValue(
+                                            ref(
+                                                this.db,
+                                                "rooms/" +
+                                                    this.room_uid +
+                                                    "/" +
+                                                    opposite_role,
+                                            ),
+                                            (snapshot) => {
+                                                if (this.is_joined) {
+                                                    // Filter out what's changed
+                                                    let currSignal = snapshot.val();
+                                                    let changes = {};
+                                                    for (const key in currSignal) {
+                                                        if (
+                                                            !this.prevSignal ||
+                                                            !(key in this.prevSignal) ||
+                                                            !isEqual(
+                                                                currSignal[key],
+                                                                this.prevSignal[key],
+                                                            )
+                                                        ) {
+                                                            changes[key] =
+                                                                currSignal[key];
+                                                        }
+                                                    }
+                                                    this.prevSignal = currSignal;
+
+                                                    // Trigger callbacks based on what's changed
+                                                    if (
+                                                        Object.keys(changes).includes(
+                                                            "candidate",
+                                                        ) ||
+                                                        Object.keys(changes).includes(
+                                                            "sessionDescription",
+                                                        ) ||
+                                                        Object.keys(changes).includes(
+                                                            "cameraInfo",
+                                                        )
+                                                    ) {
+                                                        if (
+                                                            Object.keys(
+                                                                changes,
+                                                            ).includes("active")
+                                                        ) {
+                                                            delete changes["active"];
+                                                        }
+                                                        this.onSignal(changes);
+                                                    }
+                                                    if (
+                                                        Object.keys(changes).includes(
+                                                            "active",
+                                                        ) &&
+                                                        !changes["active"]
+                                                    ) {
+                                                        console.log("bye");
+                                                        if (this.role === "robot") {
+                                                            update(
+                                                                ref(
+                                                                    this.db,
+                                                                    "robots/" +
+                                                                        this.robot_key,
+                                                                ),
+                                                                {
+                                                                    status: "online",
+                                                                },
+                                                            );
+                                                        }
+                                                        this.onGoodbye();
+                                                    }
+                                                    if (
+                                                        this.role === "robot" &&
+                                                        Object.keys(changes).includes(
+                                                            "active",
+                                                        ) &&
+                                                        changes["active"]
+                                                    ) {
+                                                        console.log(
+                                                            `Operator has joined the room. My role: ${this.role}.`,
+                                                        );
+                                                        update(
+                                                            ref(
+                                                                this.db,
+                                                                "robots/" + this.robot_key,
+                                                            ),
+                                                            {
+                                                                status: "occupied",
+                                                            },
+                                                        );
+                                                        if (this.onRobotConnectionStart)
+                                                            this.onRobotConnectionStart();
+                                                    }
                                                 }
-                                                this.onSignal(changes);
-                                            }
-                                            if (
-                                                Object.keys(changes).includes(
-                                                    "active",
-                                                ) &&
-                                                !changes["active"]
-                                            ) {
-                                                console.log("bye");
-                                                if (this.role === "robot") {
-                                                    update(
-                                                        ref(
-                                                            this.db,
-                                                            "robots/" +
-                                                                this.uid,
-                                                        ),
-                                                        {
-                                                            status: "online",
-                                                        },
-                                                    );
-                                                }
-                                                this.onGoodbye();
-                                            }
-                                            if (
-                                                this.role === "robot" &&
-                                                Object.keys(changes).includes(
-                                                    "active",
-                                                ) &&
-                                                changes["active"]
-                                            ) {
-                                                console.log(
-                                                    `Operator has joined the room. My role: ${this.role}.`,
-                                                );
-                                                update(
-                                                    ref(
-                                                        this.db,
-                                                        "robots/" + this.uid,
-                                                    ),
-                                                    {
-                                                        status: "occupied",
-                                                    },
-                                                );
-                                                if (this.onRobotConnectionStart)
-                                                    this.onRobotConnectionStart();
+                                            },
+                                        );
+
+                                        resolve();
+                                    });
+                                };
+
+                                if (!this.role) {
+                                    get(ref(this.db, "robots")).then((robotsSnapshot) => {
+                                        const robots = robotsSnapshot.val() || {};
+                                        let found = false;
+                                        for (const [key, robo_info] of Object.entries(robots)) {
+                                            if (robo_info && robo_info["uid"] === this.uid) {
+                                                this.role = "robot";
+                                                this.robot_name = robo_info["name"] || key;
+                                                found = true;
+                                                break;
                                             }
                                         }
-                                    },
-                                );
-
-                                resolve();
-                            });
-                        },
-                    );
+                                        continueConfigure();
+                                    });
+                                } else {
+                                    continueConfigure();
+                                }
+                            },
+                        );
+                    });
                 }
             });
         });
@@ -239,7 +273,7 @@ export class FirebaseSignaling extends BaseSignaling {
                         },
                     ).then(() => {
                         this.is_joined = true;
-                        update(ref(this.db, "robots/" + this.uid), {
+                        update(ref(this.db, "robots/" + this.robot_key), {
                             status: "online",
                         });
                         resolve(true);
@@ -305,7 +339,7 @@ export class FirebaseSignaling extends BaseSignaling {
                 active: false,
             });
             if (this.role === "robot") {
-                update(ref(this.db, "robots/" + this.uid), {
+                update(ref(this.db, "robots/" + this.robot_key), {
                     status: "offline",
                 });
             }

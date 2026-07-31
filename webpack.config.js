@@ -6,16 +6,32 @@ const dotenv = require("dotenv");
 const pages = ["robot", "operator", "home"];
 
 // call dotenv and it will return an Object with a parsed key
-const env = dotenv.config().parsed;
+const env = dotenv.config().parsed || {};
+
+const defaultEnv = {
+    apiKey: undefined,
+    authDomain: undefined,
+    databaseURL: undefined,
+    projectId: undefined,
+    storageBucket: undefined,
+    messagingSenderId: undefined,
+    appId: undefined,
+    measurementId: undefined,
+    roboUsername: undefined,
+    roboPassword: undefined,
+};
+
+const mergedEnv = { ...defaultEnv, ...env };
 
 // reduce it to a nice object, the same as before
-const envKeys = Object.keys(env).reduce((prev, next) => {
-    prev[`process.env.${next}`] = JSON.stringify(env[next]);
+const envKeys = Object.keys(mergedEnv).reduce((prev, next) => {
+    prev[`process.env.${next}`] = mergedEnv[next] !== undefined ? JSON.stringify(mergedEnv[next]) : "undefined";
     return prev;
 }, {});
 
-module.exports = (env) => {
-    envKeys["process.env.storage"] = JSON.stringify(env.storage);
+module.exports = (webpackEnv) => {
+    const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
+    envKeys["process.env.storage"] = JSON.stringify(storageValue);
     console.log(envKeys);
 
     return {
@@ -41,10 +57,8 @@ module.exports = (env) => {
             // https://github.com/webpack/changelog-v5/issues/10
             new webpack.ProvidePlugin({
                 Buffer: ["buffer", "Buffer"],
+                process: "process/browser.js",
             }),
-            // new webpack.ProvidePlugin({
-            //   process: 'process/browser',
-            // }),
             new webpack.DefinePlugin(envKeys),
         ].concat(
             pages.map(

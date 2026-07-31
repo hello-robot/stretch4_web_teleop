@@ -63,9 +63,10 @@ function setStatus(status) {
     currentStatus = status;
     const uid = auth.currentUser.uid;
     console.log(`[DAEMON] Setting status for ${uid} (${fleetId}) to: ${status}`);
-    update(ref(db, `robots/${uid}`), {
+    update(ref(db, `robots/${fleetId}`), {
         status: status,
         name: fleetId,
+        uid: uid,
         last_updated: Date.now()
     }).catch((err) => console.error('[DAEMON] Error updating status:', err.message));
 }
@@ -135,8 +136,8 @@ async function initDaemon() {
 
         // Set up presence monitoring via .info/connected
         const connectedRef = ref(db, '.info/connected');
-        const statusRef = ref(db, `robots/${uid}/status`);
-        const controlRef = ref(db, `robots/${uid}/control`);
+        const statusRef = ref(db, `robots/${fleetId}/status`);
+        const controlRef = ref(db, `robots/${fleetId}/control`);
 
         onValue(connectedRef, async (snapshot) => {
             if (snapshot.val() === true) {

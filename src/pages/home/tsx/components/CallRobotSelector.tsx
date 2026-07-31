@@ -1,15 +1,15 @@
+import CircleIcon from "@mui/icons-material/Circle";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardActions from "@mui/material/CardActions";
+import CardContent from "@mui/material/CardContent";
+import CircularProgress from "@mui/material/CircularProgress";
+import { blue, green, grey, purple, red, yellow } from "@mui/material/colors";
+import Grid from "@mui/material/Grid2";
+import Typography from "@mui/material/Typography";
 import "home/css/CallRobotSelector.css";
 import React, { useEffect, useState } from "react";
-import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid2";
-import Card from "@mui/material/Card";
-import CardContent from "@mui/material/CardContent";
-import CardActions from "@mui/material/CardActions";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import CircleIcon from "@mui/icons-material/Circle";
-import CircularProgress from "@mui/material/CircularProgress";
-import { green, red, yellow, grey, blue, purple } from "@mui/material/colors";
 import { loginHandler } from "../index";
 
 function get_indicator_text(status_str) {
@@ -181,20 +181,27 @@ export const CallRobotSelector = (props: { style?: React.CSSProperties }) => {
                 className="rs-container"
                 style={props.style}
             >
-                {Object.entries(callableRobots).map(([robo_uid, value]: [string, any], idx) => {
-                    if (value["is_active"]) {
-                        return (
-                            <Grid key={idx} size={{ md: 12, lg: 6 }}>
-                                <CallRobotItem
-                                    key={idx}
-                                    uid={robo_uid}
-                                    name={value["name"]}
-                                    status={value["status"]}
-                                />
-                            </Grid>
-                        );
-                    }
-                })}
+                {Object.keys(callableRobots).length === 0 ? (
+                    <Typography variant="body1" sx={{ color: "text.secondary", p: 2 }}>
+                        No assigned robots found in Firebase Realtime Database for your account. Please check your <code>assignments/&lt;user_uid&gt;/robots</code> configuration in Firebase Console.
+                    </Typography>
+                ) : (
+                    Object.entries(callableRobots).map(([robo_uid, value]: [string, any], idx) => {
+                        if (value && value["is_active"]) {
+                            return (
+                                <Grid key={idx} size={{ md: 12, lg: 6 }}>
+                                    <CallRobotItem
+                                        key={idx}
+                                        uid={robo_uid}
+                                        name={value["name"] || robo_uid}
+                                        status={value["status"] || "offline"}
+                                    />
+                                </Grid>
+                            );
+                        }
+                        return null;
+                    })
+                )}
             </Grid>
         </Box>
     );
