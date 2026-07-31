@@ -4,6 +4,10 @@ import sys
 
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
+from launch_ros.actions import Node
+from stretch4_body.core.robot_params import RobotParams
+
+from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
@@ -23,10 +27,6 @@ from launch.substitutions import (
     NotEqualsSubstitution,
     PathJoinSubstitution,
 )
-from launch_ros.actions import Node
-from stretch4_body.core.robot_params import RobotParams
-
-from launch import LaunchDescription
 
 
 def symlinks_to_has_head_cams():
@@ -74,7 +74,6 @@ def check_valid_configuration(model, tool, has_head_cams):
             file=sys.stderr,
         )
         sys.exit(1)
-
 
 
 def generate_launch_description():
@@ -257,26 +256,26 @@ def generate_launch_description():
         ld.add_action(configure_video_streams_node)
 
     navigation_bringup_launch = GroupAction(
-            condition=IfCondition(
-                NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
-            ),
-            actions=[
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        [
-                            stretch_navigation_path,
-                            "/launch/navigation_mppi.launch.py",
-                        ]
-                    ),
-                    launch_arguments={
-                        "use_sim_time": "false",
-                        "autostart": "true",
-                        "map": LaunchConfiguration("map_yaml"),
-                        "use_rviz": "false",
-                    }.items(),
+        condition=IfCondition(
+            NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
+        ),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [
+                        stretch_navigation_path,
+                        "/launch/navigation_mppi.launch.py",
+                    ]
                 ),
-            ],
-        )
+                launch_arguments={
+                    "use_sim_time": "false",
+                    "autostart": "true",
+                    "map": LaunchConfiguration("map_yaml"),
+                    "use_rviz": "false",
+                }.items(),
+            ),
+        ],
+    )
     ld.add_action(navigation_bringup_launch)
 
     ld.add_action(
