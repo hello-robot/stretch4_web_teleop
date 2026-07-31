@@ -18,4 +18,11 @@ export abstract class LoginHandler {
     ): Promise<undefined>;
 
     public abstract forgot_password(username: string): Promise<undefined>;
+    public requestRobotLaunch(robo_uid: string): Promise<void> {
+        return Promise.resolve();
+    }
+
+    public requestRobotStop(robo_uid: string): Promise<void> {
+        return Promise.resolve();
+    }
 }

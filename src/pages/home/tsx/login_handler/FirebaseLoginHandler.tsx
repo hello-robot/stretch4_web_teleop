@@ -11,7 +11,7 @@ import {
     browserSessionPersistence,
     Auth,
 } from "firebase/auth";
-import { getDatabase, ref, onValue, Database } from "firebase/database";
+import { getDatabase, ref, onValue, set, Database } from "firebase/database";
 
 export class FirebaseLoginHandler extends LoginHandler {
     private auth: Auth;
@@ -113,6 +113,24 @@ export class FirebaseLoginHandler extends LoginHandler {
                     resolve(undefined);
                 })
                 .catch(reject);
+        });
+    }
+
+    public requestRobotLaunch(robo_uid: string): Promise<void> {
+        if (!this.uid) return Promise.reject("User not logged in");
+        return set(ref(this.db, "robots/" + robo_uid + "/control"), {
+            action: "launch",
+            requested_by: this.uid,
+            requested_at: Date.now(),
+        });
+    }
+
+    public requestRobotStop(robo_uid: string): Promise<void> {
+        if (!this.uid) return Promise.reject("User not logged in");
+        return set(ref(this.db, "robots/" + robo_uid + "/control"), {
+            action: "stop",
+            requested_by: this.uid,
+            requested_at: Date.now(),
         });
     }
 }

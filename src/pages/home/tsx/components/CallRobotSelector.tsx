@@ -8,13 +8,18 @@ import CardActions from "@mui/material/CardActions";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import CircleIcon from "@mui/icons-material/Circle";
-import { green, red, yellow, grey } from "@mui/material/colors";
+import CircularProgress from "@mui/material/CircularProgress";
+import { green, red, yellow, grey, blue, purple } from "@mui/material/colors";
 import { loginHandler } from "../index";
 
 function get_indicator_text(status_str) {
     switch (status_str) {
         case "online":
             return "Online";
+        case "standby":
+            return "Standby (Ready to launch)";
+        case "launching":
+            return "Launching ROS2 Interface...";
         case "offline":
             return "Offline";
         case "occupied":
@@ -31,6 +36,18 @@ function get_indicator(status_str) {
             statusui = {
                 color_name: "green",
                 color: green,
+            };
+            break;
+        case "standby":
+            statusui = {
+                color_name: "blue",
+                color: blue,
+            };
+            break;
+        case "launching":
+            statusui = {
+                color_name: "purple",
+                color: purple,
             };
             break;
         case "offline":
@@ -70,55 +87,66 @@ function get_indicator(status_str) {
     return <CircleIcon sx={indicator_css} />;
 }
 
-function get_action(status_str, robot_name) {
+function get_action(status_str: string, robot_name: string, robot_uid: string) {
     switch (status_str) {
         case "online":
             return (
                 <Button
                     href={`/operator/?robot=${robot_name}`}
                     variant="contained"
+                    color="success"
                     size="small"
                 >
                     Call Robot
                 </Button>
             );
-        case "offline":
+        case "standby":
             return (
                 <Button
-                    href={`/operator/?robot=${robot_name}`}
+                    onClick={() => loginHandler.requestRobotLaunch(robot_uid)}
                     variant="contained"
+                    color="primary"
+                    size="small"
+                >
+                    Launch Interface
+                </Button>
+            );
+        case "launching":
+            return (
+                <Button
+                    variant="outlined"
                     size="small"
                     disabled
+                    startIcon={<CircularProgress size={16} />}
                 >
-                    Call Robot
+                    Launching...
                 </Button>
             );
         case "occupied":
             return (
                 <Button
-                    href={`/operator/?robot=${robot_name}`}
                     variant="contained"
                     size="small"
                     disabled
                 >
-                    Call Robot
+                    Occupied
                 </Button>
             );
+        case "offline":
         default:
             return (
                 <Button
-                    href={`/operator/?robot=${robot_name}`}
                     variant="contained"
                     size="small"
                     disabled
                 >
-                    Call Robot
+                    Offline
                 </Button>
             );
     }
 }
 
-const CallRobotItem = (props: { name: String; status: String }) => {
+const CallRobotItem = (props: { uid: string; name: string; status: string }) => {
     return (
         <Card sx={{ minWidth: 275 }}>
             <CardContent>
@@ -130,7 +158,7 @@ const CallRobotItem = (props: { name: String; status: String }) => {
                     {get_indicator_text(props.status)}
                 </Typography>
             </CardContent>
-            <CardActions>{get_action(props.status, props.name)}</CardActions>
+            <CardActions>{get_action(props.status, props.name, props.uid)}</CardActions>
         </Card>
     );
 };
@@ -153,12 +181,13 @@ export const CallRobotSelector = (props: { style?: React.CSSProperties }) => {
                 className="rs-container"
                 style={props.style}
             >
-                {Object.entries(callableRobots).map(([key, value], idx) => {
+                {Object.entries(callableRobots).map(([robo_uid, value]: [string, any], idx) => {
                     if (value["is_active"]) {
                         return (
                             <Grid key={idx} size={{ md: 12, lg: 6 }}>
                                 <CallRobotItem
                                     key={idx}
+                                    uid={robo_uid}
                                     name={value["name"]}
                                     status={value["status"]}
                                 />
@@ -170,3 +199,4 @@ export const CallRobotSelector = (props: { style?: React.CSSProperties }) => {
         </Box>
     );
 };
+
