@@ -73,7 +73,7 @@ function setStatus(status) {
 
 function checkInterfaceRunning() {
     return new Promise((resolve) => {
-        exec('pgrep -f web_interface.launch.py', (error, stdout) => {
+        exec("pgrep -f '[w]eb_interface.launch.py'", (error, stdout) => {
             resolve(!error && stdout.trim().length > 0);
         });
     });
@@ -89,17 +89,17 @@ function handleLaunchCommand(requestedBy) {
     console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}`);
     setStatus('launching');
 
-    const launchScript = path.join(repoRoot, 'launch_interface.sh');
+    const launchScript = path.join(repoRoot, 'launch_interface_firebase.sh');
     
-    // Execute launch_interface.sh -f
-    execFile(launchScript, ['-f'], { cwd: repoRoot }, (error, stdout, stderr) => {
+    // Execute launch_interface_firebase.sh inside a login shell to load full environment
+    exec(`bash -l -c "${launchScript}"`, { cwd: repoRoot }, (error, stdout, stderr) => {
         isProcessingCommand = false;
         if (error) {
             console.error('[DAEMON] Failed to launch interface:', error.message);
             console.error(stderr);
             setStatus('standby');
         } else {
-            console.log('[DAEMON] launch_interface.sh succeeded.');
+            console.log('[DAEMON] launch_interface_firebase.sh succeeded.');
             // Status will be transitioned to 'online' by robot browser joining room
         }
     });

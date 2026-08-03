@@ -29,13 +29,13 @@ const envKeys = Object.keys(mergedEnv).reduce((prev, next) => {
     return prev;
 }, {});
 
-module.exports = (webpackEnv) => {
+module.exports = (webpackEnv, argv) => {
     const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
     envKeys["process.env.storage"] = JSON.stringify(storageValue);
     console.log(envKeys);
 
     return {
-        mode: "development",
+        mode: argv && argv.mode ? argv.mode : "development",
         entry: pages.reduce((config, page) => {
             config[page] = `./src/pages/${page}/tsx/index.tsx`;
             return config;
@@ -43,6 +43,7 @@ module.exports = (webpackEnv) => {
         output: {
             filename: "[name]/bundle.js",
             path: path.resolve(__dirname, "dist"),
+            publicPath: "/",
         },
         optimization: {
             splitChunks: {
@@ -124,6 +125,6 @@ module.exports = (webpackEnv) => {
                 zlib: false,
             },
         },
-        watch: true,
+        watch: argv && argv.mode === "production" ? false : true,
     };
 };

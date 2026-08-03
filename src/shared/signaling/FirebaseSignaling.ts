@@ -14,7 +14,7 @@ import {
 
 // TODO: use lodash isequal
 function isEqual(obj1, obj2) {
-    if (!isObject(obj1) && !isObject(obj2)) {
+    if (!isObject(obj1) || !isObject(obj2)) {
         return obj1 === obj2;
     }
     var props1 = Object.getOwnPropertyNames(obj1);
@@ -96,18 +96,134 @@ export class FirebaseSignaling extends BaseSignaling {
     }
 
     public configure(room_name: string): Promise<void> {
-        return new Promise<void>((resolve) => {
+        console.log("FirebaseSignaling: configure() called with room_name:", room_name);
+        return new Promise<void>((resolve, reject) => {
             // wait to be authenticated
             onAuthStateChanged(this.auth, (user) => {
+                console.log("FirebaseSignaling: onAuthStateChanged event triggered. User UID:", user ? user.uid : "null");
                 this.uid = user ? user.uid : undefined;
                 this._loginState = user ? "authenticated" : "not_authenticated";
 
                 if (this._loginState === "authenticated") {
+                    if (this.initialRole === "robot") {
+                        this.role = "robot";
+                        const urlParams = new URLSearchParams(window.location.search);
+                        this.robot_name = urlParams.get('fleet_id') || process.env.HELLO_FLEET_ID;
+                        console.log(`FirebaseSignaling (Robot Mode Bypass): role set to robot, name to ${this.robot_name}`);
+
+                        this._get_room_uid(room_name).then((room_uid) => {
+                            this.room_uid = room_uid;
+                            let opposite_role = "operator";
+                            console.log("FirebaseSignaling: room_uid is:", this.room_uid, ". Listening to rooms/" + this.room_uid + "/" + opposite_role);
+                            onValue(
+                                ref(
+                                    this.db,
+                                    "rooms/" +
+                                        this.room_uid +
+                                        "/" +
+                                        opposite_role,
+                                ),
+                                (snapshot) => {
+                                    if (this.is_joined) {
+                                        // Filter out what's changed
+                                        let currSignal = snapshot.val();
+                                        let changes = {};
+                                        for (const key in currSignal) {
+                                            if (
+                                                !this.prevSignal ||
+                                                !(key in this.prevSignal) ||
+                                                !isEqual(
+                                                    currSignal[key],
+                                                    this.prevSignal[key],
+                                                )
+                                            ) {
+                                                changes[key] =
+                                                    currSignal[key];
+                                            }
+                                        }
+                                        this.prevSignal = currSignal;
+
+                                        // Trigger callbacks based on what's changed
+                                        if (
+                                            Object.keys(changes).includes(
+                                                "candidate",
+                                            ) ||
+                                            Object.keys(changes).includes(
+                                                "sessionDescription",
+                                            ) ||
+                                            Object.keys(changes).includes(
+                                                "cameraInfo",
+                                            )
+                                        ) {
+                                            if (
+                                                Object.keys(
+                                                    changes,
+                                                ).includes("active")
+                                            ) {
+                                                delete changes["active"];
+                                            }
+                                            this.onSignal(changes);
+                                        }
+                                        if (
+                                            Object.keys(changes).includes(
+                                                "active",
+                                            ) &&
+                                            !changes["active"]
+                                        ) {
+                                            console.log("bye");
+                                            if (this.role === "robot") {
+                                                update(
+                                                    ref(
+                                                        this.db,
+                                                        "robots/" +
+                                                            this.robot_key,
+                                                    ),
+                                                    {
+                                                        status: "online",
+                                                    },
+                                                );
+                                            }
+                                            this.onGoodbye();
+                                        }
+                                        if (
+                                            this.role === "robot" &&
+                                            Object.keys(changes).includes(
+                                                "active",
+                                            ) &&
+                                            changes["active"]
+                                        ) {
+                                            console.log(
+                                                `Operator has joined the room. My role: ${this.role}.`,
+                                            );
+                                            update(
+                                                ref(
+                                                    this.db,
+                                                    "robots/" + this.robot_key,
+                                                ),
+                                                {
+                                                    status: "occupied",
+                                                },
+                                            );
+                                            if (this.onRobotConnectionStart)
+                                                this.onRobotConnectionStart();
+                                        }
+                                    }
+                                },
+                            );
+
+                            resolve();
+                        });
+                        return;
+                    }
+
+                    console.log("FirebaseSignaling: authenticated. Querying uids/" + this.uid);
                     get(ref(this.db, "uids/" + this.uid)).then((uidSnapshot) => {
                         const alias = uidSnapshot.val() || this.uid;
+                        console.log("FirebaseSignaling: fetched alias:", alias, ". Querying assignments/" + alias);
                         get(ref(this.db, "assignments/" + alias)).then(
                             (snapshot) => {
                                 const assignment = snapshot.val() || {};
+                                console.log("FirebaseSignaling: fetched assignment:", assignment);
                                 this.role = assignment.role;
                                 this.robot_name = assignment.name;
 
@@ -124,6 +240,7 @@ export class FirebaseSignaling extends BaseSignaling {
                                             this.role === "robot"
                                                 ? "operator"
                                                 : "robot";
+                                        console.log("FirebaseSignaling: room_uid is:", this.room_uid, ". Listening to rooms/" + this.room_uid + "/" + opposite_role);
                                         onValue(
                                             ref(
                                                 this.db,
@@ -237,12 +354,21 @@ export class FirebaseSignaling extends BaseSignaling {
                                             }
                                         }
                                         continueConfigure();
+                                    }).catch((err) => {
+                                        console.error("FirebaseSignaling: Error fetching robots list:", err);
+                                        reject(err);
                                     });
                                 } else {
                                     continueConfigure();
                                 }
                             },
-                        );
+                        ).catch((err) => {
+                            console.error("FirebaseSignaling: Error fetching assignment:", err);
+                            reject(err);
+                        });
+                    }).catch((err) => {
+                        console.error("FirebaseSignaling: Error fetching UID alias:", err);
+                        reject(err);
                     });
                 }
             });
@@ -348,9 +474,34 @@ export class FirebaseSignaling extends BaseSignaling {
 
     public send(signal: SignallingMessage): void {
         if (this.is_joined) {
+            let sanitizedSignal: any = {};
+            if (signal.sessionDescription) {
+                sanitizedSignal.sessionDescription =
+                    typeof signal.sessionDescription.toJSON === "function"
+                        ? signal.sessionDescription.toJSON()
+                        : {
+                              type: signal.sessionDescription.type,
+                              sdp: signal.sessionDescription.sdp,
+                          };
+            }
+            if (signal.candidate) {
+                sanitizedSignal.candidate =
+                    typeof signal.candidate.toJSON === "function"
+                        ? signal.candidate.toJSON()
+                        : {
+                              candidate: signal.candidate.candidate,
+                              sdpMid: signal.candidate.sdpMid,
+                              sdpMLineIndex: signal.candidate.sdpMLineIndex,
+                              usernameFragment: signal.candidate.usernameFragment,
+                          };
+            }
+            if (signal.cameraInfo) {
+                sanitizedSignal.cameraInfo = signal.cameraInfo;
+            }
+
             update(
                 ref(this.db, "rooms/" + this.room_uid + "/" + this.role),
-                signal,
+                sanitizedSignal,
             );
         }
     }

@@ -63,6 +63,7 @@ export class WebRTCConnection extends React.Component {
             onSignal: this.onSignal,
             onGoodbye: this.stop,
             onRobotConnectionStart: props.onRobotConnectionStart,
+            role: props.peerRole,
         });
     }
 

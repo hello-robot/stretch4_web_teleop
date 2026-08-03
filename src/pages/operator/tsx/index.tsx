@@ -74,7 +74,7 @@ new Promise<void>(async (resolve) => {
     let room_name = currURL.searchParams.get("robot");
     if (
         process.env.storage === "firebase" &&
-        !/^stretch-(re1|re2|se3)-\d{4}$/.test(room_name)
+        !/^stretch-(re1|re2|se3|se4)-\d{4}$/.test(room_name)
     ) {
         console.error(`ERROR: Invalid room ${room_name}`);
         throw new Error("Invalid room name");
