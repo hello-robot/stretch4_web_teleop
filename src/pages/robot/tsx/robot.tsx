@@ -357,6 +357,7 @@ export class Robot extends React.Component {
             let robotPose: RobotPose = rosJointStatetoRobotPose(
                 this.jointState
             );
+            robotPose["arm_joint"] = this.getJointValue("arm_joint");
             let jointValues: ValidJointStateDict = {};
             let effortValues: ValidJointStateDict = {};
             this.jointState.name.forEach((name?: ValidJoints) => {
@@ -936,34 +937,52 @@ export class Robot extends React.Component {
      * In navigation mode, you can send position commands to the arm and
      * velocity commands to the base.
      */
-    switchToNavigationMode() {
-        if (robotMode === "navigation") return;
-        this.modeParam.set("navigation", () => {
-            robotMode = "navigation";
-            console.log("Switched to navigation mode");
-        });
+    switchToNavigationMode(): Promise<void> {
+        return new Promise((resolve) => {
+            if (robotMode === "navigation") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("navigation", () => {
+                robotMode = "navigation";
+                console.log("Switched to navigation mode");
+                resolve();
+            });
+        })
     }
 
     /**
      * In position mode, you can send position commands to the arm and
      * position commands to the base.
      */
-    switchToPositionMode = () => {
-        if (robotMode === "position") return;
-        this.modeParam.set("position", () => {
-            robotMode = "position";
-            console.log("Switched to position mode");
+    switchToPositionMode = (): Promise<void> => {
+        return new Promise((resolve) => {
+            if (robotMode === "position") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("position", () => {
+                robotMode = "position";
+                console.log("Switched to position mode");
+                resolve();
+            });
         });
     };
 
     /**
      * In velocity mode, you can send velocity commands to the arm and base.
      */
-    switchToVelocityMode = () => {
-        if (robotMode === "velocity") return;
-        this.modeParam.set("velocity", () => {
-            robotMode = "velocity";
-            console.log("Switched to velocity mode");
+    switchToVelocityMode = (): Promise<void> => {
+        return new Promise((resolve) => {
+            if (robotMode === "velocity") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("velocity", () => {
+                robotMode = "velocity";
+                console.log("Switched to velocity mode");
+                resolve();
+            });
         });
     };
 
@@ -1002,8 +1021,8 @@ export class Robot extends React.Component {
         this.cmdVelTopic.publish(twist);
     };
 
-    setJointVelocity(jointName: ValidJoints, velocity: number) {
-        this.switchToVelocityMode();
+    async setJointVelocity(jointName: ValidJoints, velocity: number) {
+        await this.switchToVelocityMode();
         this.stopExecution();
         let jointVelocities = {
             joint_names: [jointName],
@@ -1142,9 +1161,9 @@ export class Robot extends React.Component {
         let jointPositions: number[] = [];
         poses.forEach((pose, index) => {
             jointPositions = [];
-            for (let key in pose) {
-                jointPositions.push(pose[key as ValidJoints]!);
-            }
+            jointNames.forEach((name) => {
+                jointPositions.push(pose[name] !== undefined ? pose[name]! : this.getJointValue(name));
+            });
             points.push({
                 positions: jointPositions,
                 time_from_start: {
@@ -1171,9 +1190,9 @@ export class Robot extends React.Component {
         return newGoal;
     }
 
-    executePoseGoal(pose: RobotPose) {
+    async executePoseGoal(pose: RobotPose) {
         console.log("executing pose goal");
-        this.switchToNavigationMode();
+        await this.switchToNavigationMode();
         this.stopExecution();
         this.poseGoal = this.makePoseGoal(pose);
         console.log("execute: ", pose);
@@ -1225,7 +1244,7 @@ export class Robot extends React.Component {
     }
 
     async executePoseGoals(poses: RobotPose[], index: number) {
-        this.switchToNavigationMode();
+        await this.switchToNavigationMode();
         // this.stopExecution();
         this.poseGoal = this.makePoseGoals(poses);
         this.playbackPosesResultCallback({
@@ -1335,8 +1354,8 @@ export class Robot extends React.Component {
         );
     }
 
-    executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        this.switchToNavigationMode();
+    async executeIncrementalMove(jointName: ValidJoints, increment: number) {
+        await this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
