@@ -13,15 +13,18 @@ import {
 import {
     ActionState,
     ActionStatusList,
+    DiagnosticArray,
     getStretchTool,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
+    ROSOdometry,
     ROSPose,
     StretchTool,
     ValidJoints,
     VideoProps,
+    JOINT_VELOCITIES,
 } from "shared/util";
 import {
     RobotPose,
@@ -66,11 +69,6 @@ export enum GoalStatus {
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
 
-// Pose-proximity arrival (primary completion when rosbridge action status/result fail).
-// Slightly above Nav2 xy_goal_tolerance (0.25m); streak avoids a single noisy TF sample.
-const MOVE_BASE_GOAL_XY_TOL_M = 0.35;
-const MOVE_BASE_GOAL_INSIDE_STREAK = 5;
-
 export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
@@ -94,9 +92,6 @@ export class Robot extends React.Component {
     private moveBaseStatusLastEmitted?: number;
     /** Count of terminal statuses when this goal session began (stale SUCCEEDED pile). */
     private moveBaseTerminalBaseline?: number;
-    /** Goal XY for pose-proximity arrival detection. */
-    private moveBaseGoalXY?: { x: number; y: number };
-    private moveBaseInsideTolStreak = 0;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     private cmdVelTopic?: Topic;
@@ -164,8 +159,6 @@ export class Robot extends React.Component {
                 this.moveBaseStatusWatching = false;
                 this.moveBaseStatusSeenActive = false;
                 this.moveBaseTerminalBaseline = undefined;
-                this.moveBaseGoalXY = undefined;
-                this.moveBaseInsideTolStreak = 0;
             }
             props.moveBaseResultCallback(goalState);
         };
@@ -299,6 +292,8 @@ export class Robot extends React.Component {
 
     async onConnect() {
         console.log("onConnect");
+        const collisionMonitorActive = await this.isCollisionMonitorActive();
+
         this.subscribeToJointState();
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
@@ -318,7 +313,8 @@ export class Robot extends React.Component {
             "Navigation succeeded!",
             "Navigation failed!",
         );
-        this.createCmdVelTopic();
+
+        this.createCmdVelTopic(collisionMonitorActive);
         this.createJointVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
@@ -431,7 +427,8 @@ export class Robot extends React.Component {
         });
         this.subscriptions.push(modeTopic);
 
-        modeTopic.subscribe((msg) => {
+        modeTopic.subscribe((msg: any) => {
+            robotMode = msg.data;
             if (this.modeCallback) this.modeCallback(msg.data);
         });
     }
@@ -760,10 +757,10 @@ export class Robot extends React.Component {
         });
     }
 
-    createCmdVelTopic() {
+    createCmdVelTopic(use_vel_nav: boolean = true) {
         this.cmdVelTopic = new Topic({
             ros: this.ros,
-            name: "/cmd_vel_nav",
+            name: use_vel_nav ? "/cmd_vel_nav" : "/cmd_vel",
             messageType: "geometry_msgs/Twist",
         });
     }
@@ -895,39 +892,7 @@ export class Robot extends React.Component {
         this.createMapFrameTFClient();
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
-            this.maybeCompleteMoveBaseByProximity(transform);
         });
-    }
-
-    /**
-     * Primary AutoNav completion path: emit success when map→base_link stays
-     * within XY tolerance of the goal. Independent of rosbridge action status.
-     */
-    private maybeCompleteMoveBaseByProximity(transform: Transform) {
-        if (!this.moveBaseStatusWatching || !this.moveBaseGoalXY) {
-            return;
-        }
-        const dx = transform.translation.x - this.moveBaseGoalXY.x;
-        const dy = transform.translation.y - this.moveBaseGoalXY.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > MOVE_BASE_GOAL_XY_TOL_M) {
-            this.moveBaseInsideTolStreak = 0;
-            return;
-        }
-        this.moveBaseInsideTolStreak += 1;
-        if (this.moveBaseInsideTolStreak < MOVE_BASE_GOAL_INSIDE_STREAK) {
-            return;
-        }
-        console.log(
-            "Navigation succeeded via pose proximity:",
-            dist.toFixed(3),
-            "m",
-        );
-        this.moveBaseResultCallback({
-            state: "Navigation succeeded!",
-            alert_type: "success",
-        });
-        this.toggleBaseOnlyCollision(true);
     }
 
     setExpandedGripper(toggle: boolean) {
@@ -1330,11 +1295,6 @@ export class Robot extends React.Component {
         this.moveBaseStatusSeenActive = false;
         this.moveBaseStatusLastEmitted = undefined;
         this.moveBaseTerminalBaseline = undefined;
-        this.moveBaseGoalXY = {
-            x: pose.position.x,
-            y: pose.position.y,
-        };
-        this.moveBaseInsideTolStreak = 0;
 
         // Immediately notify operator that navigation has started executing
         this.moveBaseResultCallback({
@@ -1445,8 +1405,6 @@ export class Robot extends React.Component {
             this.moveBaseStatusWatching = false;
             this.moveBaseStatusSeenActive = false;
             this.moveBaseTerminalBaseline = undefined;
-            this.moveBaseGoalXY = undefined;
-            this.moveBaseInsideTolStreak = 0;
         }
     }
 
@@ -1469,7 +1427,7 @@ export class Robot extends React.Component {
                     foundAny = true;
                 }
             }
-            if (foundAny) return total * 1.25;  // Scale factor to account for the number of links (5/4)
+            if (foundAny) return total;
         }
 
         let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
@@ -1524,6 +1482,36 @@ export class Robot extends React.Component {
             this.jointState.effort[jointIndex] > MAX_EFFORTS[jointName]![1];
 
         return inCollision;
+    }
+
+    async isCollisionMonitorActive(timeoutMs: number = 3000): Promise<boolean> {
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < timeoutMs) {
+            const isActive = await new Promise<boolean>((resolve) => {
+                const rosAny = this.ros as any;
+                if (rosAny.getNodes !== undefined) {
+                    rosAny.getNodes(
+                        (nodes: string[]) => {
+                            resolve(nodes.some((node: string) => node.endsWith("collision_monitor")));
+                        },
+                        () => resolve(false)
+                    );
+                } else {
+                    resolve(false);
+                }
+            });
+
+            if (isActive) {
+                return true;
+            }
+
+            // Wait 500ms before checking again
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        console.log("Timed out waiting for collision_monitor node. Defaulting to /cmd_vel.");
+        return false;
     }
 
     /**
