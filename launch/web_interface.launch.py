@@ -257,26 +257,26 @@ def generate_launch_description():
         ld.add_action(configure_video_streams_node)
 
     navigation_bringup_launch = GroupAction(
-            condition=IfCondition(
-                NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
-            ),
-            actions=[
-                IncludeLaunchDescription(
-                    PythonLaunchDescriptionSource(
-                        [
-                            stretch_navigation_path,
-                            "/launch/navigation_mppi.launch.py",
-                        ]
-                    ),
-                    launch_arguments={
-                        "use_sim_time": "false",
-                        "autostart": "true",
-                        "map": LaunchConfiguration("map_yaml"),
-                        "use_rviz": "false",
-                    }.items(),
+        condition=IfCondition(
+            NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
+        ),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [
+                        stretch_navigation_path,
+                        "/launch/navigation_mppi.launch.py",
+                    ]
                 ),
-            ],
-        )
+                launch_arguments={
+                    "use_sim_time": "false",
+                    "autostart": "true",
+                    "map": LaunchConfiguration("map_yaml"),
+                    "use_rviz": "false",
+                }.items(),
+            ),
+        ],
+    )
     ld.add_action(navigation_bringup_launch)
 
     ld.add_action(

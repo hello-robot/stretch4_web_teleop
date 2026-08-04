@@ -302,6 +302,8 @@ export class Robot extends React.Component {
 
     async onConnect() {
         console.log("onConnect");
+        const collisionMonitorActive = await this.isCollisionMonitorActive();
+
         this.subscribeToJointState();
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
@@ -321,7 +323,8 @@ export class Robot extends React.Component {
             "Navigation succeeded!",
             "Navigation failed!",
         );
-        this.createCmdVelTopic();
+
+        this.createCmdVelTopic(collisionMonitorActive);
         this.createJointVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
@@ -434,7 +437,8 @@ export class Robot extends React.Component {
         });
         this.subscriptions.push(modeTopic);
 
-        modeTopic.subscribe((msg) => {
+        modeTopic.subscribe((msg: any) => {
+            robotMode = msg.data;
             if (this.modeCallback) this.modeCallback(msg.data);
         });
     }
@@ -763,10 +767,10 @@ export class Robot extends React.Component {
         });
     }
 
-    createCmdVelTopic() {
+    createCmdVelTopic(use_vel_nav: boolean = true) {
         this.cmdVelTopic = new Topic({
             ros: this.ros,
-            name: "/cmd_vel_nav",
+            name: use_vel_nav ? "/cmd_vel_nav" : "/cmd_vel",
             messageType: "geometry_msgs/Twist",
         });
     }
@@ -1333,11 +1337,14 @@ export class Robot extends React.Component {
         this.moveBaseStatusSeenActive = false;
         this.moveBaseStatusLastEmitted = undefined;
         this.moveBaseTerminalBaseline = undefined;
+<<<<<<< HEAD
         this.moveBaseGoalXY = {
             x: pose.position.x,
             y: pose.position.y,
         };
         this.moveBaseInsideTolStreak = 0;
+=======
+>>>>>>> 73ed2a5ae38ff508fba41473fecb00c0025241ee
 
         // Immediately notify operator that navigation has started executing
         this.moveBaseResultCallback({
@@ -1448,8 +1455,11 @@ export class Robot extends React.Component {
             this.moveBaseStatusWatching = false;
             this.moveBaseStatusSeenActive = false;
             this.moveBaseTerminalBaseline = undefined;
+<<<<<<< HEAD
             this.moveBaseGoalXY = undefined;
             this.moveBaseInsideTolStreak = 0;
+=======
+>>>>>>> 73ed2a5ae38ff508fba41473fecb00c0025241ee
         }
     }
 
@@ -1472,7 +1482,11 @@ export class Robot extends React.Component {
                     foundAny = true;
                 }
             }
+<<<<<<< HEAD
             if (foundAny) return total * 1.25;  // Scale factor to account for the number of links (5/4)
+=======
+            if (foundAny) return total;
+>>>>>>> 73ed2a5ae38ff508fba41473fecb00c0025241ee
         }
 
         let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
@@ -1527,6 +1541,36 @@ export class Robot extends React.Component {
             this.jointState.effort[jointIndex] > MAX_EFFORTS[jointName]![1];
 
         return inCollision;
+    }
+
+    async isCollisionMonitorActive(timeoutMs: number = 3000): Promise<boolean> {
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < timeoutMs) {
+            const isActive = await new Promise<boolean>((resolve) => {
+                const rosAny = this.ros as any;
+                if (rosAny.getNodes !== undefined) {
+                    rosAny.getNodes(
+                        (nodes: string[]) => {
+                            resolve(nodes.some((node: string) => node.endsWith("collision_monitor")));
+                        },
+                        () => resolve(false)
+                    );
+                } else {
+                    resolve(false);
+                }
+            });
+
+            if (isActive) {
+                return true;
+            }
+
+            // Wait 500ms before checking again
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        console.log("Timed out waiting for collision_monitor node. Defaulting to /cmd_vel.");
+        return false;
     }
 
     /**

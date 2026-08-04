@@ -1,22 +1,20 @@
-import React, { useEffect, useState, Dispatch, SetStateAction } from 'react'
-import { Canvas } from "../static_components/Canvas";
-import { Map } from './Map';
-import { ComponentType, MapDefinition } from '../utils/component_definitions';
-import { SharedState } from './CustomizableComponent';
-import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
-import type { AddToastFn } from './Toasts';
-import { mapFunctionProvider } from 'operator/tsx/index';
-import { OccupancyGrid } from '../static_components/OccupancyGrid';
-import { underMapFunctionProvider } from 'operator/tsx/index';
-import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
+import { mapFunctionProvider, underMapFunctionProvider } from 'operator/tsx/index';
+import React, { Dispatch, SetStateAction, useEffect, useState } from 'react';
+import { Quaternion, Transform, Vector3 } from 'roslib';
 import {
     ActionState,
     ROSOccupancyGrid,
-    ROSPose,
     ROSPoint,
+    ROSPose,
 } from 'shared/util';
-import { Transform, Vector3 } from 'roslib';
 import '../../css/AutoNav.css';
+import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
+import { Canvas } from "../static_components/Canvas";
+import { OccupancyGrid } from '../static_components/OccupancyGrid';
+import { SharedState } from './CustomizableComponent';
+import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
+import { Map } from './Map';
+import type { AddToastFn } from './Toasts';
 
 interface AutoNavProps {
     sharedState: SharedState;
@@ -62,7 +60,7 @@ export interface AutoNavFunctions {
         poseNames: string[],
         poseTypes: string[],
     ) => void;
-    DisplayGoalMarker: (pose: Vector3) => void;
+    DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) => void;
     Play: () => void;
     RemoveGoalMarker: () => void;
     GoalReached: () => Promise<boolean>;
@@ -181,8 +179,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
         /**
          * Display a goal marker on the map at the given pose.
          */
-        DisplayGoalMarker: (pose: Vector3) =>
-            occupancyGrid!.createGoalMarker(pose.x, pose.y, true),
+        DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) =>
+            occupancyGrid!.createGoalMarker(pose.x, pose.y, true, rotation),
 
         /**
          * Play the current navigation sequence (if supported by occupancyGrid).

@@ -71,14 +71,17 @@
         filter: brightness(1);
         opacity: 1;
     }
+
     25% {
         filter: brightness(1.5);
         opacity: 0.7;
     }
+
     75% {
         filter: brightness(2);
         opacity: 0.4;
     }
+
     100% {
         filter: brightness(1);
         opacity: 1;
@@ -174,18 +177,12 @@
         box-shadow 150ms ease-out;
 }
 
-.footer-global
-    .scene-menu-button-container
-    .scene-menu-button:active
-    .fancy-border:not(.fancy-border--mic-active) {
+.footer-global .scene-menu-button-container .scene-menu-button:active .fancy-border:not(.fancy-border--mic-active) {
     border-color: hsl(204 100% 50% / 1);
     filter: saturate(1) opacity(1);
 }
 
-.footer-global
-    .scene-menu-button-container
-    .scene-menu-button
-    .fancy-border--mic-active {
+.footer-global .scene-menu-button-container .scene-menu-button .fancy-border--mic-active {
     /* Glow only — no solid stroke while speaking */
     border-color: transparent;
     filter: saturate(1) opacity(1);
