@@ -1,3 +1,4 @@
+import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
 import { RobotPose, ValidJoints } from "shared/util";
@@ -22,7 +23,6 @@ export abstract class FunctionProvider {
     public activeButtonPadFunction: ButtonPadButton;
     public activeVelocityAction?: VelocityCommand;
     public velocityExecutionHeartbeat?: number; // ReturnType<typeof setInterval>
-
     /**
      * Adds a remote robot instance to this function provider. This must be called
      * before any components of the interface will be able to execute functions
@@ -32,6 +32,24 @@ export abstract class FunctionProvider {
      */
     static addRemoteRobot(remoteRobot: RemoteRobot) {
         FunctionProvider.remoteRobot = remoteRobot;
+    }
+
+    /**
+     * Subscribe to map pose (amcl) updates from the remote robot.
+     * Returns a no-op unsubscribe when the robot is not connected yet.
+     */
+    static subscribeMapPose(
+        listener: (pose: Transform) => void,
+    ): (() => void) | undefined {
+        if (!FunctionProvider.remoteRobot) {
+            return undefined;
+        }
+        return FunctionProvider.remoteRobot.addMapPoseListener(listener);
+    }
+
+    /** Latest cached map pose, if the remote robot is connected. */
+    static getMapPose(): Transform | undefined {
+        return FunctionProvider.remoteRobot?.getMapPose();
     }
 
     /**
@@ -49,6 +67,34 @@ export abstract class FunctionProvider {
         this.velocityScale = velocityScale;
         this.actionMode = actionMode;
         this.pilotControlsCurrent = pilotControlsCurrent as PilotButtonPadType ?? PilotButtonPads[0];
+    }
+
+    /**
+     * Check if robot is connected
+     */
+    public static robotIsConnected(): boolean {
+        return FunctionProvider.remoteRobot !== undefined;
+    }
+
+    public isMotionActive(): boolean {
+        return (
+            this.velocityExecutionHeartbeat !== undefined ||
+            this.activeVelocityAction !== undefined
+        );
+    }
+
+    /**
+     * Move the robot to an absolute pose (e.g. a voice macro).
+     * Stops any ongoing velocity or timed move, then sends a setRobotPose command.
+     *
+     * @param pose  Partial RobotPose mapping joint names to absolute target positions.
+     * @returns false if no robot is connected.
+     */
+    public executeAbsolutePose(pose: RobotPose): boolean {
+        if (!FunctionProvider.remoteRobot) return false;
+        this.stopCurrentAction(true);
+        FunctionProvider.remoteRobot.setRobotPose(pose);
+        return true;
     }
 
     public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {
@@ -118,5 +164,6 @@ export abstract class FunctionProvider {
             clearInterval(this.velocityExecutionHeartbeat);
             this.velocityExecutionHeartbeat = undefined;
         }
+
     }
 }

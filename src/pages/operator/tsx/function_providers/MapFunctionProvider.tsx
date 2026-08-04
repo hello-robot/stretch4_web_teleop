@@ -1,7 +1,7 @@
 import { ROSPose } from "shared/util";
 import { MapFunction } from "../layout_components/AutoNav";
 import { FunctionProvider } from "./FunctionProvider";
-import { occupancyGrid } from "operator/tsx/index";
+import { occupancyGrid, underMapFunctionProvider } from "operator/tsx/index";
 
 export class MapFunctionProvider extends FunctionProvider {
     constructor() {
@@ -20,6 +20,10 @@ export class MapFunctionProvider extends FunctionProvider {
                 };
             case MapFunction.MoveBase:
                 return (pose: ROSPose) => {
+                    underMapFunctionProvider.setMoveBaseState({
+                        state: "Navigation executing!",
+                        alert_type: "info",
+                    });
                     // FunctionProvider.remoteRobot?.stopExecution()
                     FunctionProvider.remoteRobot?.moveBase(pose);
                 };

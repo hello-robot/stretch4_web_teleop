@@ -197,6 +197,13 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "moveBaseState":
             console.log("moveBaseState", message.message);
             underMapFunctionProvider.setMoveBaseState(message.message);
+            if (
+                message.message.alert_type === "success" ||
+                message.message.alert_type === "warning" ||
+                message.message.alert_type === "error"
+            ) {
+                remoteRobot.setGoalReached(true);
+            }
             break;
         case "playbackPosesState":
             console.log("playbackPosesState", message.message);

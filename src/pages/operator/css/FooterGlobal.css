@@ -2,7 +2,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 20px 10px;
+    padding: 12px 20px 0px;
     background-color: #000000;
 }
 
@@ -103,7 +103,9 @@
     justify-content: center;
     align-items: center;
     width: 100%;
-    height: 58px;
+    height: 65px;
+    /* Tighter than browser default so waveform + "Voice AutoNav" fit on one line */
+    padding: 0 4px;
     background-color: hsl(204 90% 5% / 1);
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
@@ -117,6 +119,15 @@
     transition: background-color 150ms ease-out;
 }
 
+.footer-global .scene-menu-button-container .scene-menu-button__label {
+    z-index: 1;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
 .footer-global .scene-menu-button-container .scene-menu-button:active {
     background-color: hsl(204 100% 50% / 1);
 }
@@ -126,7 +137,7 @@
     bottom: 0px;
     left: -4px;
     width: calc(100% + 8px);
-    height: 62px;
+    height: 69px;
     border-top-left-radius: 24px;
     border-top-right-radius: 24px;
     z-index: 0;

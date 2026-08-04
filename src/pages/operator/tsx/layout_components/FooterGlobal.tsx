@@ -35,7 +35,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         () => [
             {
                 id: "pilot-mode",
-                name: "Pilot Mode",
+                name: "Pilot",
                 description: "TextDescription",
                 onClick: () => {
                     swipeableViewsIdxSet(0);

@@ -25,7 +25,7 @@ import {
     push,
 } from "firebase/database";
 import { ArucoMarkersInfo, RobotPose } from "shared/util";
-import ROSLIB from "roslib";
+import { Transform } from "roslib";
 
 /** Uses Firebase to store data. */
 export class FirebaseStorageHandler extends StorageHandler {
@@ -39,7 +39,7 @@ export class FirebaseStorageHandler extends StorageHandler {
     private layouts: { [name: string]: LayoutDefinition };
     private currentLayout: LayoutDefinition | null;
     private poses: { [name: string]: RobotPose };
-    private mapPoses: { [name: string]: ROSLIB.Transform };
+    private mapPoses: { [name: string]: Transform };
     private mapPoseTypes: { [name: string]: string };
     private recordings: { [name: string]: RobotPose[] };
     private markerNames: string[];
@@ -161,14 +161,14 @@ export class FirebaseStorageHandler extends StorageHandler {
         return Object.keys(this.mapPoses);
     }
 
-    public saveMapPose(name: string, pose: ROSLIB.Transform, poseType: string) {
+    public saveMapPose(name: string, pose: Transform, poseType: string) {
         this.mapPoses[name] = pose;
         this.mapPoseTypes[name] = poseType;
         this.writeMapPoses(this.mapPoses);
         this.writeMapPoseTypes(this.mapPoseTypes);
     }
 
-    private async writeMapPoses(poses: { [name: string]: ROSLIB.Transform }) {
+    private async writeMapPoses(poses: { [name: string]: Transform }) {
         this.mapPoses = poses;
 
         let updates: any = {};
@@ -184,15 +184,15 @@ export class FirebaseStorageHandler extends StorageHandler {
         return update(ref(this.database), updates);
     }
 
-    public getMapPose(poseName: string): ROSLIB.Transform {
+    public getMapPose(poseName: string): Transform {
         let pose = this.mapPoses![poseName];
         if (!pose) throw Error(`Could not load pose ${poseName}`);
         return JSON.parse(JSON.stringify(pose));
     }
 
-    public getMapPoses(): ROSLIB.Transform[] {
+    public getMapPoses(): Transform[] {
         const poseNames = this.getMapPoseNames();
-        var poses: ROSLIB.Transform[] = [];
+        var poses: Transform[] = [];
         poseNames.forEach((poseName) => {
             const pose = this.getMapPose(poseName);
             poses.push(pose);

@@ -3,8 +3,9 @@
 import React from "react";
 import createjs from "createjs-module";
 import { ROSOccupancyGrid, ROSPoint, ROSPose } from "shared/util";
-import ROSLIB from "roslib";
+import { Pose, Vector3, Quaternion, Transform } from "roslib";
 import { MapFunctions } from "../layout_components/AutoNav";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import hexToRgbArray from "../utils/hex-to-rgb-array";
 
 /**
@@ -17,7 +18,7 @@ export class OccupancyGrid extends React.Component {
     // The createjs stage (canvas root)
     private rootObject: createjs.Stage;
     // The origin of the map in ROS coordinates
-    private origin?: ROSLIB.Pose;
+    private origin?: Pose;
     // The bitmap image of the occupancy grid
     private bitmap?: createjs.Bitmap;
     // Map dimensions in cells
@@ -30,8 +31,12 @@ export class OccupancyGrid extends React.Component {
     private map: ROSOccupancyGrid;
     // The createjs shape for the goal marker
     private goalMarker?: createjs.Shape;
-    // Interval for checking if the goal is reached
-    private getGoalReached?: NodeJS.Timeout;
+    // The createjs shape for the robot's current pose
+    private robotMarker?: createjs.Shape;
+    // Fallback poll when amclPose events are sparse
+    private setPoseInterval?: ReturnType<typeof setInterval>;
+    // Unsubscribe from RemoteRobot map-pose listeners
+    private mapPoseUnsubscribe?: () => void;
     // List of saved pose markers (shapes and labels)
     private savedPoseMarkers: {
         circle: createjs.Shape;
@@ -70,8 +75,11 @@ export class OccupancyGrid extends React.Component {
      * @param y Y coordinate
      * @param color RGB color array
      * @param text Label text
+     * @param rotation Optional rotation quaternion (SE2 transform support)
      */
-    drawSavedPoseMarker(x: number, y: number, color: number[], text: string) {
+    drawSavedPoseMarker(x: number, y: number, color: number[], text: string, rotation?: Quaternion) {
+        var container = new createjs.Container();
+
         var circle = new createjs.Shape();
         var radius = 30;
 
@@ -80,13 +88,34 @@ export class OccupancyGrid extends React.Component {
             createjs.Graphics.getRGB(color[0], color[1], color[2], 0.5),
         );
         graphics.drawCircle(0, 0, radius);
+        graphics.endFill();
 
         createjs.Shape.call(circle, graphics);
+        container.addChild(circle);
 
-        circle.x = x;
-        circle.y = y;
-        circle.scaleX = 1.0 / this.rootObject.scaleX;
-        circle.scaleY = 1.0 / this.rootObject.scaleY;
+        if (rotation) {
+            var arrow = new createjs.Shape();
+            var arrowGraphics = new createjs.Graphics();
+            var size = 20;
+            var arrowColor = createjs.Graphics.getRGB(color[0], color[1], color[2], 0.9);
+            arrowGraphics.beginFill(arrowColor);
+            arrowGraphics.moveTo(0, size);
+            arrowGraphics.lineTo(-size / 2, -size / 2);
+            arrowGraphics.lineTo(size / 2, -size / 2);
+            arrowGraphics.lineTo(0, size);
+            arrowGraphics.closePath();
+            arrowGraphics.endFill();
+            createjs.Shape.call(arrow, arrowGraphics);
+
+            let theta = this.rosQuaternionToGlobalTheta(rotation);
+            arrow.rotation = theta - 90.0;
+            container.addChild(arrow);
+        }
+
+        container.x = x;
+        container.y = y;
+        container.scaleX = 1.0 / this.rootObject.scaleX;
+        container.scaleY = 1.0 / this.rootObject.scaleY;
 
         var label = new createjs.Text(text, "bold 40px Arial", "#ff7700");
         label.x = x;
@@ -96,13 +125,13 @@ export class OccupancyGrid extends React.Component {
         label.scaleY = 1.0 / this.rootObject.scaleY;
         label.textBaseline = "alphabetic";
 
-        circle.on("mouseover", (event) => {
+        container.on("mouseover", (event) => {
             label.visible = true;
         });
-        circle.on("mouseout", (event) => {
+        container.on("mouseout", (event) => {
             label.visible = false;
         });
-        return { circle, label };
+        return { circle: container, label };
     }
 
     /**
@@ -113,13 +142,9 @@ export class OccupancyGrid extends React.Component {
     drawNavigationArrow(pulse: boolean, color: number[]) {
         var arrow = new createjs.Shape();
         var size = 40;
-        var strokeSize = 0;
-        var strokeColor = createjs.Graphics.getRGB(
-            color[0],
-            color[1],
-            color[2],
-            0.85,
-        );
+        var strokeSize = 6;
+        var cornerRadius = 10;
+        var strokeColor = createjs.Graphics.getRGB(255, 255, 255, 0.7);
         var fillColor = createjs.Graphics.getRGB(
             color[0],
             color[1],
@@ -127,17 +152,43 @@ export class OccupancyGrid extends React.Component {
             0.85,
         );
 
-        // draw the arrow
-        var graphics = new createjs.Graphics();
+        // Tip / left / right — same geometry as before, with rounded corners.
+        const vertices = [
+            { x: 0.0, y: size / 1.5 },
+            { x: -size / 2.0, y: -size / 2.0 },
+            { x: size / 2.0, y: -size / 2.0 },
+        ];
 
-        // line width
-        graphics.setStrokeStyle(strokeSize);
-        graphics.moveTo(0.0, size / 1.5);
+        var graphics = new createjs.Graphics();
+        graphics.setStrokeStyle(strokeSize, "round", "round");
         graphics.beginStroke(strokeColor);
         graphics.beginFill(fillColor);
-        graphics.lineTo(-size / 2.0, -size / 2.0);
-        graphics.lineTo(size / 2.0, -size / 2.0);
-        graphics.lineTo(0.0, size / 1.5);
+
+        const n = vertices.length;
+        for (let i = 0; i < n; i++) {
+            const curr = vertices[i];
+            const prev = vertices[(i + n - 1) % n];
+            const next = vertices[(i + 1) % n];
+            const toPrev = { x: prev.x - curr.x, y: prev.y - curr.y };
+            const toNext = { x: next.x - curr.x, y: next.y - curr.y };
+            const lenPrev = Math.hypot(toPrev.x, toPrev.y);
+            const lenNext = Math.hypot(toNext.x, toNext.y);
+            const r = Math.min(cornerRadius, lenPrev / 2, lenNext / 2);
+            const p1 = {
+                x: curr.x + (toPrev.x / lenPrev) * r,
+                y: curr.y + (toPrev.y / lenPrev) * r,
+            };
+            const p2 = {
+                x: curr.x + (toNext.x / lenNext) * r,
+                y: curr.y + (toNext.y / lenNext) * r,
+            };
+            if (i === 0) {
+                graphics.moveTo(p1.x, p1.y);
+            } else {
+                graphics.lineTo(p1.x, p1.y);
+            }
+            graphics.quadraticCurveTo(curr.x, curr.y, p2.x, p2.y);
+        }
         graphics.closePath();
         graphics.endFill();
         graphics.endStroke();
@@ -192,7 +243,7 @@ export class OccupancyGrid extends React.Component {
         }
 
         // Save the map origin (position and orientation) from ROS map metadata
-        this.origin = new ROSLIB.Pose({
+        this.origin = new Pose({
             position: this.map.info.origin.position,
             orientation: this.map.info.origin.orientation,
         });
@@ -283,7 +334,7 @@ export class OccupancyGrid extends React.Component {
             return;
         }
 
-        this.origin = new ROSLIB.Pose({
+        this.origin = new Pose({
             position: this.map.info.origin.position,
             orientation: this.map.info.origin.orientation,
         });
@@ -318,7 +369,7 @@ export class OccupancyGrid extends React.Component {
     /**
      * Converts a ROS translation (Vector3) to global canvas coordinates.
      */
-    rosToGlobal(translation: ROSLIB.Vector3) {
+    rosToGlobal(translation: Vector3) {
         var x =
             (this.width * this.scaleX! -
                 (-translation.x +
@@ -340,7 +391,7 @@ export class OccupancyGrid extends React.Component {
      * Converts a ROS quaternion to a global theta (angle in degrees).
      * See: https://github.com/RobotWebTools/ros2djs/blob/develop/src/Ros2D.js#L34C1-L44C3
      */
-    rosQuaternionToGlobalTheta(orientation: ROSLIB.Quaternion) {
+    rosQuaternionToGlobalTheta(orientation: Quaternion) {
         // See https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Rotation_matrices
         // here we use [x y z] = R * [1 0 0]
         var w = orientation.w;
@@ -370,24 +421,64 @@ export class OccupancyGrid extends React.Component {
     }
 
     /**
-     * Adds a marker for the robot's current pose and updates it periodically.
+     * Apply a map pose to the robot marker (null-safe).
+     */
+    updateRobotMarker(pose?: Transform | null) {
+        if (!this.robotMarker || !pose?.translation || !pose?.rotation) {
+            return;
+        }
+        try {
+            const globalCoord = this.rosToGlobal(pose.translation);
+            this.robotMarker.x = globalCoord.x;
+            this.robotMarker.y = globalCoord.y;
+            const theta = this.rosQuaternionToGlobalTheta(pose.rotation);
+            this.robotMarker.rotation = theta - 90.0;
+            this.robotMarker.scaleX = 1.0 / this.rootObject.scaleX;
+            this.robotMarker.scaleY = 1.0 / this.rootObject.scaleY;
+            this.robotMarker.visible = true;
+            // Keep the robot marker above goal / saved-pose markers.
+            const top = this.rootObject.numChildren - 1;
+            if (top >= 0) {
+                this.rootObject.setChildIndex(this.robotMarker, top);
+            }
+            this.rootObject.update();
+        } catch (err) {
+            console.warn("updateRobotMarker failed:", err);
+        }
+    }
+
+    private trySubscribeMapPoseUpdates() {
+        if (this.mapPoseUnsubscribe) {
+            return;
+        }
+        const unsubscribe = FunctionProvider.subscribeMapPose((pose) => {
+            this.updateRobotMarker(pose);
+        });
+        if (!unsubscribe) {
+            return;
+        }
+        this.mapPoseUnsubscribe = unsubscribe;
+        this.updateRobotMarker(FunctionProvider.getMapPose());
+    }
+
+    /**
+     * Adds a marker for the robot's current pose and updates it from amclPose
+     * events (with a slow null-safe poll as backup).
      */
     addCurrentPoseMarker() {
-        const color = hexToRgbArray('#008AE5');
-        var robotMarker = this.drawNavigationArrow(false, color);
-        this.rootObject.addChild(robotMarker);
+        const color = hexToRgbArray("#008AE5");
+        this.robotMarker = this.drawNavigationArrow(false, color);
+        this.rootObject.addChild(this.robotMarker);
 
-        const setPoseInterval = setInterval(() => {
-            let pose = this.functs.GetPose();
-            let globalCoord = this.rosToGlobal(pose.translation);
-            robotMarker.x = globalCoord.x;
-            robotMarker.y = globalCoord.y;
-            let theta = this.rosQuaternionToGlobalTheta(pose.rotation);
-            robotMarker.rotation = theta - 90.0;
-            robotMarker.scaleX = 1.0 / this.rootObject.scaleX;
-            robotMarker.scaleY = 1.0 / this.rootObject.scaleY;
-            robotMarker.visible = true;
-            this.rootObject.update();
+        this.trySubscribeMapPoseUpdates();
+        this.setPoseInterval = setInterval(() => {
+            this.trySubscribeMapPoseUpdates();
+            try {
+                const pose = this.functs.GetPose();
+                this.updateRobotMarker(pose);
+            } catch {
+                // Pose may be unavailable before WebRTC map TF arrives.
+            }
         }, 1000);
     }
 
@@ -400,7 +491,7 @@ export class OccupancyGrid extends React.Component {
      */
     public displayPoseMarkers(
         display: boolean,
-        poses: ROSLIB.Transform[],
+        poses: Transform[],
         poseNames: string[],
         poseTypes: string[],
     ) {
@@ -420,6 +511,7 @@ export class OccupancyGrid extends React.Component {
                     globalCoord.y,
                     color,
                     poseNames[index],
+                    pose.rotation,
                 );
                 poseMarker.circle.visible = true;
                 poseMarker.label.visible = false;
@@ -452,7 +544,7 @@ export class OccupancyGrid extends React.Component {
      * @param y Y coordinate
      * @param ros Whether the coordinates are in ROS space
      */
-    public createGoalMarker(x: number, y: number, ros: boolean) {
+    public createGoalMarker(x: number, y: number, ros: boolean, rotation?: Quaternion) {
         const color = hexToRgbArray('#2EE4C8');
         let globalCoord = { x: x, y: y };
         if (ros)
@@ -460,22 +552,28 @@ export class OccupancyGrid extends React.Component {
                 x: x,
                 y: y,
                 z: 0,
-            } as ROSLIB.Vector3);
-        if (this.getGoalReached) clearInterval(this.getGoalReached);
+            } as Vector3);
+        // Preview / active goal draw only — do not poll GoalReached here
+        // (that raced with FooterAutoNav and stole nav-complete events).
         if (this.goalMarker) this.rootObject.removeChild(this.goalMarker);
         this.goalMarker = this.drawNavigationArrow(true, color);
         this.goalMarker.x = globalCoord.x;
         this.goalMarker.y = globalCoord.y;
+        if (rotation) {
+            let theta = this.rosQuaternionToGlobalTheta(rotation);
+            this.goalMarker.rotation = theta - 90.0;
+        }
         this.goalMarker.scaleX = 1.0 / this.rootObject.scaleX;
         this.goalMarker.scaleY = 1.0 / this.rootObject.scaleY;
         this.goalMarker.visible = true;
         this.rootObject.addChild(this.goalMarker);
-        this.getGoalReached = setInterval(() => {
-            if (this.functs.GoalReached()) {
-                this.rootObject.removeChild(this.goalMarker!);
-                clearInterval(this.getGoalReached);
+        if (this.robotMarker) {
+            const top = this.rootObject.numChildren - 1;
+            if (top >= 0) {
+                this.rootObject.setChildIndex(this.robotMarker, top);
             }
-        }, 1000);
+        }
+        this.rootObject.update();
     }
 
     /**
@@ -525,7 +623,11 @@ export class OccupancyGrid extends React.Component {
      */
     removeGoalMarker() {
         this.goalPositionSet(undefined);
-        if (this.goalMarker) this.rootObject.removeChild(this.goalMarker);
+        if (this.goalMarker) {
+            this.rootObject.removeChild(this.goalMarker);
+            this.goalMarker = undefined;
+            this.rootObject.update();
+        }
     }
 
     /**

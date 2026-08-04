@@ -2,20 +2,20 @@ import React, { useEffect, useState, Dispatch, SetStateAction } from 'react'
 import { Canvas } from "../static_components/Canvas";
 import { Map } from './Map';
 import { ComponentType, MapDefinition } from '../utils/component_definitions';
-import genUUID from '../utils/genUUID';
 import { SharedState } from './CustomizableComponent';
-import FooterAutoNav from './FooterAutoNav';
-import Toasts, { Toast } from './Toasts';
+import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
+import type { AddToastFn } from './Toasts';
 import { mapFunctionProvider } from 'operator/tsx/index';
 import { OccupancyGrid } from '../static_components/OccupancyGrid';
 import { underMapFunctionProvider } from 'operator/tsx/index';
 import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
 import {
+    ActionState,
     ROSOccupancyGrid,
     ROSPose,
     ROSPoint,
 } from 'shared/util';
-import ROSLIB from "roslib";
+import { Quaternion, Transform, Vector3 } from 'roslib';
 import '../../css/AutoNav.css';
 
 interface AutoNavProps {
@@ -24,6 +24,12 @@ interface AutoNavProps {
     swipeableViewsIdxSet: Dispatch<SetStateAction<number>>;
     sceneSelected: string;
     onSceneSelectedChange: Dispatch<SetStateAction<string>>;
+    addToast: AddToastFn;
+    isModalLocationsMenuVisible: boolean;
+    isModalLocationsMenuVisibleSet: Dispatch<SetStateAction<boolean>>;
+    onRegisterAutoNavNavControls?: (controls: AutoNavNavControls | null) => void;
+    /** Terminal move-base alerts clear AutoNav Start/Stop UI. */
+    moveBaseState?: ActionState;
 }
 
 export enum MapFunction {
@@ -44,19 +50,19 @@ export interface AutoNavFunctions {
     DeleteGoal: (goalId: number) => void;
     DeleteMapPose: (poseName: string) => void;
     SaveGoal: (locationName: string) => void;
-    LoadGoal: (poseName: string) => ROSLIB.Transform;
-    NavigateToPose: (pose: ROSLIB.Transform) => void;
-    GetPose: () => ROSLIB.Transform;
+    LoadGoal: (poseName: string) => Transform;
+    NavigateToPose: (pose: Transform) => void;
+    GetPose: () => Transform;
     GetSavedPoseNames: () => string[];
     GetSavedPoseTypes: () => string[];
-    GetSavedPoses: () => ROSLIB.Transform[];
+    GetSavedPoses: () => Transform[];
     DisplayPoseMarkers: (
         toggle: boolean,
-        poses: ROSLIB.Transform[],
+        poses: Transform[],
         poseNames: string[],
         poseTypes: string[],
     ) => void;
-    DisplayGoalMarker: (pose: ROSLIB.Vector3) => void;
+    DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) => void;
     Play: () => void;
     RemoveGoalMarker: () => void;
     GoalReached: () => Promise<boolean>;
@@ -65,7 +71,7 @@ export interface AutoNavFunctions {
 
 export interface MapFunctions {
     GetMap: ROSOccupancyGrid;
-    GetPose: () => ROSLIB.Transform;
+    GetPose: () => Transform;
     MoveBase: (pose: ROSPose) => void;
     GoalReached: () => boolean;
     SelectGoal: () => boolean;
@@ -87,6 +93,11 @@ const AutoNav: React.FC<AutoNavProps> = ({
     swipeableViewsIdxSet,
     sceneSelected,
     onSceneSelectedChange,
+    addToast,
+    isModalLocationsMenuVisible,
+    isModalLocationsMenuVisibleSet,
+    onRegisterAutoNavNavControls,
+    moveBaseState,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -94,9 +105,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // Manage goal position
     const [goalPosition, goalPositionSet] = useState<ROSPoint | undefined>(undefined);
-
-    // Manage toast notifications for <Toasts>
-    const [toasts, toastsSet] = useState<Toast[]>([]);
 
     // OccupancyGrid instance for map and marker operations
     const [occupancyGrid, occupancyGridSet] = useState<OccupancyGrid>();
@@ -113,20 +121,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
             if (unsubscribeOnUnmount) unsubscribeOnUnmount();
         };
     }, [occupancyGrid]);
-
-    // Function to add a toast notification
-    const addToast = (
-        type: 'success' | 'error' | 'info',
-        message: string,
-        duration?: number
-    ) => {
-        // Generate a unique ID for toast
-        const id = genUUID();
-        // Add the toast to the state!
-        toastsSet((prevToasts) => (
-            [...prevToasts, { id, type, message, duration }]
-        ));
-    };
 
     /**
      * All navigation-related functions, provided by underMapFunctionProvider.
@@ -151,13 +145,13 @@ const AutoNav: React.FC<AutoNavProps> = ({
         ) as (locationName: string) => void,
         LoadGoal: underMapFunctionProvider.provideFunctions(
             UnderMapButton.LoadGoal,
-        ) as (poseName: string) => ROSLIB.Transform,
+        ) as (poseName: string) => Transform,
         NavigateToPose: underMapFunctionProvider.provideFunctions(
             UnderMapButton.NavigateToPose,
-        ) as (pose: ROSLIB.Transform) => void,
+        ) as (pose: Transform) => void,
         GetPose: underMapFunctionProvider.provideFunctions(
             UnderMapButton.GetPose,
-        ) as () => ROSLIB.Transform,
+        ) as () => Transform,
         GetSavedPoseNames: underMapFunctionProvider.provideFunctions(
             UnderMapButton.GetSavedPoseNames,
         ) as () => string[],
@@ -166,14 +160,14 @@ const AutoNav: React.FC<AutoNavProps> = ({
         ) as () => string[],
         GetSavedPoses: underMapFunctionProvider.provideFunctions(
             UnderMapButton.GetSavedPoses,
-        ) as () => ROSLIB.Transform[],
+        ) as () => Transform[],
 
         /**
          * Display pose markers on the map. Requires occupancyGrid to be set.
          */
         DisplayPoseMarkers: (
             toggle: boolean,
-            poses: ROSLIB.Transform[],
+            poses: Transform[],
             poseNames: string[],
             poseTypes: string[],
         ) => {
@@ -187,8 +181,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
         /**
          * Display a goal marker on the map at the given pose.
          */
-        DisplayGoalMarker: (pose: ROSLIB.Vector3) =>
-            occupancyGrid!.createGoalMarker(pose.x, pose.y, true),
+        DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) =>
+            occupancyGrid!.createGoalMarker(pose.x, pose.y, true, rotation),
 
         /**
          * Play the current navigation sequence (if supported by occupancyGrid).
@@ -202,24 +196,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
             UnderMapButton.RenamePose,
         ) as (poseNameOld: string, poseNameNew: string) => void,
     };
-
-    /**
-     * Callback to set the map pose and navigate to the selected goal
-     * Sets goal marker & initiates navigation to selected location.
-     *
-     * @param pose - Pose to navigate to
-    */
-
-    underMapFunctionProvider.setMapPoseCallback((pose: ROSLIB.Vector3) => {
-        functs.DisplayGoalMarker(pose);
-        isCurrentlyMovingSet(true);
-        isSelectingGoalSet(false);
-        functs
-            .GoalReached()
-            .then((goalReached) => {
-                isCurrentlyMovingSet(false)
-            });
-    })
 
     /**
      * Callback to update the goal selection state and update mapFn.SelectGoal.
@@ -241,7 +217,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
         ) as ROSOccupancyGrid,
         GetPose: mapFunctionProvider.provideFunctions(
             MapFunction.GetPose,
-        ) as () => ROSLIB.Transform,
+        ) as () => Transform,
         MoveBase: mapFunctionProvider.provideFunctions(
             MapFunction.MoveBase,
         ) as (pose: ROSPose) => void,
@@ -264,14 +240,36 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // Modal visibility state for adding a location
     const [isModalAddLocationVisible, isModalAddLocationVisibleSet] = useState<boolean>(false);
-    // Modal visibility state for locations menu
-    const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] = useState<boolean>(false);
     // Whether to display all goal markers on the map
     const [displayGoals, displayGoalsSet] = useState<boolean>(false);
     // Navigation goal selection state (true if selecting a goal).
     const [isSelectingGoal, isSelectingGoalSet] = useState<boolean>(true);
     // Whether the robot is currently auto-navigating
     const [isCurrentlyMoving, isCurrentlyMovingSet] = useState<boolean>(false);
+
+    // Drive Start/Stop from terminal Nav2 / cancel alerts (not GoalReached flag race).
+    useEffect(() => {
+        if (!moveBaseState) {
+            return;
+        }
+        const alertType = moveBaseState.alert_type;
+        if (
+            alertType !== "success" &&
+            alertType !== "warning" &&
+            alertType !== "error"
+        ) {
+            return;
+        }
+        isCurrentlyMovingSet(false);
+        isSelectingGoalSet(true);
+        occupancyGrid?.removeGoalMarker();
+        // Force a marker refresh in case the last amclPose was dropped in flight.
+        try {
+            occupancyGrid?.updateRobotMarker(functs.GetPose());
+        } catch {
+            // Pose may be unavailable before WebRTC map TF arrives.
+        }
+    }, [moveBaseState, occupancyGrid]);
 
     /**
      * On mount, create the canvas and OccupancyGrid for the map.
@@ -311,7 +309,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     return (
         <div className='auto-nav'>
-            <Toasts toasts={toasts} toastsSet={toastsSet} />
             <div className="map-wrapper">
                 <Map />
             </div>
@@ -333,6 +330,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
                 swipeableViewsIdxSet={swipeableViewsIdxSet}
                 sceneSelected={sceneSelected}
                 onSceneSelectedChange={onSceneSelectedChange}
+                onRegisterAutoNavNavControls={onRegisterAutoNavNavControls}
             />
         </div>
     );

@@ -2,7 +2,7 @@ import { ActionState, ROSPose, waitUntil } from "shared/util";
 import { StorageHandler } from "../storage_handler/StorageHandler";
 import { FunctionProvider } from "./FunctionProvider";
 import { resolve } from "path";
-import ROSLIB from "roslib";
+import { Transform, Vector3 } from "roslib";
 
 export enum UnderMapButton {
     SelectGoal,
@@ -24,7 +24,7 @@ export class UnderMapFunctionProvider extends FunctionProvider {
     private selectGoal: boolean;
     private storageHandler: StorageHandler;
     private navigationSuccess?: boolean;
-    private mapPoseCallback?: (pose: ROSLIB.Vector3) => void = undefined;
+    private mapPoseCallback?: (pose: Vector3) => void = undefined;
     private operatorCallback?: (state: ActionState) => void = undefined;
 
     constructor(storageHandler: StorageHandler) {
@@ -46,7 +46,13 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                     this.selectGoal = toggle;
                 };
             case UnderMapButton.CancelGoal:
-                return () => FunctionProvider.remoteRobot?.stopMoveBase();
+                return () => {
+                    this.setMoveBaseState({
+                        state: "Navigation canceled!",
+                        alert_type: "error",
+                    });
+                    FunctionProvider.remoteRobot?.stopMoveBase();
+                };
 
             case UnderMapButton.DeleteGoal:
                 return (idx: number) => {
@@ -72,7 +78,11 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                     return pose;
                 };
             case UnderMapButton.NavigateToPose:
-                return (pose: ROSLIB.Transform) => {
+                return (pose: Transform) => {
+                    this.setMoveBaseState({
+                        state: "Navigation executing!",
+                        alert_type: "info",
+                    });
                     let rosPose = {
                         position: {
                             x: pose.translation.x,
@@ -112,6 +122,7 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                                 FunctionProvider.remoteRobot?.isGoalReached();
                             if (goalReached) {
                                 clearInterval(interval);
+                                FunctionProvider.remoteRobot?.setGoalReached(false);
                                 resolve(true);
                             }
                         });
@@ -144,7 +155,7 @@ export class UnderMapFunctionProvider extends FunctionProvider {
      *
      * @param callback - A function that receives a `ROSLIB.Vector3` object representing the pose on the map.
      */
-    public setMapPoseCallback(callback: (pose: ROSLIB.Vector3) => void) {
+    public setMapPoseCallback(callback: (pose: Vector3) => void) {
         this.mapPoseCallback = callback;
     }
 }
