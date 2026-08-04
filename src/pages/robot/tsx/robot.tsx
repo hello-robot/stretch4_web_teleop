@@ -1337,14 +1337,11 @@ export class Robot extends React.Component {
         this.moveBaseStatusSeenActive = false;
         this.moveBaseStatusLastEmitted = undefined;
         this.moveBaseTerminalBaseline = undefined;
-<<<<<<< HEAD
         this.moveBaseGoalXY = {
             x: pose.position.x,
             y: pose.position.y,
         };
         this.moveBaseInsideTolStreak = 0;
-=======
->>>>>>> 73ed2a5ae38ff508fba41473fecb00c0025241ee
 
         // Immediately notify operator that navigation has started executing
         this.moveBaseResultCallback({
@@ -1455,11 +1452,8 @@ export class Robot extends React.Component {
             this.moveBaseStatusWatching = false;
             this.moveBaseStatusSeenActive = false;
             this.moveBaseTerminalBaseline = undefined;
-<<<<<<< HEAD
             this.moveBaseGoalXY = undefined;
             this.moveBaseInsideTolStreak = 0;
-=======
->>>>>>> 73ed2a5ae38ff508fba41473fecb00c0025241ee
         }
     }
 
@@ -1482,11 +1476,7 @@ export class Robot extends React.Component {
                     foundAny = true;
                 }
             }
-<<<<<<< HEAD
-            if (foundAny) return total * 1.25;  // Scale factor to account for the number of links (5/4)
-=======
             if (foundAny) return total;
->>>>>>> 73ed2a5ae38ff508fba41473fecb00c0025241ee
         }
 
         let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
