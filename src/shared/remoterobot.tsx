@@ -15,6 +15,7 @@ import {
     HomeTheRobotCommand,
     GetStretchTool,
     SetJointVelocityCommand,
+    SeedLocalizationCommand,
 } from "shared/commands";
 import {
     ValidJointStateDict,
@@ -246,6 +247,16 @@ export class RemoteRobot extends React.Component<{}, any> {
     homeTheRobot() {
         let cmd: HomeTheRobotCommand = {
             type: "homeTheRobot",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Ask the robot to seed its localization.
+     */
+    seedLocalization() {
+        let cmd: SeedLocalizationCommand = {
+            type: "seedLocalization",
         };
         this.robotChannel(cmd);
     }
