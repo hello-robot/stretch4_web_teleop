@@ -1,7 +1,7 @@
 {
-  "name": "Stretch Web Interface _XP",
+  "name": "Stretch4-Web-Interface _XP",
   "short_name": "SWI_XP",
-  "description": "Stretch Web Interface _XP",
+  "description": "Stretch4-Web-Interface _XP",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

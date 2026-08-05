@@ -34,7 +34,7 @@ export const SideBySideView = (props) => {
                         component="div"
                         sx={{ flexGrow: 1 }}
                     >
-                        Stretch Web Teleop
+                        Stretch4-Web-Interface
                     </Typography>
                     <Button color="inherit" onClick={handleLogout}>
                         Logout
@@ -78,7 +78,7 @@ export const SideBySideView = (props) => {
                         component="div"
                         sx={{ flexGrow: 1 }}
                     >
-                        Stretch Web Teleop
+                        Stretch4-Web-Interface
                     </Typography>
                     <Button color="inherit" onClick={handleLogout}>
                         Logout
