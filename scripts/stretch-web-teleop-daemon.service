@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=anna2
-WorkingDirectory=/home/anna2/ament_ws/src/stretch4_web_teleop
-ExecStart=/usr/bin/node /home/anna2/ament_ws/src/stretch4_web_teleop/scripts/stretch_firebase_daemon.js
+User=hello-robot
+WorkingDirectory=/home/hello-robot/ament_ws/src/stretch4_web_teleop
+ExecStart=/usr/bin/node /home/hello-robot/ament_ws/src/stretch4_web_teleop/scripts/stretch_firebase_daemon.js
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production

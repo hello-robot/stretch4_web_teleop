@@ -58,6 +58,8 @@ let currentStatus = 'offline';
 let isProcessingCommand = false;
 const repoRoot = path.join(__dirname, '..');
 
+const fs = require('fs');
+
 function setStatus(status) {
     if (!auth.currentUser) return;
     currentStatus = status;
@@ -79,20 +81,104 @@ function checkInterfaceRunning() {
     });
 }
 
-function handleLaunchCommand(requestedBy) {
+async function ensureMapLocal(mapId, requestedBy) {
+    if (!mapId) return null;
+    const fleetPath = process.env.HELLO_FLEET_PATH || path.join(process.env.HOME, 'stretch_user');
+    const mapsDir = path.join(fleetPath, 'maps');
+
+    // Direct local yaml check
+    const directYaml = path.join(mapsDir, `${mapId}.yaml`);
+    const subDirYaml = path.join(mapsDir, mapId, `${mapId}.yaml`);
+    let foundLocalYaml = null;
+    if (fs.existsSync(directYaml)) foundLocalYaml = directYaml;
+    else if (fs.existsSync(subDirYaml)) foundLocalYaml = subDirYaml;
+
+    // Fetch from Firebase DB to verify / obtain map record
+    console.log(`[DAEMON] Checking Firebase DB for map '${mapId}'...`);
+    try {
+        let mapSnap = await get(ref(db, `maps/${mapId}`));
+        if (!mapSnap.exists()) {
+            mapSnap = await get(ref(db, `robots/${fleetId}/maps/${mapId}`));
+        }
+
+        if (mapSnap.exists() && requestedBy) {
+            const mapData = mapSnap.val();
+            let alias = requestedBy;
+            try {
+                const uidSnap = await get(ref(db, `uids/${requestedBy}`));
+                if (uidSnap.exists()) alias = uidSnap.val();
+            } catch (e) {}
+
+            const isOwner = mapData.owner_uid === requestedBy || mapData.owner_uid === alias;
+            const isAllowed = mapData.allowed_users &&
+                (mapData.allowed_users[requestedBy] || mapData.allowed_users[alias] || mapData.allowed_users[fleetId]);
+
+            let isAssigned = false;
+            try {
+                const assignSnap1 = await get(ref(db, `assignments/${alias}/maps/${mapId}`));
+                const assignSnap2 = await get(ref(db, `assignments/${requestedBy}/maps/${mapId}`));
+                isAssigned = assignSnap1.exists() || assignSnap2.exists();
+            } catch (e) {}
+
+            if (!isOwner && !isAllowed && !isAssigned) {
+                console.warn(`[DAEMON] Security Alert: User '${requestedBy}' (${alias}) is not authorized for map '${mapId}'.`);
+                return null;
+            }
+        }
+
+        if (foundLocalYaml) return foundLocalYaml;
+
+        if (!mapSnap.exists()) {
+            console.warn(`[DAEMON] Map '${mapId}' not found in Firebase DB under /maps/ or /robots/${fleetId}/maps/`);
+            return null;
+        }
+
+        const mapData = mapSnap.val();
+        const { yaml_content, pgm_filename, pgm_base64 } = mapData;
+        if (!yaml_content || !pgm_base64) {
+            console.warn(`[DAEMON] Map '${mapId}' payload missing yaml_content or pgm_base64.`);
+            return null;
+        }
+
+        const targetDir = path.join(mapsDir, mapId);
+        fs.mkdirSync(targetDir, { recursive: true });
+
+        const targetYaml = path.join(targetDir, `${mapId}.yaml`);
+        const targetPgm = path.join(targetDir, pgm_filename || `${mapId}.pgm`);
+
+        fs.writeFileSync(targetYaml, yaml_content, 'utf8');
+        fs.writeFileSync(targetPgm, Buffer.from(pgm_base64, 'base64'));
+
+        console.log(`[DAEMON] Map '${mapId}' successfully downloaded to ${targetYaml}`);
+        return targetYaml;
+    } catch (err) {
+        console.error(`[DAEMON] Failed to fetch map '${mapId}':`, err.message);
+        return foundLocalYaml;
+    }
+}
+
+async function handleLaunchCommand(requestedBy, mapId) {
     if (isProcessingCommand) {
         console.log('[DAEMON] Already processing a command, ignoring launch request.');
         return;
     }
 
     isProcessingCommand = true;
-    console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}`);
+    console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}, map: ${mapId || 'none'}`);
     setStatus('launching');
 
+    let mapArg = '';
+    if (mapId) {
+        const localMapYaml = await ensureMapLocal(mapId, requestedBy);
+        if (localMapYaml) {
+            mapArg = `-m "${localMapYaml}"`;
+        }
+    }
+
     const launchScript = path.join(repoRoot, 'launch_interface_firebase.sh');
-    
-    // Execute launch_interface_firebase.sh inside a login shell to load full environment
-    exec(`bash -l -c "${launchScript}"`, { cwd: repoRoot }, (error, stdout, stderr) => {
+    const cmdStr = mapArg ? `bash -l -c "${launchScript} ${mapArg}"` : `bash -l -c "${launchScript}"`;
+
+    exec(cmdStr, { cwd: repoRoot }, (error, stdout, stderr) => {
         isProcessingCommand = false;
         if (error) {
             console.error('[DAEMON] Failed to launch interface:', error.message);
@@ -174,7 +260,7 @@ async function initDaemon() {
             const { action, requested_by } = controlData;
 
             if (action === 'launch') {
-                handleLaunchCommand(requested_by);
+                handleLaunchCommand(requested_by, controlData.map_id || controlData.map_name);
                 // Clear command once consumed
                 set(controlRef, null);
             } else if (action === 'stop') {

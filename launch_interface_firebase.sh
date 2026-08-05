@@ -6,6 +6,17 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+while getopts m: opt; do
+	case $opt in
+	m)
+		if [[ -n "$OPTARG" ]]; then
+			echo "Setting map to: $OPTARG"
+			MAP_ARG="map_yaml:=$OPTARG"
+		fi
+		;;
+	esac
+done
+
 timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
 logdir="$HOME/stretch_user/log/web_teleop/$timestamp"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
@@ -41,7 +52,7 @@ fi
 # 3. Start ROS2 launch file
 echo "Start ROS2..."
 LAUNCH_LOGFILE="$logdir/web_interface_launch.txt"
-screen -dm -S "web_teleop_ros" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py > $LAUNCH_LOGFILE 2>&1"
+screen -dm -S "web_teleop_ros" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
 sleep 8
 
 # 4. Start the robot browser (pointing to Firebase)

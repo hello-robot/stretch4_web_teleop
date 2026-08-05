@@ -19,6 +19,8 @@ import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
 import { StorageHandler } from "./storage_handler/StorageHandler";
+import { createLoginHandler } from "../../home/tsx/utils";
+import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
 
 import "operator/css/index.css";
 import { waitUntilAsync } from "../../../shared/util";
@@ -41,6 +43,8 @@ let root: Root;
 export let stretchTool: StretchTool;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
+export let loginHandler: LoginHandler;
+let room_name: string | null = null;
 
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
@@ -66,9 +70,13 @@ connection = new WebRTCConnection({
     onConnectionEnd: disconnectFromRobot,
 });
 
+loginHandler = createLoginHandler(() => {
+    console.log("Operator login handler ready");
+});
+
 new Promise<void>(async (resolve) => {
     let currURL = new URL(window.location.href);
-    let room_name = currURL.searchParams.get("robot");
+    room_name = currURL.searchParams.get("robot");
     if (
         process.env.storage === "firebase" &&
         !/^stretch-(re1|re2|se3|se4)-\d{4}$/.test(room_name)
@@ -363,9 +371,15 @@ function disconnectFromRobot() {
 window.onbeforeunload = () => {
     connection.hangup();
     connection.stop();
+    if (loginHandler && room_name) {
+        loginHandler.requestRobotStop(room_name);
+    }
 };
 
 window.onunload = () => {
     connection.hangup();
     connection.stop();
+    if (loginHandler && room_name) {
+        loginHandler.requestRobotStop(room_name);
+    }
 };

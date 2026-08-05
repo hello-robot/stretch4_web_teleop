@@ -8,13 +8,14 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import Snackbar from "@mui/material/Snackbar";
-import { Changelog } from "./Changelog";
+import { UserMaps } from "./UserMaps";
 import { CallRobotSelector } from "./CallRobotSelector";
 import { loginHandler } from "../index";
 
 export const SideBySideView = (props) => {
     const [openFailureToast, setOpenFailureToast] = useState(false);
     const [failureToastMessage, setfailureToastMessage] = useState("");
+    const [selectedMap, setSelectedMap] = useState<string | null>(null);
 
     const handleLogout = () => {
         loginHandler.logout().catch((error) => {
@@ -48,12 +49,15 @@ export const SideBySideView = (props) => {
                 className="sbs-container"
             >
                 <Grid size={{ md: 12, lg: 6 }}>
-                    <Changelog
+                    <UserMaps
+                        selectedMap={selectedMap}
+                        onSelectMap={setSelectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>
                 <Grid size={{ md: 12, lg: 6 }}>
                     <CallRobotSelector
+                        selectedMap={selectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>
@@ -88,11 +92,14 @@ export const SideBySideView = (props) => {
             <Grid container spacing={2} className="sbs-container">
                 <Grid size={12}>
                     <CallRobotSelector
+                        selectedMap={selectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>
                 <Grid size={12}>
-                    <Changelog
+                    <UserMaps
+                        selectedMap={selectedMap}
+                        onSelectMap={setSelectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>

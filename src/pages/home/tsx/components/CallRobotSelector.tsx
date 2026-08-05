@@ -5,7 +5,7 @@ import Card from "@mui/material/Card";
 import CardActions from "@mui/material/CardActions";
 import CardContent from "@mui/material/CardContent";
 import CircularProgress from "@mui/material/CircularProgress";
-import { blue, green, grey, purple, red, yellow } from "@mui/material/colors";
+import { blue, green, grey, red, yellow } from "@mui/material/colors";
 import Grid from "@mui/material/Grid2";
 import Typography from "@mui/material/Typography";
 import "home/css/CallRobotSelector.css";
@@ -19,7 +19,7 @@ function get_indicator_text(status_str) {
         case "standby":
             return "Standby (Ready to launch)";
         case "launching":
-            return "Launching ROS2 Interface...";
+            return "Starting Interface...";
         case "offline":
             return "Offline";
         case "occupied":
@@ -32,7 +32,7 @@ function get_indicator_text(status_str) {
 function get_indicator(status_str) {
     let statusui;
     switch (status_str) {
-        case "online":
+        case "active":
             statusui = {
                 color_name: "green",
                 color: green,
@@ -46,8 +46,8 @@ function get_indicator(status_str) {
             break;
         case "launching":
             statusui = {
-                color_name: "purple",
-                color: purple,
+                color_name: "yellow",
+                color: yellow,
             };
             break;
         case "offline":
@@ -87,23 +87,35 @@ function get_indicator(status_str) {
     return <CircleIcon sx={indicator_css} />;
 }
 
-function get_action(status_str: string, robot_name: string, robot_uid: string) {
+
+function get_action(status_str: string, robot_name: string, robot_uid: string, selected_map: string | null) {
+    const mapQuery = selected_map ? `&map=${encodeURIComponent(selected_map)}` : "";
     switch (status_str) {
         case "online":
             return (
-                <Button
-                    href={`/operator/?robot=${robot_name}`}
-                    variant="contained"
-                    color="success"
-                    size="small"
-                >
-                    Call Robot
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                        href={`/operator/?robot=${robot_name}${mapQuery}`}
+                        variant="contained"
+                        color="success"
+                        size="small"
+                    >
+                        Open Interface
+                    </Button>
+                    <Button
+                        onClick={() => loginHandler.requestRobotStop(robot_uid)}
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                    >
+                        Stop Interface
+                    </Button>
+                </Box>
             );
         case "standby":
             return (
                 <Button
-                    onClick={() => loginHandler.requestRobotLaunch(robot_uid)}
+                    onClick={() => loginHandler.requestRobotLaunch(robot_uid, selected_map)}
                     variant="contained"
                     color="primary"
                     size="small"
@@ -124,13 +136,23 @@ function get_action(status_str: string, robot_name: string, robot_uid: string) {
             );
         case "occupied":
             return (
-                <Button
-                    variant="contained"
-                    size="small"
-                    disabled
-                >
-                    Occupied
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                        variant="contained"
+                        size="small"
+                        disabled
+                    >
+                        Occupied
+                    </Button>
+                    <Button
+                        onClick={() => loginHandler.requestRobotStop(robot_uid)}
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                    >
+                        Stop Interface
+                    </Button>
+                </Box>
             );
         case "offline":
         default:
@@ -146,7 +168,7 @@ function get_action(status_str: string, robot_name: string, robot_uid: string) {
     }
 }
 
-const CallRobotItem = (props: { uid: string; name: string; status: string }) => {
+const CallRobotItem = (props: { uid: string; name: string; status: string; selectedMap: string | null }) => {
     return (
         <Card sx={{ minWidth: 275 }}>
             <CardContent>
@@ -158,12 +180,12 @@ const CallRobotItem = (props: { uid: string; name: string; status: string }) => 
                     {get_indicator_text(props.status)}
                 </Typography>
             </CardContent>
-            <CardActions>{get_action(props.status, props.name, props.uid)}</CardActions>
+            <CardActions>{get_action(props.status, props.name, props.uid, props.selectedMap)}</CardActions>
         </Card>
     );
 };
 
-export const CallRobotSelector = (props: { style?: React.CSSProperties }) => {
+export const CallRobotSelector = (props: { selectedMap?: string | null; style?: React.CSSProperties }) => {
     const [callableRobots, setCallableRobots] = useState({});
 
     useEffect(() => {
@@ -195,6 +217,7 @@ export const CallRobotSelector = (props: { style?: React.CSSProperties }) => {
                                         uid={robo_uid}
                                         name={value["name"] || robo_uid}
                                         status={value["status"] || "offline"}
+                                        selectedMap={props.selectedMap || null}
                                     />
                                 </Grid>
                             );
