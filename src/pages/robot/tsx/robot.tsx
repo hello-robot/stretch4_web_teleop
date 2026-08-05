@@ -1247,9 +1247,58 @@ export class Robot extends React.Component {
         return newGoal;
     }
 
+    isAlreadyAtPose(pose: RobotPose, tolerance: number = 0.01): boolean {
+        if (!this.jointState) {
+            console.log("isAlreadyAtPose: No jointState received yet.");
+            return false;
+        }
+        console.log("Checking if robot is already at pose. Target vs Current:");
+        for (let key in pose) {
+            const jointName = key as ValidJoints;
+            const targetPos = pose[jointName];
+            if (targetPos !== undefined) {
+                try {
+                    const currentPos = this.getJointValue(jointName);
+                    if (currentPos === undefined || isNaN(currentPos)) {
+                        console.log(`isAlreadyAtPose: Joint ${jointName} has invalid current position:`, currentPos);
+                        return false;
+                    }
+                    const diff = Math.abs(targetPos - currentPos);
+                    console.log(`- ${jointName}: Target=${targetPos.toFixed(4)}, Current=${currentPos.toFixed(4)}, Diff=${diff.toFixed(4)} (Tol=${tolerance})`);
+                    if (diff > tolerance) {
+                        console.log(`isAlreadyAtPose: Joint ${jointName} exceeds tolerance.`);
+                        return false;
+                    }
+                } catch (e) {
+                    console.log(`isAlreadyAtPose: Exception querying joint ${jointName}:`, e);
+                    return false;
+                }
+            }
+        }
+        console.log("isAlreadyAtPose: All joints within tolerance. Already at pose!");
+        return true;
+    }
+
     async executePoseGoal(pose: RobotPose) {
-        console.log("executing pose goal");
         await this.switchToNavigationMode();
+
+        /// check if at goal already
+        if (this.isAlreadyAtPose(pose)) {
+            console.log("Robot is already at target pose, skipping execution.");
+            this.playbackPosesResultCallback({
+                state: MovementState.Executing,
+                alert_type: "info",
+            });
+            setTimeout(() => {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Success,
+                    alert_type: "info",
+                });
+            }, 1000);
+            return;
+        }
+        console.log("executing pose goal");
+        
         this.stopExecution();
         this.poseGoal = this.makePoseGoal(pose);
         console.log("execute: ", pose);
@@ -1307,6 +1356,26 @@ export class Robot extends React.Component {
 
     async executePoseGoals(poses: RobotPose[], index: number) {
         await this.switchToNavigationMode();
+
+        // check if at goal already
+        if (poses.length > 0) {
+            const finalPose = poses[poses.length - 1];
+            if (this.isAlreadyAtPose(finalPose)) {
+                console.log("Robot is already at final target pose, skipping execution.");
+                this.playbackPosesResultCallback({
+                    state: MovementState.Executing,
+                    alert_type: "info",
+                });
+                setTimeout(() => {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Success,
+                        alert_type: "info",
+                    });
+                }, 1000);
+                return;
+            }
+        }
+        
         // this.stopExecution();
         this.poseGoal = this.makePoseGoals(poses);
         this.playbackPosesResultCallback({
@@ -1327,6 +1396,11 @@ export class Robot extends React.Component {
                     this.playbackPosesResultCallback({
                         state: MovementState.Success,
                         alert_type: "info",
+                    });
+                } else {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Fail,
+                        alert_type: "error",
                     });
                 }
             },

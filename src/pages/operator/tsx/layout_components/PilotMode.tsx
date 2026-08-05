@@ -101,6 +101,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
                                 type: "spring",
                                 duration: 1,
                                 bounce: 0.2,
+                                filter: { type: "tween", duration: 0.3, ease: "easeOut" }
                             }}
                         >
                             <TabGroup
