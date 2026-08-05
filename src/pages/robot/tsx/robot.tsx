@@ -1286,7 +1286,7 @@ export class Robot extends React.Component {
             return;
         }
         console.log("executing pose goal");
-        
+
         this.stopExecution();
         this.poseGoal = this.makePoseGoal(pose, 1.5);
         console.log("execute: ", pose);
@@ -1363,8 +1363,8 @@ export class Robot extends React.Component {
                 return;
             }
         }
-        
-        // this.stopExecution();
+
+        this.stopExecution();
         this.poseGoal = this.makePoseGoals(poses, 1.5);
         this.playbackPosesResultCallback({
             state: MovementState.Executing,
