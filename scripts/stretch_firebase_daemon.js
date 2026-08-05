@@ -260,9 +260,10 @@ async function initDaemon() {
             const { action, requested_by } = controlData;
 
             if (action === 'launch') {
-                handleLaunchCommand(requested_by, controlData.map_id || controlData.map_name);
-                // Clear command once consumed
-                set(controlRef, null);
+                handleLaunchCommand(requested_by, controlData.map_id || controlData.map_name).finally(() => {
+                    // Clear command once consumed so that rules can read requested_by during map fetch
+                    set(controlRef, null);
+                });
             } else if (action === 'stop') {
                 handleStopCommand(requested_by);
                 set(controlRef, null);
