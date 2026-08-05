@@ -1107,13 +1107,15 @@ export class Robot extends React.Component {
 
             try {
                 const currentPos = this.getJointValue(jointName);
-                const distance = Math.abs(targetPos - currentPos);
-                const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
+                if (currentPos !== undefined && !isNaN(currentPos)) {
+                    const distance = Math.abs(targetPos - currentPos);
+                    const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
 
-                if (velocityLimit > 0) {
-                    const jointDuration = distance / velocityLimit;
-                    if (jointDuration > maxDuration) {
-                        maxDuration = jointDuration;
+                    if (velocityLimit > 0) {
+                        const jointDuration = distance / velocityLimit;
+                        if (!isNaN(jointDuration) && jointDuration > maxDuration) {
+                            maxDuration = jointDuration;
+                        }
                     }
                 }
             } catch (e) {
@@ -1158,17 +1160,72 @@ export class Robot extends React.Component {
         }
 
         let points: any = [];
-        let jointPositions: number[] = [];
+        let cumulativeTime = 0.0;
+
+        // Iterate through each pose to compute the trajectory points with appropriate timing based on joint velocities
         poses.forEach((pose, index) => {
-            jointPositions = [];
+            let jointPositions: number[] = [];
             jointNames.forEach((name) => {
                 jointPositions.push(pose[name] !== undefined ? pose[name]! : this.getJointValue(name));
             });
+
+            let segmentDuration = 0.1; // fallback minimum duration for this segment
+
+            if (index > 0) {
+                // Second pose + subsequent poses: compute duration relative to previous pose
+                const prevPose = poses[index - 1];
+                jointNames.forEach((name) => {
+                    const targetPos = pose[name];
+                    const prevPos = prevPose[name];
+
+                    if (targetPos !== undefined && prevPos !== undefined) {
+                        const distance = Math.abs(targetPos - prevPos);
+                        const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
+
+                        if (velocityLimit > 0) {
+                            const jointDuration = distance / velocityLimit;
+
+                            if (jointDuration > segmentDuration) {
+                                segmentDuration = jointDuration;
+                            }
+                        }
+                    }
+                });
+            } else {
+                // First pose: compute duration relative to current physical joint states
+                jointNames.forEach((name) => {
+                    const targetPos = pose[name];
+                    if (targetPos !== undefined) {
+                        try {
+                            const currentPos = this.getJointValue(name);
+                            if (currentPos !== undefined && !isNaN(currentPos)) {
+                                const distance = Math.abs(targetPos - currentPos);
+                                const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
+
+                                if (velocityLimit > 0) {
+                                    const jointDuration = distance / velocityLimit;
+                                    if (!isNaN(jointDuration) && jointDuration > segmentDuration) {
+                                        segmentDuration = jointDuration;
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn(`Could not compute segment duration for first pose joint ${name}:`, e);
+                        }
+                    }
+                });
+            }
+
+            cumulativeTime += segmentDuration;
+
+            const secs = Math.floor(cumulativeTime);
+            const nsecs = Math.round((cumulativeTime - secs) * 1e9);
+
             points.push({
                 positions: jointPositions,
                 time_from_start: {
-                    secs: 10,
-                    nsecs: 0,
+                    secs: secs,
+                    nsecs: nsecs,
                 },
             });
         });
@@ -1221,7 +1278,12 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
-                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                let error_code = -4; // default fallback error code
+                try {
+                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                } catch (e) {
+                    console.warn("Could not parse action error code:", e);
+                }
                 console.log(
                     "Error for action on " +
                     this.trajectoryClient.name +
@@ -1233,7 +1295,7 @@ export class Robot extends React.Component {
                         state: MovementState.Cancel,
                         alert_type: "error",
                     });
-                } else if (error_code == -4) {
+                } else {
                     this.playbackPosesResultCallback({
                         state: MovementState.Fail,
                         alert_type: "error",
@@ -1277,7 +1339,12 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
-                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                let error_code = -4; // default fallback error code
+                try {
+                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                } catch (e) {
+                    console.warn("Could not parse action error code:", e);
+                }
                 console.log(
                     "Error for action on " +
                     this.trajectoryClient.name +
@@ -1289,7 +1356,7 @@ export class Robot extends React.Component {
                         state: MovementState.Cancel,
                         alert_type: "error",
                     });
-                } else if (error_code == -4) {
+                } else {
                     this.playbackPosesResultCallback({
                         state: MovementState.Fail,
                         alert_type: "error",
@@ -1447,6 +1514,18 @@ export class Robot extends React.Component {
                 }
             }
             if (foundAny) return total;
+
+            // Fallback for when individual telescoping links are not published:
+            // Check if either "arm_joint" or "wrist_extension" is available in the jointState.
+            let idx = this.jointState.name.indexOf(name as ValidJoints);
+            if (idx !== -1) {
+                return this.jointState.position[idx];
+            }
+            let fallbackName = name === "arm_joint" ? "wrist_extension" : "arm_joint";
+            let fallbackIdx = this.jointState.name.indexOf(fallbackName as ValidJoints);
+            if (fallbackIdx !== -1) {
+                return this.jointState.position[fallbackIdx];
+            }
         }
 
         let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
