@@ -293,7 +293,12 @@ const AutoNav: React.FC<AutoNavProps> = ({
             occupancyGrid.width,
             occupancyGrid.height,
         );
+        // Stage scale is applied above; refresh so markers use the real scale.
+        occupancyGrid.refreshMarkerScales();
         occupancyGridSet(occupancyGrid);
+        return () => {
+            occupancyGrid.dispose();
+        };
     }, []);
 
     // Show friendly, helpful toast when
