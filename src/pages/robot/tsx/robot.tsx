@@ -1094,16 +1094,17 @@ export class Robot extends React.Component {
     }
 
 
-    makePoseGoal(pose: RobotPose) {
-        let jointNames: ValidJoints[] = [];
-        let jointPositions: number[] = [];
-        let maxDuration = 0.1; // minimum threshold to prevent division by zero or excessive acceleration
+    makePoseGoal(pose: RobotPose, minDuration: number = 0.5) {
+        const allJointNames = Object.keys(pose) as ValidJoints[];
+        if (allJointNames.length === 0) throw new Error("Pose object cannot be empty");
+
+        let maxDuration = minDuration;
+        const jointNames: ValidJoints[] = [];
+        const jointPositions: number[] = [];
 
         for (let key in pose) {
             const jointName = key as ValidJoints;
-            jointNames.push(jointName);
-            const targetPos = pose[jointName]!;
-            jointPositions.push(targetPos);
+            let targetPos = pose[jointName]!;
 
             try {
                 const currentPos = this.getJointValue(jointName);
@@ -1121,130 +1122,117 @@ export class Robot extends React.Component {
             } catch (e) {
                 console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
             }
+            jointNames.push(jointName);
+            jointPositions.push(targetPos);
         }
 
-        const secs = Math.floor(maxDuration);
-        const nsecs = Math.round((maxDuration - secs) * 1e9);
+        if (jointNames.length === 0) {
+            // Defensive fallback: if all joints are skipped, include the first one to avoid empty goal errors
+            const firstKey = Object.keys(pose)[0] as ValidJoints;
+            jointNames.push(firstKey);
+            jointPositions.push(pose[firstKey]!);
+        }
+
+        // Safe nanosecond calculation
+        let secs = Math.floor(maxDuration);
+        let nsecs = Math.round((maxDuration - secs) * 1e9);
+        if (nsecs >= 1e9) {
+            secs += 1;
+            nsecs = 0;
+        }
 
         console.log("Calculated synchronized trajectory duration:", maxDuration, "secs:", secs, "nsecs:", nsecs);
 
-        if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = {
+        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
+
+        return {
             trajectory: {
                 header: {
-                    stamp: {
-                        secs: 0,
-                        nsecs: 0,
-                    },
+                    stamp: { secs: 0, nsecs: 0 }, // Execute immediately
                 },
                 joint_names: jointNames,
                 points: [
                     {
                         positions: jointPositions,
-                        time_from_start: {
-                            secs: secs,
-                            nsecs: nsecs,
-                        },
+                        time_from_start: { secs, nsecs },
                     },
                 ],
             },
         };
-
-        return newGoal;
     }
 
-    makePoseGoals(poses: RobotPose[]) {
-        let jointNames: ValidJoints[] = [];
-        for (let key in poses[0]) {
-            jointNames.push(key as ValidJoints);
+    makePoseGoals(poses: RobotPose[], minSegmentDuration: number = 0.5) {
+        if (!poses || poses.length === 0) {
+            throw new Error("Poses array cannot be empty");
         }
 
-        let points: any = [];
+        // Standardize joint list using the union of keys or the first pose's keys
+        const jointNames = Object.keys(poses[0]) as ValidJoints[];
+        const points: any[] = [];
         let cumulativeTime = 0.0;
 
-        // Iterate through each pose to compute the trajectory points with appropriate timing based on joint velocities
+        // keep track of cumulative duration for timestamps for each point
         poses.forEach((pose, index) => {
-            let jointPositions: number[] = [];
+            let segmentDuration = minSegmentDuration;
+            const jointPositions: number[] = [];
+
             jointNames.forEach((name) => {
-                jointPositions.push(pose[name] !== undefined ? pose[name]! : this.getJointValue(name));
-            });
+                if (index === 0) {
+                    // First pose: evaluate vs. live state
+                    const currentPos = this.getJointValue(name);
+                    const targetPos = pose[name] !== undefined ? pose[name]! : currentPos;
+                    jointPositions.push(targetPos);
 
-            let segmentDuration = 0.1; // fallback minimum duration for this segment
-
-            if (index > 0) {
-                // Second pose + subsequent poses: compute duration relative to previous pose
-                const prevPose = poses[index - 1];
-                jointNames.forEach((name) => {
-                    const targetPos = pose[name];
-                    const prevPos = prevPose[name];
+                    if (targetPos !== undefined && currentPos !== undefined && !isNaN(currentPos)) {
+                        const distance = Math.abs(targetPos - currentPos);
+                        const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
+                        if (velocityLimit > 0) {
+                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
+                        }
+                    }
+                } else {
+                    // Subsequent poses: evaluate vs. previous point's recorded target position
+                    const prevPos = points[index - 1].positions[jointNames.indexOf(name)];
+                    const targetPos = pose[name] !== undefined ? pose[name]! : prevPos;
+                    jointPositions.push(targetPos);
 
                     if (targetPos !== undefined && prevPos !== undefined) {
                         const distance = Math.abs(targetPos - prevPos);
                         const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
-
                         if (velocityLimit > 0) {
-                            const jointDuration = distance / velocityLimit;
-
-                            if (jointDuration > segmentDuration) {
-                                segmentDuration = jointDuration;
-                            }
+                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
                         }
                     }
-                });
-            } else {
-                // First pose: compute duration relative to current physical joint states
-                jointNames.forEach((name) => {
-                    const targetPos = pose[name];
-                    if (targetPos !== undefined) {
-                        try {
-                            const currentPos = this.getJointValue(name);
-                            if (currentPos !== undefined && !isNaN(currentPos)) {
-                                const distance = Math.abs(targetPos - currentPos);
-                                const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
-
-                                if (velocityLimit > 0) {
-                                    const jointDuration = distance / velocityLimit;
-                                    if (!isNaN(jointDuration) && jointDuration > segmentDuration) {
-                                        segmentDuration = jointDuration;
-                                    }
-                                }
-                            }
-                        } catch (e) {
-                            console.warn(`Could not compute segment duration for first pose joint ${name}:`, e);
-                        }
-                    }
-                });
-            }
+                }
+            });
 
             cumulativeTime += segmentDuration;
 
-            const secs = Math.floor(cumulativeTime);
-            const nsecs = Math.round((cumulativeTime - secs) * 1e9);
+            // Safe nanosecond calculation
+            let secs = Math.floor(cumulativeTime);
+            let nsecs = Math.round((cumulativeTime - secs) * 1e9);
+            if (nsecs >= 1e9) {
+                secs += 1;
+                nsecs = 0;
+            }
 
             points.push({
                 positions: jointPositions,
-                time_from_start: {
-                    secs: secs,
-                    nsecs: nsecs,
-                },
+                time_from_start: { secs, nsecs },
             });
         });
 
-        if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = {
+        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
+
+        return {
             trajectory: {
                 header: {
-                    stamp: {
-                        secs: 0,
-                        nsecs: 0,
-                    },
+                    stamp: { secs: 0, nsecs: 0 },
                 },
                 joint_names: jointNames,
                 points: points,
             },
         };
-
-        return newGoal;
     }
 
     isAlreadyAtPose(pose: RobotPose, tolerance: number = 0.01): boolean {
@@ -1300,7 +1288,7 @@ export class Robot extends React.Component {
         console.log("executing pose goal");
         
         this.stopExecution();
-        this.poseGoal = this.makePoseGoal(pose);
+        this.poseGoal = this.makePoseGoal(pose, 1.5);
         console.log("execute: ", pose);
         this.poseGoalID = this.trajectoryClient.sendGoal(
             this.poseGoal,
@@ -1377,7 +1365,7 @@ export class Robot extends React.Component {
         }
         
         // this.stopExecution();
-        this.poseGoal = this.makePoseGoals(poses);
+        this.poseGoal = this.makePoseGoals(poses, 1.5);
         this.playbackPosesResultCallback({
             state: MovementState.Executing,
             alert_type: "info",
