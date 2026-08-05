@@ -15,6 +15,7 @@ import {
     ActionStatusList,
     DiagnosticArray,
     getStretchTool,
+    JOINT_VELOCITIES,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
@@ -24,7 +25,6 @@ import {
     StretchTool,
     ValidJoints,
     VideoProps,
-    JOINT_VELOCITIES,
 } from "shared/util";
 import {
     RobotPose,
@@ -1049,19 +1049,13 @@ export class Robot extends React.Component {
     }
 
     /**
-     * Ask the robot to seed its localization via /seed_localization (std_srvs/Trigger).
+     * Ask the robot to seed its localization.
      */
-    seedLocalization(
-        resultCallback?: (result: { success: boolean; message: string }) => void
-    ) {
+    seedLocalization() {
         var request = {};
-        this.seedLocalizationService!.callService(
-            request,
-            (response: { success: boolean; message: string }) => {
-                console.log("Seed localization complete", response);
-                resultCallback?.(response);
-            }
-        );
+        this.seedLocalizationService!.callService(request, () => {
+            console.log("Seed localization complete");
+        });
     }
 
     executeBaseVelocity = (props: {
