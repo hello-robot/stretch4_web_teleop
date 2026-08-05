@@ -1,38 +1,35 @@
+import { FirebaseOptions } from "firebase/app";
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
-import { WebRTCConnection } from "shared/webrtcconnections";
+import { cmd } from "shared/commands";
+import { RemoteRobot } from "shared/remoterobot";
 import {
-    WebRTCMessage,
-    RemoteStream,
-    RobotPose,
-    ROSOccupancyGrid,
-    StretchTool,
     delay,
     getStretchTool,
+    RemoteStream,
+    ROSOccupancyGrid,
+    StretchTool,
     waitUntil,
+    WebRTCMessage
 } from "shared/util";
-import { RemoteRobot } from "shared/remoterobot";
-import { cmd } from "shared/commands";
-import { Operator } from "./Operator";
-import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
-import { StorageHandler } from "./storage_handler/StorageHandler";
-import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
-import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
-import { FirebaseOptions } from "firebase/app";
+import { WebRTCConnection } from "shared/webrtcconnections";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
+import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
+import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
+import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
+import { StorageHandler } from "./storage_handler/StorageHandler";
 
-import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
-import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
-import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
-import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
-import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
-import { MobileOperator } from "./MobileOperator";
-import { isMobile } from "react-device-detect";
 import "operator/css/index.css";
-import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
-import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
 import { waitUntilAsync } from "../../../shared/util";
+import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
+import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
+import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
+import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
+import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
+import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
+import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
+import { MobileOperator } from "./MobileOperator";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -79,8 +76,13 @@ new Promise<void>(async (resolve) => {
         console.error(`ERROR: Invalid room ${room_name}`);
         throw new Error("Invalid room name");
     }
-    await connection.configure_signaler(room_name);
-    console.log("Signaler ready!");
+    try {
+        await connection.configure_signaler(room_name);
+        console.log("Signaler ready!");
+    } catch (error) {
+        console.error("Failed to configure signaler.", error);
+        return;
+    }
 
     let connected = false;
     while (!connected) {
