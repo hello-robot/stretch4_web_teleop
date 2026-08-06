@@ -422,6 +422,8 @@ export type ActiveRealtimeVoiceSession = {
     /** Manual wake when Web Speech API is unavailable. */
     wake: () => void;
     sleep: () => void;
+    /** Force-close mic uplink (no audio to OpenAI) while session stays up. */
+    setMicMuted: (muted: boolean) => void;
 };
 
 export type { VoiceListeningState } from "./voiceWakeSleep";
@@ -902,5 +904,8 @@ export async function connectOpenAIRealtimeVoice(
         disconnect,
         wake: () => voiceWakeSleep?.wake(),
         sleep: () => voiceWakeSleep?.sleep("phrase"),
+        setMicMuted: (muted: boolean) => {
+            micGate?.setForceClosed(muted);
+        },
     };
 }
