@@ -185,7 +185,6 @@ function buildRealtimeVoiceSessionPayload() {
                 `\`label\` must be the place name only after the prefix (e.g. "office", "middle of living room", "front of the kitchen island"). This only loads the pose/goal marker; the user must say "Navigation start" / "Start navigation" / "AutoNav start" separately to navigate.`,
                 `CRITICAL: "Navigate to the living room" → \`${LOAD_AUTONAV_LOCATION}\` with \`label="living room"\`. "Navigate to middle of living room" → \`label="middle of living room"\`. NEVER \`${SWITCH_SCENE}\` for these. Bare "open AutoNav" (no place) → \`${SWITCH_SCENE}\`. "Navigation start" / "Start navigation" / "AutoNav start" → \`${CONTROL_AUTONAV}\` start.`,
 
->>>>>>> a222705
             ].join(" "),
             tools: [
                 {
