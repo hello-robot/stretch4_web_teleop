@@ -2,7 +2,7 @@
 
 /**
  * stretch_firebase_daemon.js
- * 
+ *
  * Onboard daemon for Stretch Web Teleop.
  * Listens for remote launch/stop commands via Firebase Realtime Database
  * and manages robot presence ('offline', 'standby', 'launching', 'online', 'occupied').

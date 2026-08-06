@@ -58,10 +58,10 @@ export const UserMaps = ({ selectedMap, onSelectMap, style }: UserMapsProps) => 
                                     checked={selectedMap === mapId}
                                     onClick={(e) => e.stopPropagation()}
                                     onChange={() => handleMapClick(mapId)}
-                                    sx={{ 
-                                        position: 'absolute', 
-                                        top: 8, 
-                                        right: 8, 
+                                    sx={{
+                                        position: 'absolute',
+                                        top: 8,
+                                        right: 8,
                                         zIndex: 2,
                                         backgroundColor: 'rgba(255, 255, 255, 0.7)',
                                         '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.9)' }

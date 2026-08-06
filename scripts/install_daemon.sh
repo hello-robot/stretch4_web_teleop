@@ -2,8 +2,8 @@
 
 # Ensure the script is run with root privileges
 if [ "$EUID" -ne 0 ]; then
-  echo "Please run this script as root using sudo."
-  exit 1
+	echo "Please run this script as root using sudo."
+	exit 1
 fi
 
 # Determine the user who ran sudo, fallback to current user
@@ -16,7 +16,7 @@ echo "Installing service for user: $TARGET_USER"
 echo "Using workspace directory: $WORKSPACE_DIR"
 
 # Generate the systemd service file dynamically
-cat << EOF > "$SERVICE_PATH"
+cat <<EOF >"$SERVICE_PATH"
 [Unit]
 Description=Stretch Web Teleop Onboard Firebase Daemon
 After=network-online.target

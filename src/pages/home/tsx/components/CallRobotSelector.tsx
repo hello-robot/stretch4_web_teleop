@@ -229,4 +229,3 @@ export const CallRobotSelector = (props: { selectedMap?: string | null; style?: 
         </Box>
     );
 };
-
