@@ -988,13 +988,19 @@ export class Robot extends React.Component {
     }
 
     /**
-     * Ask the robot to seed its localization.
+     * Ask the robot to seed its localization via /seed_localization (std_srvs/Trigger).
      */
-    seedLocalization() {
+    seedLocalization(
+        resultCallback?: (result: { success: boolean; message: string }) => void
+    ) {
         var request = {};
-        this.seedLocalizationService!.callService(request, () => {
-            console.log("Seed localization complete");
-        });
+        this.seedLocalizationService!.callService(
+            request,
+            (response: { success: boolean; message: string }) => {
+                console.log("Seed localization complete", response);
+                resultCallback?.(response);
+            }
+        );
     }
 
     executeBaseVelocity = (props: {

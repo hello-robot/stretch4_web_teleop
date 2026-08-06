@@ -329,7 +329,15 @@ function handleMessage(message: WebRTCMessage) {
             robot.homeTheRobot();
             break;
         case "seedLocalization":
-            robot.seedLocalization();
+            robot.seedLocalization((response) => {
+                forwardActionState(
+                    {
+                        state: response.message,
+                        alert_type: response.success ? "success" : "error",
+                    },
+                    "seedLocalizationState"
+                );
+            });
             break;
     }
 }

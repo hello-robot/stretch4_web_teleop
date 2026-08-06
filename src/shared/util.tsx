@@ -107,6 +107,7 @@ export type WebRTCMessage =
     | IsRunStoppedMessage
     | StretchToolMessage
     | ActionStateMessage
+    | SeedLocalizationStateMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -155,6 +156,11 @@ export interface ActionState {
 
 export interface ActionStateMessage {
     type: string;
+    message: ActionState;
+}
+
+export interface SeedLocalizationStateMessage {
+    type: "seedLocalizationState";
     message: ActionState;
 }
 
