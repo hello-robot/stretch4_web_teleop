@@ -4,24 +4,24 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import MicIcon from "@mui/icons-material/Mic";
 import MicOffIcon from "@mui/icons-material/MicOff";
 
+import "operator/css/FooterGlobal.css";
+import batteryIcon from "operator/icons/Battery_Footer.svg";
+import runStopRunIcon from "operator/icons/RunStop_Run.svg";
+import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
+import { runStopFunctionProvider } from "..";
 import MainMenu from "../basic_components/MainMenu";
 import SceneCarousel, {
     SceneItem,
 } from "../basic_components/SceneCarousel";
+import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
-import batteryIcon from "operator/icons/Battery_Footer.svg";
-import runStopRunIcon from "operator/icons/RunStop_Run.svg";
-import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
-import "operator/css/FooterGlobal.css";
-import { runStopFunctionProvider } from "..";
-import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 import {
     getVoiceStatusSnapshot,
     setVoiceStatus,
     useVoiceStatus,
 } from "../voice/voiceStatusStore";
-import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
@@ -80,6 +80,14 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: voiceConnected,
             },
             {
+                id: "localize-aruco",
+                name: "Localize (ArUco)",
+                description: "TextDescription",
+                onClick: () => alert("foo"),
+                icon: <CheckCircleIcon />,
+                enabled: true
+            },
+            {
                 id: "finedex-gripper",
                 name: "FineDex Gripper",
                 description: "TextDescription",
@@ -121,7 +129,13 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
+        // Action-only items run their handler without switching the active scene.
         if (scene.id === "mic-mute") {
+            scene.onClick?.();
+            isMainMenuOpenSet(false);
+            return;
+        }
+        if (scene.id === "localize-aruco") {
             scene.onClick?.();
             isMainMenuOpenSet(false);
             return;
