@@ -176,8 +176,8 @@ export async function createMicLevelGate(
         const shouldTransmit =
             !forceClosed && !flushing && (gateOpen || bypass);
         liveGain.gain.value = shouldTransmit ? 1 : 0;
-        // Report threshold gate only (not wake-sleep bypass). UI should pulse
-        // when RMS exceeds VOICE_MIC_RMS_THRESHOLD, not while bypass is open.
+        // UI glow/waveform follows RMS threshold only — bypass is uplink-only
+        // (e.g. asleep wake listening) and must not look like the gate is open.
         opts.onGateChange?.(gateOpen, currentLevel);
     };
 
