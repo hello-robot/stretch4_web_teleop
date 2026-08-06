@@ -23,6 +23,7 @@ import {
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
+    VOICE_AUTO_MUTE_ENABLED,
     VOICE_AUTO_MUTE_IDLE_MS,
     VOICE_AUTO_SLEEP_POLL_MS,
     type ControlAutoNavAction,
@@ -348,7 +349,7 @@ export const VoiceCommandAssistant = ({
     }, []);
 
     useEffect(() => {
-        if (phase !== "live") {
+        if (!VOICE_AUTO_MUTE_ENABLED || phase !== "live") {
             return;
         }
         const id = window.setInterval(() => {
