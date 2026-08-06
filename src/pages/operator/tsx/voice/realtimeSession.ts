@@ -1060,9 +1060,6 @@ export async function connectOpenAIRealtimeVoice(
 
         if (eventType.includes("input_audio_transcription")) {
             handleUserTranscription(blob, eventType);
-            if (voiceWakeSleep?.state !== "awake") {
-                return;
-            }
             const transcript =
                 extractUserTranscript(blob) ||
                 transcriptByItem.get(
@@ -1076,8 +1073,9 @@ export async function connectOpenAIRealtimeVoice(
             ) {
                 // ── Interrupt policy: intentional stop only ───────────────────────────────────
                 // Motion continues through non-command speech and VAD speech_started.
-                // Local stop here only for short transcripts matching VOICE_STOP_KEYWORDS;
-                // otherwise wait for stop_motion or a superseding movement tool.
+                // Local stop for short transcripts matching VOICE_STOP_KEYWORDS — both
+                // asleep and awake (safety). Otherwise wait for stop_motion or a
+                // superseding movement tool.
                 const words = transcript.trim().toLowerCase().split(/\s+/);
                 if (
                     words.length <= 3 &&
