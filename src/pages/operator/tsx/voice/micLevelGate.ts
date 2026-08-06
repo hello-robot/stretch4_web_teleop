@@ -172,7 +172,9 @@ export async function createMicLevelGate(
         const shouldTransmit =
             !forceClosed && !flushing && (gateOpen || bypass);
         liveGain.gain.value = shouldTransmit ? 1 : 0;
-        opts.onGateChange?.(gateOpen || bypass, currentLevel);
+        // UI glow/waveform follows RMS threshold only — bypass is uplink-only
+        // (e.g. asleep wake listening) and must not look like the gate is open.
+        opts.onGateChange?.(gateOpen, currentLevel);
     };
 
     const flushLookback = () => {
