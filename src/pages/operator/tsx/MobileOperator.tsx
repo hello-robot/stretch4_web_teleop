@@ -1,45 +1,66 @@
-import "operator/css/MobileOperator.css";
-import React, { useState } from "react";
+import React, { PointerEventHandler, useState } from "react";
+import {
+    ActionModeType,
+    ButtonPadIdMobile,
+    CameraViewId,
+    ComponentDefinition,
+    ComponentType,
+    MapDefinition,
+    LayoutDefinition,
+    PilotButtonPadType,
+} from "./utils/component_definitions";
 import {
     ActionState,
+    className,
     ActionState as MoveBaseState,
-    RemoteStream
+    RemoteStream,
 } from "shared/util";
 import {
     buttonFunctionProvider,
-    homeTheRobotFunctionProvider,
-    movementRecorderFunctionProvider,
     stretchTool,
+    movementRecorderFunctionProvider,
     underMapFunctionProvider,
+    homeTheRobotFunctionProvider,
 } from ".";
 import {
     ButtonPadButton,
     ButtonState,
     ButtonStateMap,
 } from "./function_providers/ButtonFunctionProvider";
-import { FunctionProvider } from "./function_providers/FunctionProvider";
-import { ButtonPad } from "./layout_components/ButtonPad";
-import { SharedState } from "./layout_components/CustomizableComponent";
-import PilotMode from "./layout_components/PilotMode";
 import { StorageHandler } from "./storage_handler/StorageHandler";
-import {
-    ActionModeType,
-    ButtonPadIdMobile,
-    CameraViewId,
-    ComponentType,
-    LayoutDefinition,
-    PilotButtonPadType
-} from "./utils/component_definitions";
+import { FunctionProvider } from "./function_providers/FunctionProvider";
+import PilotMode from "./layout_components/PilotMode";
+import "operator/css/MobileOperator.css";
+import { SimpleCameraView } from "./layout_components/SimpleCameraView";
+import { SharedState } from "./layout_components/CustomizableComponent";
+import FooterPilotMode from "./layout_components/FooterPilotMode";
+import { ButtonPad } from "./layout_components/ButtonPad";
 // import Swipe from "./static_components/Swipe";
-import SwipeableViews from "react-swipeable-views";
+import { Map } from "./layout_components/Map";
 import { TabGroup } from "./basic_components/TabGroup";
+import SwipeableViews from "react-swipeable-views";
+import {
+    MovementRecorder,
+    MovementRecorderFunction,
+} from "./layout_components/MovementRecorder";
 import AutoNav from "./layout_components/AutoNav";
+import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
+import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 
-import { HomingBanner } from "./basic_components/HomingBanner";
-import FooterGlobal from "./layout_components/FooterGlobal";
+import { Alert } from "./basic_components/Alert";
+import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
 import GripperCamPIP from "./layout_components/GripperCamPIP";
-import Toasts, { useToasts } from "./layout_components/Toasts";
+import FooterGlobal from "./layout_components/FooterGlobal";
+import { HomingBanner } from "./basic_components/HomingBanner";
 import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
+import Toasts, { useToasts } from "./layout_components/Toasts";
+import type {
+    ControlAutoNavAction,
+    ControlAutoNavResult,
+    LoadAutoNavLocationResult,
+    SavedLocationsModalAction,
+    SetSavedLocationsModalResult,
+} from "./voice/constants";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -100,6 +121,14 @@ export const MobileOperator = (props: {
     const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
         useState(false);
 
+    /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
+    const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
+    const registerAutoNavNavControls = React.useCallback(
+        (controls: AutoNavNavControls | null) => {
+            autoNavNavControlsRef.current = controls;
+        },
+        [],
+    );
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
@@ -114,8 +143,94 @@ export const MobileOperator = (props: {
         }
     }, [sceneSelected]);
 
+    const handleSetSavedLocationsModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saved Locations is only available in AutoNav",
+                };
+            }
+            isModalLocationsMenuVisibleSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Locations."
+                        : "Closed Saved Locations.",
+            };
+        },
+        [],
+    );
 
+    const handleControlAutoNav = React.useCallback(
+        (action: ControlAutoNavAction): ControlAutoNavResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav controls are only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return action === "start" ? controls.start() : controls.cancel();
+        },
+        [],
+    );
 
+    /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
+    const handleCancelAutoNavOnStop =
+        React.useCallback((): ControlAutoNavResult => {
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return controls.cancel();
+        }, []);
+
+    const handleGetAutoNavSavedPoseNames = React.useCallback(():
+        | string[]
+        | null => {
+        if (sceneSelectedRef.current !== "autonav") {
+            return null;
+        }
+        const controls = autoNavNavControlsRef.current;
+        if (!controls) {
+            return null;
+        }
+        return controls.getSavedPoseNames();
+    }, []);
+
+    const handleLoadAutoNavLocation = React.useCallback(
+        (poseName: string): LoadAutoNavLocationResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav location loading is only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            const result = controls.loadLocation(poseName);
+            return result.ok
+                ? { ok: true, detail: result.detail, label: poseName }
+                : { ok: false, detail: result.detail };
+        },
+        [],
+    );
     const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
@@ -357,7 +472,6 @@ export const MobileOperator = (props: {
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
                             onVelocityScaleChange={applyVelocityScale}
-                            setVelocityScale={applyVelocityScale}
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
@@ -408,6 +522,6 @@ export const MobileOperator = (props: {
                     onSceneSelectedChange={setSceneSelected}
                 />
             </div>
-        </div >
+        </div>
     );
 };
