@@ -357,6 +357,7 @@ export class Robot extends React.Component {
             let robotPose: RobotPose = rosJointStatetoRobotPose(
                 this.jointState
             );
+            robotPose["arm_joint"] = this.getJointValue("arm_joint");
             let jointValues: ValidJointStateDict = {};
             let effortValues: ValidJointStateDict = {};
             this.jointState.name.forEach((name?: ValidJoints) => {
@@ -936,34 +937,52 @@ export class Robot extends React.Component {
      * In navigation mode, you can send position commands to the arm and
      * velocity commands to the base.
      */
-    switchToNavigationMode() {
-        if (robotMode === "navigation") return;
-        this.modeParam.set("navigation", () => {
-            robotMode = "navigation";
-            console.log("Switched to navigation mode");
-        });
+    switchToNavigationMode(): Promise<void> {
+        return new Promise((resolve) => {
+            if (robotMode === "navigation") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("navigation", () => {
+                robotMode = "navigation";
+                console.log("Switched to navigation mode");
+                resolve();
+            });
+        })
     }
 
     /**
      * In position mode, you can send position commands to the arm and
      * position commands to the base.
      */
-    switchToPositionMode = () => {
-        if (robotMode === "position") return;
-        this.modeParam.set("position", () => {
-            robotMode = "position";
-            console.log("Switched to position mode");
+    switchToPositionMode = (): Promise<void> => {
+        return new Promise((resolve) => {
+            if (robotMode === "position") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("position", () => {
+                robotMode = "position";
+                console.log("Switched to position mode");
+                resolve();
+            });
         });
     };
 
     /**
      * In velocity mode, you can send velocity commands to the arm and base.
      */
-    switchToVelocityMode = () => {
-        if (robotMode === "velocity") return;
-        this.modeParam.set("velocity", () => {
-            robotMode = "velocity";
-            console.log("Switched to velocity mode");
+    switchToVelocityMode = (): Promise<void> => {
+        return new Promise((resolve) => {
+            if (robotMode === "velocity") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("velocity", () => {
+                robotMode = "velocity";
+                console.log("Switched to velocity mode");
+                resolve();
+            });
         });
     };
 
@@ -1002,8 +1021,8 @@ export class Robot extends React.Component {
         this.cmdVelTopic.publish(twist);
     };
 
-    setJointVelocity(jointName: ValidJoints, velocity: number) {
-        this.switchToVelocityMode();
+    async setJointVelocity(jointName: ValidJoints, velocity: number) {
+        await this.switchToVelocityMode();
         this.stopExecution();
         let jointVelocities = {
             joint_names: [jointName],
@@ -1075,107 +1094,201 @@ export class Robot extends React.Component {
     }
 
 
-    makePoseGoal(pose: RobotPose) {
-        let jointNames: ValidJoints[] = [];
-        let jointPositions: number[] = [];
-        let maxDuration = 0.1; // minimum threshold to prevent division by zero or excessive acceleration
+    makePoseGoal(pose: RobotPose, minDuration: number = 0.5) {
+        const allJointNames = Object.keys(pose) as ValidJoints[];
+        if (allJointNames.length === 0) throw new Error("Pose object cannot be empty");
+
+        let maxDuration = minDuration;
+        const jointNames: ValidJoints[] = [];
+        const jointPositions: number[] = [];
 
         for (let key in pose) {
             const jointName = key as ValidJoints;
-            jointNames.push(jointName);
-            const targetPos = pose[jointName]!;
-            jointPositions.push(targetPos);
+            let targetPos = pose[jointName]!;
 
             try {
                 const currentPos = this.getJointValue(jointName);
-                const distance = Math.abs(targetPos - currentPos);
-                const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
+                if (currentPos !== undefined && !isNaN(currentPos)) {
+                    const distance = Math.abs(targetPos - currentPos);
+                    const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
 
-                if (velocityLimit > 0) {
-                    const jointDuration = distance / velocityLimit;
-                    if (jointDuration > maxDuration) {
-                        maxDuration = jointDuration;
+                    if (velocityLimit > 0) {
+                        const jointDuration = distance / velocityLimit;
+                        if (!isNaN(jointDuration) && jointDuration > maxDuration) {
+                            maxDuration = jointDuration;
+                        }
                     }
                 }
             } catch (e) {
                 console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
             }
+            jointNames.push(jointName);
+            jointPositions.push(targetPos);
         }
 
-        const secs = Math.floor(maxDuration);
-        const nsecs = Math.round((maxDuration - secs) * 1e9);
+        if (jointNames.length === 0) {
+            // Defensive fallback: if all joints are skipped, include the first one to avoid empty goal errors
+            const firstKey = Object.keys(pose)[0] as ValidJoints;
+            jointNames.push(firstKey);
+            jointPositions.push(pose[firstKey]!);
+        }
+
+        // Safe nanosecond calculation
+        let secs = Math.floor(maxDuration);
+        let nsecs = Math.round((maxDuration - secs) * 1e9);
+        if (nsecs >= 1e9) {
+            secs += 1;
+            nsecs = 0;
+        }
 
         console.log("Calculated synchronized trajectory duration:", maxDuration, "secs:", secs, "nsecs:", nsecs);
 
-        if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = {
+        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
+
+        return {
             trajectory: {
                 header: {
-                    stamp: {
-                        secs: 0,
-                        nsecs: 0,
-                    },
+                    stamp: { secs: 0, nsecs: 0 }, // Execute immediately
                 },
                 joint_names: jointNames,
                 points: [
                     {
                         positions: jointPositions,
-                        time_from_start: {
-                            secs: secs,
-                            nsecs: nsecs,
-                        },
+                        time_from_start: { secs, nsecs },
                     },
                 ],
             },
         };
-
-        return newGoal;
     }
 
-    makePoseGoals(poses: RobotPose[]) {
-        let jointNames: ValidJoints[] = [];
-        for (let key in poses[0]) {
-            jointNames.push(key as ValidJoints);
+    makePoseGoals(poses: RobotPose[], minSegmentDuration: number = 0.5) {
+        if (!poses || poses.length === 0) {
+            throw new Error("Poses array cannot be empty");
         }
 
-        let points: any = [];
-        let jointPositions: number[] = [];
+        // Standardize joint list using the union of keys or the first pose's keys
+        const jointNames = Object.keys(poses[0]) as ValidJoints[];
+        const points: any[] = [];
+        let cumulativeTime = 0.0;
+
+        // keep track of cumulative duration for timestamps for each point
         poses.forEach((pose, index) => {
-            jointPositions = [];
-            for (let key in pose) {
-                jointPositions.push(pose[key as ValidJoints]!);
+            let segmentDuration = minSegmentDuration;
+            const jointPositions: number[] = [];
+
+            jointNames.forEach((name) => {
+                if (index === 0) {
+                    // First pose: evaluate vs. live state
+                    const currentPos = this.getJointValue(name);
+                    const targetPos = pose[name] !== undefined ? pose[name]! : currentPos;
+                    jointPositions.push(targetPos);
+
+                    if (targetPos !== undefined && currentPos !== undefined && !isNaN(currentPos)) {
+                        const distance = Math.abs(targetPos - currentPos);
+                        const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
+                        if (velocityLimit > 0) {
+                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
+                        }
+                    }
+                } else {
+                    // Subsequent poses: evaluate vs. previous point's recorded target position
+                    const prevPos = points[index - 1].positions[jointNames.indexOf(name)];
+                    const targetPos = pose[name] !== undefined ? pose[name]! : prevPos;
+                    jointPositions.push(targetPos);
+
+                    if (targetPos !== undefined && prevPos !== undefined) {
+                        const distance = Math.abs(targetPos - prevPos);
+                        const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
+                        if (velocityLimit > 0) {
+                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
+                        }
+                    }
+                }
+            });
+
+            cumulativeTime += segmentDuration;
+
+            // Safe nanosecond calculation
+            let secs = Math.floor(cumulativeTime);
+            let nsecs = Math.round((cumulativeTime - secs) * 1e9);
+            if (nsecs >= 1e9) {
+                secs += 1;
+                nsecs = 0;
             }
+
             points.push({
                 positions: jointPositions,
-                time_from_start: {
-                    secs: 10,
-                    nsecs: 0,
-                },
+                time_from_start: { secs, nsecs },
             });
         });
 
-        if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = {
+        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
+
+        return {
             trajectory: {
                 header: {
-                    stamp: {
-                        secs: 0,
-                        nsecs: 0,
-                    },
+                    stamp: { secs: 0, nsecs: 0 },
                 },
                 joint_names: jointNames,
                 points: points,
             },
         };
-
-        return newGoal;
     }
 
-    executePoseGoal(pose: RobotPose) {
+    isAlreadyAtPose(pose: RobotPose, tolerance: number = 0.01): boolean {
+        if (!this.jointState) {
+            console.log("isAlreadyAtPose: No jointState received yet.");
+            return false;
+        }
+        console.log("Checking if robot is already at pose. Target vs Current:");
+        for (let key in pose) {
+            const jointName = key as ValidJoints;
+            const targetPos = pose[jointName];
+            if (targetPos !== undefined) {
+                try {
+                    const currentPos = this.getJointValue(jointName);
+                    if (currentPos === undefined || isNaN(currentPos)) {
+                        console.log(`isAlreadyAtPose: Joint ${jointName} has invalid current position:`, currentPos);
+                        return false;
+                    }
+                    const diff = Math.abs(targetPos - currentPos);
+                    console.log(`- ${jointName}: Target=${targetPos.toFixed(4)}, Current=${currentPos.toFixed(4)}, Diff=${diff.toFixed(4)} (Tol=${tolerance})`);
+                    if (diff > tolerance) {
+                        console.log(`isAlreadyAtPose: Joint ${jointName} exceeds tolerance.`);
+                        return false;
+                    }
+                } catch (e) {
+                    console.log(`isAlreadyAtPose: Exception querying joint ${jointName}:`, e);
+                    return false;
+                }
+            }
+        }
+        console.log("isAlreadyAtPose: All joints within tolerance. Already at pose!");
+        return true;
+    }
+
+    async executePoseGoal(pose: RobotPose) {
+        await this.switchToNavigationMode();
+
+        /// check if at goal already
+        if (this.isAlreadyAtPose(pose)) {
+            console.log("Robot is already at target pose, skipping execution.");
+            this.playbackPosesResultCallback({
+                state: MovementState.Executing,
+                alert_type: "info",
+            });
+            setTimeout(() => {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Success,
+                    alert_type: "info",
+                });
+            }, 1000);
+            return;
+        }
         console.log("executing pose goal");
-        this.switchToNavigationMode();
+
         this.stopExecution();
-        this.poseGoal = this.makePoseGoal(pose);
+        this.poseGoal = this.makePoseGoal(pose, 1.5);
         console.log("execute: ", pose);
         this.poseGoalID = this.trajectoryClient.sendGoal(
             this.poseGoal,
@@ -1202,7 +1315,12 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
-                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                let error_code = -4; // default fallback error code
+                try {
+                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                } catch (e) {
+                    console.warn("Could not parse action error code:", e);
+                }
                 console.log(
                     "Error for action on " +
                     this.trajectoryClient.name +
@@ -1214,7 +1332,7 @@ export class Robot extends React.Component {
                         state: MovementState.Cancel,
                         alert_type: "error",
                     });
-                } else if (error_code == -4) {
+                } else {
                     this.playbackPosesResultCallback({
                         state: MovementState.Fail,
                         alert_type: "error",
@@ -1225,9 +1343,29 @@ export class Robot extends React.Component {
     }
 
     async executePoseGoals(poses: RobotPose[], index: number) {
-        this.switchToNavigationMode();
-        // this.stopExecution();
-        this.poseGoal = this.makePoseGoals(poses);
+        await this.switchToNavigationMode();
+
+        // check if at goal already
+        if (poses.length > 0) {
+            const finalPose = poses[poses.length - 1];
+            if (this.isAlreadyAtPose(finalPose)) {
+                console.log("Robot is already at final target pose, skipping execution.");
+                this.playbackPosesResultCallback({
+                    state: MovementState.Executing,
+                    alert_type: "info",
+                });
+                setTimeout(() => {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Success,
+                        alert_type: "info",
+                    });
+                }, 1000);
+                return;
+            }
+        }
+
+        this.stopExecution();
+        this.poseGoal = this.makePoseGoals(poses, 1.5);
         this.playbackPosesResultCallback({
             state: MovementState.Executing,
             alert_type: "info",
@@ -1247,6 +1385,11 @@ export class Robot extends React.Component {
                         state: MovementState.Success,
                         alert_type: "info",
                     });
+                } else {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Fail,
+                        alert_type: "error",
+                    });
                 }
             },
             (feedback) => {
@@ -1258,7 +1401,12 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
-                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                let error_code = -4; // default fallback error code
+                try {
+                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                } catch (e) {
+                    console.warn("Could not parse action error code:", e);
+                }
                 console.log(
                     "Error for action on " +
                     this.trajectoryClient.name +
@@ -1270,7 +1418,7 @@ export class Robot extends React.Component {
                         state: MovementState.Cancel,
                         alert_type: "error",
                     });
-                } else if (error_code == -4) {
+                } else {
                     this.playbackPosesResultCallback({
                         state: MovementState.Fail,
                         alert_type: "error",
@@ -1335,8 +1483,8 @@ export class Robot extends React.Component {
         );
     }
 
-    executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        this.switchToNavigationMode();
+    async executeIncrementalMove(jointName: ValidJoints, increment: number) {
+        await this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1428,6 +1576,18 @@ export class Robot extends React.Component {
                 }
             }
             if (foundAny) return total;
+
+            // Fallback for when individual telescoping links are not published:
+            // Check if either "arm_joint" or "wrist_extension" is available in the jointState.
+            let idx = this.jointState.name.indexOf(name as ValidJoints);
+            if (idx !== -1) {
+                return this.jointState.position[idx];
+            }
+            let fallbackName = name === "arm_joint" ? "wrist_extension" : "arm_joint";
+            let fallbackIdx = this.jointState.name.indexOf(fallbackName as ValidJoints);
+            if (fallbackIdx !== -1) {
+                return this.jointState.position[fallbackIdx];
+            }
         }
 
         let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
