@@ -56,6 +56,14 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: true
             },
             {
+                id: "localize-aruco",
+                name: "Localize (ArUco)",
+                description: "TextDescription",
+                onClick: () => alert("foo"),
+                icon: <CheckCircleIcon />,
+                enabled: true
+            },
+            {
                 id: "finedex-gripper",
                 name: "FineDex Gripper",
                 description: "TextDescription",
@@ -92,6 +100,12 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
+        // Action-only items run their handler without switching the active scene.
+        if (scene.id === "localize-aruco") {
+            scene.onClick?.();
+            isMainMenuOpenSet(false);
+            return;
+        }
         onSceneSelectedChange(scene.id);
         scene.onClick?.();
         isMainMenuOpenSet(false);
