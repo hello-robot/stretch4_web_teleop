@@ -142,6 +142,14 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 status: localizeStatus,
             },
             {
+                id: "localize-aruco",
+                name: "Localize (ArUco)",
+                description: "TextDescription",
+                onClick: () => alert("foo"),
+                icon: <CheckCircleIcon />,
+                enabled: true
+            },
+            {
                 id: "finedex-gripper",
                 name: "FineDex Gripper",
                 description: "TextDescription",
