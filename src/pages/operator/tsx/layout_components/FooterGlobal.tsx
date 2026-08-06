@@ -4,6 +4,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import MicIcon from "@mui/icons-material/Mic";
 import MicOffIcon from "@mui/icons-material/MicOff";
 
+<<<<<<< HEAD
 import "operator/css/FooterGlobal.css";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
@@ -25,6 +26,22 @@ import {
     useVoiceStatus,
 } from "../voice/voiceStatusStore";
 import { MapFunction } from "./AutoNav";
+=======
+import MainMenu from "../basic_components/MainMenu";
+import SceneCarousel, {
+    SceneItem,
+    SceneItemStatus,
+} from "../basic_components/SceneCarousel";
+import MagneticWrapper from "../static_components/MagneticWrapper";
+import batteryIcon from "operator/icons/Battery_Footer.svg";
+import runStopRunIcon from "operator/icons/RunStop_Run.svg";
+import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
+import "operator/css/FooterGlobal.css";
+import { mapFunctionProvider, runStopFunctionProvider } from "..";
+import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { MapFunction } from "./AutoNav";
+import { ActionState } from "shared/util";
+>>>>>>> ef04098 (Call "Localization" from <MainMenu>)
 
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
 
@@ -41,7 +58,10 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
+<<<<<<< HEAD
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
+=======
+>>>>>>> ef04098 (Call "Localization" from <MainMenu>)
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
@@ -119,20 +139,6 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: true,
             },
             {
-                id: "mic-mute",
-                name: micMuted ? "Unmute" : "Mute",
-                description: "Toggle microphone uplink to OpenAI",
-                onClick: () => {
-                    const nextMuted = !getVoiceStatusSnapshot().micMuted;
-                    if (!nextMuted) {
-                        bumpVoiceCommandActivity();
-                    }
-                    setVoiceStatus({ micMuted: nextMuted });
-                },
-                icon: micMuted ? <MicOffIcon /> : <MicIcon />,
-                enabled: voiceConnected,
-            },
-            {
                 id: "localize-aruco",
                 name: "Localize (ArUco)",
                 description: "TextDescription",
@@ -140,14 +146,6 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 icon: <CheckCircleIcon />,
                 enabled: localizeStatus !== "loading",
                 status: localizeStatus,
-            },
-            {
-                id: "localize-aruco",
-                name: "Localize (ArUco)",
-                description: "TextDescription",
-                onClick: () => alert("foo"),
-                icon: <CheckCircleIcon />,
-                enabled: true
             },
             {
                 id: "finedex-gripper",
@@ -188,6 +186,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             micMuted,
             voiceConnected,
             localizeStatus,
+            localizeStatus,
         ]
     );
 
@@ -195,7 +194,6 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         // Action-only items run their handler without switching the active scene.
         if (scene.id === "mic-mute") {
             scene.onClick?.();
-            isMainMenuOpenSet(false);
             return;
         }
         if (scene.id === "localize-aruco") {

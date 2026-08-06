@@ -107,7 +107,6 @@ export type WebRTCMessage =
     | LeaseStatusMessage
     | StretchToolMessage
     | ActionStateMessage
-    | OdomMessage
     | SeedLocalizationStateMessage
     | cmd;
 
