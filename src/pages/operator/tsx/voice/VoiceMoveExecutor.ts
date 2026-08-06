@@ -71,6 +71,11 @@ export abstract class VoiceMoveExecutor {
     public static emitVoiceMoveFeedback(feedback: VoiceMoveFeedback): void {
         VoiceMoveExecutor._context?.onVoiceMoveFeedback?.(feedback);
     }
+
+    /** Public emit for free-function tools (stop, macros) outside subclasses. */
+    static emitFeedback(feedback: VoiceMoveFeedback): void {
+        VoiceMoveExecutor.emitVoiceMoveFeedback(feedback);
+    }
     /**
      * Coerce and validate the raw `speed` arg from Realtime tool arguments.
      * Falls back to VOICE_SPEED_DEFAULT when missing or unrecognised.

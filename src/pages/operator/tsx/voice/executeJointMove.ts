@@ -287,7 +287,7 @@ export function executeStopMotionOnProvider(
         provider.timedVoiceMoveActive ||
         provider.activeVelocityAction !== undefined;
     provider.disableActiveButton();
-    JointMoveExecutor.emitVoiceMoveFeedback({ kind: "stop", hadMotion });
+    VoiceMoveExecutor.emitFeedback({ kind: "stop", hadMotion });
     return {
         ok: true,
         detail: hadMotion
@@ -314,13 +314,13 @@ export function executeMacroOnProvider(
     const pose = VOICE_MACROS[macroName];
     const started = provider.executeAbsolutePose(pose);
     if (!started) {
-        JointMoveExecutor.emitVoiceMoveFeedback({
+        VoiceMoveExecutor.emitFeedback({
             kind: "rejected",
             reason: "disconnected",
         });
         return { ok: false, detail: "Robot not connected." };
     }
-    JointMoveExecutor.emitVoiceMoveFeedback({
+    VoiceMoveExecutor.emitFeedback({
         kind: "macro_started",
         action: macroName,
     });
