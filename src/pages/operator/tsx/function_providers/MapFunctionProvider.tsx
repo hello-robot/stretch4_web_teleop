@@ -37,6 +37,10 @@ export class MapFunctionProvider extends FunctionProvider {
                     }
                     return false;
                 };
+            case MapFunction.SeedLocalization:
+                return () => {
+                    FunctionProvider.remoteRobot?.seedLocalization();
+                };
         }
     }
 }

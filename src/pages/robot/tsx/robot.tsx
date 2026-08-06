@@ -135,6 +135,7 @@ export class Robot extends React.Component {
     private stretchToolParam: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
+    private seedLocalizationService?: Service;
     private stretchTool: StretchTool;
 
     constructor(props: {
@@ -338,6 +339,7 @@ export class Robot extends React.Component {
         // this.subscribeToHeadTiltTF();
         // this.subscribeToMapTF();
         this.createHomeTheRobotService();
+        this.createSeedLocalizationService();
         this.initStretchParams();
 
         return Promise.resolve();
@@ -815,6 +817,14 @@ export class Robot extends React.Component {
         });
     }
 
+    createSeedLocalizationService() {
+        this.seedLocalizationService = new Service({
+            ros: this.ros,
+            name: "/seed_localization",
+            serviceType: "std_srvs/Trigger",
+        });
+    }
+
     createExpandedGripperService() {
         this.setExpandedGripperService = new Service({
             ros: this.ros,
@@ -1016,6 +1026,16 @@ export class Robot extends React.Component {
         var request = {};
         this.homeTheRobotService!.callService(request, () => {
             console.log("Homing complete");
+        });
+    }
+
+    /**
+     * Ask the robot to seed its localization.
+     */
+    seedLocalization() {
+        var request = {};
+        this.seedLocalizationService!.callService(request, () => {
+            console.log("Seed localization complete");
         });
     }
 

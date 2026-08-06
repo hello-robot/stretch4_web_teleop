@@ -35,6 +35,7 @@ export enum MapFunction {
     GetPose,
     MoveBase,
     GoalReached,
+    SeedLocalization,
 }
 
 /**
@@ -74,6 +75,7 @@ export interface MapFunctions {
     GoalReached: () => boolean;
     SelectGoal: () => boolean;
     SetSelectGoal: (selectGoal: boolean) => void;
+    SeedLocalization: () => void;
 }
 
 /**
@@ -222,6 +224,9 @@ const AutoNav: React.FC<AutoNavProps> = ({
         GoalReached: mapFunctionProvider.provideFunctions(
             MapFunction.GoalReached,
         ) as () => boolean,
+        SeedLocalization: mapFunctionProvider.provideFunctions(
+            MapFunction.SeedLocalization,
+        ) as () => void,
         /**
          * Returns whether a goal is currently being selected.
          */
@@ -291,7 +296,12 @@ const AutoNav: React.FC<AutoNavProps> = ({
             occupancyGrid.width,
             occupancyGrid.height,
         );
+        // Stage scale is applied above; refresh so markers use the real scale.
+        occupancyGrid.refreshMarkerScales();
         occupancyGridSet(occupancyGrid);
+        return () => {
+            occupancyGrid.dispose();
+        };
     }, []);
 
     // Show friendly, helpful toast when

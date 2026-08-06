@@ -14,8 +14,9 @@ import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
-import { runStopFunctionProvider } from "..";
+import { runStopFunctionProvider, mapFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { MapFunction } from "./AutoNav";
 import {
     getVoiceStatusSnapshot,
     setVoiceStatus,
@@ -80,6 +81,19 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: voiceConnected,
             },
             {
+                id: "localize-aruco",
+                name: "Localize (ArUco)",
+                description: "Localize Using ",
+                onClick: () => {
+                    const seedLoc = mapFunctionProvider.provideFunctions(
+                        MapFunction.SeedLocalization,
+                    ) as (() => void) | undefined;
+                    seedLoc?.();
+                },
+                icon: <CheckCircleIcon />,
+                enabled: true
+            },
+            {
                 id: "finedex-gripper",
                 name: "FineDex Gripper",
                 description: "TextDescription",
@@ -121,7 +135,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
-        if (scene.id === "mic-mute") {
+        // Action-only items run their handler without switching the active scene.
+        if (scene.id === "mic-mute" || scene.id === "localize-aruco") {
             scene.onClick?.();
             isMainMenuOpenSet(false);
             return;
