@@ -53,29 +53,6 @@ Select the `Realtime Database` option under Build in the Firebase console for yo
         },
         "currentLayouts": {
         	".read": "auth != null"
-        },
-        "maps": {
-          "$map_id": {
-            ".read": "data.child('owner_uid').val() === auth.uid || data.child('allowed_users').child(auth.uid).val() === true || data.child('allowed_users').child(root.child('uids').child(auth.uid).val()).val() === true",
-            ".write": "!data.exists() || data.child('owner_uid').val() === auth.uid"
-          }
-        },
-        "assignments": {
-          "$username": {
-            ".read": "auth != null && (root.child('uids').child(auth.uid).val() === $username || auth.uid === $username)",
-            "maps": {
-              ".read": "auth != null",
-              "$map_id": {
-                ".write": "auth != null"
-              }
-            }
-          }
-        },
-        "robots": {
-          ".read": "auth != null",
-          "$robot_id": {
-            ".write": "auth != null"
-          }
         }
     }
 }

@@ -1,16 +1,16 @@
-import "home/css/SideBySideView.css";
-import React, { useEffect, useState } from "react";
-import { isTablet, isBrowser } from "react-device-detect";
-import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid2";
 import AppBar from "@mui/material/AppBar";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Grid from "@mui/material/Grid2";
+import Snackbar from "@mui/material/Snackbar";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import Snackbar from "@mui/material/Snackbar";
-import { UserMaps } from "./UserMaps";
-import { CallRobotSelector } from "./CallRobotSelector";
+import "home/css/SideBySideView.css";
+import React, { useState } from "react";
+import { isBrowser, isTablet } from "react-device-detect";
 import { loginHandler } from "../index";
+import { CallRobotSelector } from "./CallRobotSelector";
+import { UserMaps } from "./UserMaps";
 
 export const SideBySideView = (props) => {
     const [openFailureToast, setOpenFailureToast] = useState(false);
@@ -35,7 +35,7 @@ export const SideBySideView = (props) => {
                         component="div"
                         sx={{ flexGrow: 1 }}
                     >
-                        Stretch4-Web-Interface
+                        Stretch Web Interface
                     </Typography>
                     <Button color="inherit" onClick={handleLogout}>
                         Logout
@@ -82,7 +82,7 @@ export const SideBySideView = (props) => {
                         component="div"
                         sx={{ flexGrow: 1 }}
                     >
-                        Stretch4-Web-Interface
+                        Stretch Web Interface
                     </Typography>
                     <Button color="inherit" onClick={handleLogout}>
                         Logout
