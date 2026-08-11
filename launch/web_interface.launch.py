@@ -5,6 +5,7 @@ import sys
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 from stretch4_body.core.robot_params import RobotParams
 
 from launch import LaunchDescription
@@ -27,7 +28,6 @@ from launch.substitutions import (
     NotEqualsSubstitution,
     PathJoinSubstitution,
 )
-from launch_ros.substitutions import FindPackageShare
 
 
 def symlinks_to_has_head_cams():
@@ -83,7 +83,7 @@ def generate_launch_description():
     rosbridge_package = str(get_package_share_path("rosbridge_server"))
     # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
-    stretch_tag_perception_path = FindPackageShare('stretch_tag_perception')
+    stretch_tag_perception_path = FindPackageShare("stretch_tag_perception")
 
     robot_params = RobotParams().get_params()[1]
     stretch_serial_no = robot_params["robot"]["serial_no"]
@@ -297,12 +297,14 @@ def generate_launch_description():
 
     # ArUco Tag Perception Launch (Run for all cameras; suppress auxiliary RViz)
     aruco_perception_launch = IncludeLaunchDescription(
-        PathJoinSubstitution([stretch_tag_perception_path, 'launch', 'stretch_aruco.launch.py']),
+        PathJoinSubstitution(
+            [stretch_tag_perception_path, "launch", "stretch_aruco.launch.py"]
+        ),
         launch_arguments={
-            'cameras': 'all',
-            'publish_markers': 'true',
-            'use_rviz': 'false',
-        }.items()
+            "cameras": "all",
+            "publish_markers": "true",
+            "use_rviz": "false",
+        }.items(),
     )
     ld.add_action(aruco_perception_launch)
 
