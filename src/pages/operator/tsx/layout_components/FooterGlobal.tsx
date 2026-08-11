@@ -23,6 +23,9 @@ import {
 } from "../voice/voiceStatusStore";
 import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 
+/** Menu tiles that run an action without changing the selected scene/footer label. */
+const ACTION_TILE_IDS = new Set(["mic-mute", "reload-app"]);
+
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
     sceneSelected: string;
@@ -80,6 +83,15 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: voiceConnected,
             },
             {
+                id: "reload-app",
+                name: "Reload App",
+                description: "Reload the operator page",
+                onClick: () => {
+                    window.location.reload();
+                },
+                enabled: true,
+            },
+            {
                 id: "finedex-gripper",
                 name: "FineDex Gripper",
                 description: "TextDescription",
@@ -121,7 +133,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
-        if (scene.id === "mic-mute") {
+        if (ACTION_TILE_IDS.has(scene.id)) {
             scene.onClick?.();
             isMainMenuOpenSet(false);
             return;

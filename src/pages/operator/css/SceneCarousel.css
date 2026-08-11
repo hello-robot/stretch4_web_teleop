@@ -26,10 +26,15 @@
 }
 
 .scene-carousel-item {
+    display: flex;
+    align-items: stretch;
     width: 100%;
     max-width: 100%;
     aspect-ratio: 1 / 1;
+    /* Override global `button { padding: var(--btn-padding) }` so labels center. */
+    padding: 0;
     background-color: hsl(206 100% 7% / 1);
+    border: 1px solid transparent;
     border-radius: 16px;
     cursor: pointer;
     transition: all 200ms ease-out;
@@ -48,19 +53,22 @@
 }
 
 .scene-carousel-item.selected {
-    border: 1px solid rgba(0, 150, 250, 0.1);
+    border-color: rgba(0, 150, 250, 0.1);
     background: #001f33;
     color: #ffffff;
     box-shadow: 0 0 40px 0 #008cea inset;
 }
 
 .scene-carousel-item-content {
+    box-sizing: border-box;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
     padding: 24px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100%;
     gap: 5px;
     text-align: center;
 }
