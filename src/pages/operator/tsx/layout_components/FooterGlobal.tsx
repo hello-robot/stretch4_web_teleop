@@ -158,18 +158,20 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             },
         ],
         [
-            onSceneSelectedChange,
-            swipeableViewsIdxSet,
             micMuted,
             voiceConnected,
             localizeStatus,
-            localizeStatus,
+            onSceneSelectedChange,
+            swipeableViewsIdxSet,
         ]
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
         // Action-only items run their handler without switching the active scene.
-        if (scene.id === "mic-mute") {
+        if (scene.id === "mic-mute" || scene.id === "localize-aruco") {
+            if (localizeStatus === "loading") {
+                return;
+            }
             scene.onClick?.();
             return;
         }

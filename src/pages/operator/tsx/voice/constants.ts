@@ -242,7 +242,6 @@ export const VOICE_AUTO_SLEEP_IDLE_MS = 60_000;
  */
 export const VOICE_AUTO_MUTE_ENABLED = false;
 
-
 /** Auto-mute mic uplink when unmuted with no successful voice tool for this long (ms). */
 export const VOICE_AUTO_MUTE_IDLE_MS = 120_000;
 
