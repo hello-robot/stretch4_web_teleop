@@ -4,6 +4,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import MicIcon from "@mui/icons-material/Mic";
 import MicOffIcon from "@mui/icons-material/MicOff";
 
+<<<<<<< HEAD
 import "operator/css/FooterGlobal.css";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
@@ -19,12 +20,33 @@ import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider"
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
 import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
+=======
+import MainMenu from "../basic_components/MainMenu";
+import SceneCarousel, {
+    SceneItem,
+    SceneItemStatus,
+} from "../basic_components/SceneCarousel";
+import MagneticWrapper from "../static_components/MagneticWrapper";
+import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
+import batteryIcon from "operator/icons/Battery_Footer.svg";
+import runStopRunIcon from "operator/icons/RunStop_Run.svg";
+import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
+import "operator/css/FooterGlobal.css";
+import { MapFunction } from "./AutoNav";
+>>>>>>> bc9013f9e40b1ab6aaef4c9aa5e11735583c0ff4
 import {
     getVoiceStatusSnapshot,
     setVoiceStatus,
     useVoiceStatus,
 } from "../voice/voiceStatusStore";
+<<<<<<< HEAD
 import { MapFunction } from "./AutoNav";
+=======
+import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
+import { mapFunctionProvider, runStopFunctionProvider } from "..";
+import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { ActionState } from "shared/util";
+>>>>>>> bc9013f9e40b1ab6aaef4c9aa5e11735583c0ff4
 
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
 
@@ -41,7 +63,11 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
+<<<<<<< HEAD
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
+=======
+    const {connected: voiceConnected, micMuted } = useVoiceStatus();
+>>>>>>> bc9013f9e40b1ab6aaef4c9aa5e11735583c0ff4
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
@@ -175,19 +201,21 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             },
         ],
         [
-            onSceneSelectedChange,
-            swipeableViewsIdxSet,
             micMuted,
             voiceConnected,
             localizeStatus,
+            onSceneSelectedChange,
+            swipeableViewsIdxSet,
         ]
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
         // Action-only items run their handler without switching the active scene.
-        if (scene.id === "mic-mute") {
+        if (scene.id === "mic-mute" || scene.id === "localize-aruco") {
+            if (localizeStatus === "loading") {
+                return;
+            }
             scene.onClick?.();
-            isMainMenuOpenSet(false);
             return;
         }
         if (scene.id === "localize-aruco") {
