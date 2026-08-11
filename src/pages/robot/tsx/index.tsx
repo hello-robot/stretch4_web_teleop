@@ -1,35 +1,35 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
-import { Robot } from "../../robot/tsx/robot";
-import { WebRTCConnection } from "../../../shared/webrtcconnections";
+import { Transform } from "roslib";
+import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
 import {
-    navigationProps,
-    gripperProps,
-    audioProps,
-    WebRTCMessage,
-    ValidJointStateDict,
-    ValidJointStateMessage,
-    ModeMessage,
-    IsHomedMessage,
-    IsRunStoppedMessage,
-    RobotPose,
-    ROSOccupancyGrid,
-    OccupancyGridMessage,
-    MapPoseMessage,
     ActionState,
     ActionStateMessage,
-    ROSBatteryState,
+    audioProps,
     BatteryVoltageMessage,
-    ROSOdometry,
-    OdomMessage,
     delay,
+    gripperProps,
+    IsHomedMessage,
+    IsRunStoppedMessage,
+    MapPoseMessage,
+    ModeMessage,
+    navigationProps,
+    OccupancyGridMessage,
+    OdomMessage,
+    RobotPose,
+    ROSBatteryState,
+    ROSOccupancyGrid,
+    ROSOdometry,
+    ValidJointStateDict,
+    ValidJointStateMessage,
+    WebRTCMessage,
 } from "shared/util";
-import { AllVideoStreamComponent, VideoStream } from "./videostreams";
-import { AudioStream } from "./audiostreams";
-import { Transform } from "roslib";
 import { StretchToolMessage } from "../../../shared/util";
-import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
+import { WebRTCConnection } from "../../../shared/webrtcconnections";
+import { Robot } from "../../robot/tsx/robot";
+import { AudioStream } from "./audiostreams";
+import { AllVideoStreamComponent, VideoStream } from "./videostreams";
 
 export const robot = new Robot({
     jointStateCallback: forwardJointStates,
@@ -261,7 +261,7 @@ function amclPoseMovedEnough(transform: Transform): boolean {
     const dist = Math.hypot(dx, dy);
     let dyaw = Math.abs(
         yawFromQuaternion(transform.rotation) -
-            yawFromQuaternion(lastAmclPoseSent.rotation),
+        yawFromQuaternion(lastAmclPoseSent.rotation),
     );
     if (dyaw > Math.PI) {
         dyaw = 2 * Math.PI - dyaw;
@@ -350,6 +350,17 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "homeTheRobot":
             robot.homeTheRobot();
+            break;
+        case "seedLocalization":
+            robot.seedLocalization((response) => {
+                forwardActionState(
+                    {
+                        state: response.message,
+                        alert_type: response.success ? "success" : "error",
+                    },
+                    "seedLocalizationState"
+                );
+            });
             break;
     }
 }

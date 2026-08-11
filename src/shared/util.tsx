@@ -1,4 +1,4 @@
-import { Transform, Message } from "roslib";
+import { Message, Transform } from "roslib";
 import { cmd } from "./commands";
 
 export type ValidJoints =
@@ -107,6 +107,7 @@ export type WebRTCMessage =
     | LeaseStatusMessage
     | StretchToolMessage
     | ActionStateMessage
+    | SeedLocalizationStateMessage
     | OdomMessage
     | cmd;
 
@@ -162,6 +163,11 @@ export interface ActionState {
 
 export interface ActionStateMessage {
     type: string;
+    message: ActionState;
+}
+
+export interface SeedLocalizationStateMessage {
+    type: "seedLocalizationState";
     message: ActionState;
 }
 

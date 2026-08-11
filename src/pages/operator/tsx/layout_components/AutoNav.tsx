@@ -35,6 +35,7 @@ export enum MapFunction {
     GetPose,
     MoveBase,
     GoalReached,
+    SeedLocalization,
 }
 
 /**
@@ -74,6 +75,7 @@ export interface MapFunctions {
     GoalReached: () => boolean;
     SelectGoal: () => boolean;
     SetSelectGoal: (selectGoal: boolean) => void;
+    SeedLocalization: () => void;
 }
 
 /**
@@ -222,6 +224,9 @@ const AutoNav: React.FC<AutoNavProps> = ({
         GoalReached: mapFunctionProvider.provideFunctions(
             MapFunction.GoalReached,
         ) as () => boolean,
+        SeedLocalization: mapFunctionProvider.provideFunctions(
+            MapFunction.SeedLocalization,
+        ) as () => void,
         /**
          * Returns whether a goal is currently being selected.
          */
