@@ -142,7 +142,7 @@ export type ExecuteJointMoveArgs = {
 
 /** Tool result sent back on the Realtime data channel (operator client). */
 export type ExecuteToolResult =
-    | { ok: true; detail: string }
+    | { ok: true; detail: string; label?: string }
     | {
         ok: false;
         detail: string;

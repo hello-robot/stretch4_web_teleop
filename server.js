@@ -5,6 +5,8 @@ const {
 } = require('./ai-gateway/openai-realtime-api');
 const voiceSessionAuth = require('./ai-gateway/voice-session-auth');
 
+const { initVoiceInteractionLogger } = require('./voiceInteractionLogger');
+
 require('dotenv').config();
 
 var options = {
@@ -37,6 +39,8 @@ app.enable('trust proxy');
 app.set('port', 443);
 server.listen(80);
 secure_server.listen(443);
+
+initVoiceInteractionLogger(app, io);
 
 var path = require('path');
 
