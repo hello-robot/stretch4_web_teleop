@@ -592,7 +592,10 @@ const SingleButton = (props: SingleButtonProps) => {
     const disabledDueToNotHomed =
         !props.sharedState.robotIsHomed &&
         notHomedDisabledFunctions.has(props.funct);
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed;
+    const isGripperBtn = props.funct === ButtonPadButton.GripperOpen || props.funct === ButtonPadButton.GripperClose;
+    const gripperDisabled = isGripperBtn && props.sharedState.stretchTool !== StretchTool.DW4;
+
+    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled;
 
     const clickProps = isDisabled
         ? {}
