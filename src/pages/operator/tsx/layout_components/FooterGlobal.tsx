@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import MicIcon from "@mui/icons-material/Mic";
+import MicOffIcon from "@mui/icons-material/MicOff";
 
 import "operator/css/FooterGlobal.css";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
@@ -16,8 +18,11 @@ import SceneCarousel, {
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
+import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 import {
-    useVoiceStatus
+    getVoiceStatusSnapshot,
+    setVoiceStatus,
+    useVoiceStatus,
 } from "../voice/voiceStatusStore";
 import { MapFunction } from "./AutoNav";
 
@@ -116,6 +121,20 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: true,
             },
             {
+                id: "mic-mute",
+                name: micMuted ? "Unmute" : "Mute",
+                description: "Toggle microphone uplink to OpenAI",
+                onClick: () => {
+                    const nextMuted = !getVoiceStatusSnapshot().micMuted;
+                    if (!nextMuted) {
+                        bumpVoiceCommandActivity();
+                    }
+                    setVoiceStatus({ micMuted: nextMuted });
+                },
+                icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                enabled: voiceConnected,
+            },
+            {
                 id: "localize-aruco",
                 name: "Localize (ArUco)",
                 description: "TextDescription",
@@ -168,10 +187,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 
     const handleSceneSelect = (scene: SceneItem) => {
         // Action-only items run their handler without switching the active scene.
-        if (scene.id === "mic-mute" || scene.id === "localize-aruco") {
-            if (localizeStatus === "loading") {
-                return;
-            }
+        if (scene.id === "mic-mute") {
             scene.onClick?.();
             return;
         }
