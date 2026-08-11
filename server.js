@@ -1,6 +1,8 @@
 var fs = require("fs");
 const { isEnabled } = require("./feature-flags");
 
+const { initVoiceInteractionLogger } = require("./voiceInteractionLogger");
+
 require("dotenv").config();
 
 var options = {
@@ -33,6 +35,8 @@ app.enable("trust proxy");
 app.set("port", 443);
 server.listen(80);
 secure_server.listen(443);
+
+initVoiceInteractionLogger(app, io);
 
 var path = require("path");
 

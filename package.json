@@ -48,6 +48,7 @@
         "localstorage": "webpack --mode development --progress --env storage='localstorage'",
         "styleguide": "styleguidist server",
         "build": "webpack --mode production --progress --env storage='firebase'",
+        "watch-voice": "node scripts/watch_voice_logs.js",
         "postinstall": "npx playwright install-deps && npx playwright install"
     },
     "eslintConfig": {

@@ -4,6 +4,7 @@
  * Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
  */
 
+import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import {
     clearLastVoiceBaseMove,
@@ -57,17 +58,16 @@ import {
     VOICE_TOOLS,
     VOICE_ASLEEP_TOOL_DEFER_MS,
     VOICE_STOP_KEYWORDS,
-    VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_WAKE_PHRASE_DISPLAY,
 } from "./constants";
 import { bumpVoiceCommandActivity } from "./voiceCommandActivity";
+import { emitVoiceInteraction } from "./voiceInteractionEmitter";
 import {
     createVoiceWakeSleep,
     type VoiceListeningState,
     type VoiceWakeSleep,
 } from "./voiceWakeSleep";
-import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
-import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
@@ -1390,6 +1390,26 @@ export async function connectOpenAIRealtimeVoice(
         opts.onLog?.(
             `[Realtime] Tool result ${JSON.stringify(result)} (${fc.call_id})`,
         );
+
+        let parsedArgs: Record<string, unknown> = {};
+        try {
+            parsedArgs = JSON.parse(fc.arguments || "{}") as Record<string, unknown>;
+        } catch {
+            //
+        }
+
+        emitVoiceInteraction({
+            transcript: latestUserTranscriptForLog() || lastCompletedUserTranscript,
+            stt_model: "gpt-4o-transcribe",
+            tool_name: fc.name,
+            tool_args: parsedArgs,
+            reasoning_model: "gpt-realtime-2.1",
+            success: result.ok,
+            detail: result.detail,
+            listening_state: voiceWakeSleep?.state || "unknown",
+            execution_mode: opts.voiceMoveExecutionMode || "button_provider",
+        });
+
         if (dc.readyState === "open") {
             sendFnOutput(dc, fc.call_id, result);
         }
