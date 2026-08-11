@@ -209,6 +209,10 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             console.log("playbackPosesState", message.message);
             movementRecorderFunctionProvider.setPlaybackPosesState(message.message);
             break;
+        case "seedLocalizationState":
+            console.log("seedLocalizationState", message.message);
+            mapFunctionProvider.setSeedLocalizationState(message.message);
+            break;
         case "relativePose":
             remoteRobot.setRelativePose(message.message);
             break;

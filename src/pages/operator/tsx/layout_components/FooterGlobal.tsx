@@ -1,18 +1,23 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 import MainMenu from "../basic_components/MainMenu";
 import SceneCarousel, {
     SceneItem,
+    SceneItemStatus,
 } from "../basic_components/SceneCarousel";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
-import { runStopFunctionProvider } from "..";
+import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { MapFunction } from "./AutoNav";
+import { ActionState } from "shared/util";
+
+const LOCALIZE_SUCCESS_HOLD_MS = 1500;
 
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
@@ -27,9 +32,57 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
+    const [localizeStatus, localizeStatusSet] =
+        useState<SceneItemStatus>("idle");
+    const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
+    const localizeSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+    localizeStatusRef.current = localizeStatus;
 
     runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
+
+    // Re-register each render (provider may be created after first mount).
+    mapFunctionProvider?.setOperatorCallback((state: ActionState) => {
+        if (state.alert_type === "success") {
+            localizeStatusSet("success");
+            if (localizeSuccessTimeoutRef.current) {
+                clearTimeout(localizeSuccessTimeoutRef.current);
+            }
+            localizeSuccessTimeoutRef.current = setTimeout(() => {
+                onSceneSelectedChange("autonav");
+                swipeableViewsIdxSet(1);
+                isMainMenuOpenSet(false);
+                localizeStatusSet("idle");
+            }, LOCALIZE_SUCCESS_HOLD_MS);
+            return;
+        }
+        if (state.alert_type === "error") {
+            localizeStatusSet("error");
+        }
+    });
+
+    useEffect(() => {
+        return () => {
+            if (localizeSuccessTimeoutRef.current) {
+                clearTimeout(localizeSuccessTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const startLocalizeAruco = () => {
+        if (localizeStatusRef.current === "loading") {
+            return;
+        }
+        if (localizeSuccessTimeoutRef.current) {
+            clearTimeout(localizeSuccessTimeoutRef.current);
+        }
+        localizeStatusSet("loading");
+        const seedLocalization = mapFunctionProvider?.provideFunctions(
+            MapFunction.SeedLocalization
+        ) as (() => void) | undefined;
+        seedLocalization?.();
+    };
 
     const scenes: SceneItem[] = useMemo(
         () => [
@@ -42,7 +95,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     onSceneSelectedChange("pilot-mode");
                 },
                 icon: <CheckCircleIcon />,
-                enabled: true
+                enabled: true,
             },
             {
                 id: "autonav",
@@ -53,7 +106,16 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     swipeableViewsIdxSet(1);
                 },
                 icon: <CheckCircleIcon />,
-                enabled: true
+                enabled: true,
+            },
+            {
+                id: "localize-aruco",
+                name: "Localize (ArUco)",
+                description: "TextDescription",
+                onClick: startLocalizeAruco,
+                icon: <CheckCircleIcon />,
+                enabled: localizeStatus !== "loading",
+                status: localizeStatus,
             },
             {
                 id: "finedex-gripper",
@@ -61,7 +123,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'finedex-gripper'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
+                enabled: false,
             },
             {
                 id: "autodock",
@@ -69,7 +131,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'autodock'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
+                enabled: false,
             },
             {
                 id: "feeding",
@@ -77,7 +139,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'feeding'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
+                enabled: false,
             },
             {
                 id: "settings",
@@ -85,13 +147,25 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'settings'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
-            }
+                enabled: false,
+            },
         ],
-        [onSceneSelectedChange, swipeableViewsIdxSet]
+        [
+            localizeStatus,
+            onSceneSelectedChange,
+            swipeableViewsIdxSet,
+        ]
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
+        // Action-only items run their handler without switching the active scene.
+        if (scene.id === "localize-aruco") {
+            if (localizeStatus === "loading") {
+                return;
+            }
+            scene.onClick?.();
+            return;
+        }
         onSceneSelectedChange(scene.id);
         scene.onClick?.();
         isMainMenuOpenSet(false);
