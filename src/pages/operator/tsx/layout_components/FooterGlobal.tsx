@@ -1,10 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import MicIcon from "@mui/icons-material/Mic";
-import MicOffIcon from "@mui/icons-material/MicOff";
 
-<<<<<<< HEAD
 import "operator/css/FooterGlobal.css";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
@@ -19,29 +16,11 @@ import SceneCarousel, {
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
-import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 import {
-    getVoiceStatusSnapshot,
-    setVoiceStatus,
-    useVoiceStatus,
+    useVoiceStatus
 } from "../voice/voiceStatusStore";
 import { MapFunction } from "./AutoNav";
-=======
-import MainMenu from "../basic_components/MainMenu";
-import SceneCarousel, {
-    SceneItem,
-    SceneItemStatus,
-} from "../basic_components/SceneCarousel";
-import MagneticWrapper from "../static_components/MagneticWrapper";
-import batteryIcon from "operator/icons/Battery_Footer.svg";
-import runStopRunIcon from "operator/icons/RunStop_Run.svg";
-import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
-import "operator/css/FooterGlobal.css";
-import { mapFunctionProvider, runStopFunctionProvider } from "..";
-import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
-import { MapFunction } from "./AutoNav";
-import { ActionState } from "shared/util";
->>>>>>> ef04098 (Call "Localization" from <MainMenu>)
+
 
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
 
@@ -58,10 +37,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
-<<<<<<< HEAD
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
-=======
->>>>>>> ef04098 (Call "Localization" from <MainMenu>)
+
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
