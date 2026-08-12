@@ -395,6 +395,40 @@ function sendFnOutput(
     );
 }
 
+/** Same constraints for first connect and later reacquire. */
+const MIC_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+};
+
+function isIosLike(): boolean {
+    const ua = navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(ua)) {
+        return true;
+    }
+    // iPadOS 13+ can report as MacIntel with touch.
+    return (
+        navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1
+    );
+}
+
+/**
+ * Home-screen / standalone PWA on iOS.
+ * Control Center and App Switcher background these harder than a Safari tab,
+ * and the mic AudioContext / getUserMedia graph often dies.
+ */
+function isIosStandalonePwa(): boolean {
+    if (!isIosLike()) {
+        return false;
+    }
+    const nav = navigator as Navigator & { standalone?: boolean };
+    if (nav.standalone === true) {
+        return true;
+    }
+    return window.matchMedia("(display-mode: standalone)").matches;
+}
+
 export type RealtimeVoiceConnectOptions = {
     /** Relative or absolute mint URL (HTTPS same-origin recommended) */
     tokenUrl?: string;
@@ -405,6 +439,11 @@ export type RealtimeVoiceConnectOptions = {
     onLog?: (s: string) => void;
     /** Normalized mic RMS (0–1) and whether the volume gate is transmitting. */
     onMicLevel?: (level: number, gateOpen: boolean) => void;
+    /**
+     * Fired when we reset SVC to cold-start (muted + asleep) on mic reacquire /
+     * failure. Caller syncs UI and cancels AutoNav without a toast.
+     */
+    onMicSafeReset?: () => void;
     /** Temporary POC: direct timedBaseDrive vs directional pad button path */
     voiceMoveExecutionMode?: VoiceMoveExecutionMode;
     /** Sync Action Speed UI + FunctionProvider.velocityScale from voice `speed` arg */
@@ -424,6 +463,17 @@ export type ActiveRealtimeVoiceSession = {
     sleep: () => void;
     /** Force-close mic uplink (no audio to OpenAI) while session stays up. */
     setMicMuted: (muted: boolean) => void;
+    /**
+     * Recover mic after foreground, or from Unmute.
+     * Serializes concurrent calls. `fromUserGesture: true` skips the safe-reset
+     * so Unmute doesn't immediately mute/sleep again.
+     */
+    recoverMic: (opts?: { fromUserGesture?: boolean }) => Promise<void>;
+};
+
+export type RecoverMicOptions = {
+    /** Unmute path — keep operator mute/wake intent; start getUserMedia in-gesture. */
+    fromUserGesture?: boolean;
 };
 
 export type { VoiceListeningState } from "./voiceWakeSleep";
@@ -454,12 +504,8 @@ export async function connectOpenAIRealtimeVoice(
 
     pc.ontrack = () => { };
 
-    const ms = await navigator.mediaDevices.getUserMedia({
-        audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-        },
+    let inputStream = await navigator.mediaDevices.getUserMedia({
+        audio: MIC_AUDIO_CONSTRAINTS,
     });
 
     let voiceWakeSleep: VoiceWakeSleep | undefined;
@@ -480,13 +526,23 @@ export async function connectOpenAIRealtimeVoice(
     voiceWakeSleep.start();
 
     let micGate: MicLevelGate | undefined;
+    /** Operator mute intent — reapplied after we rebuild the mic gate. */
+    let micMutedIntent = false;
+    let sessionDisposed = false;
+    let recoverMicInFlight: Promise<void> | null = null;
+    /** Unmute arrived while a background recover was still in flight — run again after. */
+    let pendingGestureRecover = false;
+    /** Skip recover on first paint; only run after we've actually been backgrounded. */
+    let sawHidden = document.hidden;
 
-    micGate = await createMicLevelGate(ms, {
+    const micGateOptions = () => ({
         bypassGate: () => voiceWakeSleep?.state === "asleep",
-        onGateChange: (gateOpen, level) => {
+        onGateChange: (gateOpen: boolean, level: number) => {
             opts.onMicLevel?.(level, gateOpen);
         },
     });
+
+    micGate = await createMicLevelGate(inputStream, micGateOptions());
 
     if (
         opts.onVoiceSpeedChange &&
@@ -511,9 +567,179 @@ export async function connectOpenAIRealtimeVoice(
         setVoiceMoveExecutionContext(undefined);
     }
 
+    let audioSender: RTCRtpSender | undefined;
     for (const t of micGate.transmitStream.getAudioTracks()) {
-        pc.addTrack(t, micGate.transmitStream);
+        audioSender = pc.addTrack(t, micGate.transmitStream);
     }
+
+    /**
+     * Cold-start SVC posture while the Realtime peer stays up:
+     * stop motion, asleep, muted.
+     */
+    const resetSvcToSafeDefaults = () => {
+        executeStopMotionOnProvider(opts.voiceProvider);
+        voiceWakeSleep?.sleep("disconnect");
+        micMutedIntent = true;
+        micGate?.setForceClosed(true);
+        opts.onMicSafeReset?.();
+    };
+
+    /** Fresh getUserMedia → rebuild gate → replaceTrack on the OpenAI sender. */
+    const reacquireMicStream = async (fromUserGesture: boolean) => {
+        if (sessionDisposed) {
+            return;
+        }
+        // Kick off getUserMedia before any await — iOS drops the Unmute gesture
+        // if we await AudioContext.resume() first.
+        const gumPromise = navigator.mediaDevices.getUserMedia({
+            audio: MIC_AUDIO_CONSTRAINTS,
+        });
+        if (!fromUserGesture) {
+            resetSvcToSafeDefaults();
+        }
+        const nextStream = await gumPromise;
+        if (sessionDisposed) {
+            nextStream.getTracks().forEach((t) => {
+                t.stop();
+            });
+            return;
+        }
+
+        inputStream.getTracks().forEach((t) => {
+            t.stop();
+        });
+        micGate?.stop();
+        inputStream = nextStream;
+        micGate = await createMicLevelGate(inputStream, micGateOptions());
+        micGate.setForceClosed(micMutedIntent);
+
+        const newTrack = micGate.transmitStream.getAudioTracks()[0] ?? null;
+        if (!audioSender) {
+            throw new Error("No RTCRtpSender for mic uplink");
+        }
+        await audioSender.replaceTrack(newTrack);
+
+        if (!micGate.isHealthy()) {
+            throw new Error("Mic still unhealthy after reacquire");
+        }
+        // Orange-dot / track.live can still mean silence — require a real callback.
+        const active = await micGate.probeActivity();
+        if (!active) {
+            throw new Error("Mic reacquired but ScriptProcessor inactive");
+        }
+        opts.onLog?.("[Realtime] mic reacquired after foreground");
+    };
+
+    /**
+     * Foreground / Unmute mic recovery.
+     *
+     * iOS standalone PWA: on background restore we only safe-reset + release
+     * capture. getUserMedia waits for Unmute (tap gesture). Safari tabs and
+     * other clients try resume + activity probe first, then reacquire if needed.
+     */
+    const recoverMicAfterForeground = (
+        recoverOpts?: RecoverMicOptions,
+    ): Promise<void> => {
+        if (sessionDisposed) {
+            return Promise.resolve();
+        }
+        const fromUserGesture = recoverOpts?.fromUserGesture === true;
+        if (recoverMicInFlight) {
+            // Don't drop an Unmute that raced a background recover — queue it.
+            if (fromUserGesture) {
+                pendingGestureRecover = true;
+                return recoverMicInFlight.then(() => {
+                    if (!pendingGestureRecover || sessionDisposed) {
+                        return;
+                    }
+                    pendingGestureRecover = false;
+                    return recoverMicAfterForeground({
+                        fromUserGesture: true,
+                    });
+                });
+            }
+            return recoverMicInFlight;
+        }
+
+        const iosPwa = isIosStandalonePwa();
+        recoverMicInFlight = (async () => {
+            try {
+                if (sessionDisposed) {
+                    return;
+                }
+
+                // App Switcher / Control Center without a gesture: releasing is
+                // safer than getUserMedia. iOS often returns a live track that
+                // never delivers audio (Dynamic Island still shows the orange mic).
+                if (iosPwa && !fromUserGesture) {
+                    opts.onLog?.(
+                        "[Realtime] iOS standalone PWA — release mic; unmute to reacquire",
+                    );
+                    resetSvcToSafeDefaults();
+                    inputStream.getTracks().forEach((t) => {
+                        t.stop();
+                    });
+                    micGate?.stop();
+                    if (audioSender) {
+                        await audioSender.replaceTrack(null);
+                    }
+                    return;
+                }
+
+                if (!fromUserGesture && micGate) {
+                    const resumed = await micGate.resume();
+                    if (sessionDisposed) {
+                        return;
+                    }
+                    if (
+                        resumed &&
+                        micGate.isHealthy() &&
+                        (await micGate.probeActivity())
+                    ) {
+                        opts.onLog?.(
+                            "[Realtime] mic recovered via AudioContext.resume + activity probe",
+                        );
+                        return;
+                    }
+                }
+
+                opts.onLog?.(
+                    "[Realtime] reacquiring getUserMedia" +
+                        (fromUserGesture ? " (user gesture)" : ""),
+                );
+                await reacquireMicStream(fromUserGesture);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                opts.onLog?.(`[Realtime] mic recovery failed: ${msg}`);
+                resetSvcToSafeDefaults();
+            }
+        })().finally(() => {
+            recoverMicInFlight = null;
+        });
+        return recoverMicInFlight;
+    };
+
+    const onVisibilityForMic = () => {
+        if (document.hidden) {
+            sawHidden = true;
+            return;
+        }
+        // Ignore the visible state at session start.
+        if (!sawHidden) {
+            return;
+        }
+        sawHidden = false;
+        void recoverMicAfterForeground();
+    };
+    const onPageShowForMic = (event: PageTransitionEvent) => {
+        // bfcache restore, or coming back after we already saw hidden.
+        if (event.persisted || sawHidden) {
+            sawHidden = false;
+            void recoverMicAfterForeground();
+        }
+    };
+    document.addEventListener("visibilitychange", onVisibilityForMic);
+    window.addEventListener("pageshow", onPageShowForMic);
 
     opts.onStatus?.("Negotiating WebRTC…");
 
@@ -860,10 +1086,13 @@ export async function connectOpenAIRealtimeVoice(
 
     if (!sdpResp.ok) {
         const errTxt = await sdpResp.text();
+        sessionDisposed = true;
+        document.removeEventListener("visibilitychange", onVisibilityForMic);
+        window.removeEventListener("pageshow", onPageShowForMic);
         voiceWakeSleep?.stop();
         voiceWakeSleep = undefined;
         micGate?.stop();
-        ms.getTracks().forEach((t) => {
+        inputStream.getTracks().forEach((t) => {
             t.stop();
         });
         pc.close();
@@ -881,6 +1110,12 @@ export async function connectOpenAIRealtimeVoice(
     opts.onStatus?.("Connected (Realtime)");
 
     async function disconnect() {
+        sessionDisposed = true;
+        document.removeEventListener("visibilitychange", onVisibilityForMic);
+        window.removeEventListener("pageshow", onPageShowForMic);
+        if (recoverMicInFlight) {
+            await recoverMicInFlight.catch(() => undefined);
+        }
         voiceWakeSleep?.stop();
         voiceWakeSleep = undefined;
         micGate?.stop();
@@ -891,7 +1126,7 @@ export async function connectOpenAIRealtimeVoice(
         setVoiceMoveExecutionContext(undefined);
         clearLastVoiceBaseMove();
         dc.close();
-        ms.getTracks().forEach((t) => {
+        inputStream.getTracks().forEach((t) => {
             t.stop();
         });
         pc.close();
@@ -903,7 +1138,9 @@ export async function connectOpenAIRealtimeVoice(
         wake: () => voiceWakeSleep?.wake(),
         sleep: () => voiceWakeSleep?.sleep("phrase"),
         setMicMuted: (muted: boolean) => {
+            micMutedIntent = muted;
             micGate?.setForceClosed(muted);
         },
+        recoverMic: (recoverOpts) => recoverMicAfterForeground(recoverOpts),
     };
 }

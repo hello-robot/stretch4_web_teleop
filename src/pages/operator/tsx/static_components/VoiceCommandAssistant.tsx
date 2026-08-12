@@ -20,6 +20,7 @@ import {
     setVoiceStatus,
     subscribeVoiceStatus,
 } from "../voice/voiceStatusStore";
+import { registerVoiceMicRecover } from "../voice/voiceMicRecoverBridge";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
@@ -121,6 +122,7 @@ export const VoiceCommandAssistant = ({
             window.clearTimeout(retryTimeoutRef.current);
             retryTimeoutRef.current = null;
         }
+        registerVoiceMicRecover(null);
         if (sessionRef.current) {
             await sessionRef.current.disconnect().catch(() => undefined);
             sessionRef.current = null;
@@ -273,8 +275,20 @@ export const VoiceCommandAssistant = ({
                 onMicLevel: (_level, gateOpen) => {
                     setVoiceStatus({ micGateOpen: gateOpen });
                 },
+                onMicSafeReset: () => {
+                    // Mirror cold-start chrome after iOS background mic release.
+                    setVoiceStatus({
+                        micMuted: true,
+                        micGateOpen: false,
+                        listeningState: "asleep",
+                    });
+                    // No toast — Control Center / App Switcher restore shouldn't spam.
+                    onCancelAutoNavOnStop();
+                },
             });
             sessionRef.current = s;
+            // Footer Unmute reaches recoverMic through the gesture bridge.
+            registerVoiceMicRecover((recoverOpts) => s.recoverMic(recoverOpts));
             s.setMicMuted(getVoiceStatusSnapshot().micMuted);
             phaseSet("live");
             setVoiceStatus({ connected: true });
@@ -283,6 +297,7 @@ export const VoiceCommandAssistant = ({
             console.error("[VoiceCommandAssistant] connect failed", e);
             setVoiceMoveExecutionContext(undefined);
             phaseSet("error");
+            registerVoiceMicRecover(null);
             sessionRef.current = null;
             clearVoiceUiStatus();
             if (retryTimeoutRef.current !== null) {
@@ -305,6 +320,7 @@ export const VoiceCommandAssistant = ({
         handleSetSavedLocationsModal,
         handleControlAutoNav,
         handleCancelAutoNavOnStop,
+        onCancelAutoNavOnStop,
         onGetAutoNavSavedPoseNames,
         handleLoadAutoNavLocation,
     ]);
@@ -334,6 +350,8 @@ export const VoiceCommandAssistant = ({
         });
     }, []);
 
+    // Unmute resets the idle clock. Mic reacquire itself is started from the
+    // Footer Unmute click (gesture bridge) — not from this subscriber.
     useEffect(() => {
         let wasMuted = getVoiceStatusSnapshot().micMuted;
         const onStatus = () => {

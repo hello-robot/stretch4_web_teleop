@@ -24,6 +24,7 @@ import {
     setVoiceStatus,
     useVoiceStatus,
 } from "../voice/voiceStatusStore";
+import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
 import { MapFunction } from "./AutoNav";
 
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
@@ -133,10 +134,12 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "Toggle microphone uplink to OpenAI",
                 onClick: () => {
                     const nextMuted = !getVoiceStatusSnapshot().micMuted;
+                    setVoiceStatus({ micMuted: nextMuted });
                     if (!nextMuted) {
                         bumpVoiceCommandActivity();
+                        // Reacquire from this tap — iOS needs the gesture for getUserMedia.
+                        void recoverVoiceMicFromUserGesture();
                     }
-                    setVoiceStatus({ micMuted: nextMuted });
                 },
                 icon: micMuted ? <MicOffIcon /> : <MicIcon />,
                 enabled: voiceConnected,
