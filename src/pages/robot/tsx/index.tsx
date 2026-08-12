@@ -77,7 +77,12 @@ robot.setOnRosConnectCallback(async () => {
     console.log(
         "Waiting for configured signaler (i.e. logging in if using Firebase)"
     );
-    await loginFirebaseSignalerAsRobot();
+    try {
+        await loginFirebaseSignalerAsRobot();
+        console.log("Firebase login successful!");
+    } catch (e) {
+        console.error("Firebase login FAILED:", e);
+    }
     await connection.configure_signaler("");
     console.log("Signaler ready! Joining room.");
     let joinedRobotRoom = await connection.joinRobotRoom();

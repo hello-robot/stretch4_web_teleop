@@ -32,10 +32,11 @@ export class FirebaseStorageHandler extends StorageHandler {
     private config: FirebaseOptions;
     private app: FirebaseApp;
     private database: Database;
-    private auth: Auth;
+    public auth: Auth;
 
-    private userEmail: string;
-    private uid: string;
+    public userEmail: string;
+    public uid: string;
+    public alias?: string;
     private layouts: { [name: string]: LayoutDefinition };
     private currentLayout: LayoutDefinition | null;
     private poses: { [name: string]: RobotPose };
@@ -58,6 +59,7 @@ export class FirebaseStorageHandler extends StorageHandler {
 
         this.userEmail = "";
         this.uid = "";
+        this.alias = undefined;
         this.layouts = {};
         this.currentLayout = null;
         this.poses = {};
@@ -89,8 +91,8 @@ export class FirebaseStorageHandler extends StorageHandler {
                 })
                 .catch((error) => {
                     console.log(
-                        "Detected that FirebaseModel isn't initialized for user ",
-                        this.uid
+                        "No saved layouts or storage data found for user (using defaults):",
+                        this.alias || this.uid
                     );
                     this.onReadyCallback();
                 });
@@ -98,8 +100,19 @@ export class FirebaseStorageHandler extends StorageHandler {
     }
 
     private async getUserDataFirebase() {
+        let lookupId = this.uid;
+        try {
+            const aliasSnapshot = await get(child(ref(this.database), "uids/" + this.uid));
+            if (aliasSnapshot.exists()) {
+                lookupId = aliasSnapshot.val();
+                this.alias = lookupId;
+            }
+        } catch (e) {
+            console.warn("Failed to lookup alias for storage data", e);
+        }
+
         const snapshot = await get(
-            child(ref(this.database), "/operators/" + this.uid)
+            child(ref(this.database), "/operators/" + lookupId)
         );
 
         if (snapshot.exists()) {
@@ -135,7 +148,8 @@ export class FirebaseStorageHandler extends StorageHandler {
         this.currentLayout = layout;
 
         let updates: any = {};
-        updates["/operators/" + this.uid + "/currentLayout"] = layout;
+        const targetId = this.alias || this.uid;
+        updates["/operators/" + targetId + "/currentLayout"] = layout;
         update(ref(this.database), updates);
     }
 
@@ -152,7 +166,8 @@ export class FirebaseStorageHandler extends StorageHandler {
         this.layouts = layouts;
 
         let updates: any = {};
-        updates["/operators/" + this.uid + "/layouts"] = layouts;
+        const targetId = this.alias || this.uid;
+        updates["/operators/" + targetId + "/layouts"] = layouts;
         return update(ref(this.database), updates);
     }
 
@@ -172,7 +187,8 @@ export class FirebaseStorageHandler extends StorageHandler {
         this.mapPoses = poses;
 
         let updates: any = {};
-        updates["/operators/" + this.uid + "/map_poses"] = poses;
+        const targetId = this.alias || this.uid;
+        updates["/operators/" + targetId + "/map_poses"] = poses;
         return update(ref(this.database), updates);
     }
 
@@ -180,7 +196,8 @@ export class FirebaseStorageHandler extends StorageHandler {
         this.mapPoseTypes = poseTypes;
 
         let updates: any = {};
-        updates["/operators/" + this.uid + "/map_pose_types"] = poseTypes;
+        const targetId = this.alias || this.uid;
+        updates["/operators/" + targetId + "/map_pose_types"] = poseTypes;
         return update(ref(this.database), updates);
     }
 

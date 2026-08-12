@@ -34,3 +34,10 @@ outcomes/*
 
 # Specialized URDFs
 urdf/*.urdf
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.runtimeconfig.json

@@ -1,10 +1,10 @@
 import "home/css/index.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { createLoginHandler } from "./utils";
-import { LoginHandler } from "./login_handler/LoginHandler";
-import { SideBySideView } from "./components/SideBySideView";
 import { LoginView } from "./components/LoginView";
+import { SideBySideView } from "./components/SideBySideView";
+import { LoginHandler } from "./login_handler/LoginHandler";
+import { createLoginHandler } from "./utils";
 
 export let loginHandler: LoginHandler;
 const container = document.getElementById("root");
@@ -17,8 +17,8 @@ loginHandler = createLoginHandler(loginHandlerReadyCallback);
 
 function renderHomePage() {
     loginHandler.loginState() == "authenticated"
-        ? (document.title = "Home - Stretch Web Teleop")
-        : (document.title = "Login - Stretch Web Teleop");
+        ? (document.title = "Home - Stretch Web Interface")
+        : (document.title = "Login - Stretch Web Interface");
 
     loginHandler.loginState() == "authenticated"
         ? root.render(<SideBySideView />)
