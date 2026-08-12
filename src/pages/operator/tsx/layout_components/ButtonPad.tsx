@@ -10,7 +10,7 @@ import {
     ButtonPadIdMobile,
     PilotButtonPadType,
 } from "../utils/component_definitions";
-import { className } from "shared/util";
+import { className, StretchTool } from "shared/util";
 import { buttonFunctionProvider } from "operator/tsx/index";
 import {
     ButtonPadShape,
@@ -319,10 +319,17 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
     const disabledDueToNotHomed =
         props.sharedState.robotIsHomed &&
         notHomedDisabledFunctions.has(props.funct);
+    const noGripperAttached =
+        props.sharedState.stretchTool === StretchTool.TABLET ||
+        props.sharedState.stretchTool === StretchTool.UNKNOWN;
+    const disabledDueToNoGripper =
+        noGripperAttached &&
+        (props.funct === ButtonPadButton.GripperOpen ||
+            props.funct === ButtonPadButton.GripperClose);
     // Handle the case where the button
     // is disabled due to not being homed
     // but remember: it's distinct from aria-hidden!
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed;
+    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || disabledDueToNoGripper;
     const cardinalDirections = ["north", "south", "west", "east"];
     const rotateDirections = ["rotate-left", "rotate-right"];
     const getAriaLabel = (direction: string): string => {
@@ -606,7 +613,14 @@ const SingleButton = (props: SingleButtonProps) => {
     const disabledDueToNotHomed =
         props.sharedState.robotIsHomed &&
         notHomedDisabledFunctions.has(props.funct);
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed;
+    const noGripperAttached =
+        props.sharedState.stretchTool === StretchTool.TABLET ||
+        props.sharedState.stretchTool === StretchTool.UNKNOWN;
+    const disabledDueToNoGripper =
+        noGripperAttached &&
+        (props.funct === ButtonPadButton.GripperOpen ||
+            props.funct === ButtonPadButton.GripperClose);
+    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || disabledDueToNoGripper;
 
     return (
         <React.Fragment>
