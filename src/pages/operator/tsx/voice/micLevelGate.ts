@@ -27,8 +27,26 @@ export type MicLevelGate = {
     readonly gateOpen: boolean;
     setForceClosed: (closed: boolean) => void;
     resumeAfterForceClose: () => void;
+    /**
+     * Resume a suspended/interrupted AudioContext (common after iOS background).
+     * @returns true when the context is running afterward.
+     */
+    resume: () => Promise<boolean>;
+    /**
+     * Cheap check: context running + input track live and unmuted.
+     * Not enough alone on iOS PWA — the graph can look fine and still be silent.
+     */
+    isHealthy: () => boolean;
+    /**
+     * True once ScriptProcessor has fired at least once (or false on timeout).
+     * Use after resume(); `isHealthy` can pass while the graph is still dead.
+     */
+    probeActivity: (timeoutMs?: number) => Promise<boolean>;
     stop: () => void;
 };
+
+/** How long `probeActivity` waits for a ScriptProcessor callback. */
+const MIC_ACTIVITY_PROBE_MS = 400;
 
 /**
  * Size of the buffer that the script processor will use to process the audio.
@@ -146,8 +164,12 @@ export async function createMicLevelGate(
     let belowThresholdSince: number | null = null;
     let flushing = false;
     let flushSource: AudioBufferSourceNode | null = null;
+    /** Bumps on every `onaudioprocess` — `probeActivity` watches this advance. */
+    let processGeneration = 0;
+    let stopped = false;
 
     processor.onaudioprocess = (event) => {
+        processGeneration += 1;
         const input = event.inputBuffer.getChannelData(0);
         ring.push(input);
         event.outputBuffer.getChannelData(0).set(input);
@@ -247,6 +269,11 @@ export async function createMicLevelGate(
     applyLiveGain();
     const pollTimer = window.setInterval(tick, pollMs);
 
+    const inputTracksLive = () =>
+        stream.getAudioTracks().some(
+            (t) => t.readyState === "live" && !t.muted,
+        );
+
     return {
         transmitStream,
         get currentLevel() {
@@ -268,14 +295,66 @@ export async function createMicLevelGate(
             forceClosed = false;
             applyLiveGain();
         },
+        async resume() {
+            if (audioContext.state === "closed") {
+                return false;
+            }
+            if (audioContext.state !== "running") {
+                try {
+                    await audioContext.resume();
+                } catch {
+                    return false;
+                }
+            }
+            return audioContext.state === "running";
+        },
+        isHealthy() {
+            return audioContext.state === "running" && inputTracksLive();
+        },
+        probeActivity(timeoutMs = MIC_ACTIVITY_PROBE_MS) {
+            if (stopped || audioContext.state === "closed") {
+                return Promise.resolve(false);
+            }
+            if (!inputTracksLive()) {
+                return Promise.resolve(false);
+            }
+            const startGen = processGeneration;
+            const deadline = performance.now() + Math.max(1, timeoutMs);
+            return new Promise<boolean>((resolve) => {
+                const check = () => {
+                    if (stopped || audioContext.state === "closed") {
+                        resolve(false);
+                        return;
+                    }
+                    if (processGeneration > startGen) {
+                        resolve(true);
+                        return;
+                    }
+                    if (performance.now() >= deadline) {
+                        resolve(false);
+                        return;
+                    }
+                    window.setTimeout(check, 32);
+                };
+                check();
+            });
+        },
         stop() {
+            if (stopped) {
+                return;
+            }
+            stopped = true;
             clearInterval(pollTimer);
             stopFlushSource();
             processor.onaudioprocess = null;
-            source.disconnect();
-            processor.disconnect();
-            liveGain.disconnect();
-            analyser.disconnect();
+            try {
+                source.disconnect();
+                processor.disconnect();
+                liveGain.disconnect();
+                analyser.disconnect();
+            } catch {
+                // already disconnected
+            }
             void audioContext.close().catch(() => undefined);
         },
     };
