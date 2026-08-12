@@ -1,0 +1,211 @@
+name: Move linked issue to In review
+
+on:
+  pull_request:
+    types:
+      - review_requested
+
+jobs:
+  move-linked-issue:
+    runs-on: ubuntu-latest
+
+    env:
+      ORGANIZATION: hello-robot
+      PROJECT_NUMBER: 28 // For the Kanban https://github.com/orgs/hello-robot/projects/28/
+      STATUS_NAME: In review
+
+    steps:
+      - name: Move Development-linked issues to In review
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+        run: |
+          set -euo pipefail
+
+          echo "PR #$PR_NUMBER received a review request."
+
+          # ------------------------------------------------------------
+          # 1. Get:
+          #    - The Kanban project's ID
+          #    - The Status field ID
+          #    - The "In review" option ID
+          #    - Issues linked to this PR through Development
+          # ------------------------------------------------------------
+
+          gh api graphql \
+            -f query='
+              query(
+                $owner: String!,
+                $repo: String!,
+                $pr: Int!,
+                $org: String!,
+                $projectNumber: Int!
+              ) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $pr) {
+                    closingIssuesReferences(first: 50) {
+                      nodes {
+                        id
+                        number
+                        title
+                        projectItems(first: 50) {
+                          nodes {
+                            id
+                            project {
+                              id
+                              number
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+
+                organization(login: $org) {
+                  projectV2(number: $projectNumber) {
+                    id
+
+                    fields(first: 100) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ' \
+            -f owner="$REPOSITORY_OWNER" \
+            -f repo="$REPOSITORY_NAME" \
+            -F pr="$PR_NUMBER" \
+            -f org="$ORGANIZATION" \
+            -F projectNumber="$PROJECT_NUMBER" \
+            > data.json
+
+          PROJECT_ID="$(
+            jq -r '.data.organization.projectV2.id' data.json
+          )"
+
+          STATUS_FIELD_ID="$(
+            jq -r '
+              .data.organization.projectV2.fields.nodes[]
+              | select(.name == "Status")
+              | .id
+            ' data.json
+          )"
+
+          IN_REVIEW_OPTION_ID="$(
+            jq -r --arg status "$STATUS_NAME" '
+              .data.organization.projectV2.fields.nodes[]
+              | select(.name == "Status")
+              | .options[]
+              | select(.name == $status)
+              | .id
+            ' data.json
+          )"
+
+          if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "null" ]]; then
+            echo "::error::Could not find project #$PROJECT_NUMBER in $ORGANIZATION."
+            exit 1
+          fi
+
+          if [[ -z "$STATUS_FIELD_ID" || "$STATUS_FIELD_ID" == "null" ]]; then
+            echo "::error::Could not find the Status field."
+            exit 1
+          fi
+
+          if [[ -z "$IN_REVIEW_OPTION_ID" || "$IN_REVIEW_OPTION_ID" == "null" ]]; then
+            echo "::error::Could not find Status option '$STATUS_NAME'."
+            exit 1
+          fi
+
+          # ------------------------------------------------------------
+          # 2. Find every Development-linked issue that is actually in
+          #    this project.
+          # ------------------------------------------------------------
+
+          LINKED_ISSUE_COUNT="$(
+            jq '
+              .data.repository.pullRequest.closingIssuesReferences.nodes
+              | length
+            ' data.json
+          )"
+
+          if [[ "$LINKED_ISSUE_COUNT" -eq 0 ]]; then
+            echo "PR #$PR_NUMBER has no Development-linked closing issues."
+            exit 0
+          fi
+
+          echo "Found $LINKED_ISSUE_COUNT Development-linked issue(s)."
+
+          jq -c \
+            --arg projectId "$PROJECT_ID" '
+              .data.repository.pullRequest.closingIssuesReferences.nodes[]
+              | {
+                  number,
+                  title,
+                  itemId: (
+                    .projectItems.nodes[]
+                    | select(.project.id == $projectId)
+                    | .id
+                  )
+                }
+            ' data.json > project-items.jsonl
+
+          if [[ ! -s project-items.jsonl ]]; then
+            echo "Linked issue(s) found, but none are in the Kanban project."
+            exit 0
+          fi
+
+          # ------------------------------------------------------------
+          # 3. Set each matching project's Status to "In review".
+          # ------------------------------------------------------------
+
+          while IFS= read -r issue; do
+            ISSUE_NUMBER="$(jq -r '.number' <<< "$issue")"
+            ISSUE_TITLE="$(jq -r '.title' <<< "$issue")"
+            ITEM_ID="$(jq -r '.itemId' <<< "$issue")"
+
+            echo "Moving issue #$ISSUE_NUMBER — $ISSUE_TITLE → $STATUS_NAME"
+
+            gh api graphql \
+              -f query='
+                mutation(
+                  $project: ID!,
+                  $item: ID!,
+                  $field: ID!,
+                  $option: String!
+                ) {
+                  updateProjectV2ItemFieldValue(
+                    input: {
+                      projectId: $project
+                      itemId: $item
+                      fieldId: $field
+                      value: {
+                        singleSelectOptionId: $option
+                      }
+                    }
+                  ) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              ' \
+              -f project="$PROJECT_ID" \
+              -f item="$ITEM_ID" \
+              -f field="$STATUS_FIELD_ID" \
+              -f option="$IN_REVIEW_OPTION_ID" \
+              --silent
+
+          done < project-items.jsonl
