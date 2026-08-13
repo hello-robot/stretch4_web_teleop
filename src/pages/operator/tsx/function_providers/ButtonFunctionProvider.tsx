@@ -101,71 +101,67 @@ export class ButtonFunctionProvider extends FunctionProvider {
         inJointLimit: ValidJointStateDict,
         inCollision: ValidJointStateDict
     ) {
-        // For all the joints that are in collision, set their corresponding buttons
-        // either to collision (for the button corresponding to the direction the
-        // collision is in) or inactive (for the button corresponding to the other direction).
-        Object.keys(inCollision).forEach((k: string) => {
-            const key = k as ValidJoints;
-            const [inCollisionNeg, inCollisionPos] = inCollision[key]!;
+        const allJointKeys = Array.from(
+            new Set([...Object.keys(inCollision), ...Object.keys(inJointLimit)])
+        ) as ValidJoints[];
+
+        allJointKeys.forEach((key) => {
             const buttons = getButtonsFromJointName(key);
             if (!buttons) return;
-            let [buttonNeg, buttonPos] =
-                key !== "wrist_yaw_joint" && key !== "wrist_pitch_joint"
-                    ? buttons
-                    : buttons.reverse();
 
-            // TODO: i think there's still something wrong with this logic
-            const prevButtonStateNeg = this.buttonStateMap.get(buttonNeg);
-            const prevButtonStatePos = this.buttonStateMap.get(buttonPos);
-            const prevInCollisionNeg =
-                prevButtonStateNeg === ButtonState.Collision;
-            const prevInCollisionPos =
-                prevButtonStatePos === ButtonState.Collision;
-            if (!prevButtonStateNeg || inCollisionNeg !== prevInCollisionNeg)
-                this.buttonStateMap.set(
-                    buttonNeg,
-                    inCollisionNeg
-                        ? ButtonState.Collision
-                        : ButtonState.Inactive
-                );
-            if (!prevButtonStatePos || inCollisionPos !== prevInCollisionPos)
-                this.buttonStateMap.set(
-                    buttonPos,
-                    inCollisionPos
-                        ? ButtonState.Collision
-                        : ButtonState.Inactive
-                );
-        });
-
-        // For all the joints that are at their limit, set their corresponding buttons
-        // either to limit (for the button corresponding to the direction the joint
-        // limit is in) or inactive (for the button corresponding to the other direction).
-        Object.keys(inJointLimit).forEach((k: string) => {
-            const key = k as ValidJoints;
-            const [inLimitNeg, inLimitPos] = inJointLimit[key]!;
-            const buttons = getButtonsFromJointName(key);
-            if (!buttons) return;
             const [buttonNeg, buttonPos] = buttons;
-            const prevButtonStateNeg = this.buttonStateMap.get(buttonNeg);
-            const prevButtonStatePos = this.buttonStateMap.get(buttonPos);
-            const prevInLimitNeg = prevButtonStateNeg !== ButtonState.Limit;
-            const prevInLimitPos = prevButtonStatePos !== ButtonState.Limit;
-            if (
-                prevButtonStateNeg == undefined ||
-                inLimitNeg !== prevInLimitNeg
-            )
-                this.buttonStateMap.set(
-                    buttonNeg,
-                    inLimitNeg ? ButtonState.Inactive : ButtonState.Limit
+
+            const collisionTuple = inCollision[key];
+            const limitTuple = inJointLimit[key];
+
+            const getNewState = (
+                isCollision?: boolean,
+                isWithinLimit?: boolean,
+                currentButton?: ButtonPadButton
+            ): ButtonState => {
+                if (isCollision === true) {
+                    return ButtonState.Collision;
+                }
+                if (isWithinLimit === false) {
+                    return ButtonState.Limit;
+                }
+                const currentState = currentButton
+                    ? this.buttonStateMap.get(currentButton)
+                    : undefined;
+                if (
+                    currentState === ButtonState.Collision ||
+                    currentState === ButtonState.Limit
+                ) {
+                    return ButtonState.Inactive;
+                }
+                return currentState || ButtonState.Inactive;
+            };
+
+            const [inCollisionNeg, inCollisionPos] = collisionTuple || [];
+            const [inLimitNeg, inLimitPos] = limitTuple || [];
+
+            if (collisionTuple !== undefined || limitTuple !== undefined) {
+                const newNegState = getNewState(
+                    inCollisionNeg,
+                    inLimitNeg,
+                    buttonNeg
                 );
-            if (
-                prevButtonStatePos == undefined ||
-                inLimitPos !== prevInLimitPos
-            )
-                this.buttonStateMap.set(
-                    buttonPos,
-                    inLimitPos ? ButtonState.Inactive : ButtonState.Limit
+                const newPosState = getNewState(
+                    inCollisionPos,
+                    inLimitPos,
+                    buttonPos
                 );
+
+                if (newNegState !== ButtonState.Inactive) {
+                    console.log(`[ButtonProvider] Setting ${buttonNeg} (${key} neg) to state: ${newNegState}`);
+                }
+                if (newPosState !== ButtonState.Inactive) {
+                    console.log(`[ButtonProvider] Setting ${buttonPos} (${key} pos) to state: ${newPosState}`);
+                }
+
+                this.buttonStateMap.set(buttonNeg, newNegState);
+                this.buttonStateMap.set(buttonPos, newPosState);
+            }
         });
 
         if (this.operatorCallback) this.operatorCallback(this.buttonStateMap);
@@ -429,8 +425,10 @@ function getButtonsFromJointName(
 ): [ButtonPadButton, ButtonPadButton] | undefined {
     switch (jointName) {
         case "stretch_gripper_joint":
+        case "gripper_aperture":
             return [ButtonPadButton.GripperClose, ButtonPadButton.GripperOpen];
         case "arm_joint":
+        case "wrist_extension":
             return [ButtonPadButton.ArmRetract, ButtonPadButton.ArmExtend];
         case "lift_joint":
             return [ButtonPadButton.ArmLower, ButtonPadButton.ArmLift];
@@ -450,11 +448,11 @@ function getButtonsFromJointName(
                 ButtonPadButton.WristRotateIn,
             ];
         case "translate_mobile_base":
-            return [ButtonPadButton.BaseForward, ButtonPadButton.BaseReverse];
+            return [ButtonPadButton.BaseReverse, ButtonPadButton.BaseForward];
         case "rotate_mobile_base":
             return [
-                ButtonPadButton.BaseRotateLeft,
                 ButtonPadButton.BaseRotateRight,
+                ButtonPadButton.BaseRotateLeft,
             ];
         default:
             return undefined;

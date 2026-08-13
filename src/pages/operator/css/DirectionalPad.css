@@ -141,6 +141,50 @@
 
 /* END <button> active */
 
+/* Collision and Limit button state styles */
+.button-wrapper div.button-cardinal.collision,
+.button-wrapper.collision div.button-cardinal,
+.button-turn-wrapper.collision button {
+    background-color: rgba(255, 165, 0, 0.4) !important;
+    background: rgba(255, 165, 0, 0.4) !important;
+    mix-blend-mode: normal !important;
+    cursor: not-allowed !important;
+}
+
+.button-wrapper div.button-cardinal.limit,
+.button-wrapper.limit div.button-cardinal,
+.button-turn-wrapper.limit button {
+    background-color: rgba(255, 0, 0, 0.4) !important;
+    background: rgba(255, 0, 0, 0.4) !important;
+    mix-blend-mode: normal !important;
+    cursor: not-allowed !important;
+}
+
+/* Ensure foreground icon buttons stay transparent so brightness filter does not wash out red/orange background */
+.button-wrapper button.button-arm-gripper.collision,
+.button-wrapper button.button-arm-gripper.limit,
+.button-wrapper button.button-wrist.collision,
+.button-wrapper button.button-wrist.limit,
+.button-wrapper button.button-chevron.collision,
+.button-wrapper button.button-chevron.limit,
+.button-wrapper.collision button,
+.button-wrapper.limit button {
+    background-color: transparent !important;
+    background: transparent !important;
+    filter: none !important;
+    cursor: not-allowed !important;
+}
+
+/* Crisp white icon image sitting on top of the red/orange button background */
+.button-wrapper.limit img,
+.button-wrapper.collision img,
+.button-turn-wrapper.limit img,
+.button-turn-wrapper.collision img,
+button.limit img,
+button.collision img {
+    filter: saturate(0) brightness(3) !important;
+}
+
 .button-wrapper div.button-cardinal span.synthetic-bottom-border {
     position: absolute;
     top: 0;
