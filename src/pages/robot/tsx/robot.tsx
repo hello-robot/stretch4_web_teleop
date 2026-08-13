@@ -25,6 +25,8 @@ import {
     ValidJoints,
     VideoProps,
     JOINT_VELOCITIES,
+    getPlaybackJointVelocity,
+    getPlaybackJointVelocities,
 } from "shared/util";
 import {
     RobotPose,
@@ -1141,7 +1143,7 @@ export class Robot extends React.Component {
                 const currentPos = this.getJointValue(jointName);
                 if (currentPos !== undefined && !isNaN(currentPos)) {
                     const distance = Math.abs(targetPos - currentPos);
-                    const velocityLimit = JOINT_VELOCITIES[jointName] || 0.1; // fallback speed
+                    const velocityLimit = getPlaybackJointVelocity(jointName);
 
                     if (velocityLimit > 0) {
                         const jointDuration = distance / velocityLimit;
@@ -1176,6 +1178,8 @@ export class Robot extends React.Component {
 
         if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
 
+        const playbackVelocities = getPlaybackJointVelocities(jointNames);
+
         return {
             trajectory: {
                 header: {
@@ -1185,7 +1189,13 @@ export class Robot extends React.Component {
                 points: [
                     {
                         positions: jointPositions,
-                        time_from_start: { secs, nsecs },
+                        velocities: playbackVelocities,
+                        time_from_start: {
+                            sec: secs,
+                            nanosec: nsecs,
+                            secs: secs,
+                            nsecs: nsecs,
+                        },
                     },
                 ],
             },
@@ -1216,7 +1226,7 @@ export class Robot extends React.Component {
 
                     if (targetPos !== undefined && currentPos !== undefined && !isNaN(currentPos)) {
                         const distance = Math.abs(targetPos - currentPos);
-                        const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
+                        const velocityLimit = getPlaybackJointVelocity(name);
                         if (velocityLimit > 0) {
                             segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
                         }
@@ -1229,7 +1239,7 @@ export class Robot extends React.Component {
 
                     if (targetPos !== undefined && prevPos !== undefined) {
                         const distance = Math.abs(targetPos - prevPos);
-                        const velocityLimit = JOINT_VELOCITIES[name] || 0.1;
+                        const velocityLimit = getPlaybackJointVelocity(name);
                         if (velocityLimit > 0) {
                             segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
                         }
@@ -1247,9 +1257,17 @@ export class Robot extends React.Component {
                 nsecs = 0;
             }
 
+            const jointVelocities = getPlaybackJointVelocities(jointNames);
+
             points.push({
                 positions: jointPositions,
-                time_from_start: { secs, nsecs },
+                velocities: jointVelocities,
+                time_from_start: {
+                    sec: secs,
+                    nanosec: nsecs,
+                    secs: secs,
+                    nsecs: nsecs,
+                },
             });
         });
 
