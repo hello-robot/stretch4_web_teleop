@@ -185,6 +185,7 @@ def generate_launch_description():
             "broadcast_odom_tf": "True",
             "fail_out_of_range_goal": "False",
             "log_level": "info",
+            "action_timeout": "30.0",
         }.items(),
     )
     ld.add_action(stretch_driver_launch)
