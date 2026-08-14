@@ -25,7 +25,6 @@ import {
     setVoiceStatus,
     useVoiceStatus,
 } from "../voice/voiceStatusStore";
-import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
 import { MapFunction } from "./AutoNav";
 
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
