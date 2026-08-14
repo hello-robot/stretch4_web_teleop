@@ -4,7 +4,28 @@
  * Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
  */
 
+import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
+import {
+    EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
+    EXECUTE_MACRO,
+    isPlaceholderArgs,
+    MIC_HEALTH_STATUS_SLUG,
+    NO_ARG_VOICE_TOOLS,
+    STOP_MOTION,
+    VOICE_ASLEEP_TOOL_DEFER_MS,
+    VOICE_DURATION_MS_DEFAULT,
+    VOICE_SPEED_DEFAULT,
+    VOICE_STOP_KEYWORDS,
+    VOICE_TOOLS,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    type ExecuteToolResult,
+    type VoiceMoveExecutionMode,
+    type VoiceSpeed,
+    type VoiceToolName,
+} from "./constants";
 import {
     clearLastVoiceBaseMove,
     executeBaseMoveOnProvider,
@@ -12,38 +33,17 @@ import {
     setVoiceMoveExecutionContext,
 } from "./executeBaseMove";
 import {
-    executeMacroOnProvider,
     executeJointMoveOnProvider,
+    executeMacroOnProvider,
     executeStopMotionOnProvider,
 } from "./executeJointMove";
-import {
-    EXECUTE_BASE_MOVE,
-    EXECUTE_JOINT_MOVE,
-    EXECUTE_MACRO,
-    isPlaceholderArgs,
-    NO_ARG_VOICE_TOOLS,
-    STOP_MOTION,
-    type ExecuteToolResult,
-    type VoiceSpeed,
-    type VoiceMoveExecutionMode,
-    type VoiceToolName,
-    MIC_HEALTH_STATUS_SLUG,
-    VOICE_SPEED_DEFAULT,
-    VOICE_DURATION_MS_DEFAULT,
-    VOICE_TOOLS,
-    VOICE_ASLEEP_TOOL_DEFER_MS,
-    VOICE_STOP_KEYWORDS,
-    VOICE_WAKE_PHRASE_DISPLAY,
-    VOICE_WAKE_PHRASE_ALT_DISPLAY,
-} from "./constants";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
+import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
     createVoiceWakeSleep,
     type VoiceListeningState,
     type VoiceWakeSleep,
 } from "./voiceWakeSleep";
-import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
-import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
@@ -573,7 +573,9 @@ export async function connectOpenAIRealtimeVoice(
 
     pc.ontrack = () => { };
 
-    let inputStream = await getUserMediaWithPrivilegeLog();
+    let inputStream = await navigator.mediaDevices.getUserMedia({
+        audio: MIC_AUDIO_CONSTRAINTS,
+    });
 
     const syncMicCaptureFromInputStream = () => {
         logMicCaptureConnected(streamHasLiveAudio(inputStream));
@@ -590,6 +592,7 @@ export async function connectOpenAIRealtimeVoice(
     };
     bindInputStreamEnded(inputStream);
     syncMicCaptureFromInputStream();
+
 
     let voiceWakeSleep: VoiceWakeSleep | undefined;
 
@@ -790,7 +793,7 @@ export async function connectOpenAIRealtimeVoice(
 
                 opts.onLog?.(
                     "[Realtime] reacquiring getUserMedia" +
-                        (fromUserGesture ? " (user gesture)" : ""),
+                    (fromUserGesture ? " (user gesture)" : ""),
                 );
                 await reacquireMicStream(fromUserGesture);
             } catch (e) {
