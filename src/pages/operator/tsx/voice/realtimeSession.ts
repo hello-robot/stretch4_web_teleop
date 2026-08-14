@@ -4,7 +4,28 @@
  * Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
  */
 
+import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
+import {
+    EXECUTE_BASE_MOVE,
+    EXECUTE_JOINT_MOVE,
+    EXECUTE_MACRO,
+    isPlaceholderArgs,
+    MIC_HEALTH_STATUS_SLUG,
+    NO_ARG_VOICE_TOOLS,
+    STOP_MOTION,
+    VOICE_ASLEEP_TOOL_DEFER_MS,
+    VOICE_DURATION_MS_DEFAULT,
+    VOICE_SPEED_DEFAULT,
+    VOICE_STOP_KEYWORDS,
+    VOICE_TOOLS,
+    VOICE_WAKE_PHRASE_ALT_DISPLAY,
+    VOICE_WAKE_PHRASE_DISPLAY,
+    type ExecuteToolResult,
+    type VoiceMoveExecutionMode,
+    type VoiceSpeed,
+    type VoiceToolName,
+} from "./constants";
 import {
     clearLastVoiceBaseMove,
     executeBaseMoveOnProvider,
@@ -12,40 +33,72 @@ import {
     setVoiceMoveExecutionContext,
 } from "./executeBaseMove";
 import {
-    executeMacroOnProvider,
     executeJointMoveOnProvider,
+    executeMacroOnProvider,
     executeStopMotionOnProvider,
 } from "./executeJointMove";
-import {
-    EXECUTE_BASE_MOVE,
-    EXECUTE_JOINT_MOVE,
-    EXECUTE_MACRO,
-    isPlaceholderArgs,
-    NO_ARG_VOICE_TOOLS,
-    STOP_MOTION,
-    type ExecuteToolResult,
-    type VoiceSpeed,
-    type VoiceMoveExecutionMode,
-    type VoiceToolName,
-    VOICE_SPEED_DEFAULT,
-    VOICE_DURATION_MS_DEFAULT,
-    VOICE_TOOLS,
-    VOICE_ASLEEP_TOOL_DEFER_MS,
-    VOICE_STOP_KEYWORDS,
-    VOICE_WAKE_PHRASE_DISPLAY,
-    VOICE_WAKE_PHRASE_ALT_DISPLAY,
-} from "./constants";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
+import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
     createVoiceWakeSleep,
     type VoiceListeningState,
     type VoiceWakeSleep,
 } from "./voiceWakeSleep";
-import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
-import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
+
+export type MicHealthStatusEvent =
+    | "User access granted"
+    | "User access rejected"
+    | "Connected"
+    | "Disconnected"
+    | "Muted"
+    | "Unmuted";
+
+/** Last logged privilege — avoids spam on connect-retry after denial. */
+let lastMicPrivilege: "granted" | "rejected" | null = null;
+/** Last logged capture connectedness (live input track). */
+let lastMicCaptureConnected: boolean | null = null;
+
+export function logMicHealthStatus(event: MicHealthStatusEvent): void {
+    console.log(`${MIC_HEALTH_STATUS_SLUG} ${event}`);
+}
+
+function logMicPrivilege(granted: boolean): void {
+    const next = granted ? "granted" : "rejected";
+    if (lastMicPrivilege === next) {
+        return;
+    }
+    lastMicPrivilege = next;
+    logMicHealthStatus(
+        granted ? "User access granted" : "User access rejected",
+    );
+}
+
+function logMicCaptureConnected(connected: boolean): void {
+    if (lastMicCaptureConnected === connected) {
+        return;
+    }
+    lastMicCaptureConnected = connected;
+    logMicHealthStatus(connected ? "Connected" : "Disconnected");
+}
+
+function isMicPermissionDenied(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    return (
+        error.name === "NotAllowedError" ||
+        error.name === "PermissionDeniedError"
+    );
+}
+
+function streamHasLiveAudio(stream: MediaStream): boolean {
+    return stream
+        .getAudioTracks()
+        .some((t) => t.readyState === "live");
+}
 
 const sleepMs = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -402,6 +455,22 @@ const MIC_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
     autoGainControl: true,
 };
 
+/** getUserMedia with privilege transition logs (granted / rejected only). */
+async function getUserMediaWithPrivilegeLog(): Promise<MediaStream> {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: MIC_AUDIO_CONSTRAINTS,
+        });
+        logMicPrivilege(true);
+        return stream;
+    } catch (error) {
+        if (isMicPermissionDenied(error)) {
+            logMicPrivilege(false);
+        }
+        throw error;
+    }
+}
+
 function isIosLike(): boolean {
     const ua = navigator.userAgent;
     if (/iPad|iPhone|iPod/.test(ua)) {
@@ -508,6 +577,23 @@ export async function connectOpenAIRealtimeVoice(
         audio: MIC_AUDIO_CONSTRAINTS,
     });
 
+    const syncMicCaptureFromInputStream = () => {
+        logMicCaptureConnected(streamHasLiveAudio(inputStream));
+    };
+    const bindInputStreamEnded = (stream: MediaStream) => {
+        for (const track of stream.getAudioTracks()) {
+            track.addEventListener("ended", () => {
+                if (stream !== inputStream) {
+                    return;
+                }
+                syncMicCaptureFromInputStream();
+            });
+        }
+    };
+    bindInputStreamEnded(inputStream);
+    syncMicCaptureFromInputStream();
+
+
     let voiceWakeSleep: VoiceWakeSleep | undefined;
 
     /** Cleared on wake so trailing STT events from the same utterance are ignored. */
@@ -591,9 +677,7 @@ export async function connectOpenAIRealtimeVoice(
         }
         // Kick off getUserMedia before any await — iOS drops the Unmute gesture
         // if we await AudioContext.resume() first.
-        const gumPromise = navigator.mediaDevices.getUserMedia({
-            audio: MIC_AUDIO_CONSTRAINTS,
-        });
+        const gumPromise = getUserMediaWithPrivilegeLog();
         if (!fromUserGesture) {
             resetSvcToSafeDefaults();
         }
@@ -610,6 +694,9 @@ export async function connectOpenAIRealtimeVoice(
         });
         micGate?.stop();
         inputStream = nextStream;
+        bindInputStreamEnded(inputStream);
+        // After swap — avoid a false Disconnected while the old track stops.
+        syncMicCaptureFromInputStream();
         micGate = await createMicLevelGate(inputStream, micGateOptions());
         micGate.setForceClosed(micMutedIntent);
 
@@ -680,6 +767,7 @@ export async function connectOpenAIRealtimeVoice(
                         t.stop();
                     });
                     micGate?.stop();
+                    syncMicCaptureFromInputStream();
                     if (audioSender) {
                         await audioSender.replaceTrack(null);
                     }
@@ -705,7 +793,7 @@ export async function connectOpenAIRealtimeVoice(
 
                 opts.onLog?.(
                     "[Realtime] reacquiring getUserMedia" +
-                        (fromUserGesture ? " (user gesture)" : ""),
+                    (fromUserGesture ? " (user gesture)" : ""),
                 );
                 await reacquireMicStream(fromUserGesture);
             } catch (e) {
@@ -1129,6 +1217,7 @@ export async function connectOpenAIRealtimeVoice(
         inputStream.getTracks().forEach((t) => {
             t.stop();
         });
+        syncMicCaptureFromInputStream();
         pc.close();
         opts.onStatus?.("Disconnected");
     }

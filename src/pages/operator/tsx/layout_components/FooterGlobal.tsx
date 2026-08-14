@@ -19,12 +19,12 @@ import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider"
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
 import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
+import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
 import {
     getVoiceStatusSnapshot,
     setVoiceStatus,
     useVoiceStatus,
 } from "../voice/voiceStatusStore";
-import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
 import { MapFunction } from "./AutoNav";
 
 /** Menu tiles that run an action without changing the selected scene/footer label. */

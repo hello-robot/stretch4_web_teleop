@@ -233,6 +233,13 @@ export function matchesSleepPhrase(normalized: string): boolean {
     );
 }
 
+/** Console tag shared by VoiceCommandAssistant logs and mic-health status lines. */
+export const VOICE_ASSISTANT_LOG_TAG = "VoiceCommandAssistant";
+/** e.g. `[VoiceCommandAssistant]` — general voice assistant console prefix. */
+export const VOICE_ASSISTANT_LOG_SLUG = `[${VOICE_ASSISTANT_LOG_TAG}]`;
+/** e.g. `[VoiceCommandAssistant microphone health status]` — mic privilege/capture/mute. */
+export const MIC_HEALTH_STATUS_SLUG = `[${VOICE_ASSISTANT_LOG_TAG} microphone health status]`;
+
 /** Auto-sleep when awake and robot motion idle for this long (ms). */
 export const VOICE_AUTO_SLEEP_IDLE_MS = 60_000;
 
