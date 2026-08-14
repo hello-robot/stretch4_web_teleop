@@ -144,23 +144,28 @@
 /* Collision and Limit button state styles */
 .button-wrapper div.button-cardinal.collision,
 .button-wrapper.collision div.button-cardinal,
-.button-turn-wrapper.collision button {
-    background-color: rgba(255, 165, 0, 0.4) !important;
-    background: rgba(255, 165, 0, 0.4) !important;
+.button-turn-wrapper.collision {
+    background-color: rgba(255, 165, 0, 1.0) !important;
+    background: rgba(255, 165, 0, 1.0) !important;
     mix-blend-mode: normal !important;
     cursor: not-allowed !important;
+    filter: none !important;
 }
 
 .button-wrapper div.button-cardinal.limit,
 .button-wrapper.limit div.button-cardinal,
-.button-turn-wrapper.limit button {
-    background-color: rgba(255, 0, 0, 0.4) !important;
-    background: rgba(255, 0, 0, 0.4) !important;
+.button-turn-wrapper.limit {
+    background-color: #ff0000 !important;
+    background: #ff0000 !important;
     mix-blend-mode: normal !important;
     cursor: not-allowed !important;
+    filter: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
 }
 
-/* Ensure foreground icon buttons stay transparent so brightness filter does not wash out red/orange background */
+/* Ensure foreground icon buttons stay transparent so brightness filter does not
+ wash out red/orange background */
 .button-wrapper button.button-arm-gripper.collision,
 .button-wrapper button.button-arm-gripper.limit,
 .button-wrapper button.button-wrist.collision,
@@ -168,11 +173,17 @@
 .button-wrapper button.button-chevron.collision,
 .button-wrapper button.button-chevron.limit,
 .button-wrapper.collision button,
-.button-wrapper.limit button {
+.button-wrapper.limit button,
+.button-turn-wrapper.collision button,
+.button-turn-wrapper.limit button,
+.button-turn-wrapper.limit button:disabled,
+.button-turn-wrapper.collision button:disabled {
     background-color: transparent !important;
     background: transparent !important;
     filter: none !important;
     cursor: not-allowed !important;
+    box-shadow: none !important;
+    z-index: 10 !important;
 }
 
 /* Crisp white icon image sitting on top of the red/orange button background */
@@ -183,6 +194,15 @@
 button.limit img,
 button.collision img {
     filter: saturate(0) brightness(3) !important;
+    z-index: 11 !important;
+    position: relative !important;
+    opacity: 1 !important;
+}
+
+/* Grey out icons for disabled buttons */
+.base-movement-controls button:disabled img {
+    filter: saturate(0) brightness(1.5) !important;
+    opacity: 0.3 !important;
 }
 
 .button-wrapper div.button-cardinal span.synthetic-bottom-border {

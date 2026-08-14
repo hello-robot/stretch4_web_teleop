@@ -65,18 +65,21 @@
     fill: var(--btn-turquoise);
 }
 
-.button-pads .collision,
 .button-pads path.collision {
     fill: orange;
-    fill-opacity: 40%;
-    background-color: rgba(255, 165, 0, 0.4) !important;
+    fill-opacity: 100%;
+    background-color: rgba(255, 165, 0, 1.0) !important;
 }
 
-.button-pads .limit,
 .button-pads path.limit {
     fill: red;
-    fill-opacity: 40%;
-    background-color: rgba(255, 0, 0, 0.4) !important;
+    fill-opacity: 100%;
+    background-color: rgba(255, 0, 0, 1.0) !important;
+}
+
+.button-pads image.collision,
+.button-pads image.limit {
+    filter: saturate(0) brightness(3) !important;
 }
 
 /* When buttons are disabled... */

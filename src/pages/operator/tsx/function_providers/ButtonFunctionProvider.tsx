@@ -105,62 +105,58 @@ export class ButtonFunctionProvider extends FunctionProvider {
             new Set([...Object.keys(inCollision), ...Object.keys(inJointLimit)])
         ) as ValidJoints[];
 
+        const targetButtonStates = new Map<ButtonPadButton, ButtonState>();
+
         allJointKeys.forEach((key) => {
             const buttons = getButtonsFromJointName(key);
             if (!buttons) return;
 
             const [buttonNeg, buttonPos] = buttons;
-
             const collisionTuple = inCollision[key];
             const limitTuple = inJointLimit[key];
-
-            const getNewState = (
-                isCollision?: boolean,
-                isWithinLimit?: boolean,
-                currentButton?: ButtonPadButton
-            ): ButtonState => {
-                if (isCollision === true) {
-                    return ButtonState.Collision;
-                }
-                if (isWithinLimit === false) {
-                    return ButtonState.Limit;
-                }
-                const currentState = currentButton
-                    ? this.buttonStateMap.get(currentButton)
-                    : undefined;
-                if (
-                    currentState === ButtonState.Collision ||
-                    currentState === ButtonState.Limit
-                ) {
-                    return ButtonState.Inactive;
-                }
-                return currentState || ButtonState.Inactive;
-            };
 
             const [inCollisionNeg, inCollisionPos] = collisionTuple || [];
             const [inLimitNeg, inLimitPos] = limitTuple || [];
 
-            if (collisionTuple !== undefined || limitTuple !== undefined) {
-                const newNegState = getNewState(
-                    inCollisionNeg,
-                    inLimitNeg,
-                    buttonNeg
-                );
-                const newPosState = getNewState(
-                    inCollisionPos,
-                    inLimitPos,
-                    buttonPos
-                );
+            const updateTargetState = (
+                btn: ButtonPadButton,
+                isCollision?: boolean,
+                isWithinLimit?: boolean
+            ) => {
+                const currentTarget = targetButtonStates.get(btn) || ButtonState.Inactive;
 
-                if (newNegState !== ButtonState.Inactive) {
-                    console.log(`[ButtonProvider] Setting ${buttonNeg} (${key} neg) to state: ${newNegState}`);
+                if (isCollision === true) {
+                    targetButtonStates.set(btn, ButtonState.Collision);
+                } else if (isWithinLimit === false && currentTarget !== ButtonState.Collision) {
+                    targetButtonStates.set(btn, ButtonState.Limit);
                 }
-                if (newPosState !== ButtonState.Inactive) {
-                    console.log(`[ButtonProvider] Setting ${buttonPos} (${key} pos) to state: ${newPosState}`);
-                }
+            };
 
-                this.buttonStateMap.set(buttonNeg, newNegState);
-                this.buttonStateMap.set(buttonPos, newPosState);
+            updateTargetState(buttonNeg, inCollisionNeg, inLimitNeg);
+            updateTargetState(buttonPos, inCollisionPos, inLimitPos);
+        });
+
+        const buttonsToUpdate = new Set([
+            ...Array.from(targetButtonStates.keys()),
+            ...Array.from(this.buttonStateMap.keys()).filter(k => 
+                this.buttonStateMap.get(k) === ButtonState.Collision || 
+                this.buttonStateMap.get(k) === ButtonState.Limit
+            )
+        ]);
+
+        buttonsToUpdate.forEach(btn => {
+            const targetState = targetButtonStates.get(btn) || ButtonState.Inactive;
+            const currentState = this.buttonStateMap.get(btn) || ButtonState.Inactive;
+            
+            if (targetState === ButtonState.Collision || targetState === ButtonState.Limit) {
+                if (currentState !== targetState) {
+                    console.log(`[ButtonProvider] Setting ${btn} to state: ${targetState}`);
+                    this.buttonStateMap.set(btn, targetState);
+                }
+            } else {
+                if (currentState === ButtonState.Collision || currentState === ButtonState.Limit) {
+                    this.buttonStateMap.set(btn, ButtonState.Inactive);
+                }
             }
         });
 

@@ -363,11 +363,13 @@ export class Robot extends React.Component {
             robotPose["arm_joint"] = this.getJointValue("arm_joint");
             let jointValues: ValidJointStateDict = {};
             let effortValues: ValidJointStateDict = {};
-            this.jointState.name.forEach((name?: ValidJoints) => {
+            const jointsToEvaluate = new Set([...this.jointState.name as ValidJoints[], "arm_joint" as ValidJoints, "wrist_extension" as ValidJoints]);
+            jointsToEvaluate.forEach((name?: ValidJoints) => {
+                if (!name) return;
                 let inLimits = this.inJointLimits(name);
                 let collision = this.inCollision(name);
-                if (inLimits) jointValues[name!] = inLimits;
-                if (collision) effortValues[name!] = collision;
+                if (inLimits) jointValues[name] = inLimits;
+                if (collision) effortValues[name] = collision;
             });
 
             if (this.jointStateCallback)
