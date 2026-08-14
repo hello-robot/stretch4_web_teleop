@@ -17,7 +17,6 @@ import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
 import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
-import { MapFunction } from "./AutoNav";
 import { ActionState } from "shared/util";
 import {
     getVoiceStatusSnapshot,
@@ -26,6 +25,7 @@ import {
 } from "../voice/voiceStatusStore";
 import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
+import { MapFunction } from "./AutoNav";
 
 /** Menu tiles that run an action without changing the selected scene/footer label. */
 const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco", "reload-app"]);

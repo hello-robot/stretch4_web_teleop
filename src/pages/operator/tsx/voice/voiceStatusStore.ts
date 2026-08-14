@@ -7,7 +7,10 @@
  */
 
 import { useSyncExternalStore } from "react";
-import type { VoiceListeningState } from "./realtimeSession";
+import {
+    logMicHealthStatus,
+    type VoiceListeningState,
+} from "./realtimeSession";
 
 export type VoiceStatusSnapshot = {
     /** Realtime session is up. */
@@ -75,7 +78,11 @@ export function setVoiceStatus(
     ) {
         return;
     }
+    const micMutedChanged = next.micMuted !== snapshot.micMuted;
     snapshot = next;
+    if (micMutedChanged) {
+        logMicHealthStatus(next.micMuted ? "Muted" : "Unmuted");
+    }
     emit();
 }
 

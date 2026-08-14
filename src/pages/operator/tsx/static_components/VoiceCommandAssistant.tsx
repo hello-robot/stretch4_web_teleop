@@ -24,6 +24,7 @@ import { registerVoiceMicRecover } from "../voice/voiceMicRecoverBridge";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
+    VOICE_ASSISTANT_LOG_SLUG,
     VOICE_AUTO_MUTE_ENABLED,
     VOICE_AUTO_MUTE_IDLE_MS,
     VOICE_AUTO_SLEEP_POLL_MS,
@@ -269,7 +270,7 @@ export const VoiceCommandAssistant = ({
                         lg.includes("user transcript") ||
                         isVoiceToolLogLine(lg)
                     ) {
-                        console.log("[VoiceCommandAssistant]", lg.slice(0, 240));
+                        console.log(VOICE_ASSISTANT_LOG_SLUG, lg.slice(0, 240));
                     }
                 },
                 onMicLevel: (_level, gateOpen) => {
@@ -294,7 +295,7 @@ export const VoiceCommandAssistant = ({
             setVoiceStatus({ connected: true });
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            console.error("[VoiceCommandAssistant] connect failed", e);
+            console.error(`${VOICE_ASSISTANT_LOG_SLUG} connect failed`, e);
             setVoiceMoveExecutionContext(undefined);
             phaseSet("error");
             registerVoiceMicRecover(null);
