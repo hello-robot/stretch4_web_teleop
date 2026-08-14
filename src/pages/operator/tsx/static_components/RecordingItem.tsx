@@ -162,7 +162,7 @@ const RecordingItem: React.FC<RecordingItemProps> = ({
     const playback = useCallback(async (idxFixed) => {
         setCameraVeilCallback(true);
         closeModal();
-        
+
         // 1. Set optimistic state immediately so the Stop button renders 0ms after tap
         idxFixedRecordingPlayingSet(idxFixed);
         // 2. Call playback immediately (awaiting mode switch if async)
