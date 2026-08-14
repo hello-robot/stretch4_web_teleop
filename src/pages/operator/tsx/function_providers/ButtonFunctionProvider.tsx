@@ -138,8 +138,8 @@ export class ButtonFunctionProvider extends FunctionProvider {
 
         const buttonsToUpdate = new Set([
             ...Array.from(targetButtonStates.keys()),
-            ...Array.from(this.buttonStateMap.keys()).filter(k => 
-                this.buttonStateMap.get(k) === ButtonState.Collision || 
+            ...Array.from(this.buttonStateMap.keys()).filter(k =>
+                this.buttonStateMap.get(k) === ButtonState.Collision ||
                 this.buttonStateMap.get(k) === ButtonState.Limit
             )
         ]);
@@ -147,7 +147,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
         buttonsToUpdate.forEach(btn => {
             const targetState = targetButtonStates.get(btn) || ButtonState.Inactive;
             const currentState = this.buttonStateMap.get(btn) || ButtonState.Inactive;
-            
+
             if (targetState === ButtonState.Collision || targetState === ButtonState.Limit) {
                 if (currentState !== targetState) {
                     console.log(`[ButtonProvider] Setting ${btn} to state: ${targetState}`);

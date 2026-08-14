@@ -68,13 +68,13 @@
 .button-pads path.collision {
     fill: orange;
     fill-opacity: 100%;
-    background-color: rgba(255, 165, 0, 1.0) !important;
+    background-color: rgba(255, 165, 0, 1) !important;
 }
 
 .button-pads path.limit {
     fill: red;
     fill-opacity: 100%;
-    background-color: rgba(255, 0, 0, 1.0) !important;
+    background-color: rgba(255, 0, 0, 1) !important;
 }
 
 .button-pads image.collision,

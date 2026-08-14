@@ -145,8 +145,8 @@
 .button-wrapper div.button-cardinal.collision,
 .button-wrapper.collision div.button-cardinal,
 .button-turn-wrapper.collision {
-    background-color: rgba(255, 165, 0, 1.0) !important;
-    background: rgba(255, 165, 0, 1.0) !important;
+    background-color: rgba(255, 165, 0, 0.4) !important;
+    background: rgba(255, 165, 0, 0.4) !important;
     mix-blend-mode: normal !important;
     cursor: not-allowed !important;
     filter: none !important;
@@ -155,8 +155,8 @@
 .button-wrapper div.button-cardinal.limit,
 .button-wrapper.limit div.button-cardinal,
 .button-turn-wrapper.limit {
-    background-color: #ff0000 !important;
-    background: #ff0000 !important;
+    background-color: rgba(255, 0, 0, 0.4) !important;
+    background: rgba(255, 0, 0, 0.4) !important;
     mix-blend-mode: normal !important;
     cursor: not-allowed !important;
     filter: none !important;
