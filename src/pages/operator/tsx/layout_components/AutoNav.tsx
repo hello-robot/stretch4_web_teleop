@@ -1,13 +1,23 @@
-import React, { useEffect, useState, Dispatch, SetStateAction } from 'react'
+import React, {
+    useEffect,
+    useRef,
+    useState,
+    Dispatch,
+    SetStateAction,
+} from 'react'
 import { Canvas } from "../static_components/Canvas";
 import { Map } from './Map';
 import { ComponentType, MapDefinition } from '../utils/component_definitions';
 import { SharedState } from './CustomizableComponent';
 import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
 import type { AddToastFn } from './Toasts';
-import { mapFunctionProvider } from 'operator/tsx/index';
+import {
+    isOccupancyGridReady,
+    mapFunctionProvider,
+    subscribeOccupancyGridReady,
+    underMapFunctionProvider,
+} from 'operator/tsx/index';
 import { OccupancyGrid } from '../static_components/OccupancyGrid';
-import { underMapFunctionProvider } from 'operator/tsx/index';
 import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
 import {
     ActionState,
@@ -110,6 +120,10 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // OccupancyGrid instance for map and marker operations
     const [occupancyGrid, occupancyGridSet] = useState<OccupancyGrid>();
+    // Full WebRTC map reassembly (chunked for large grids)
+    const [mapReady, mapReadySet] = useState<boolean>(() => isOccupancyGridReady());
+    // Paint the canvas once per browser session (AutoNav stays mounted across scenes)
+    const mapInitializedRef = useRef(false);
 
     // Subscribe to goal position updates from the OccupancyGrid
     useEffect(() => {
@@ -123,6 +137,12 @@ const AutoNav: React.FC<AutoNavProps> = ({
             if (unsubscribeOnUnmount) unsubscribeOnUnmount();
         };
     }, [occupancyGrid]);
+
+    useEffect(() => {
+        return subscribeOccupancyGridReady(() => {
+            mapReadySet(true);
+        });
+    }, []);
 
     /**
      * All navigation-related functions, provided by underMapFunctionProvider.
@@ -277,34 +297,38 @@ const AutoNav: React.FC<AutoNavProps> = ({
     }, [moveBaseState, occupancyGrid]);
 
     /**
-     * On mount, create the canvas and OccupancyGrid for the map.
-     * This sets up the map rendering and interaction logic.
+     * Create the canvas and OccupancyGrid once the full map has arrived.
+     * AutoNav stays mounted across Pilot/AutoNav switches, so this runs once
+     * per browser session (not on every visit to AutoNav).
      */
     useEffect(() => {
-        let map = mapFn.GetMap;
-        let width = map ? map.info.width : 60;
-        let height = map ? map.info.height : 100;
-        var canvas = new Canvas({
+        if (!mapReady || mapInitializedRef.current) return;
+        if (!document.getElementById("map")) return;
+
+        const map = mapFn.GetMap;
+        if (!map) return;
+
+        mapInitializedRef.current = true;
+        const width = map.info.width;
+        const height = map.info.height;
+        const canvas = new Canvas({
             divID: "map",
             className: "mapCanvas",
             width: width * 5, // Scale width to avoid blurriness when making map larger
             height: height * 5, // Scale height to avoid blurriness when making map larger
         });
-        var occupancyGrid = new OccupancyGrid({
+        const grid = new OccupancyGrid({
             functs: mapFn,
             rootObject: canvas.scene!,
         });
-        canvas.scaleToDimensions(
-            occupancyGrid.width,
-            occupancyGrid.height,
-        );
+        canvas.scaleToDimensions(grid.width, grid.height);
         // Stage scale is applied above; refresh so markers use the real scale.
-        occupancyGrid.refreshMarkerScales();
-        occupancyGridSet(occupancyGrid);
+        grid.refreshMarkerScales();
+        occupancyGridSet(grid);
         return () => {
-            occupancyGrid.dispose();
+            grid.dispose();
         };
-    }, []);
+    }, [mapReady]);
 
     // Show friendly, helpful toast when
     // user dives into the AutoNav UX
@@ -321,6 +345,13 @@ const AutoNav: React.FC<AutoNavProps> = ({
         <div className='auto-nav'>
             <div className="map-wrapper">
                 <Map />
+                {!mapReady && (
+                    // Loading spinner
+                    <div className="map-loading-overlay" aria-busy="true">
+                        <div className="loader" aria-hidden="true" />
+                        <div className="loading-text"></div>
+                    </div>
+                )}
             </div>
             <FooterAutoNav
                 handleSelectGoal={handleSelectGoal}
