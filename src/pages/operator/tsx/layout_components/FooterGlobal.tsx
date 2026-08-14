@@ -25,6 +25,7 @@ import {
     useVoiceStatus,
 } from "../voice/voiceStatusStore";
 import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
+import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
 
 /** Menu tiles that run an action without changing the selected scene/footer label. */
 const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco", "reload-app"]);
@@ -134,10 +135,12 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "Toggle microphone uplink to OpenAI",
                 onClick: () => {
                     const nextMuted = !getVoiceStatusSnapshot().micMuted;
+                    setVoiceStatus({ micMuted: nextMuted });
                     if (!nextMuted) {
                         bumpVoiceCommandActivity();
+                        // Reacquire from this tap — iOS needs the gesture for getUserMedia.
+                        void recoverVoiceMicFromUserGesture();
                     }
-                    setVoiceStatus({ micMuted: nextMuted });
                 },
                 icon: micMuted ? <MicOffIcon /> : <MicIcon />,
                 enabled: voiceConnected,
