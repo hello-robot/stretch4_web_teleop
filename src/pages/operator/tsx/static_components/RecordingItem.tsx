@@ -159,15 +159,15 @@ const RecordingItem: React.FC<RecordingItemProps> = ({
         isEditingSet(false);
     }, [idxFixed, recordingName, functions, recordingsRefresh]);
 
-    // Handler for playback
-    const playback = useCallback((idxFixed) => {
-        setCameraVeilCallback(true)
-        setTimeout(() => {
-            idxFixedRecordingPlayingSet(idxFixed);
-            functions.LoadRecording(idxFixed);
-            // Use a delay to allow for the modal to close before kicking off
-        }, DELAYMS_PLAYBACK_BEFORE_START);
-    }, []);
+    const playback = useCallback(async (idxFixed) => {
+        setCameraVeilCallback(true);
+        closeModal();
+
+        // 1. Set optimistic state immediately so the Stop button renders 0ms after tap
+        idxFixedRecordingPlayingSet(idxFixed);
+        // 2. Call playback immediately (awaiting mode switch if async)
+        await functions.LoadRecording(idxFixed);
+    }, [closeModal, idxFixedRecordingPlayingSet, functions]);
 
     // Side-effects when playback starts/ends
     useEffect(() => {

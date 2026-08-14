@@ -282,6 +282,16 @@ export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     rotate_mobile_base: 0.5,
 };
 
+const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
+
+export function getPlaybackJointVelocity(jointName: ValidJoints): number {
+    return (JOINT_VELOCITIES[jointName] || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
+}
+
+export function getPlaybackJointVelocities(jointNames: ValidJoints[]): number[] {
+    return jointNames.map(getPlaybackJointVelocity);
+}
+
 export const navigationProps = {
     width: 768, // 800,
     height: 768, // 1280,
