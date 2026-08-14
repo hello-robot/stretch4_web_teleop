@@ -26,8 +26,9 @@ import {
 } from "../voice/voiceStatusStore";
 import { MapFunction } from "./AutoNav";
 
+/** Menu tiles that run an action without changing the selected scene/footer label. */
+const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco", "reload-app"]);
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
-const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco"]);
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
     sceneSelected: string;
@@ -140,6 +141,15 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 },
                 icon: micMuted ? <MicOffIcon /> : <MicIcon />,
                 enabled: voiceConnected,
+            },
+            {
+                id: "reload-app",
+                name: "Reload App",
+                description: "Reload the operator page",
+                onClick: () => {
+                    window.location.reload();
+                },
+                enabled: true,
             },
             {
                 id: "finedex-gripper",

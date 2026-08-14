@@ -4,6 +4,10 @@ import sys
 
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
+from launch_ros.actions import Node
+from stretch4_body.core.robot_params import RobotParams
+
+from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
@@ -23,12 +27,12 @@ from launch.substitutions import (
     NotEqualsSubstitution,
     PathJoinSubstitution,
 )
+
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from stretch4_body.core.robot_params import RobotParams
 
 from launch import LaunchDescription
-
 
 def symlinks_to_has_head_cams():
     usb_device_seen = {
@@ -75,7 +79,6 @@ def check_valid_configuration(model, tool, has_head_cams):
             file=sys.stderr,
         )
         sys.exit(1)
-
 
 
 def generate_launch_description():

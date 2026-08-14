@@ -72,7 +72,12 @@
     inset: 0;
     z-index: 0;
     border-radius: inherit;
-    background: linear-gradient(180deg, hsla(204, 100%, 70%, 0.9) 1%, hsla(204, 100%, 50%, 0.5) 40%, hsla(204, 80%, 50%, 1) 100%);
+    background: linear-gradient(
+        180deg,
+        hsla(204, 100%, 70%, 0.9) 1%,
+        hsla(204, 100%, 50%, 0.5) 40%,
+        hsla(204, 80%, 50%, 1) 100%
+    );
     pointer-events: none;
     opacity: 0.9;
 }
