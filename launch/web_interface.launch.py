@@ -5,6 +5,7 @@ import sys
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 from stretch4_body.core.robot_params import RobotParams
 
 from launch import LaunchDescription
@@ -28,11 +29,6 @@ from launch.substitutions import (
     PathJoinSubstitution,
 )
 
-from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
-from stretch4_body.core.robot_params import RobotParams
-
-from launch import LaunchDescription
 
 def symlinks_to_has_head_cams():
     usb_device_seen = {
