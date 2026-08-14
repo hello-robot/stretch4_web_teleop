@@ -27,6 +27,7 @@ import {
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
     type VoiceToolName,
+    MIC_HEALTH_STATUS_SLUG,
     VOICE_SPEED_DEFAULT,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_TOOLS,
@@ -46,6 +47,58 @@ import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
+
+export type MicHealthStatusEvent =
+    | "User access granted"
+    | "User access rejected"
+    | "Connected"
+    | "Disconnected"
+    | "Muted"
+    | "Unmuted";
+
+/** Last logged privilege — avoids spam on connect-retry after denial. */
+let lastMicPrivilege: "granted" | "rejected" | null = null;
+/** Last logged capture connectedness (live input track). */
+let lastMicCaptureConnected: boolean | null = null;
+
+export function logMicHealthStatus(event: MicHealthStatusEvent): void {
+    console.log(`${MIC_HEALTH_STATUS_SLUG} ${event}`);
+}
+
+function logMicPrivilege(granted: boolean): void {
+    const next = granted ? "granted" : "rejected";
+    if (lastMicPrivilege === next) {
+        return;
+    }
+    lastMicPrivilege = next;
+    logMicHealthStatus(
+        granted ? "User access granted" : "User access rejected",
+    );
+}
+
+function logMicCaptureConnected(connected: boolean): void {
+    if (lastMicCaptureConnected === connected) {
+        return;
+    }
+    lastMicCaptureConnected = connected;
+    logMicHealthStatus(connected ? "Connected" : "Disconnected");
+}
+
+function isMicPermissionDenied(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    return (
+        error.name === "NotAllowedError" ||
+        error.name === "PermissionDeniedError"
+    );
+}
+
+function streamHasLiveAudio(stream: MediaStream): boolean {
+    return stream
+        .getAudioTracks()
+        .some((t) => t.readyState === "live");
+}
 
 const sleepMs = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -402,6 +455,22 @@ const MIC_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
     autoGainControl: true,
 };
 
+/** getUserMedia with privilege transition logs (granted / rejected only). */
+async function getUserMediaWithPrivilegeLog(): Promise<MediaStream> {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: MIC_AUDIO_CONSTRAINTS,
+        });
+        logMicPrivilege(true);
+        return stream;
+    } catch (error) {
+        if (isMicPermissionDenied(error)) {
+            logMicPrivilege(false);
+        }
+        throw error;
+    }
+}
+
 function isIosLike(): boolean {
     const ua = navigator.userAgent;
     if (/iPad|iPhone|iPod/.test(ua)) {
@@ -504,9 +573,23 @@ export async function connectOpenAIRealtimeVoice(
 
     pc.ontrack = () => { };
 
-    let inputStream = await navigator.mediaDevices.getUserMedia({
-        audio: MIC_AUDIO_CONSTRAINTS,
-    });
+    let inputStream = await getUserMediaWithPrivilegeLog();
+
+    const syncMicCaptureFromInputStream = () => {
+        logMicCaptureConnected(streamHasLiveAudio(inputStream));
+    };
+    const bindInputStreamEnded = (stream: MediaStream) => {
+        for (const track of stream.getAudioTracks()) {
+            track.addEventListener("ended", () => {
+                if (stream !== inputStream) {
+                    return;
+                }
+                syncMicCaptureFromInputStream();
+            });
+        }
+    };
+    bindInputStreamEnded(inputStream);
+    syncMicCaptureFromInputStream();
 
     let voiceWakeSleep: VoiceWakeSleep | undefined;
 
@@ -591,9 +674,7 @@ export async function connectOpenAIRealtimeVoice(
         }
         // Kick off getUserMedia before any await — iOS drops the Unmute gesture
         // if we await AudioContext.resume() first.
-        const gumPromise = navigator.mediaDevices.getUserMedia({
-            audio: MIC_AUDIO_CONSTRAINTS,
-        });
+        const gumPromise = getUserMediaWithPrivilegeLog();
         if (!fromUserGesture) {
             resetSvcToSafeDefaults();
         }
@@ -610,6 +691,9 @@ export async function connectOpenAIRealtimeVoice(
         });
         micGate?.stop();
         inputStream = nextStream;
+        bindInputStreamEnded(inputStream);
+        // After swap — avoid a false Disconnected while the old track stops.
+        syncMicCaptureFromInputStream();
         micGate = await createMicLevelGate(inputStream, micGateOptions());
         micGate.setForceClosed(micMutedIntent);
 
@@ -680,6 +764,7 @@ export async function connectOpenAIRealtimeVoice(
                         t.stop();
                     });
                     micGate?.stop();
+                    syncMicCaptureFromInputStream();
                     if (audioSender) {
                         await audioSender.replaceTrack(null);
                     }
@@ -1129,6 +1214,7 @@ export async function connectOpenAIRealtimeVoice(
         inputStream.getTracks().forEach((t) => {
             t.stop();
         });
+        syncMicCaptureFromInputStream();
         pc.close();
         opts.onStatus?.("Disconnected");
     }
