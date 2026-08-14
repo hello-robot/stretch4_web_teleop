@@ -17,7 +17,12 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
-    | HomeTheRobotCommand;
+    | HomeTheRobotCommand
+    | SeedLocalizationCommand;
+
+export interface SeedLocalizationCommand {
+    type: "seedLocalization";
+}
 
 export interface VelocityCommand {
     stop: () => void;

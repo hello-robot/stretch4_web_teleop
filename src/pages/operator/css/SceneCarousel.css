@@ -54,6 +54,33 @@
     box-shadow: 0 0 40px 0 #008cea inset;
 }
 
+.scene-carousel-item.status-loading,
+.scene-carousel-item.status-loading:disabled {
+    opacity: 1;
+    cursor: wait;
+    color: hsl(204, 100%, 50%);
+}
+
+.scene-carousel-item.status-success,
+.scene-carousel-item.status-success:disabled {
+    opacity: 1;
+    color: #4ade80;
+}
+
+.scene-carousel-item.status-success .scene-carousel-item-icon {
+    color: #4ade80;
+}
+
+.scene-carousel-item.status-error,
+.scene-carousel-item.status-error:disabled {
+    opacity: 1;
+    color: #f87171;
+}
+
+.scene-carousel-item.status-error .scene-carousel-item-icon {
+    color: #f87171;
+}
+
 .scene-carousel-item-content {
     padding: 24px;
     display: flex;
