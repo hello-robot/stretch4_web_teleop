@@ -128,9 +128,55 @@ export const MobileOperator = (props: {
         }
     }, [sceneSelected]);
 
+    /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
+    const handleCancelAutoNavOnStop =
+        React.useCallback((): ControlAutoNavResult => {
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return controls.cancel();
+        }, []);
 
+    const handleGetAutoNavSavedPoseNames = React.useCallback(():
+        | string[]
+        | null => {
+        if (sceneSelectedRef.current !== "autonav") {
+            return null;
+        }
+        const controls = autoNavNavControlsRef.current;
+        if (!controls) {
+            return null;
+        }
+        return controls.getSavedPoseNames();
+    }, []);
 
-    const alertTimeoutDuration = 5000; // milliseconds
+    const handleLoadAutoNavLocation = React.useCallback(
+        (poseName: string): LoadAutoNavLocationResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav location loading is only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            const result = controls.loadLocation(poseName);
+            return result.ok
+                ? { ok: true, detail: result.detail, label: poseName }
+                : { ok: false, detail: result.detail };
+        },
+        [],
+    );
+    const alertTimeoutDuration = 100; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
