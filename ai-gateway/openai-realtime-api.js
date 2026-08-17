@@ -38,9 +38,13 @@ const {
     SET_SAVED_LOCATIONS_MODAL,
     CONTROL_AUTONAV,
     LOAD_AUTONAV_LOCATION,
+    SET_SAVED_POSES_MODAL,
+    SAVE_POSE,
+    MOVE_TO_POSE,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    SAVED_POSES_MODAL_ACTIONS,
     AUTONAV_NAV_ACTIONS,
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_SLEEP_PHRASE_DISPLAY,
@@ -184,6 +188,11 @@ function buildRealtimeVoiceSessionPayload() {
                 `Do NOT call this tool for "go to the office", "take me to the kitchen", "AutoNav to the office", or any phrase missing "Navigate to".`,
                 `\`label\` must be the place name only after the prefix (e.g. "office", "middle of living room", "front of the kitchen island"). This only loads the pose/goal marker; the user must say "Navigation start" / "Start navigation" / "AutoNav start" separately to navigate.`,
                 `CRITICAL: "Navigate to the living room" → \`${LOAD_AUTONAV_LOCATION}\` with \`label="living room"\`. "Navigate to middle of living room" → \`label="middle of living room"\`. NEVER \`${SWITCH_SCENE}\` for these. Bare "open AutoNav" (no place) → \`${SWITCH_SCENE}\`. "Navigation start" / "Start navigation" / "AutoNav start" → \`${CONTROL_AUTONAV}\` start.`,
+
+                // ── Saved Poses & Poses Commands ────────────────────────────────────────────────────────────
+                `When the user wants to open or close the Saved Poses / Movement Recorder modal, call tool \`${SET_SAVED_POSES_MODAL}\` with \`action\`. Phrases: "open saved poses", "show saved poses", "open pose recorder", "close saved poses".`,
+                `When the user wants to save or bookmark the current pose, call tool \`${SAVE_POSE}\` with \`name\`. Phrases: "save pose as stow", "save pose as look down", "save this pose as grab cup". \`name\` must be the pose name only.`,
+                `When the user wants to move the robot to a saved pose, call tool \`${MOVE_TO_POSE}\` with \`name\`. Phrases: "move to pose stow", "go to pose look down", "play pose stow", "move to pose grab cup". \`name\` must be the pose name only.`,
             ].join(" "),
             tools: [
                 {
@@ -405,6 +414,61 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                         },
                         required: ["label"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: SET_SAVED_POSES_MODAL,
+                    description:
+                        "Open or close the Saved Poses / Movement Recorder modal in the operator UI. Use for requests like 'open saved poses' or 'show pose recorder'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: SAVED_POSES_MODAL_ACTIONS,
+                                description:
+                                    "Whether to open or close the Saved Poses modal.",
+                            },
+                        },
+                        required: ["action"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: SAVE_POSE,
+                    description:
+                        "Stops robot movement and saves the robot's current pose under a name. Use for requests like 'save pose as stow' or 'save pose as look down'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            name: {
+                                type: "string",
+                                description:
+                                    "Name of the pose to save (e.g. stow, look down, grab cup).",
+                            },
+                        },
+                        required: ["name"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: MOVE_TO_POSE,
+                    description:
+                        "Moves the robot to a previously saved pose by name. Use for requests like 'move to pose stow' or 'go to pose look down'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            name: {
+                                type: "string",
+                                description:
+                                    "Name of the saved pose to move to (e.g. stow, look down).",
+                            },
+                        },
+                        required: ["name"],
                         additionalProperties: false,
                     },
                 },

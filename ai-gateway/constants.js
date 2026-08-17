@@ -74,6 +74,15 @@ const CONTROL_AUTONAV = "control_autonav";
 /** Load a Saved Location pose in AutoNav (requires "Navigate to …" / "Navigate to the …" utterance). */
 const LOAD_AUTONAV_LOCATION = "load_autonav_location";
 
+/** Open or close the Saved Poses / Movement Recorder modal. */
+const SET_SAVED_POSES_MODAL = "set_saved_poses_modal";
+
+/** Save current robot pose under a user-provided name. */
+const SAVE_POSE = "save_pose";
+
+/** Move robot to a previously saved pose by name. */
+const MOVE_TO_POSE = "move_to_pose";
+
 /** Names of available macros (matches voiceMacros.ts on the client). */
 const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
 
@@ -82,6 +91,9 @@ const VOICE_SCENE_NAMES = ["pilot", "autonav"];
 
 /** Valid set_saved_locations_modal.action values. */
 const SAVED_LOCATIONS_MODAL_ACTIONS = ["open", "close"];
+
+/** Valid set_saved_poses_modal.action values. */
+const SAVED_POSES_MODAL_ACTIONS = ["open", "close"];
 
 /** Valid control_autonav.action values. */
 const AUTONAV_NAV_ACTIONS = ["start", "cancel"];
@@ -98,6 +110,9 @@ const VOICE_TOOLS = [
     SET_SAVED_LOCATIONS_MODAL,
     CONTROL_AUTONAV,
     LOAD_AUTONAV_LOCATION,
+    SET_SAVED_POSES_MODAL,
+    SAVE_POSE,
+    MOVE_TO_POSE,
 ];
 
 // ── Base move action enums ────────────────────────────────────────────────────
@@ -215,9 +230,13 @@ module.exports = {
     SET_SAVED_LOCATIONS_MODAL,
     CONTROL_AUTONAV,
     LOAD_AUTONAV_LOCATION,
+    SET_SAVED_POSES_MODAL,
+    SAVE_POSE,
+    MOVE_TO_POSE,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    SAVED_POSES_MODAL_ACTIONS,
     AUTONAV_NAV_ACTIONS,
 
     VOICE_TOOLS,

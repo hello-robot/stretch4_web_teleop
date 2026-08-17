@@ -12,7 +12,10 @@ import {
     EXECUTE_MACRO,
     isPlaceholderArgs,
     MIC_HEALTH_STATUS_SLUG,
+    MOVE_TO_POSE,
     NO_ARG_VOICE_TOOLS,
+    SAVE_POSE,
+    SET_SAVED_POSES_MODAL,
     STOP_MOTION,
     VOICE_ASLEEP_TOOL_DEFER_MS,
     VOICE_DURATION_MS_DEFAULT,
@@ -22,6 +25,10 @@ import {
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
     VOICE_WAKE_PHRASE_DISPLAY,
     type ExecuteToolResult,
+    type MoveToPoseResult,
+    type SavedPosesModalAction,
+    type SavePoseResult,
+    type SetSavedPosesModalResult,
     type VoiceMoveExecutionMode,
     type VoiceSpeed,
     type VoiceToolName,
@@ -37,6 +44,11 @@ import {
     executeMacroOnProvider,
     executeStopMotionOnProvider,
 } from "./executeJointMove";
+import {
+    executeMoveToPose,
+    executeSavePose,
+    executeSetSavedPosesModal,
+} from "./executePoseCommands";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
 import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
@@ -523,6 +535,13 @@ export type RealtimeVoiceConnectOptions = {
     onVoiceMoveFeedback?: (feedback: VoiceMoveFeedback) => void;
     /** Asleep/awake listening mode (wake/sleep phrases). */
     onListeningState?: (state: VoiceListeningState) => void;
+    /** Programmatically open or close Saved Poses / Movement Recorder modal */
+    onSetSavedPosesModal?: (
+        action: SavedPosesModalAction,
+    ) => SetSavedPosesModalResult;
+    onSetSavedPosesModalFeedback?: (result: SetSavedPosesModalResult) => void;
+    onSavePoseFeedback?: (result: SavePoseResult) => void;
+    onMoveToPoseFeedback?: (result: MoveToPoseResult) => void;
 };
 
 export type ActiveRealtimeVoiceSession = {
@@ -843,7 +862,7 @@ export async function connectOpenAIRealtimeVoice(
         (
             voiceProvider: ButtonFunctionProvider,
             fc: ExtractedFnCall,
-        ) => ExecuteToolResult
+        ) => ExecuteToolResult | Promise<ExecuteToolResult>
     > = {
         execute_base_move: (voiceProvider, fc) => {
             let rawArgs: Record<string, unknown>;
@@ -893,6 +912,24 @@ export async function connectOpenAIRealtimeVoice(
                 rawArgs = {};
             }
             return executeMacroOnProvider(voiceProvider, rawArgs);
+        },
+        set_saved_poses_modal: (_voiceProvider, fc) => {
+            const res = executeSetSavedPosesModal(
+                fc.arguments,
+                opts.onSetSavedPosesModal,
+            );
+            opts.onSetSavedPosesModalFeedback?.(res);
+            return res;
+        },
+        save_pose: async (_voiceProvider, fc) => {
+            const res = await executeSavePose(fc.arguments, opts.voiceProvider);
+            opts.onSavePoseFeedback?.(res);
+            return res;
+        },
+        move_to_pose: (_voiceProvider, fc) => {
+            const res = executeMoveToPose(fc.arguments);
+            opts.onMoveToPoseFeedback?.(res);
+            return res;
         },
     };
 
@@ -999,7 +1036,7 @@ export async function connectOpenAIRealtimeVoice(
                 detail: `Unknown tool: ${fc.name}`,
                 ignored: true,
             }
-            : voiceToolRunners[fc.name](opts.voiceProvider, fc);
+            : await voiceToolRunners[fc.name](opts.voiceProvider, fc);
 
         if (result.ok) {
             voiceWakeSleep?.notifyMotionOrCommand();

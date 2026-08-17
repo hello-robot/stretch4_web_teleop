@@ -25,7 +25,7 @@ echo "-l $REDIRECT_LOGDIR" &>>$REDIRECT_LOGFILE
 echo "-f $STORAGE" &>>$REDIRECT_LOGFILE
 
 echo "Run webpack..."
-export NODE_EXTRA_CA_CERTS="/home/hello-robot/ament_ws/src/stretch4_web_teleop/certificates/rootCA.pem"
+export NODE_EXTRA_CA_CERTS="$HOME/ament_ws/src/stretch4_web_teleop/certificates/rootCA.pem"
 cd ~/ament_ws/src/stretch4_web_teleop && pm2 start -s npm --name="stretch4_web_teleop" -- run $STORAGE &>>$REDIRECT_LOGFILE
 
 echo "Start local server..."
