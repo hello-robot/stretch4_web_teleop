@@ -45,6 +45,50 @@ export let stretchTool: StretchTool;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
 
+/** True when all WebRTC occupancy-grid chunks have been reassembled. */
+export function isOccupancyGridComplete(
+    grid: ROSOccupancyGrid | undefined,
+): boolean {
+    if (!grid?.info) return false;
+    const expected = grid.info.width * grid.info.height;
+    return expected > 0 && grid.data.length >= expected;
+}
+
+export function isOccupancyGridReady(): boolean {
+    return isOccupancyGridComplete(occupancyGrid);
+}
+
+type OccupancyGridReadyListener = () => void;
+const occupancyGridReadyListeners = new Set<OccupancyGridReadyListener>();
+
+function notifyOccupancyGridReady() {
+    occupancyGridReadyListeners.forEach((listener) => {
+        try {
+            listener();
+        } catch (err) {
+            console.warn("occupancyGridReady listener failed:", err);
+        }
+    });
+}
+
+/** Subscribe to full map reassembly. Fires immediately if already ready. */
+export function subscribeOccupancyGridReady(
+    callback: OccupancyGridReadyListener,
+): () => void {
+    occupancyGridReadyListeners.add(callback);
+    if (isOccupancyGridReady()) {
+        callback();
+    }
+    return () => {
+        occupancyGridReadyListeners.delete(callback);
+    };
+}
+
+function resetOccupancyGrid() {
+    occupancyGrid = undefined;
+    occupancyGridReadyListeners.clear();
+}
+
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
 export var buttonFunctionProvider = new ButtonFunctionProvider();
@@ -189,6 +233,10 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
                     message.message.data
                 );
             }
+            // Map has loaded successfully
+            if (isOccupancyGridComplete(occupancyGrid)) {
+                notifyOccupancyGridReady();
+            }
             break;
         case "amclPose":
             remoteRobot.setMapPose(message.message);
@@ -211,6 +259,10 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "playbackPosesState":
             console.log("playbackPosesState", message.message);
             movementRecorderFunctionProvider.setPlaybackPosesState(message.message);
+            break;
+        case "seedLocalizationState":
+            console.log("seedLocalizationState", message.message);
+            mapFunctionProvider.setSeedLocalizationState(message.message);
             break;
         case "relativePose":
             remoteRobot.setRelativePose(message.message);
@@ -250,7 +302,7 @@ function configureRemoteRobot() {
     remoteRobot = new RemoteRobot({
         robotChannel: (message: cmd) => connection.sendData(message),
     });
-    occupancyGrid = undefined;
+    resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();

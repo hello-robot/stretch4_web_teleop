@@ -1,4 +1,4 @@
-import { Transform, Message } from "roslib";
+import { Message, Transform } from "roslib";
 import { cmd } from "./commands";
 
 export type ValidJoints =
@@ -108,6 +108,7 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | OdomMessage
+    | SeedLocalizationStateMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -162,6 +163,11 @@ export interface ActionState {
 
 export interface ActionStateMessage {
     type: string;
+    message: ActionState;
+}
+
+export interface SeedLocalizationStateMessage {
+    type: "seedLocalizationState";
     message: ActionState;
 }
 
@@ -275,6 +281,16 @@ export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.5,
 };
+
+const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
+
+export function getPlaybackJointVelocity(jointName: ValidJoints): number {
+    return (JOINT_VELOCITIES[jointName] || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
+}
+
+export function getPlaybackJointVelocities(jointNames: ValidJoints[]): number[] {
+    return jointNames.map(getPlaybackJointVelocity);
+}
 
 export const navigationProps = {
     width: 768, // 800,

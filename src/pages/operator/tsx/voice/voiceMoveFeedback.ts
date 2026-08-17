@@ -11,6 +11,7 @@ export type VoiceMoveFeedback =
         distance_display?: string;
         repeated?: boolean;
     }
+    | { kind: "macro_started"; action: MacroMoveAction }
     | { kind: "stop"; hadMotion: boolean }
     | {
         kind: "rejected";
@@ -80,6 +81,11 @@ export function voiceMoveFeedbackToToast(
                 message: `${prefix}${action}, ${speed}, ${distPart}`,
             };
         }
+        case "macro_started":
+            return {
+                type: "info",
+                message: ACTION_LABELS[feedback.action],
+            };
         case "stop":
             if (!feedback.hadMotion) {
                 return null;

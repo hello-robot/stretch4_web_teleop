@@ -4,6 +4,11 @@ import sys
 
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+from stretch4_body.core.robot_params import RobotParams
+
+from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
@@ -23,10 +28,6 @@ from launch.substitutions import (
     NotEqualsSubstitution,
     PathJoinSubstitution,
 )
-from launch_ros.actions import Node
-from stretch4_body.core.robot_params import RobotParams
-
-from launch import LaunchDescription
 
 
 def symlinks_to_has_head_cams():
@@ -76,13 +77,13 @@ def check_valid_configuration(model, tool, has_head_cams):
         sys.exit(1)
 
 
-
 def generate_launch_description():
     teleop_interface_package = str(get_package_share_path("stretch4_web_teleop"))
     core_package = str(get_package_share_path("stretch_core"))
     rosbridge_package = str(get_package_share_path("rosbridge_server"))
     # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
+    stretch_tag_perception_path = FindPackageShare("stretch_tag_perception")
 
     robot_params = RobotParams().get_params()[1]
     stretch_serial_no = robot_params["robot"]["serial_no"]
@@ -179,6 +180,7 @@ def generate_launch_description():
             "broadcast_odom_tf": "True",
             "fail_out_of_range_goal": "False",
             "log_level": "info",
+            "action_timeout": "30.0",
         }.items(),
     )
     ld.add_action(stretch_driver_launch)
@@ -293,5 +295,27 @@ def generate_launch_description():
             shell=True,
         ),
     )
+
+    # ArUco Tag Perception Launch (Run for all cameras; suppress auxiliary RViz)
+    aruco_perception_launch = IncludeLaunchDescription(
+        PathJoinSubstitution(
+            [stretch_tag_perception_path, "launch", "stretch_aruco.launch.py"]
+        ),
+        launch_arguments={
+            "cameras": "all",
+            "publish_markers": "true",
+            "use_rviz": "false",
+        }.items(),
+    )
+    ld.add_action(aruco_perception_launch)
+
+    # localization with aruco tag node
+    aruco_localization_node = Node(
+        package="stretch_nav2",
+        executable="aruco_tag_localization.py",
+        name="aruco_tag_localization",
+        output="screen",
+    )
+    ld.add_action(aruco_localization_node)
 
     return ld

@@ -13,19 +13,28 @@ interface ButtonCancelPlaybackProps {
  * bottom of its parent container.
  */
 export const ButtonCancelPlayback = (props: ButtonCancelPlaybackProps) => {
+    const handleStopTrigger = (e: React.SyntheticEvent) => {
+        // Prevent duplicate trigger when pointerdown is followed by click
+        e.preventDefault();
+        e.stopPropagation();
+        props.handlePlaybackCancel();
+    };
+
     return (
         <AnimatePresence>
             {props.isRecordingPlaying && (
                 <motion.div
                     className="cancel-playback-container"
-                    initial={{ opacity: 0 }}
+                    initial={{ opacity: 1 }}
                     animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
+                    exit={{ opacity: 0, transition: { duration: 0.15 } }}
                 >
                     <button
+                        type="button"
                         className="cancel-playback-btn"
-                        onPointerDown={props.handlePlaybackCancel}
+                        onPointerDown={handleStopTrigger}
+                        onClick={handleStopTrigger}
+                        aria-label="Stop pose playback"
                     >
                         <span className="cancel-playback-icon">
                             <span className="cancel-playback-icon-inner">
@@ -35,8 +44,7 @@ export const ButtonCancelPlayback = (props: ButtonCancelPlaybackProps) => {
                         Stop
                     </button>
                 </motion.div>
-            )
-            }
-        </AnimatePresence >
+            )}
+        </AnimatePresence>
     );
 };
