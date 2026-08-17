@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Live watcher utility for Voice Interaction Logs.
- * Tails ~/stretch_user/log/web_teleop/voice_interactions_latest.jsonl
+ * Live watcher utility for Microphone Event Logs.
+ * Tails ~/stretch_user/log/web_teleop/mic_events_latest.jsonl
  * with syntax highlighting and pretty formatting.
  */
 
@@ -14,8 +14,8 @@ const chalk = require('chalk');
 function resolveLogPath() {
     const defaultDir = path.join(os.homedir(), 'stretch_user', 'log', 'web_teleop');
     const targetDir = process.env.REDIRECT_LOGDIR || defaultDir;
-    const latestFile = path.join(targetDir, 'voice_interactions_latest.jsonl');
-    const textRefFile = path.join(targetDir, 'voice_interactions_latest.jsonl.txt');
+    const latestFile = path.join(targetDir, 'mic_events_latest.jsonl');
+    const textRefFile = path.join(targetDir, 'mic_events_latest.jsonl.txt');
 
     // 1. Direct symlink / file check
     if (fs.existsSync(latestFile)) {
@@ -36,11 +36,11 @@ function resolveLogPath() {
         } catch (_) {}
     }
 
-    // 3. Fallback: find the newest voice_interactions_*.jsonl file in targetDir
+    // 3. Fallback: find the newest mic_events_*.jsonl file in targetDir
     if (fs.existsSync(targetDir)) {
         try {
             const files = fs.readdirSync(targetDir)
-                .filter((f) => f.startsWith('voice_interactions_') && f.endsWith('.jsonl') && f !== 'voice_interactions_latest.jsonl')
+                .filter((f) => f.startsWith('mic_events_') && f.endsWith('.jsonl') && f !== 'mic_events_latest.jsonl')
                 .map((f) => ({
                     path: path.join(targetDir, f),
                     mtime: fs.statSync(path.join(targetDir, f)).mtimeMs,
@@ -61,42 +61,25 @@ function formatAndPrintLine(line) {
     try {
         const record = JSON.parse(line.trim());
         const timeShort = record.timestamp ? record.timestamp.slice(11, 19) : '--:--:--';
+        const eventName = record.event || 'unknown';
 
-        // 1. General VoiceCommandAssistant log entry
-        if (record.message || record.type === 'log') {
-            const msg = record.message || '';
-            let formatted = msg;
-            if (msg.includes('user transcript (partial):')) {
-                const text = msg.replace(/.*user transcript \(partial\):\s*/, '');
-                formatted = `🗣️  ${chalk.grey('(partial)')} ${chalk.cyan(text)}`;
-            } else if (msg.includes('user transcript:')) {
-                const text = msg.replace(/.*user transcript:\s*/, '');
-                formatted = `🗣️  ${chalk.cyan.bold(`"${text}"`)}`;
-            } else if (msg.includes('[WakeSleep]')) {
-                formatted = `⏰ ${chalk.magenta(msg)}`;
-            } else if (msg.includes('Tool') || msg.includes('result')) {
-                formatted = `🛠️  ${chalk.yellow(msg)}`;
-            } else {
-                formatted = `💬 ${chalk.white(msg)}`;
-            }
-
-            console.log(`${chalk.grey(`[VoiceLog ${timeShort}]`)} ${formatted}`);
-            return;
+        let eventColor = chalk.cyan;
+        let icon = '🎙️ ';
+        if (eventName === 'User access granted' || eventName === 'Connected' || eventName === 'Unmuted') {
+            eventColor = chalk.green;
+            icon = eventName === 'Unmuted' ? '🔊' : '🟢';
+        } else if (eventName === 'User access rejected' || eventName === 'Disconnected' || eventName === 'Muted') {
+            eventColor = chalk.yellow;
+            icon = eventName === 'Muted' ? '🔇' : (eventName === 'Disconnected' ? '🔴' : '🚫');
         }
 
-        // 2. Structured voice interaction summary record
-        const transcriptText = record.input?.transcript ? `"${record.input.transcript}"` : '(no transcript)';
-        const toolText = record.output?.tool_name
-            ? `${record.output.tool_name}(${JSON.stringify(record.output.tool_args || {})})`
-            : '(no tool)';
-        const statusIcon = record.execution?.success ? chalk.green('✅ SUCCESS') : chalk.red('❌ REJECTED');
-        const detailText = record.execution?.detail ? ` (${record.execution.detail})` : '';
+        const detailsStr = record.details && Object.keys(record.details).length > 0
+            ? ` ${chalk.grey(JSON.stringify(record.details))}`
+            : '';
 
         console.log(
-            `${chalk.grey(`[VoiceLog ${timeShort}]`)} ` +
-            `🗣️  ${chalk.cyan.bold(transcriptText)} ➔ ` +
-            `🛠️  ${chalk.yellow(toolText)} ➔ ` +
-            `${statusIcon}${chalk.grey(detailText)}`
+            `${chalk.grey(`[MicLog ${timeShort}]`)} ` +
+            `${icon}  ${eventColor.bold(eventName)}${detailsStr}`
         );
     } catch (e) {
         console.log(chalk.grey(`[RawLog] ${line.trim()}`));
@@ -106,9 +89,9 @@ function formatAndPrintLine(line) {
 function main() {
     let logPath = resolveLogPath();
 
-    console.log(chalk.bold.magenta('\n======================================================'));
-    console.log(chalk.bold.magenta('       STRETCH VOICE INTERACTION LIVE WATCHER         '));
-    console.log(chalk.bold.magenta('======================================================'));
+    console.log(chalk.bold.cyan('\n======================================================'));
+    console.log(chalk.bold.cyan('       STRETCH MICROPHONE EVENTS LIVE WATCHER         '));
+    console.log(chalk.bold.cyan('======================================================'));
     console.log(chalk.cyan(`Target Log File: ${logPath}\n`));
 
     if (!fs.existsSync(logPath)) {
@@ -155,7 +138,7 @@ function main() {
 
     process.on('SIGINT', () => {
         clearInterval(watchTimer);
-        console.log(chalk.grey('\nExiting voice watcher.\n'));
+        console.log(chalk.grey('\nExiting microphone watcher.\n'));
         process.exit(0);
     });
 }

@@ -63,6 +63,7 @@ import {
 } from "./constants";
 import { bumpVoiceCommandActivity } from "./voiceCommandActivity";
 import { emitVoiceInteraction } from "./voiceInteractionEmitter";
+import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
     createVoiceWakeSleep,
     type VoiceListeningState,
@@ -1399,7 +1400,7 @@ export async function connectOpenAIRealtimeVoice(
         }
 
         emitVoiceInteraction({
-            transcript: latestUserTranscriptForLog() || lastCompletedUserTranscript,
+            transcript: latestUserTranscriptForLog(),
             stt_model: "gpt-4o-transcribe",
             tool_name: fc.name,
             tool_args: parsedArgs,

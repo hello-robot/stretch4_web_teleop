@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Live watcher utility for Voice Interaction Logs.
- * Tails ~/stretch_user/log/web_teleop/voice_interactions_latest.jsonl
+ * Live watcher utility for Realtime Model Logs (Reasoning & Tools: gpt-realtime-2.1).
+ * Tails ~/stretch_user/log/web_teleop/realtime_model_latest.jsonl
  * with syntax highlighting and pretty formatting.
  */
 
@@ -14,8 +14,8 @@ const chalk = require('chalk');
 function resolveLogPath() {
     const defaultDir = path.join(os.homedir(), 'stretch_user', 'log', 'web_teleop');
     const targetDir = process.env.REDIRECT_LOGDIR || defaultDir;
-    const latestFile = path.join(targetDir, 'voice_interactions_latest.jsonl');
-    const textRefFile = path.join(targetDir, 'voice_interactions_latest.jsonl.txt');
+    const latestFile = path.join(targetDir, 'realtime_model_latest.jsonl');
+    const textRefFile = path.join(targetDir, 'realtime_model_latest.jsonl.txt');
 
     // 1. Direct symlink / file check
     if (fs.existsSync(latestFile)) {
@@ -36,11 +36,11 @@ function resolveLogPath() {
         } catch (_) {}
     }
 
-    // 3. Fallback: find the newest voice_interactions_*.jsonl file in targetDir
+    // 3. Fallback: find the newest realtime_model_*.jsonl or voice_interactions_*.jsonl file in targetDir
     if (fs.existsSync(targetDir)) {
         try {
             const files = fs.readdirSync(targetDir)
-                .filter((f) => f.startsWith('voice_interactions_') && f.endsWith('.jsonl') && f !== 'voice_interactions_latest.jsonl')
+                .filter((f) => (f.startsWith('realtime_model_') || f.startsWith('voice_interactions_')) && f.endsWith('.jsonl') && !f.includes('latest'))
                 .map((f) => ({
                     path: path.join(targetDir, f),
                     mtime: fs.statSync(path.join(targetDir, f)).mtimeMs,
@@ -62,54 +62,48 @@ function formatAndPrintLine(line) {
         const record = JSON.parse(line.trim());
         const timeShort = record.timestamp ? record.timestamp.slice(11, 19) : '--:--:--';
 
-        // 1. General VoiceCommandAssistant log entry
-        if (record.message || record.type === 'log') {
+        // 1. Tool / System console log entry
+        if (record.message || record.type === 'log' || record.type === 'tool') {
             const msg = record.message || '';
             let formatted = msg;
-            if (msg.includes('user transcript (partial):')) {
-                const text = msg.replace(/.*user transcript \(partial\):\s*/, '');
-                formatted = `🗣️  ${chalk.grey('(partial)')} ${chalk.cyan(text)}`;
-            } else if (msg.includes('user transcript:')) {
-                const text = msg.replace(/.*user transcript:\s*/, '');
-                formatted = `🗣️  ${chalk.cyan.bold(`"${text}"`)}`;
-            } else if (msg.includes('[WakeSleep]')) {
-                formatted = `⏰ ${chalk.magenta(msg)}`;
-            } else if (msg.includes('Tool') || msg.includes('result')) {
+            if (msg.includes('Tool') || msg.includes('result')) {
                 formatted = `🛠️  ${chalk.yellow(msg)}`;
+            } else if (msg.includes('error') || msg.includes('fail')) {
+                formatted = `⚠️  ${chalk.red(msg)}`;
             } else {
                 formatted = `💬 ${chalk.white(msg)}`;
             }
 
-            console.log(`${chalk.grey(`[VoiceLog ${timeShort}]`)} ${formatted}`);
+            console.log(`${chalk.grey(`[RealtimeModel ${timeShort}]`)} ${formatted}`);
             return;
         }
 
-        // 2. Structured voice interaction summary record
-        const transcriptText = record.input?.transcript ? `"${record.input.transcript}"` : '(no transcript)';
+        // 2. Structured voice interaction & tool decision record
+        const transcriptText = record.input?.transcript ? `"${record.input.transcript}"` : '(context)';
         const toolText = record.output?.tool_name
             ? `${record.output.tool_name}(${JSON.stringify(record.output.tool_args || {})})`
-            : '(no tool)';
+            : '(no tool call)';
         const statusIcon = record.execution?.success ? chalk.green('✅ SUCCESS') : chalk.red('❌ REJECTED');
         const detailText = record.execution?.detail ? ` (${record.execution.detail})` : '';
 
         console.log(
-            `${chalk.grey(`[VoiceLog ${timeShort}]`)} ` +
-            `🗣️  ${chalk.cyan.bold(transcriptText)} ➔ ` +
-            `🛠️  ${chalk.yellow(toolText)} ➔ ` +
+            `${chalk.grey(`[RealtimeModel ${timeShort}]`)} ` +
+            `🗣️  ${chalk.cyan(transcriptText)} ➔ ` +
+            `🛠️  ${chalk.yellow.bold(toolText)} ➔ ` +
             `${statusIcon}${chalk.grey(detailText)}`
         );
     } catch (e) {
-        console.log(chalk.grey(`[RawLog] ${line.trim()}`));
+        console.log(chalk.grey(`[RawRealtimeLog] ${line.trim()}`));
     }
 }
 
 function main() {
     let logPath = resolveLogPath();
 
-    console.log(chalk.bold.magenta('\n======================================================'));
-    console.log(chalk.bold.magenta('       STRETCH VOICE INTERACTION LIVE WATCHER         '));
-    console.log(chalk.bold.magenta('======================================================'));
-    console.log(chalk.cyan(`Target Log File: ${logPath}\n`));
+    console.log(chalk.bold.yellow('\n======================================================'));
+    console.log(chalk.bold.yellow('    REALTIME MODEL LIVE STREAM (gpt-realtime-2.1)     '));
+    console.log(chalk.bold.yellow('======================================================'));
+    console.log(chalk.grey(`Target Log File: ${logPath}\n`));
 
     if (!fs.existsSync(logPath)) {
         console.log(chalk.yellow(`Waiting for log file to be created at: ${logPath} ...`));
@@ -130,7 +124,7 @@ function main() {
         if (currentResolved !== logPath && fs.existsSync(currentResolved)) {
             logPath = currentResolved;
             fileSize = 0;
-            console.log(chalk.cyan(`\nSwitched to active log file: ${logPath}\n`));
+            console.log(chalk.yellow(`\nSwitched to active log file: ${logPath}\n`));
         }
 
         if (!fs.existsSync(logPath)) return;
@@ -155,7 +149,7 @@ function main() {
 
     process.on('SIGINT', () => {
         clearInterval(watchTimer);
-        console.log(chalk.grey('\nExiting voice watcher.\n'));
+        console.log(chalk.grey('\nExiting realtime model watcher.\n'));
         process.exit(0);
     });
 }
