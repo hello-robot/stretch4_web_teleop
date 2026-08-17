@@ -4,11 +4,6 @@ import sys
 
 from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_share_path
-from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
-from stretch4_body.core.robot_params import RobotParams
-
-from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
@@ -28,6 +23,11 @@ from launch.substitutions import (
     NotEqualsSubstitution,
     PathJoinSubstitution,
 )
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+from stretch4_body.core.robot_params import RobotParams
+
+from launch import LaunchDescription
 
 
 def symlinks_to_has_head_cams():
@@ -303,7 +303,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "cameras": "all",
-            "publish_markers": "true",
+            "publish_markers": "false",
             "use_rviz": "false",
         }.items(),
     )

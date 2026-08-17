@@ -38,7 +38,7 @@ import {
     executeStopMotionOnProvider,
 } from "./executeJointMove";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
-import { emitVoiceInteraction } from "./voiceInteractionEmitter";
+import { emitMicEvent, emitVoiceInteraction } from "./voiceInteractionEmitter";
 import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
     createVoiceWakeSleep,
@@ -64,6 +64,7 @@ let lastMicCaptureConnected: boolean | null = null;
 
 export function logMicHealthStatus(event: MicHealthStatusEvent): void {
     console.log(`${MIC_HEALTH_STATUS_SLUG} ${event}`);
+    emitMicEvent({ event });
 }
 
 function logMicPrivilege(granted: boolean): void {
@@ -599,6 +600,8 @@ export async function connectOpenAIRealtimeVoice(
 
     /** Cleared on wake so trailing STT events from the same utterance are ignored. */
     const transcriptByItem = new Map<string, string>();
+    let lastUserTranscript = "";
+    const latestUserTranscriptForLog = () => lastUserTranscript;
 
     voiceWakeSleep = createVoiceWakeSleep({
         provider: opts.voiceProvider,
@@ -923,6 +926,7 @@ export async function connectOpenAIRealtimeVoice(
             }
             const next = (transcriptByItem.get(itemId) ?? "") + delta;
             transcriptByItem.set(itemId, next);
+            lastUserTranscript = next;
             opts.onLog?.(
                 `[Realtime] user transcript (partial): ${next.slice(0, 160)}`,
             );
@@ -940,6 +944,7 @@ export async function connectOpenAIRealtimeVoice(
         if (!transcript) {
             return;
         }
+        lastUserTranscript = transcript;
         opts.onLog?.(
             `[Realtime] user transcript: ${transcript.slice(0, 160)}`,
         );
@@ -1018,7 +1023,7 @@ export async function connectOpenAIRealtimeVoice(
         }
 
         emitVoiceInteraction({
-            transcript: latestUserTranscriptForLog() || lastCompletedUserTranscript,
+            transcript: latestUserTranscriptForLog(),
             stt_model: "gpt-4o-transcribe",
             tool_name: fc.name,
             tool_args: parsedArgs,

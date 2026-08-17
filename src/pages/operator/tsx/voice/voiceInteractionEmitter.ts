@@ -21,6 +21,11 @@ export type VoiceInteractionPayload = {
     execution_mode?: string;
 };
 
+export type MicEventPayload = {
+    event: string;
+    details?: Record<string, unknown>;
+};
+
 /**
  * Emits a structured voice interaction record to the server logger.
  */
@@ -32,3 +37,37 @@ export function emitVoiceInteraction(payload: VoiceInteractionPayload): void {
         console.warn("[voiceInteractionEmitter] Failed to emit voice interaction", e);
     }
 }
+
+/**
+ * Emits a microphone lifecycle/health event record to the server logger.
+ */
+export function emitMicEvent(payload: MicEventPayload): void {
+    try {
+        const socket = getInteractionSocket();
+        socket.emit("mic_event", payload);
+    } catch (e) {
+        console.warn("[voiceInteractionEmitter] Failed to emit mic event", e);
+    }
+}
+
+/**
+ * Emits a general VoiceCommandAssistant console log to the server logger.
+ */
+export function emitVoiceAssistantLog(log: string): void {
+    try {
+        const socket = getInteractionSocket();
+        socket.emit("voice_assistant_log", { log });
+    } catch (e) {
+        console.warn("[voiceInteractionEmitter] Failed to emit voice assistant log", e);
+    }
+}
+
+/**
+ * Shorthand aliases for emitVoiceInteraction and emitMicEvent.
+ */
+export const emitVoice = emitVoiceInteraction;
+export const emitMic = emitMicEvent;
+
+
+
+
