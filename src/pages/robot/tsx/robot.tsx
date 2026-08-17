@@ -15,6 +15,7 @@ import {
     ActionStatusList,
     DiagnosticArray,
     getStretchTool,
+    JOINT_VELOCITIES,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
@@ -24,7 +25,6 @@ import {
     StretchTool,
     ValidJoints,
     VideoProps,
-    JOINT_VELOCITIES,
     getPlaybackJointVelocity,
     getPlaybackJointVelocities,
 } from "shared/util";
@@ -83,6 +83,7 @@ export class Robot extends React.Component {
     private onRosConnectCallback?: () => Promise<void>;
     private jointLimits: { [key in ValidJoints]?: [number, number] } = {};
     private diagnosticJointLimits: { [key in ValidJoints]?: [boolean, boolean] } = {};
+    private diagnosticInCollision: { [key in ValidJoints]?: [boolean, boolean] } = {};
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
     private poseGoalID?: string;
@@ -374,11 +375,13 @@ export class Robot extends React.Component {
             robotPose["arm_joint"] = this.getJointValue("arm_joint");
             let jointValues: ValidJointStateDict = {};
             let effortValues: ValidJointStateDict = {};
-            this.jointState.name.forEach((name?: ValidJoints) => {
+            const jointsToEvaluate = new Set([...this.jointState.name as ValidJoints[], "arm_joint" as ValidJoints, "wrist_extension" as ValidJoints]);
+            jointsToEvaluate.forEach((name?: ValidJoints) => {
+                if (!name) return;
                 let inLimits = this.inJointLimits(name);
                 let collision = this.inCollision(name);
-                if (inLimits) jointValues[name!] = inLimits;
-                if (collision) effortValues[name!] = collision;
+                if (inLimits) jointValues[name] = inLimits;
+                if (collision) effortValues[name] = collision;
             });
 
             if (this.jointStateCallback)
@@ -497,11 +500,32 @@ export class Robot extends React.Component {
                 }
                 if (status.name == "at_limit") {
                     status.values.forEach((v) => {
-                        let jointName = v.key as ValidJoints;
+                        let rawKey = v.key;
+                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
-                        let isPos = valStr.includes("'pos': True") || valStr.includes('"pos": true') || valStr.includes("'pos': true") || valStr.includes('"pos": True');
-                        let isNeg = valStr.includes("'neg': True") || valStr.includes('"neg": true') || valStr.includes("'neg': true") || valStr.includes('"neg": True');
-                        this.diagnosticJointLimits[jointName] = [!isNeg, !isPos];
+                        let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
+                        let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
+                        let limits: [boolean, boolean] = [!isNeg, !isPos];
+                        console.log(`[Diagnostics] at_limit for ${rawKey} (${jointName}): limits=[${limits[0]}, ${limits[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        this.diagnosticJointLimits[jointName] = limits;
+                        // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
+                        if (jointName === "arm_joint") this.diagnosticJointLimits["wrist_extension"] = limits;
+                        if (jointName === "wrist_extension") this.diagnosticJointLimits["arm_joint"] = limits;
+                    });
+                }
+                if (status.name == "in_collision") {
+                    status.values.forEach((v) => {
+                        let rawKey = v.key;
+                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let valStr = v.value;
+                        let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
+                        let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
+                        let collisions: [boolean, boolean] = [isNeg, isPos];
+                        console.log(`[Diagnostics] in_collision for ${rawKey} (${jointName}): collisions=[${collisions[0]}, ${collisions[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        this.diagnosticInCollision[jointName] = collisions;
+                        // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
+                        if (jointName === "arm_joint") this.diagnosticInCollision["wrist_extension"] = collisions;
+                        if (jointName === "wrist_extension") this.diagnosticInCollision["arm_joint"] = collisions;
                     });
                 }
             });
@@ -1695,12 +1719,23 @@ export class Robot extends React.Component {
 
     inJointLimits(jointName: ValidJoints) {
         let jointValue = this.getJointValue(jointName);
-        return this.inJointLimitsHelper(jointValue, jointName);
+        let res = this.inJointLimitsHelper(jointValue, jointName);
+        if (res && (!res[0] || !res[1])) {
+            console.log(`[Robot] inJointLimits for ${jointName}: [${res[0]}, ${res[1]}] (diagnostic: ${this.diagnosticJointLimits[jointName] !== undefined})`);
+        }
+        return res;
     }
 
     inJointLimitsHelper(jointValue: number, jointName: ValidJoints) {
         if (this.diagnosticJointLimits[jointName] !== undefined) {
             return this.diagnosticJointLimits[jointName];
+        }
+
+        let alias: ValidJoints | undefined =
+            jointName === "arm_joint" ? "wrist_extension" :
+                jointName === "wrist_extension" ? "arm_joint" : undefined;
+        if (alias && this.diagnosticJointLimits[alias] !== undefined) {
+            return this.diagnosticJointLimits[alias];
         }
 
         let jointLimits = this.jointLimits[jointName];
@@ -1714,32 +1749,21 @@ export class Robot extends React.Component {
     }
 
     inCollision(jointName: ValidJoints) {
-        let inCollision: [boolean, boolean] = [false, false];
-        // TODO: This formulation needs to be changed, because effort values are
-        // robot-specific and change based on whether the robot is plugged in or not,
-        // mechanical factors (e.g., an old cable), etc. Thus, a single threshold
-        // will not work across all robots.
-        const MAX_EFFORTS: { [key in ValidJoints]?: [number, number] } = {
-            head_tilt_joint: [-50, 50],
-            head_pan_joint: [-50, 50],
-            wrist_extension: [-40, 40],
-            lift_joint: [0, 70],
-            // "wrist_yaw_joint": [-10, 10],
-            // "wrist_pitch_joint": [-10, 10],
-            // "wrist_roll_joint": [-10, 10],
-        };
-
-        if (!(jointName in MAX_EFFORTS)) return inCollision;
-
-        let jointIndex = this.jointState.name.indexOf(jointName);
-        // In collision if joint is applying more than 50% effort when moving downward/inward/backward
-        inCollision[0] =
-            this.jointState.effort[jointIndex] < MAX_EFFORTS[jointName]![0];
-        // In collision if joint is applying more than 50% effort when moving upward/outward/forward
-        inCollision[1] =
-            this.jointState.effort[jointIndex] > MAX_EFFORTS[jointName]![1];
-
-        return inCollision;
+        let res: [boolean, boolean] = [false, false];
+        if (this.diagnosticInCollision[jointName] !== undefined) {
+            res = this.diagnosticInCollision[jointName]!;
+        } else {
+            let alias: ValidJoints | undefined =
+                jointName === "arm_joint" ? "wrist_extension" :
+                    jointName === "wrist_extension" ? "arm_joint" : undefined;
+            if (alias && this.diagnosticInCollision[alias] !== undefined) {
+                res = this.diagnosticInCollision[alias]!;
+            }
+        }
+        if (res[0] || res[1]) {
+            console.log(`[Robot] inCollision for ${jointName}: [${res[0]}, ${res[1]}] (diagnostic: ${this.diagnosticInCollision[jointName] !== undefined})`);
+        }
+        return res;
     }
 
     async isCollisionMonitorActive(timeoutMs: number = 3000): Promise<boolean> {
