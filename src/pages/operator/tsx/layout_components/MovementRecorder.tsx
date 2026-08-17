@@ -212,7 +212,41 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         ) as (names: string[]) => void,
     }), []);
 
+    const {
+        playbackPosesState,
+        idxFixedRecordingPlaying,
+        idxFixedRecordingPlayingSet
+    } = props.sharedState;
+
     const [isModalOpen, isModalOpenSet] = React.useState<boolean>(false);
+
+    useEffect(() => {
+        movementRecorderFunctionProvider.setModalOpenHandler((open) => {
+            isModalOpenSet(open);
+            props.setCameraVeilCallback?.(open);
+        });
+        movementRecorderFunctionProvider.setCameraVeilHandler((visible) => {
+            props.setCameraVeilCallback?.(visible);
+        });
+        movementRecorderFunctionProvider.setIdxFixedRecordingPlayingHandler((idx) => {
+            idxFixedRecordingPlayingSet(idx);
+        });
+        movementRecorderFunctionProvider.setRefreshRecordingsHandler(() => {
+            recordingsSet(functions.SavedRecordingNames());
+        });
+        return () => {
+            movementRecorderFunctionProvider.setModalOpenHandler(undefined);
+            movementRecorderFunctionProvider.setCameraVeilHandler(undefined);
+            movementRecorderFunctionProvider.setIdxFixedRecordingPlayingHandler(undefined);
+            movementRecorderFunctionProvider.setRefreshRecordingsHandler(undefined);
+        };
+    }, [props.setCameraVeilCallback, idxFixedRecordingPlayingSet, functions]);
+
+    useEffect(() => {
+        if (isModalOpen) {
+            recordingsSet(functions.SavedRecordingNames());
+        }
+    }, [isModalOpen, functions]);
 
     /*******************
      * Joint selection *
@@ -462,11 +496,6 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
      * Unset index to -1 when playback ended     *
      * due to success, canceled, or failed state *
      *********************************************/
-    const {
-        playbackPosesState,
-        idxFixedRecordingPlaying,
-        idxFixedRecordingPlayingSet
-    } = props.sharedState;
     const playbackTerminated = movementStatesTerminal.includes(playbackPosesState?.state as MovementState)
 
     // When playback ends, whether due to
