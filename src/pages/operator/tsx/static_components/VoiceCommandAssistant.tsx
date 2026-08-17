@@ -31,8 +31,12 @@ import {
     type ControlAutoNavAction,
     type ControlAutoNavResult,
     type LoadAutoNavLocationResult,
+    type MoveToPoseResult,
     type SavedLocationsModalAction,
+    type SavedPosesModalAction,
+    type SavePoseResult,
     type SetSavedLocationsModalResult,
+    type SetSavedPosesModalResult,
     type VoiceSceneName,
     type VoiceSpeed,
     type VoiceMoveExecutionMode,
@@ -75,6 +79,9 @@ export type VoiceCommandAssistantProps = {
     onSetSavedLocationsModal: (
         action: SavedLocationsModalAction,
     ) => SetSavedLocationsModalResult;
+    onSetSavedPosesModal?: (
+        action: SavedPosesModalAction,
+    ) => SetSavedPosesModalResult;
     onControlAutoNav: (action: ControlAutoNavAction) => ControlAutoNavResult;
     onCancelAutoNavOnStop: () => ControlAutoNavResult;
     onGetAutoNavSavedPoseNames: () => string[] | null;
@@ -88,6 +95,7 @@ export const VoiceCommandAssistant = ({
     addToast,
     onSwitchScene,
     onSetSavedLocationsModal,
+    onSetSavedPosesModal,
     onControlAutoNav,
     onCancelAutoNavOnStop,
     onGetAutoNavSavedPoseNames,
@@ -195,6 +203,62 @@ export const VoiceCommandAssistant = ({
         [onSetSavedLocationsModal, addToast],
     );
 
+    const handleSetSavedPosesModal = useCallback(
+        (action: SavedPosesModalAction): SetSavedPosesModalResult => {
+            if (!onSetSavedPosesModal) {
+                return {
+                    ok: false,
+                    detail: "Saved Poses modal control unavailable.",
+                };
+            }
+            const result = onSetSavedPosesModal(action);
+            if (!result.ok) {
+                addToast("error", result.detail, undefined, "voice");
+            } else {
+                addToast(
+                    "info",
+                    action === "open" ? "Opening Saved Poses" : "Closing Saved Poses",
+                    undefined,
+                    "voice",
+                );
+            }
+            return result;
+        },
+        [onSetSavedPosesModal, addToast],
+    );
+
+    const handleSavePoseFeedback = useCallback(
+        (result: SavePoseResult) => {
+            if (result.ok) {
+                addToast(
+                    "info",
+                    `Saved pose "${result.name ?? ""}"`,
+                    undefined,
+                    "voice",
+                );
+            } else {
+                addToast("error", result.detail, undefined, "voice");
+            }
+        },
+        [addToast],
+    );
+
+    const handleMoveToPoseFeedback = useCallback(
+        (result: MoveToPoseResult) => {
+            if (result.ok) {
+                addToast(
+                    "info",
+                    `Moving to pose "${result.name ?? ""}"`,
+                    undefined,
+                    "voice",
+                );
+            } else {
+                addToast("error", result.detail, undefined, "voice");
+            }
+        },
+        [addToast],
+    );
+
     const handleControlAutoNav = useCallback(
         (action: ControlAutoNavAction): ControlAutoNavResult => {
             const result = onControlAutoNav(action);
@@ -257,6 +321,9 @@ export const VoiceCommandAssistant = ({
                 onSwitchScene: handleSwitchScene,
                 onSaveMapLocationResult: handleSaveMapLocationResult,
                 onSetSavedLocationsModal: handleSetSavedLocationsModal,
+                onSetSavedPosesModal: handleSetSavedPosesModal,
+                onSavePoseFeedback: handleSavePoseFeedback,
+                onMoveToPoseFeedback: handleMoveToPoseFeedback,
                 onControlAutoNav: handleControlAutoNav,
                 onCancelAutoNavOnStop: handleCancelAutoNavOnStop,
                 onGetAutoNavSavedPoseNames,
@@ -319,6 +386,9 @@ export const VoiceCommandAssistant = ({
         handleSwitchScene,
         handleSaveMapLocationResult,
         handleSetSavedLocationsModal,
+        handleSetSavedPosesModal,
+        handleSavePoseFeedback,
+        handleMoveToPoseFeedback,
         handleControlAutoNav,
         handleCancelAutoNavOnStop,
         onCancelAutoNavOnStop,

@@ -20,10 +20,14 @@ import {
     JOINT_MOVE_ACTIONS,
     JOINT_WRIST_ACTIONS,
     LOAD_AUTONAV_LOCATION,
+    MOVE_TO_POSE,
     REPEAT_BASE_MOVE,
     SAVE_MAP_LOCATION,
+    SAVE_POSE,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    SAVED_POSES_MODAL_ACTIONS,
     SET_SAVED_LOCATIONS_MODAL,
+    SET_SAVED_POSES_MODAL,
     STOP_MOTION,
     SWITCH_SCENE,
     VOICE_DISTANCE_M_MAX,
@@ -62,7 +66,7 @@ export {
     JOINT_GRIPPER_ACTIONS,
     JOINT_LIFT_ARM_ACTIONS,
     JOINT_MOVE_ACTIONS,
-    JOINT_WRIST_ACTIONS, LOAD_AUTONAV_LOCATION, REPEAT_BASE_MOVE, SAVE_MAP_LOCATION, SAVED_LOCATIONS_MODAL_ACTIONS, SET_SAVED_LOCATIONS_MODAL, STOP_MOTION, SWITCH_SCENE, VOICE_DISTANCE_M_MAX, VOICE_DISTANCE_M_MIN, VOICE_DURATION_MS_DEFAULT,
+    JOINT_WRIST_ACTIONS, LOAD_AUTONAV_LOCATION, MOVE_TO_POSE, REPEAT_BASE_MOVE, SAVE_MAP_LOCATION, SAVE_POSE, SAVED_LOCATIONS_MODAL_ACTIONS, SAVED_POSES_MODAL_ACTIONS, SET_SAVED_LOCATIONS_MODAL, SET_SAVED_POSES_MODAL, STOP_MOTION, SWITCH_SCENE, VOICE_DISTANCE_M_MAX, VOICE_DISTANCE_M_MIN, VOICE_DURATION_MS_DEFAULT,
     VOICE_DURATION_MS_MAX,
     VOICE_DURATION_MS_MIN, VOICE_MACRO_NAMES, VOICE_ROTATION_DEG_MAX, VOICE_ROTATION_DEG_MIN, VOICE_SCENE_NAMES, VOICE_SLEEP_PHRASE, VOICE_SLEEP_PHRASE_ALT, VOICE_SLEEP_PHRASE_ALT_DISPLAY, VOICE_SLEEP_PHRASE_DISPLAY, VOICE_SPEED_DEFAULT,
     VOICE_SPEEDS,
@@ -133,10 +137,34 @@ export type VoiceSceneName = (typeof VOICE_SCENE_NAMES)[number];
 export type SavedLocationsModalAction =
     (typeof SAVED_LOCATIONS_MODAL_ACTIONS)[number];
 
+/** All valid set_saved_poses_modal.action values. */
+export type SavedPosesModalAction =
+    (typeof SAVED_POSES_MODAL_ACTIONS)[number];
+
 /** Result of set_saved_locations_modal for toast UX. */
 export type SetSavedLocationsModalResult = {
     ok: boolean;
     detail: string;
+};
+
+/** Result of set_saved_poses_modal for toast UX. */
+export type SetSavedPosesModalResult = {
+    ok: boolean;
+    detail: string;
+};
+
+/** Result of save_pose for toast UX. */
+export type SavePoseResult = {
+    ok: boolean;
+    detail: string;
+    name?: string;
+};
+
+/** Result of move_to_pose for toast UX. */
+export type MoveToPoseResult = {
+    ok: boolean;
+    detail: string;
+    name?: string;
 };
 
 /** All valid control_autonav.action values. */
