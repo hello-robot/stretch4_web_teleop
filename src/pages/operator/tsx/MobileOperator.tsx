@@ -36,7 +36,7 @@ import { SharedState } from "./layout_components/CustomizableComponent";
 import FooterPilotMode from "./layout_components/FooterPilotMode";
 import { ButtonPad } from "./layout_components/ButtonPad";
 // import Swipe from "./static_components/Swipe";
-import { Map } from "./layout_components/Map";
+import { Map as MapComponent } from "./layout_components/Map";
 import { TabGroup } from "./basic_components/TabGroup";
 import SwipeableViews from "react-swipeable-views";
 import {
@@ -195,10 +195,8 @@ export const MobileOperator = (props: {
             if (state == ButtonState.Collision) collisionButtons.push(button);
         });
         setButtonCollision(collisionButtons);
-        if (bsm !== buttonStateMap.current) {
-            buttonStateMap.current = bsm;
-            setButtonStateMapRerender(!buttonStateMapRerender);
-        }
+        buttonStateMap.current = new Map(bsm);
+        setButtonStateMapRerender((prev) => !prev);
     }
     buttonFunctionProvider.setOperatorCallback(operatorCallback);
 

@@ -354,7 +354,10 @@ class RobotSensors extends React.Component {
 
         // Call the callback when joint limits or in collition joints have changed.
         if (change && this.functionProviderCallback) {
-            this.functionProviderCallback(jointValues, effortValues);
+            this.functionProviderCallback(
+                this.inJointLimits,
+                this.inCollision
+            );
         }
 
         // Call the callback when a new joint state is received.
