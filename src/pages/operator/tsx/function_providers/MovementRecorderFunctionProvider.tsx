@@ -35,11 +35,31 @@ export class MovementRecorderFunctionProvider extends FunctionProvider {
      */
     private refreshRecordingsHandler?: () => void = undefined;
 
+    /**
+     * Callback to cancel active pose playback via MovementRecorder UI handler.
+     */
+    private cancelPlaybackHandler?: () => boolean = undefined;
+
     constructor(storageHandler: StorageHandler) {
         super();
         this.provideFunctions = this.provideFunctions.bind(this);
         this.poses = [];
         this.storageHandler = storageHandler;
+    }
+
+    public setCancelPlaybackHandler(handler?: () => boolean) {
+        this.cancelPlaybackHandler = handler;
+    }
+
+    public cancelPlayback(): boolean {
+        if (this.cancelPlaybackHandler) {
+            return this.cancelPlaybackHandler();
+        }
+        if (FunctionProvider.remoteRobot) {
+            FunctionProvider.remoteRobot.stopTrajectory();
+            return true;
+        }
+        return false;
     }
 
     public setModalOpenHandler(handler?: (open: boolean) => void) {

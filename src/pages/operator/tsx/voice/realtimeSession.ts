@@ -977,7 +977,9 @@ export async function connectOpenAIRealtimeVoice(
      * stop motion, asleep, muted.
      */
     const resetSvcToSafeDefaults = () => {
-        executeStopMotionOnProvider(opts.voiceProvider);
+        executeStopMotionOnProvider(opts.voiceProvider, {
+            cancelAutoNav: opts.onCancelAutoNavOnStop,
+        });
         voiceWakeSleep?.sleep("disconnect");
         micMutedIntent = true;
         micGate?.setForceClosed(true);
@@ -1190,8 +1192,13 @@ export async function connectOpenAIRealtimeVoice(
             return executeJointMoveOnProvider(voiceProvider, rawArgs);
         },
         stop_motion: (voiceProvider) => {
-            const stopResult = executeStopMotionOnProvider(voiceProvider);
-            const cancelResult = opts.onCancelAutoNavOnStop?.();
+            let cancelResult: ControlAutoNavResult | undefined;
+            const stopResult = executeStopMotionOnProvider(voiceProvider, {
+                cancelAutoNav: () => {
+                    cancelResult = opts.onCancelAutoNavOnStop?.();
+                    return cancelResult ?? { ok: false };
+                },
+            });
             if (cancelResult?.ok) {
                 return {
                     ok: true,
@@ -1725,8 +1732,9 @@ export async function connectOpenAIRealtimeVoice(
                     opts.onLog?.(
                         `[Realtime] Fast-path stop triggered by transcript: "${transcript.trim()}"`,
                     );
-                    executeStopMotionOnProvider(opts.voiceProvider);
-                    opts.onCancelAutoNavOnStop?.();
+                    executeStopMotionOnProvider(opts.voiceProvider, {
+                        cancelAutoNav: opts.onCancelAutoNavOnStop,
+                    });
                 }
             }
             return;

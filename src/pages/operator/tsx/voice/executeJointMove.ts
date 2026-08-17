@@ -17,6 +17,7 @@ import {
 } from "shared/util";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
+import { movementRecorderFunctionProvider } from "../index";
 import {
     clampDurationMs,
     clampJointDistanceM,
@@ -278,15 +279,38 @@ export function executeJointMoveOnProvider(
 }
 
 /**
- * Stop any ongoing robot motion — base translation, rotation, arm, wrist, or gripper.
+ * Stop any ongoing robot motion — base translation, rotation, arm, wrist, gripper,
+ * trajectory / pose playback, and navigation.
  */
 export function executeStopMotionOnProvider(
     provider: ButtonFunctionProvider,
+    extraStopOpts?: {
+        cancelAutoNav?: () => { ok: boolean };
+    },
 ): ExecuteToolResult {
-    const hadMotion =
+    const hadVelocityMotion =
         provider.timedVoiceMoveActive ||
         provider.activeVelocityAction !== undefined;
     provider.disableActiveButton();
+
+    let hadTrajectoryMotion = false;
+    try {
+        hadTrajectoryMotion = movementRecorderFunctionProvider.cancelPlayback();
+    } catch {
+        FunctionProvider.remoteRobot?.stopTrajectory();
+    }
+
+    let hadAutoNav = false;
+    if (extraStopOpts?.cancelAutoNav) {
+        try {
+            const navRes = extraStopOpts.cancelAutoNav();
+            hadAutoNav = navRes?.ok === true;
+        } catch {
+            //
+        }
+    }
+
+    const hadMotion = hadVelocityMotion || hadTrajectoryMotion || hadAutoNav;
     VoiceMoveExecutor.emitFeedback({ kind: "stop", hadMotion });
     return {
         ok: true,
