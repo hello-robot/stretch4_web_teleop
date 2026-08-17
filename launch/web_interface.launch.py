@@ -303,7 +303,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "cameras": "all",
-            "publish_markers": "true",
+            "publish_markers": "false",
             "use_rviz": "false",
         }.items(),
     )
