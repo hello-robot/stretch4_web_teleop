@@ -141,6 +141,81 @@
 
 /* END <button> active */
 
+/* Collision and Limit button state styles */
+.button-wrapper div.button-cardinal.collision,
+.button-wrapper.collision div.button-cardinal,
+.button-turn-wrapper.collision {
+    mix-blend-mode: normal !important;
+    cursor: not-allowed !important;
+    filter: none !important;
+    border-style: double;
+    box-shadow: inset 0px 0px 30px 0px hsl(34deg 100% 50% / 100%) !important;
+    border-color: hsl(34deg 100% 50% / 50%) !important;
+}
+
+.button-wrapper div.button-cardinal.limit,
+.button-wrapper.limit div.button-cardinal,
+.button-turn-wrapper.limit {
+    mix-blend-mode: normal !important;
+    cursor: not-allowed !important;
+    filter: none !important;
+    box-shadow: inset 0px 0px 50px 0px hsl(0deg 100% 50% / 50%) !important;
+    border-style: none !important;
+    opacity: 1 !important;
+}
+
+.button-cardinal.collision span.synthetic-bottom-border {
+    box-shadow: 0px 0px 30px -10px hsl(34deg 100% 50% / 100%) !important;
+    border-color: hsl(34deg 100% 50% / 50%) !important;
+    border-style: double;
+}
+
+.button-cardinal.limit span.synthetic-bottom-border {
+    box-shadow: 0px 0px 30px 0px hsl(0deg 100% 50% / 50%) !important;
+    border-color: hsl(34deg 100% 50% / 75%) !important;
+}
+
+/* Ensure foreground icon buttons stay transparent so brightness filter does not
+ wash out red/orange background */
+.button-wrapper button.button-arm-gripper.collision,
+.button-wrapper button.button-arm-gripper.limit,
+.button-wrapper button.button-wrist.collision,
+.button-wrapper button.button-wrist.limit,
+.button-wrapper button.button-chevron.collision,
+.button-wrapper button.button-chevron.limit,
+.button-wrapper.collision button,
+.button-wrapper.limit button,
+.button-turn-wrapper.collision button,
+.button-turn-wrapper.limit button,
+.button-turn-wrapper.limit button:disabled,
+.button-turn-wrapper.collision button:disabled {
+    background-color: transparent !important;
+    background: transparent !important;
+    filter: none !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    z-index: 10 !important;
+}
+
+/* Crisp white icon image sitting on top of the red/orange button background */
+.button-wrapper.limit img,
+.button-wrapper.collision img,
+.button-turn-wrapper.limit img,
+.button-turn-wrapper.collision img,
+button.limit img,
+button.collision img {
+    filter: saturate(0) brightness(3) !important;
+    z-index: 11 !important;
+    position: relative !important;
+    opacity: 1 !important;
+}
+
+/* Grey out icons for disabled buttons */
+.base-movement-controls button:disabled img {
+    filter: saturate(0) brightness(1.5) !important;
+    opacity: 0.3 !important;
+}
+
 .button-wrapper div.button-cardinal span.synthetic-bottom-border {
     position: absolute;
     top: 0;

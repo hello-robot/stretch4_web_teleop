@@ -22,6 +22,9 @@ import { ButtonPad } from "./layout_components/ButtonPad";
 import { SharedState } from "./layout_components/CustomizableComponent";
 import PilotMode from "./layout_components/PilotMode";
 import { StorageHandler } from "./storage_handler/StorageHandler";
+// import Swipe from "./static_components/Swipe";
+import SwipeableViews from "react-swipeable-views";
+import { TabGroup } from "./basic_components/TabGroup";
 import {
     ActionModeType,
     ButtonPadIdMobile,
@@ -31,8 +34,6 @@ import {
     PilotButtonPadType
 } from "./utils/component_definitions";
 // import Swipe from "./static_components/Swipe";
-import SwipeableViews from "react-swipeable-views";
-import { TabGroup } from "./basic_components/TabGroup";
 import AutoNav from "./layout_components/AutoNav";
 import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
 
@@ -251,10 +252,8 @@ export const MobileOperator = (props: {
             if (state == ButtonState.Collision) collisionButtons.push(button);
         });
         setButtonCollision(collisionButtons);
-        if (bsm !== buttonStateMap.current) {
-            buttonStateMap.current = bsm;
-            setButtonStateMapRerender(!buttonStateMapRerender);
-        }
+        buttonStateMap.current = new Map(bsm);
+        setButtonStateMapRerender((prev) => !prev);
     }
     buttonFunctionProvider.setOperatorCallback(operatorCallback);
 
