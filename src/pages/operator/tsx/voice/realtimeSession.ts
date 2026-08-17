@@ -336,6 +336,18 @@ function parsedArgsCompleteForTool(
     if (nameVal === SWITCH_SCENE) {
         return typeof parsed.scene === "string" && parsed.scene.length > 0;
     }
+    if (
+        nameVal === SAVE_MAP_LOCATION ||
+        nameVal === LOAD_AUTONAV_LOCATION
+    ) {
+        return typeof parsed.label === "string" && parsed.label.length > 0;
+    }
+    if (
+        nameVal === SET_SAVED_LOCATIONS_MODAL ||
+        nameVal === CONTROL_AUTONAV
+    ) {
+        return typeof parsed.action === "string" && parsed.action.length > 0;
+    }
     return false;
 }
 
@@ -395,7 +407,11 @@ function accumulateFunctionCalls(
                 nameVal === EXECUTE_BASE_MOVE ||
                 nameVal === EXECUTE_JOINT_MOVE ||
                 nameVal === EXECUTE_MACRO ||
-                nameVal === SWITCH_SCENE
+                nameVal === SWITCH_SCENE ||
+                nameVal === SAVE_MAP_LOCATION ||
+                nameVal === SET_SAVED_LOCATIONS_MODAL ||
+                nameVal === CONTROL_AUTONAV ||
+                nameVal === LOAD_AUTONAV_LOCATION
             ) &&
             typeof argsRaw === "string"
         ) {
