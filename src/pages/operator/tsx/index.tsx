@@ -14,7 +14,7 @@ import {
 import { RemoteRobot } from "shared/remoterobot";
 import { cmd } from "shared/commands";
 import { Operator } from "./Operator";
-import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
+import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
@@ -218,6 +218,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "isRunStopped":
             remoteRobot.sensors.setRunStopState(message.enabled);
             break;
+        case "leaseStatus":
+            remoteRobot.sensors.setLeaseStatus(message.holder, message.isDriverHolding);
+            break;
         case "stretchTool":
             console.log("index stretchTool", message.value);
             stretchTool = getStretchTool(message.value);
@@ -267,6 +270,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "batteryVoltage":
             remoteRobot.sensors.setBatteryVoltage(message.message);
             break;
+        case "odom":
+            remoteRobot.sensors.setOdom(message.message);
+            break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
     }
@@ -315,6 +321,13 @@ function configureRemoteRobot() {
     );
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
         runStopFunctionProvider.updateRunStopState
+    );
+    remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
+        (holder, isDriverHolding) => {
+            if (!isDriverHolding) {
+                buttonFunctionProvider.stopCurrentAction(true);
+            }
+        }
     );
 }
 

@@ -1,58 +1,54 @@
-import React, { PointerEventHandler, useState } from "react";
-import {
-    ActionModeType,
-    ButtonPadIdMobile,
-    CameraViewId,
-    ComponentDefinition,
-    ComponentType,
-    MapDefinition,
-    LayoutDefinition,
-    PilotButtonPadType,
-} from "./utils/component_definitions";
+import "operator/css/MobileOperator.css";
+import React, { useState } from "react";
 import {
     ActionState,
-    className,
     ActionState as MoveBaseState,
-    RemoteStream,
+    RemoteStream
 } from "shared/util";
 import {
     buttonFunctionProvider,
-    stretchTool,
-    movementRecorderFunctionProvider,
-    underMapFunctionProvider,
     homeTheRobotFunctionProvider,
+    movementRecorderFunctionProvider,
+    stretchTool,
+    underMapFunctionProvider,
 } from ".";
 import {
     ButtonPadButton,
     ButtonState,
     ButtonStateMap,
 } from "./function_providers/ButtonFunctionProvider";
-import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import PilotMode from "./layout_components/PilotMode";
-import "operator/css/MobileOperator.css";
-import { SimpleCameraView } from "./layout_components/SimpleCameraView";
-import { SharedState } from "./layout_components/CustomizableComponent";
-import FooterPilotMode from "./layout_components/FooterPilotMode";
 import { ButtonPad } from "./layout_components/ButtonPad";
+import { SharedState } from "./layout_components/CustomizableComponent";
+import PilotMode from "./layout_components/PilotMode";
+import { StorageHandler } from "./storage_handler/StorageHandler";
 // import Swipe from "./static_components/Swipe";
-import { Map as MapComponent } from "./layout_components/Map";
-import { TabGroup } from "./basic_components/TabGroup";
 import SwipeableViews from "react-swipeable-views";
+import { TabGroup } from "./basic_components/TabGroup";
 import {
-    MovementRecorder,
-    MovementRecorderFunction,
-} from "./layout_components/MovementRecorder";
+    ActionModeType,
+    ButtonPadIdMobile,
+    CameraViewId,
+    ComponentType,
+    LayoutDefinition,
+    PilotButtonPadType
+} from "./utils/component_definitions";
+// import Swipe from "./static_components/Swipe";
 import AutoNav from "./layout_components/AutoNav";
 import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
-import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 
-import { Alert } from "./basic_components/Alert";
-import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
-import GripperCamPIP from "./layout_components/GripperCamPIP";
-import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
+import FooterGlobal from "./layout_components/FooterGlobal";
+import GripperCamPIP from "./layout_components/GripperCamPIP";
 import Toasts, { useToasts } from "./layout_components/Toasts";
+import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
+import type {
+    ControlAutoNavAction,
+    ControlAutoNavResult,
+    LoadAutoNavLocationResult,
+    SavedLocationsModalAction,
+    SetSavedLocationsModalResult,
+} from "./voice/constants";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -113,7 +109,14 @@ export const MobileOperator = (props: {
     const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
         useState(false);
 
-
+    /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
+    const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
+    const registerAutoNavNavControls = React.useCallback(
+        (controls: AutoNavNavControls | null) => {
+            autoNavNavControlsRef.current = controls;
+        },
+        [],
+    );
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
@@ -127,6 +130,46 @@ export const MobileOperator = (props: {
             isModalLocationsMenuVisibleSet(false);
         }
     }, [sceneSelected]);
+
+    const handleSetSavedLocationsModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saved Locations is only available in AutoNav",
+                };
+            }
+            isModalLocationsMenuVisibleSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Locations."
+                        : "Closed Saved Locations.",
+            };
+        },
+        [],
+    );
+
+    const handleControlAutoNav = React.useCallback(
+        (action: ControlAutoNavAction): ControlAutoNavResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav controls are only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return action === "start" ? controls.start() : controls.cancel();
+        },
+        [],
+    );
 
     /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
     const handleCancelAutoNavOnStop =
@@ -324,7 +367,25 @@ export const MobileOperator = (props: {
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <Toasts toasts={toasts} toastsSet={toastsSet} />
-
+            <VoiceCommandAssistant
+                onVelocityScaleApplied={applyVelocityScale}
+                setActionMode={setActionMode}
+                addToast={addToast}
+                onSwitchScene={(scene) => {
+                    if (scene === "pilot") {
+                        swipeableViewsIdxSet(0);
+                        setSceneSelected("pilot-mode");
+                    } else {
+                        setSceneSelected("autonav");
+                        swipeableViewsIdxSet(1);
+                    }
+                }}
+                onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                onControlAutoNav={handleControlAutoNav}
+                onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
+                onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
+                onLoadAutoNavLocation={handleLoadAutoNavLocation}
+            />
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
@@ -396,7 +457,7 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-                            setVelocityScale={applyVelocityScale}
+                            onVelocityScaleChange={applyVelocityScale}
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
@@ -434,7 +495,9 @@ export const MobileOperator = (props: {
                             isModalLocationsMenuVisibleSet={
                                 isModalLocationsMenuVisibleSet
                             }
-
+                            onRegisterAutoNavNavControls={
+                                registerAutoNavNavControls
+                            }
                             moveBaseState={moveBaseState}
                         />
                     </div>

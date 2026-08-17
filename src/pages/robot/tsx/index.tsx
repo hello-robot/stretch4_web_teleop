@@ -21,6 +21,8 @@ import {
     ActionStateMessage,
     ROSBatteryState,
     BatteryVoltageMessage,
+    ROSOdometry,
+    OdomMessage,
     delay,
 } from "shared/util";
 import { AllVideoStreamComponent, VideoStream } from "./videostreams";
@@ -33,6 +35,7 @@ export const robot = new Robot({
     jointStateCallback: forwardJointStates,
     batteryStateCallback: forwardBatteryState,
     occupancyGridCallback: forwardOccupancyGrid,
+    odomCallback: forwardOdom,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
     playbackPosesResultCallback: (goalState: ActionState) =>
@@ -42,6 +45,7 @@ export const robot = new Robot({
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
+    leaseStatusCallback: forwardLeaseStatus,
 });
 
 export let connection: WebRTCConnection;
@@ -149,6 +153,16 @@ function forwardIsRunStopped(isRunStopped: boolean) {
     } as IsRunStoppedMessage);
 }
 
+function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "leaseStatus",
+        holder: holder,
+        isDriverHolding: isDriverHolding,
+    } as LeaseStatusMessage);
+}
+
 function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
@@ -180,6 +194,15 @@ function forwardBatteryState(batteryState: ROSBatteryState) {
         type: "batteryVoltage",
         message: batteryState.voltage,
     } as BatteryVoltageMessage);
+}
+
+function forwardOdom(odom: ROSOdometry) {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "odom",
+        message: odom,
+    } as OdomMessage);
 }
 
 function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {

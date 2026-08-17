@@ -1,24 +1,35 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import MicIcon from "@mui/icons-material/Mic";
+import MicOffIcon from "@mui/icons-material/MicOff";
 
+import "operator/css/FooterGlobal.css";
+import batteryIcon from "operator/icons/Battery_Footer.svg";
+import runStopRunIcon from "operator/icons/RunStop_Run.svg";
+import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
+import { ActionState } from "shared/util";
+import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import MainMenu from "../basic_components/MainMenu";
 import SceneCarousel, {
     SceneItem,
     SceneItemStatus,
 } from "../basic_components/SceneCarousel";
-import MagneticWrapper from "../static_components/MagneticWrapper";
-import batteryIcon from "operator/icons/Battery_Footer.svg";
-import runStopRunIcon from "operator/icons/RunStop_Run.svg";
-import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
-import "operator/css/FooterGlobal.css";
-import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import MagneticWrapper from "../static_components/MagneticWrapper";
+import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
+import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
+import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
+import {
+    getVoiceStatusSnapshot,
+    setVoiceStatus,
+    useVoiceStatus,
+} from "../voice/voiceStatusStore";
 import { MapFunction } from "./AutoNav";
-import { ActionState } from "shared/util";
 
+/** Menu tiles that run an action without changing the selected scene/footer label. */
+const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco", "reload-app"]);
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
-
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
     sceneSelected: string;
@@ -32,6 +43,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
+    const { connected: voiceConnected, micMuted } = useVoiceStatus();
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
@@ -118,6 +130,31 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 status: localizeStatus,
             },
             {
+                id: "mic-mute",
+                name: micMuted ? "Unmute" : "Mute",
+                description: "Toggle microphone uplink to OpenAI",
+                onClick: () => {
+                    const nextMuted = !getVoiceStatusSnapshot().micMuted;
+                    setVoiceStatus({ micMuted: nextMuted });
+                    if (!nextMuted) {
+                        bumpVoiceCommandActivity();
+                        // Reacquire from this tap — iOS needs the gesture for getUserMedia.
+                        void recoverVoiceMicFromUserGesture();
+                    }
+                },
+                icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                enabled: voiceConnected,
+            },
+            {
+                id: "reload-app",
+                name: "Reload App",
+                description: "Reload the operator page",
+                onClick: () => {
+                    window.location.reload();
+                },
+                enabled: true,
+            },
+            {
                 id: "finedex-gripper",
                 name: "FineDex Gripper",
                 description: "TextDescription",
@@ -151,6 +188,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             },
         ],
         [
+            micMuted,
+            voiceConnected,
             localizeStatus,
             onSceneSelectedChange,
             swipeableViewsIdxSet,
@@ -158,12 +197,9 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
-        // Action-only items run their handler without switching the active scene.
-        if (scene.id === "localize-aruco") {
-            if (localizeStatus === "loading") {
-                return;
-            }
+        if (ACTION_TILE_IDS.has(scene.id)) {
             scene.onClick?.();
+            isMainMenuOpenSet(false);
             return;
         }
         onSceneSelectedChange(scene.id);
@@ -185,8 +221,10 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="scene-menu-button"
                     onPointerUp={() => isMainMenuOpenSet(true)}
                 >
-                    {sceneNameCurrent}
-                    <div className="fancy-border" />
+                    <VoicePilotSceneChrome
+                        sceneSelected={sceneSelected}
+                        fallbackName={sceneNameCurrent}
+                    />
                 </button>
                 <MainMenu
                     isOpen={isMainMenuOpen}
