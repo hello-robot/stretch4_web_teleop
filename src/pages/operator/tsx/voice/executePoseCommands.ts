@@ -15,7 +15,7 @@ import {
     SavePoseResult,
     SetSavedPosesModalResult,
 } from "./constants";
-import { RealtimeVoiceFunctionsProvider } from "./voiceFunctionsProvider";
+import { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 
 /**
  * Helper to safely parse raw tool arguments (which can be a JSON string or an object).
@@ -76,7 +76,7 @@ function sleepMs(ms: number): Promise<void> {
  */
 export async function executeSavePose(
     rawArgs: unknown,
-    voiceProvider?: RealtimeVoiceFunctionsProvider,
+    voiceProvider?: ButtonFunctionProvider,
 ): Promise<SavePoseResult> {
     const args = parseArgsObject(rawArgs);
     const rawName = typeof args.name === "string" ? args.name.trim() : "";
@@ -96,8 +96,8 @@ export async function executeSavePose(
     }
 
     // 1. Stop any ongoing robot motion first
-    if (voiceProvider?.buttonFunctionProvider) {
-        voiceProvider.buttonFunctionProvider.stopCurrentAction(true);
+    if (voiceProvider) {
+        voiceProvider.stopCurrentAction(true);
     }
     FunctionProvider.remoteRobot?.stopTrajectory();
 
