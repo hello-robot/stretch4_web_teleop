@@ -30,7 +30,7 @@
       type = Terminal
       parent = hpaned0
       order = 0
-      command = "bash -c 'cd /home/anna2/ament_ws/src/stretch4_web_teleop && npm run watch-transcribe-model; exec bash'"
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-transcribe-model; exec bash'"
       title = Transcribe Model (STT)
     [[[hpaned1]]]
       type = HPaned
@@ -41,7 +41,7 @@
       type = Terminal
       parent = hpaned1
       order = 0
-      command = "bash -c 'cd /home/anna2/ament_ws/src/stretch4_web_teleop && npm run watch-realtime-model; exec bash'"
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-realtime-model; exec bash'"
       title = Realtime Model (Tools)
     [[[hpaned2]]]
       type = HPaned
@@ -52,13 +52,13 @@
       type = Terminal
       parent = hpaned2
       order = 0
-      command = "bash -c 'cd /home/anna2/ament_ws/src/stretch4_web_teleop && npm run watch-mic; exec bash'"
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-mic; exec bash'"
       title = Mic Events
     [[[col4]]]
       type = Terminal
       parent = hpaned2
       order = 1
-      command = "bash -c 'cd /home/anna2/ament_ws/src/stretch4_web_teleop && npm run watch-ros; exec bash'"
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-ros; exec bash'"
       title = ROS Launch Logs
   [[web_interface_command_center]]
     [[[child0]]]
