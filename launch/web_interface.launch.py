@@ -50,7 +50,11 @@ def check_valid_configuration(model, tool, has_head_cams):
     whichever value is not recognised.
     """
     valid_models = ["SE4"]
-    valid_tools = ["eoa_wrist_dw4_tool_sg4", "eoa_wrist_dw4_tool_tablet"]
+    valid_tools = [
+        "eoa_wrist_dw4_tool_sg4",
+        "eoa_wrist_dw4_tool_tablet",
+        "eoa_wrist_dw4_tool_nil",
+    ]
 
     if model not in valid_models:
         print(
