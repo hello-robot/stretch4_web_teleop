@@ -275,6 +275,7 @@ def generate_launch_description():
                     "autostart": "true",
                     "map": LaunchConfiguration("map_yaml"),
                     "use_rviz": "false",
+                    "action_timeout": "30.0",
                 }.items(),
             ),
         ],

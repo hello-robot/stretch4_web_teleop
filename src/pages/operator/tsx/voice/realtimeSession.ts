@@ -24,6 +24,7 @@ import {
     VOICE_TOOLS,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
     VOICE_WAKE_PHRASE_DISPLAY,
+    type ControlAutoNavResult,
     type ExecuteToolResult,
     type MoveToPoseResult,
     type SavedPosesModalAction,
@@ -542,6 +543,8 @@ export type RealtimeVoiceConnectOptions = {
     onSetSavedPosesModalFeedback?: (result: SetSavedPosesModalResult) => void;
     onSavePoseFeedback?: (result: SavePoseResult) => void;
     onMoveToPoseFeedback?: (result: MoveToPoseResult) => void;
+    /** Fast-path / stop_motion cancel hook for active AutoNav navigation */
+    onCancelAutoNavOnStop?: () => ControlAutoNavResult;
 };
 
 export type ActiveRealtimeVoiceSession = {
@@ -682,7 +685,9 @@ export async function connectOpenAIRealtimeVoice(
      * stop motion, asleep, muted.
      */
     const resetSvcToSafeDefaults = () => {
-        executeStopMotionOnProvider(opts.voiceProvider);
+        executeStopMotionOnProvider(opts.voiceProvider, {
+            cancelAutoNav: opts.onCancelAutoNavOnStop,
+        });
         voiceWakeSleep?.sleep("disconnect");
         micMutedIntent = true;
         micGate?.setForceClosed(true);
@@ -895,7 +900,9 @@ export async function connectOpenAIRealtimeVoice(
             return executeJointMoveOnProvider(voiceProvider, rawArgs);
         },
         stop_motion: (voiceProvider) =>
-            executeStopMotionOnProvider(voiceProvider),
+            executeStopMotionOnProvider(voiceProvider, {
+                cancelAutoNav: opts.onCancelAutoNavOnStop,
+            }),
         repeat_base_move: (voiceProvider) =>
             executeRepeatBaseMoveOnProvider(voiceProvider),
         execute_macro: (voiceProvider, fc) => {
@@ -1079,7 +1086,9 @@ export async function connectOpenAIRealtimeVoice(
                     opts.onLog?.(
                         `[Realtime] Fast-path stop triggered by transcript: "${transcript.trim()}"`,
                     );
-                    executeStopMotionOnProvider(opts.voiceProvider);
+                    executeStopMotionOnProvider(opts.voiceProvider, {
+                        cancelAutoNav: opts.onCancelAutoNavOnStop,
+                    });
                 }
             }
             return;

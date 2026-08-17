@@ -218,6 +218,9 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         idxFixedRecordingPlayingSet
     } = props.sharedState;
 
+    const [recordings, recordingsSet] = useState<string[]>(
+        functions.SavedRecordingNames(),
+    );
     const [isModalOpen, isModalOpenSet] = React.useState<boolean>(false);
 
     useEffect(() => {
@@ -260,6 +263,18 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
     const [isPlaybackStatusbarVisible, isPlaybackStatusbarVisibleSet] = React.useState<boolean>(false);
     const [typePlaybackStatusbar, typePlaybackStatusbarSet] = React.useState<StatusbarType>('info');
     const [childrenPlaybackStatusbar, childrenPlaybackStatusbarSet] = React.useState<React.ReactNode | null>(null);
+
+    const showButtonPadWithDelay = useCallback(() => {
+        setTimeout(() => { props.setCameraVeilCallback(false) }, DELAYMS_BUTTONPAD)
+    }, [props.setCameraVeilCallback]);
+
+    const hideStatusBar = useCallback(() => {
+        setTimeout(() => {
+            isPlaybackStatusbarVisibleSet(false);
+            showButtonPadWithDelay();
+        }, DELAYMS_STATUSBAR_BEFORE_HIDE)
+    }, [showButtonPadWithDelay]);
+
     const [isOneJointSelected, isOneJointSelectedSet] = React.useState<boolean>(false);
     const selectAllJoints = useCallback(() => {
         setArm(true);
@@ -330,9 +345,6 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
     /*************
      * Recording *
      *************/
-    const [recordings, recordingsSet] = useState<string[]>(
-        functions.SavedRecordingNames(),
-    );
     const [showRecordingStartButton, showRecordingStartButtonSet] =
         useState<boolean>(false);
     const [isNamingModalVisible, isNamingModalVisibleSet] = React.useState<boolean>(false);
@@ -794,13 +806,9 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
     // is currently playing (including this one)
     const isRecordingPlaying = movementStatesTransitory.includes(playbackPosesState?.state as MovementState);
 
-    const showButtonPadWithDelay = useCallback(() => {
-        setTimeout(() => { props.setCameraVeilCallback(false) }, DELAYMS_BUTTONPAD)
-    }, []);
-
     const handlePlaybackCancel = useCallback(() => {
 
-        const recordingName = recordings[idxFixedRecordingPlaying];
+        const recordingName = recordings[idxFixedRecordingPlaying] ?? "Pose";
 
         childrenPlaybackStatusbarSet(
             <div className="mrecord-statusbar-row mrecord-statusbar-row--loose">
@@ -812,14 +820,21 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         hideStatusBar();
         idxFixedRecordingPlayingSet(-1);
         functions.Cancel();
-    }, [idxFixedRecordingPlaying, idxFixedRecordingPlayingSet, functions]);
+        return true;
+    }, [recordings, idxFixedRecordingPlaying, idxFixedRecordingPlayingSet, functions, hideStatusBar]);
 
-    const hideStatusBar = useCallback(() => {
-        setTimeout(() => {
-            isPlaybackStatusbarVisibleSet(false);
-            showButtonPadWithDelay();
-        }, DELAYMS_STATUSBAR_BEFORE_HIDE)
-    }, []);
+    useEffect(() => {
+        movementRecorderFunctionProvider.setCancelPlaybackHandler(() => {
+            if (isRecordingPlaying || idxFixedRecordingPlaying !== -1) {
+                handlePlaybackCancel();
+                return true;
+            }
+            return false;
+        });
+        return () => {
+            movementRecorderFunctionProvider.setCancelPlaybackHandler(undefined);
+        };
+    }, [handlePlaybackCancel, isRecordingPlaying, idxFixedRecordingPlaying]);
 
     useEffect(() => {
 
