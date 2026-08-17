@@ -110,7 +110,8 @@ const ButtonCTA = (props: {
     ) {
         return (
             <button
-                onPointerDown={() => props.showRecordingStartButtonSet(true)}
+                type="button"
+                onClick={() => props.showRecordingStartButtonSet(true)}
                 className="btn btn-tertiary mrecord-modal-cta-btn"
             >
                 <RadioButtonCheckedIcon color="primary" fontSize="small" />
@@ -127,7 +128,8 @@ const ButtonCTA = (props: {
     ) {
         return (
             <button
-                onPointerDown={props.startRecording}
+                type="button"
+                onClick={props.startRecording}
                 disabled={!props.isOneJointSelected}
                 className={`btn btn-primary mrecord-modal-cta-btn ${props.isOneJointSelected ? 'glow' : ''}`}
             >
@@ -147,7 +149,8 @@ const ButtonCTA = (props: {
             && !props.isRecordingNameDuplicate;
         return (
             <button
-                onPointerDown={props.handleSaveRecording}
+                type="button"
+                onClick={props.handleSaveRecording}
                 className={`btn btn-primary mrecord-modal-cta-btn ${canSave ? 'glow' : ''}`}
                 disabled={!canSave}
             >
@@ -715,8 +718,9 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
             {!showRecordingStartButton && !isNamingModalVisible
                 ? (<MagneticWrapper>
                     <button
+                        type="button"
                         className="btn btn-tertiary"
-                        onPointerDown={handleClose}
+                        onClick={handleClose}
                     >
                         Close
                     </button>
@@ -725,20 +729,23 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                     ? (
                         <MagneticWrapper>
                             <button
+                                type="button"
                                 className="btn btn-tertiary"
-                                onPointerDown={dumpToInitialState}
+                                onClick={dumpToInitialState}
                             >
                                 Back
                             </button>
                         </MagneticWrapper>
                     )
                     : (
-                        <MagneticWrapper>                            <button
-                            className="btn btn-tertiary"
-                            onPointerDown={handleDiscardRecording}
-                        >
-                            Discard
-                        </button>
+                        <MagneticWrapper>
+                            <button
+                                type="button"
+                                className="btn btn-tertiary"
+                                onClick={handleDiscardRecording}
+                            >
+                                Discard
+                            </button>
                         </MagneticWrapper>
                     )}
         </Flex>
@@ -1012,7 +1019,8 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                             ? (
                                 <div className="joints-list">
                                     <button
-                                        onPointerDown={!isOneJointSelected ? selectAllJoints : deselectAllJoints}
+                                        type="button"
+                                        onClick={!isOneJointSelected ? selectAllJoints : deselectAllJoints}
                                         disabled={props.isRecording}
                                         className={`btn ${!isOneJointSelected ? "btn-primary" : "btn-tertiary"}`}
                                     >
