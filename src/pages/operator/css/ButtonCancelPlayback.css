@@ -1,7 +1,7 @@
 /* Floating "Stop" button that appears during movement recording playback. */
 
 .cancel-playback-container {
-    z-index: 2;
+    z-index: 2000;
     position: absolute;
     bottom: 50px;
     display: flex;
@@ -12,7 +12,7 @@
 
 /* Dark translucent pill-shaped button with backdrop blur */
 .cancel-playback-btn {
-    z-index: 2;
+    z-index: 2001;
     position: relative;
     display: flex;
     align-items: center;
