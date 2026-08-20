@@ -292,6 +292,13 @@ input.locations-menu-list-item-input {
 
 input.locations-menu-list-item-input:disabled {
     opacity: 1;
+    /* Disabled inputs swallow clicks; pass them through to the
+       left-column select handler (ARIAProps onClick). */
+    pointer-events: none;
+}
+
+.locations-menu-list-item-left-column:has(input:disabled) .input-fluid-container {
+    pointer-events: none;
 }
 
 button.cancel-auto-nav-button {
