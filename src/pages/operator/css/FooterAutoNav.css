@@ -297,7 +297,8 @@ input.locations-menu-list-item-input:disabled {
     pointer-events: none;
 }
 
-.locations-menu-list-item-left-column:has(input:disabled) .input-fluid-container {
+.locations-menu-list-item-left-column:has(input:disabled)
+    .input-fluid-container {
     pointer-events: none;
 }
 
