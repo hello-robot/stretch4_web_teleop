@@ -14,10 +14,12 @@ import {
     EXECUTE_MACRO,
     isPlaceholderArgs,
     LOAD_AUTONAV_LOCATION,
+    MAIN_MENU_ACTIONS,
     MIC_HEALTH_STATUS_SLUG,
     NO_ARG_VOICE_TOOLS,
     SAVE_MAP_LOCATION,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    SET_MAIN_MENU,
     SET_SAVED_LOCATIONS_MODAL,
     STOP_MOTION,
     SWITCH_SCENE,
@@ -33,7 +35,9 @@ import {
     type ControlAutoNavResult,
     type ExecuteToolResult,
     type LoadAutoNavLocationResult,
+    type MainMenuAction,
     type SavedLocationsModalAction,
+    type SetMainMenuResult,
     type SetSavedLocationsModalResult,
     type VoiceMoveExecutionMode,
     type VoiceSceneName,
@@ -258,6 +262,7 @@ function formatToolCallLog(
         }
     } else if (
         fc.name === SET_SAVED_LOCATIONS_MODAL ||
+        fc.name === SET_MAIN_MENU ||
         fc.name === CONTROL_AUTONAV
     ) {
         try {
@@ -346,6 +351,7 @@ function parsedArgsCompleteForTool(
     }
     if (
         nameVal === SET_SAVED_LOCATIONS_MODAL ||
+        nameVal === SET_MAIN_MENU ||
         nameVal === CONTROL_AUTONAV
     ) {
         return typeof parsed.action === "string" && parsed.action.length > 0;
@@ -412,6 +418,7 @@ function accumulateFunctionCalls(
                 nameVal === SWITCH_SCENE ||
                 nameVal === SAVE_MAP_LOCATION ||
                 nameVal === SET_SAVED_LOCATIONS_MODAL ||
+                nameVal === SET_MAIN_MENU ||
                 nameVal === CONTROL_AUTONAV ||
                 nameVal === LOAD_AUTONAV_LOCATION
             ) &&
@@ -614,6 +621,8 @@ export type RealtimeVoiceConnectOptions = {
     onSetSavedLocationsModal?: (
         action: SavedLocationsModalAction,
     ) => SetSavedLocationsModalResult;
+    /** Open/close the operator Main Menu overlay. */
+    onSetMainMenu?: (action: MainMenuAction) => SetMainMenuResult;
     /**
      * Start/cancel AutoNav navigation (AutoNav-gated in MobileOperator).
      * Return result for tool output; VoiceCommandAssistant toasts errors.
@@ -1258,6 +1267,40 @@ export async function connectOpenAIRealtimeVoice(
             const result = opts.onSetSavedLocationsModal(
                 action as SavedLocationsModalAction,
             );
+            return result.ok
+                ? { ok: true, detail: result.detail }
+                : { ok: false, detail: result.detail, ignored: true };
+        },
+        set_main_menu: (_voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                opts.onLog?.(
+                    `[Realtime] Bad JSON arguments for ${SET_MAIN_MENU}: ${fc.arguments}`,
+                );
+                rawArgs = {};
+            }
+            const action =
+                typeof rawArgs.action === "string" ? rawArgs.action : "";
+            if (!(MAIN_MENU_ACTIONS as readonly string[]).includes(action)) {
+                return {
+                    ok: false,
+                    detail: `Unknown action: "${action}".`,
+                    ignored: true,
+                };
+            }
+            if (!opts.onSetMainMenu) {
+                return {
+                    ok: false,
+                    detail: "Main Menu is unavailable.",
+                    ignored: true,
+                };
+            }
+            const result = opts.onSetMainMenu(action as MainMenuAction);
             return result.ok
                 ? { ok: true, detail: result.detail }
                 : { ok: false, detail: result.detail, ignored: true };

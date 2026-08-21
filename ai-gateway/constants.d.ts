@@ -17,11 +17,13 @@ export declare const EXECUTE_MACRO: "execute_macro";
 export declare const SWITCH_SCENE: "switch_scene";
 export declare const SAVE_MAP_LOCATION: "save_map_location";
 export declare const SET_SAVED_LOCATIONS_MODAL: "set_saved_locations_modal";
+export declare const SET_MAIN_MENU: "set_main_menu";
 export declare const CONTROL_AUTONAV: "control_autonav";
 export declare const LOAD_AUTONAV_LOCATION: "load_autonav_location";
 export declare const VOICE_MACRO_NAMES: readonly ["center_wrist", "stow_wrist"];
 export declare const VOICE_SCENE_NAMES: readonly ["pilot", "autonav"];
 export declare const SAVED_LOCATIONS_MODAL_ACTIONS: readonly ["open", "close"];
+export declare const MAIN_MENU_ACTIONS: readonly ["open", "close"];
 export declare const AUTONAV_NAV_ACTIONS: readonly ["start", "cancel"];
 export declare const VOICE_TOOLS: readonly [
     typeof EXECUTE_BASE_MOVE,
@@ -32,6 +34,7 @@ export declare const VOICE_TOOLS: readonly [
     typeof SWITCH_SCENE,
     typeof SAVE_MAP_LOCATION,
     typeof SET_SAVED_LOCATIONS_MODAL,
+    typeof SET_MAIN_MENU,
     typeof CONTROL_AUTONAV,
     typeof LOAD_AUTONAV_LOCATION,
 ];
