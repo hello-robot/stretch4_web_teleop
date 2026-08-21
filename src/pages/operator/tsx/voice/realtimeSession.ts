@@ -14,10 +14,12 @@ import {
     EXECUTE_MACRO,
     isPlaceholderArgs,
     LOAD_AUTONAV_LOCATION,
+    MAIN_MENU_ACTIONS,
     MIC_HEALTH_STATUS_SLUG,
     NO_ARG_VOICE_TOOLS,
     SAVE_MAP_LOCATION,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    SET_MAIN_MENU,
     SET_SAVED_LOCATIONS_MODAL,
     STOP_MOTION,
     SWITCH_SCENE,
@@ -33,7 +35,9 @@ import {
     type ControlAutoNavResult,
     type ExecuteToolResult,
     type LoadAutoNavLocationResult,
+    type MainMenuAction,
     type SavedLocationsModalAction,
+    type SetMainMenuResult,
     type SetSavedLocationsModalResult,
     type VoiceMoveExecutionMode,
     type VoiceSceneName,
@@ -55,15 +59,8 @@ import {
     executeSaveMapLocation,
     type SaveMapLocationResult,
 } from "./executeSaveMapLocation";
-import {
-    extractLabelAfterNavigateToThe,
-    hasNavigateToThePrefix,
-    isBareNavigatePhrase,
-    isToThePlaceContinuation,
-    matchSavedLocation,
-} from "./matchSavedLocation";
+import { matchSavedLocation } from "./matchSavedLocation";
 import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
-import { normalizePhrase } from "./phraseUtils";
 import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
     createVoiceWakeSleep,
@@ -258,6 +255,7 @@ function formatToolCallLog(
         }
     } else if (
         fc.name === SET_SAVED_LOCATIONS_MODAL ||
+        fc.name === SET_MAIN_MENU ||
         fc.name === CONTROL_AUTONAV
     ) {
         try {
@@ -346,6 +344,7 @@ function parsedArgsCompleteForTool(
     }
     if (
         nameVal === SET_SAVED_LOCATIONS_MODAL ||
+        nameVal === SET_MAIN_MENU ||
         nameVal === CONTROL_AUTONAV
     ) {
         return typeof parsed.action === "string" && parsed.action.length > 0;
@@ -412,6 +411,7 @@ function accumulateFunctionCalls(
                 nameVal === SWITCH_SCENE ||
                 nameVal === SAVE_MAP_LOCATION ||
                 nameVal === SET_SAVED_LOCATIONS_MODAL ||
+                nameVal === SET_MAIN_MENU ||
                 nameVal === CONTROL_AUTONAV ||
                 nameVal === LOAD_AUTONAV_LOCATION
             ) &&
@@ -614,6 +614,8 @@ export type RealtimeVoiceConnectOptions = {
     onSetSavedLocationsModal?: (
         action: SavedLocationsModalAction,
     ) => SetSavedLocationsModalResult;
+    /** Open/close the operator Main Menu overlay. */
+    onSetMainMenu?: (action: MainMenuAction) => SetMainMenuResult;
     /**
      * Start/cancel AutoNav navigation (AutoNav-gated in MobileOperator).
      * Return result for tool output; VoiceCommandAssistant toasts errors.
@@ -711,37 +713,10 @@ export async function connectOpenAIRealtimeVoice(
 
     /** Cleared on wake so trailing STT events from the same utterance are ignored. */
     const transcriptByItem = new Map<string, string>();
-    /** Latest completed user transcript (for Navigate-to prefix gate). */
-    let lastCompletedUserTranscript = "";
-    /**
-     * Prior turn was bare "Navigate" / "navigated" — next "to the …" may complete
-     * a VAD-split load command.
-     */
-    let pendingBareNavigatePrefix = false;
-    /** Dedupe fast-path + model tool double-fires for the same place. */
+    /** Dedupe accidental double tool fires for the same place. */
     let lastLoadedAutoNavLabel = "";
     let lastLoadedAutoNavAtMs = 0;
     const LOAD_AUTONAV_DEDUPE_MS = 2500;
-
-    /** Prefix may appear in a completed turn or still-streaming partials (tool race). */
-    const transcriptHasNavigateToThePrefix = (): boolean => {
-        if (hasNavigateToThePrefix(lastCompletedUserTranscript)) {
-            return true;
-        }
-        for (const partial of transcriptByItem.values()) {
-            if (hasNavigateToThePrefix(partial)) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    const latestUserTranscriptForLog = (): string => {
-        if (transcriptByItem.size > 0) {
-            return [...transcriptByItem.values()].join(" ");
-        }
-        return lastCompletedUserTranscript;
-    };
 
     const tryLoadAutoNavLocationLabel = (
         label: string,
@@ -819,37 +794,12 @@ export async function connectOpenAIRealtimeVoice(
         return { ok: false, detail: result.detail, ignored: true };
     };
 
-    /** Client-side load when STT has "Navigate to …" / "Navigate to the …". */
-    const tryFastPathLoadAutoNavLocation = (transcript: string): boolean => {
-        let label = extractLabelAfterNavigateToThe(transcript);
-        if (
-            !label &&
-            pendingBareNavigatePrefix &&
-            isToThePlaceContinuation(transcript)
-        ) {
-            label = normalizePhrase(transcript)
-                .replace(/^to the\s+/, "")
-                .replace(/^to\s+/, "")
-                .trim();
-        }
-        if (!label) {
-            return false;
-        }
-        opts.onLog?.(
-            `[Realtime] Fast-path ${LOAD_AUTONAV_LOCATION} from transcript: "${transcript.trim()}" → label="${label}"`,
-        );
-        tryLoadAutoNavLocationLabel(label, "transcript_fast_path");
-        pendingBareNavigatePrefix = false;
-        return true;
-    };
-
     voiceWakeSleep = createVoiceWakeSleep({
         provider: opts.voiceProvider,
         onStateChange: (s) => {
             opts.onListeningState?.(s);
             if (s === "awake") {
                 transcriptByItem.clear();
-                pendingBareNavigatePrefix = false;
             }
         },
         onLog: opts.onLog,
@@ -1171,26 +1121,6 @@ export async function connectOpenAIRealtimeVoice(
                     ignored: true,
                 };
             }
-            // Safety net: if Navigate-to-the is in the transcript, load instead.
-            if (scene === "autonav" && transcriptHasNavigateToThePrefix()) {
-                const label =
-                    extractLabelAfterNavigateToThe(
-                        lastCompletedUserTranscript,
-                    ) ||
-                    [...transcriptByItem.values()]
-                        .map((t) => extractLabelAfterNavigateToThe(t))
-                        .find((l) => Boolean(l)) ||
-                    "";
-                if (label) {
-                    opts.onLog?.(
-                        `[Realtime] Redirecting switch_scene→${LOAD_AUTONAV_LOCATION} label="${label}"`,
-                    );
-                    return tryLoadAutoNavLocationLabel(
-                        label,
-                        "switch_scene_redirect",
-                    );
-                }
-            }
             if (!opts.onSwitchScene) {
                 return {
                     ok: false,
@@ -1262,6 +1192,40 @@ export async function connectOpenAIRealtimeVoice(
                 ? { ok: true, detail: result.detail }
                 : { ok: false, detail: result.detail, ignored: true };
         },
+        set_main_menu: (_voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                opts.onLog?.(
+                    `[Realtime] Bad JSON arguments for ${SET_MAIN_MENU}: ${fc.arguments}`,
+                );
+                rawArgs = {};
+            }
+            const action =
+                typeof rawArgs.action === "string" ? rawArgs.action : "";
+            if (!(MAIN_MENU_ACTIONS as readonly string[]).includes(action)) {
+                return {
+                    ok: false,
+                    detail: `Unknown action: "${action}".`,
+                    ignored: true,
+                };
+            }
+            if (!opts.onSetMainMenu) {
+                return {
+                    ok: false,
+                    detail: "Main Menu is unavailable.",
+                    ignored: true,
+                };
+            }
+            const result = opts.onSetMainMenu(action as MainMenuAction);
+            return result.ok
+                ? { ok: true, detail: result.detail }
+                : { ok: false, detail: result.detail, ignored: true };
+        },
         control_autonav: (_voiceProvider, fc) => {
             let rawArgs: Record<string, unknown>;
             try {
@@ -1320,20 +1284,6 @@ export async function connectOpenAIRealtimeVoice(
                     ignored: true,
                 };
             }
-            if (
-                !transcriptHasNavigateToThePrefix() &&
-                !pendingBareNavigatePrefix
-            ) {
-                const transcript = latestUserTranscriptForLog();
-                opts.onLog?.(
-                    `[Realtime] ${LOAD_AUTONAV_LOCATION} ignored — missing Navigate to prefix (transcript="${transcript.slice(0, 80)}")`,
-                );
-                return {
-                    ok: false,
-                    detail: 'Requires "Navigate to …" or "Navigate to the …".',
-                    ignored: true,
-                };
-            }
             return tryLoadAutoNavLocationLabel(label, "tool");
         },
     };
@@ -1381,24 +1331,10 @@ export async function connectOpenAIRealtimeVoice(
         if (!transcript) {
             return;
         }
-        lastCompletedUserTranscript = transcript;
         opts.onLog?.(
             `[Realtime] user transcript: ${transcript.slice(0, 160)}`,
         );
         voiceWakeSleep?.tryPhraseFromTranscript(transcript, true);
-
-        if (voiceWakeSleep?.state === "awake") {
-            if (tryFastPathLoadAutoNavLocation(transcript)) {
-                // loaded (or attempted) from "Navigate to …" / stitched turn
-            } else if (isBareNavigatePhrase(transcript)) {
-                pendingBareNavigatePrefix = true;
-                opts.onLog?.(
-                    `[Realtime] Bare Navigate phrase — waiting for possible "to …" continuation`,
-                );
-            } else if (!isToThePlaceContinuation(transcript)) {
-                pendingBareNavigatePrefix = false;
-            }
-        }
     };
 
     const runVoiceToolOnce = async (

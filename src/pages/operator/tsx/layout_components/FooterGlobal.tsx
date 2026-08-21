@@ -34,15 +34,18 @@ interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
     sceneSelected: string;
     onSceneSelectedChange: React.Dispatch<React.SetStateAction<string>>;
+    isMainMenuOpen: boolean;
+    isMainMenuOpenSet: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const FooterGlobal: React.FC<FooterGlobalProps> = ({
     swipeableViewsIdxSet,
     sceneSelected,
     onSceneSelectedChange,
+    isMainMenuOpen,
+    isMainMenuOpenSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
-    const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
