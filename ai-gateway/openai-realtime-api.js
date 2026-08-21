@@ -36,11 +36,13 @@ const {
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    SET_MAIN_MENU,
     CONTROL_AUTONAV,
     LOAD_AUTONAV_LOCATION,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    MAIN_MENU_ACTIONS,
     AUTONAV_NAV_ACTIONS,
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_SLEEP_PHRASE_DISPLAY,
@@ -159,6 +161,12 @@ function buildRealtimeVoiceSessionPayload() {
                 `Speech-to-text often mishears AutoNav as "auto now", "auto nav", "auto-nav", or "auto nap". For bare scene switches, treat those as \`scene="autonav"\`.`,
                 `CRITICAL: If the utterance is "Navigate to …" / "Navigate to the …" / "navigated to …" followed by a place name, do NOT call \`${SWITCH_SCENE}\` — call \`${LOAD_AUTONAV_LOCATION}\` instead.`,
 
+                // ── Main Menu ──────────────────────────────────────────────────────────────────────────────
+                `When the user wants to open or close the operator Main Menu overlay (not change scenes, not Saved Locations), call tool \`${SET_MAIN_MENU}\` with \`action\`. Do not call a movement tool. Do not use \`${SWITCH_SCENE}\` or \`${SET_SAVED_LOCATIONS_MODAL}\` for this.`,
+                `\`action="open"\`: Phrases: "Open menu", "Open the menu", "Open main menu", "Show menu", "Show the menu".`,
+                `\`action="close"\`: Phrases: "Close menu", "Close the menu", "Close main menu", "Hide menu", "Dismiss menu".`,
+                `CRITICAL DISAMBIGUATION: "open menu" / "close menu" → \`${SET_MAIN_MENU}\`. "open AutoNav" / "open Pilot" → \`${SWITCH_SCENE}\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\`.`,
+
                 // ── Save map location ──────────────────────────────────────────────────────────────────────
                 `When the user wants to save or bookmark the robot's current place with a name, call tool \`${SAVE_MAP_LOCATION}\` with \`label\`. Do not call a movement tool. Do not ask them to use the Add Location UI.`,
                 `Extract the label from phrases like: "add this location as …", "save this spot as …", "name this location …", "save this location as …", "bookmark this as …".`,
@@ -168,7 +176,7 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user wants to open or close the Saved Locations list/modal (not change scenes), call tool \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action\`. Do not call a movement tool. Do not use \`${SWITCH_SCENE}\` for this.`,
                 `\`action="open"\`: Phrases: "open saved locations", "show saved locations", "open the locations list", "show my locations".`,
                 `\`action="close"\`: Phrases: "close saved locations", "hide saved locations", "close the locations list", "dismiss saved locations".`,
-                `CRITICAL DISAMBIGUATION: "open AutoNav" / "go to AutoNav" (no place) → \`${SWITCH_SCENE}\` with \`scene="autonav"\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action="open"\`. "Navigate to the living room" / "Navigate to middle of living room" → \`${LOAD_AUTONAV_LOCATION}\`, never \`${SWITCH_SCENE}\`.`,
+                `CRITICAL DISAMBIGUATION: "open menu" → \`${SET_MAIN_MENU}\`. "open AutoNav" / "go to AutoNav" (no place) → \`${SWITCH_SCENE}\` with \`scene="autonav"\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\` with \`action="open"\`. "Navigate to the living room" / "Navigate to middle of living room" → \`${LOAD_AUTONAV_LOCATION}\`, never \`${SWITCH_SCENE}\`.`,
                 `The client rejects this tool if the user is not on AutoNav — do not call \`${SWITCH_SCENE}\` as a substitute.`,
 
                 // ── AutoNav start / cancel ─────────────────────────────────────────────────────────────────
@@ -349,6 +357,25 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                         },
                         required: ["label"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: SET_MAIN_MENU,
+                    description:
+                        "Open or close the operator Main Menu overlay. Use for requests like 'Open menu' or 'Close menu'. Do not use for switching Pilot/AutoNav scenes or for Saved Locations.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: MAIN_MENU_ACTIONS,
+                                description:
+                                    "Whether to open or close the Main Menu.",
+                            },
+                        },
+                        required: ["action"],
                         additionalProperties: false,
                     },
                 },

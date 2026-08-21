@@ -31,7 +31,9 @@ import {
     type ControlAutoNavAction,
     type ControlAutoNavResult,
     type LoadAutoNavLocationResult,
+    type MainMenuAction,
     type SavedLocationsModalAction,
+    type SetMainMenuResult,
     type SetSavedLocationsModalResult,
     type VoiceSceneName,
     type VoiceSpeed,
@@ -75,6 +77,7 @@ export type VoiceCommandAssistantProps = {
     onSetSavedLocationsModal: (
         action: SavedLocationsModalAction,
     ) => SetSavedLocationsModalResult;
+    onSetMainMenu: (action: MainMenuAction) => SetMainMenuResult;
     onControlAutoNav: (action: ControlAutoNavAction) => ControlAutoNavResult;
     onCancelAutoNavOnStop: () => ControlAutoNavResult;
     onGetAutoNavSavedPoseNames: () => string[] | null;
@@ -88,6 +91,7 @@ export const VoiceCommandAssistant = ({
     addToast,
     onSwitchScene,
     onSetSavedLocationsModal,
+    onSetMainMenu,
     onControlAutoNav,
     onCancelAutoNavOnStop,
     onGetAutoNavSavedPoseNames,
@@ -195,6 +199,17 @@ export const VoiceCommandAssistant = ({
         [onSetSavedLocationsModal, addToast],
     );
 
+    const handleSetMainMenu = useCallback(
+        (action: MainMenuAction): SetMainMenuResult => {
+            const result = onSetMainMenu(action);
+            if (!result.ok) {
+                addToast("error", result.detail, undefined, "voice");
+            }
+            return result;
+        },
+        [onSetMainMenu, addToast],
+    );
+
     const handleControlAutoNav = useCallback(
         (action: ControlAutoNavAction): ControlAutoNavResult => {
             const result = onControlAutoNav(action);
@@ -257,6 +272,7 @@ export const VoiceCommandAssistant = ({
                 onSwitchScene: handleSwitchScene,
                 onSaveMapLocationResult: handleSaveMapLocationResult,
                 onSetSavedLocationsModal: handleSetSavedLocationsModal,
+                onSetMainMenu: handleSetMainMenu,
                 onControlAutoNav: handleControlAutoNav,
                 onCancelAutoNavOnStop: handleCancelAutoNavOnStop,
                 onGetAutoNavSavedPoseNames,
@@ -319,6 +335,7 @@ export const VoiceCommandAssistant = ({
         handleSwitchScene,
         handleSaveMapLocationResult,
         handleSetSavedLocationsModal,
+        handleSetMainMenu,
         handleControlAutoNav,
         handleCancelAutoNavOnStop,
         onCancelAutoNavOnStop,

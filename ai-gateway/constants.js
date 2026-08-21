@@ -68,6 +68,9 @@ const SAVE_MAP_LOCATION = "save_map_location";
 /** Open or close the Saved Locations modal (AutoNav only). */
 const SET_SAVED_LOCATIONS_MODAL = "set_saved_locations_modal";
 
+/** Open or close the operator Main Menu overlay. */
+const SET_MAIN_MENU = "set_main_menu";
+
 /** Start or cancel AutoNav navigation (AutoNav only; requires a loaded pose for start). */
 const CONTROL_AUTONAV = "control_autonav";
 
@@ -83,6 +86,9 @@ const VOICE_SCENE_NAMES = ["pilot", "autonav"];
 /** Valid set_saved_locations_modal.action values. */
 const SAVED_LOCATIONS_MODAL_ACTIONS = ["open", "close"];
 
+/** Valid set_main_menu.action values. */
+const MAIN_MENU_ACTIONS = ["open", "close"];
+
 /** Valid control_autonav.action values. */
 const AUTONAV_NAV_ACTIONS = ["start", "cancel"];
 
@@ -96,6 +102,7 @@ const VOICE_TOOLS = [
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    SET_MAIN_MENU,
     CONTROL_AUTONAV,
     LOAD_AUTONAV_LOCATION,
 ];
@@ -213,11 +220,13 @@ module.exports = {
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
     SET_SAVED_LOCATIONS_MODAL,
+    SET_MAIN_MENU,
     CONTROL_AUTONAV,
     LOAD_AUTONAV_LOCATION,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
+    MAIN_MENU_ACTIONS,
     AUTONAV_NAV_ACTIONS,
 
     VOICE_TOOLS,
