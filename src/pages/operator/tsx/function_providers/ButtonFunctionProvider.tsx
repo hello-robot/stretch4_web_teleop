@@ -34,6 +34,18 @@ export enum ButtonPadButton {
     WristRollRight = "Wrist roll right",
 }
 
+/** Button pad buttons that drive the mobile base (velocity / cmd_vel). */
+const baseButtonPadFunctions = new Set<ButtonPadButton>([
+    ButtonPadButton.OmniForward,
+    ButtonPadButton.OmniBackward,
+    ButtonPadButton.BaseForward,
+    ButtonPadButton.BaseReverse,
+    ButtonPadButton.StrafeLeft,
+    ButtonPadButton.StrafeRight,
+    ButtonPadButton.BaseRotateLeft,
+    ButtonPadButton.BaseRotateRight,
+]);
+
 /** Button functions which require moving a joint in the negative direction. */
 const negativeButtonPadFunctions = new Set<ButtonPadButton>([
     ButtonPadButton.OmniBackward,
@@ -152,6 +164,15 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 if (currentState !== targetState) {
                     console.log(`[ButtonProvider] Setting ${btn} to state: ${targetState}`);
                     this.buttonStateMap.set(btn, targetState);
+                    // Limit/Collision disables pad handlers (no onRelease). Stop any
+                    // in-flight Press-and-Hold / Click-Click velocity for this button.
+                    if (
+                        this.activeButtonPadFunction === btn &&
+                        this.activeVelocityAction
+                    ) {
+                        this.stopCurrentAction(true);
+                        this.activeButtonPadFunction = undefined;
+                    }
                 }
             } else {
                 if (currentState === ButtonState.Collision || currentState === ButtonState.Limit) {
@@ -299,10 +320,11 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     onClick: () => {
                         action();
                         this.setButtonActiveState(buttonPadFunction);
-                        // Set button state inactive after 1 second
                         setTimeout(() => {
                             this.setButtonInactiveState(buttonPadFunction);
-                            this.setBaseVelocity(0.0, 0.0, 0.0);
+                            if (baseButtonPadFunctions.has(buttonPadFunction)) {
+                                this.setBaseVelocity(0.0, 0.0, 0.0);
+                            }
                         }, 1000);
                     },
                     // onLeave: onLeave,
