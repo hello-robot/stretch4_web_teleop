@@ -136,6 +136,8 @@ Methods `switchToNavigationMode()`, `switchToPositionMode()`, `switchToVelocityM
 | `stopMoveBaseClient()` | Cancels active move-base goal | — |
 | `homeTheRobot()` | Calls `/home_the_robot` service | `std_srvs/Trigger` |
 
+Trajectory goals remap operator `stretch_gripper_joint` (finger rad) → driver `gripper_joint` (stretch_gripper pct). Pose playback / `executePoseGoal` run body joints then a gripper-only goal (driver gripper monitoring is pct-vs-world-rad and times out in mixed goals). Multi-pose recordings keep the full body path but only the **last** gripper aperture (mid-path open/close is not replayed). Velocity `/joint_vel` keeps `stretch_gripper_joint`.
+
 ## Full Data Flow (Robot Page)
 
 ```
