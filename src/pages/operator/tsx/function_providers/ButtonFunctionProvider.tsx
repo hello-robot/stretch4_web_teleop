@@ -420,8 +420,7 @@ function getButtonsFromJointName(
     jointName: ValidJoints
 ): [ButtonPadButton, ButtonPadButton] | undefined {
     switch (jointName) {
-        case "stretch_gripper_joint":
-        case "gripper_aperture":
+        case "gripper_joint":
             return [ButtonPadButton.GripperClose, ButtonPadButton.GripperOpen];
         case "arm_joint":
         case "wrist_extension":
@@ -487,7 +486,7 @@ function getJointNameFromButtonFunction(
 
         case ButtonPadButton.GripperClose:
         case ButtonPadButton.GripperOpen:
-            return "stretch_gripper_joint";
+            return "gripper_joint";
 
         case ButtonPadButton.WristRollLeft:
         case ButtonPadButton.WristRollRight:
