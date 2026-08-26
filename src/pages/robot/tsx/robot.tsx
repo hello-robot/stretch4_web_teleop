@@ -14,15 +14,15 @@ import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
-    getStretchTool,
     JOINT_VELOCITIES,
+    parseToolMetadata,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    StretchTool,
+    ToolMetadata,
     ValidJoints,
     VideoProps,
     getPlaybackJointVelocity,
@@ -131,7 +131,7 @@ export class Robot extends React.Component {
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
-    private stretchTool: StretchTool;
+    private stretchToolName: string = "unknown";
 
     constructor(props: {
         jointStateCallback: (
@@ -491,7 +491,7 @@ export class Robot extends React.Component {
                 if (status.name == "at_limit") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -506,7 +506,7 @@ export class Robot extends React.Component {
                 if (status.name == "in_collision") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -541,7 +541,7 @@ export class Robot extends React.Component {
             name: "/configure_video_streams_gripper:stretch_tool",
         });
         this.stretchToolParam.get((value: string) => {
-            this.stretchTool = getStretchTool(value);
+            this.stretchToolName = value || "unknown";
         });
 
         this.modeParam = new Param({
@@ -550,14 +550,19 @@ export class Robot extends React.Component {
         });
     }
 
+    hasGripperJoint(): boolean {
+        if (!this.jointState?.name) return false;
+        return this.jointState.name.some(
+            (n) =>
+                n === "gripper_joint" ||
+                n === "stretch_gripper_joint" ||
+                n === "gripper_aperture"
+        );
+    }
+
     getStretchTool() {
-        // if (this.stretchTool == StretchTool.TABLET) {
-        //     this.subscribeToTabletTF();
-        // } else {
-        //     this.subscribeToGripperFingerTF();
-        // }
         if (this.stretchToolCallback)
-            this.stretchToolCallback(this.stretchTool);
+            this.stretchToolCallback(this.stretchToolName);
     }
 
     getOccupancyGrid() {
@@ -1179,7 +1184,15 @@ export class Robot extends React.Component {
             } catch (e) {
                 console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
             }
-            jointNames.push(jointName);
+            let targetJointName: ValidJoints = jointName;
+            if (jointName === "gripper_joint") {
+                if (this.jointState?.name?.includes("stretch_gripper_joint" as ValidJoints)) {
+                    targetJointName = "stretch_gripper_joint" as ValidJoints;
+                } else if (this.jointState?.name?.includes("gripper_aperture" as ValidJoints)) {
+                    targetJointName = "gripper_aperture" as ValidJoints;
+                }
+            }
+            jointNames.push(targetJointName);
             jointPositions.push(targetPos);
         }
 
@@ -1660,6 +1673,15 @@ export class Robot extends React.Component {
             let fallbackIdx = this.jointState.name.indexOf(fallbackName as ValidJoints);
             if (fallbackIdx !== -1) {
                 return this.jointState.position[fallbackIdx];
+            }
+        }
+
+        if (name === "gripper_joint") {
+            for (let gName of ["gripper_joint", "stretch_gripper_joint", "gripper_aperture"]) {
+                let idx = this.jointState.name.indexOf(gName as ValidJoints);
+                if (idx !== -1) {
+                    return this.jointState.position[idx];
+                }
             }
         }
 

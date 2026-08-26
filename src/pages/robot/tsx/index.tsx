@@ -22,6 +22,7 @@ import {
     ROSBatteryState,
     BatteryVoltageMessage,
     delay,
+    parseToolMetadata,
 } from "shared/util";
 import { AllVideoStreamComponent, VideoStream } from "./videostreams";
 import { AudioStream } from "./audiostreams";
@@ -152,9 +153,11 @@ function forwardIsRunStopped(isRunStopped: boolean) {
 function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
+    const isActuated = robot.hasGripperJoint();
     connection.sendData({
         type: "stretchTool",
         value: value,
+        toolMetadata: parseToolMetadata(value, isActuated),
     } as StretchToolMessage);
 }
 
