@@ -44,30 +44,17 @@ def symlinks_to_has_head_cams():
     return all(usb_device_seen.values())
 
 
-def check_valid_configuration(model, tool, has_head_cams):
-    """Validates that the robot configuration is supported. Checks model, tool,
+def check_valid_configuration(model, has_head_cams):
+    """Validates that the robot configuration is supported. Checks model
     and has_head_cams individually and exits with a targeted error message for
-    whichever value is not recognised.
+    whichever value is not recognized.
     """
     valid_models = ["SE4"]
-    valid_tools = [
-        "eoa_wrist_dw4_tool_sg4",
-        "eoa_wrist_dw4_tool_tablet",
-        "eoa_wrist_dw4_tool_nil",
-    ]
 
     if model not in valid_models:
         print(
             f"[web_interface.launch.py] ERROR: Unsupported robot model {model!r}. "
             f"Valid models: {valid_models}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    if tool not in valid_tools:
-        print(
-            f"[web_interface.launch.py] ERROR: Unsupported tool {tool!r} for model {model!r}. "
-            f"Valid tools: {valid_tools}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -94,7 +81,7 @@ def generate_launch_description():
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
     stretch_has_head_cams = symlinks_to_has_head_cams()
-    check_valid_configuration(stretch_model, stretch_tool, stretch_has_head_cams)
+    check_valid_configuration(stretch_model, stretch_has_head_cams)
 
     # Declare launch arguments
     params_file = DeclareLaunchArgument(
