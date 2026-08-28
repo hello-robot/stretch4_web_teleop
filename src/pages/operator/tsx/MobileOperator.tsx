@@ -374,7 +374,7 @@ export const MobileOperator = (props: {
             <Toasts toasts={toasts} toastsSet={toastsSet} />
             {/* @flag svc */}
             {voiceSvc ? (
-                <VoiceCommandAssistant>
+                <VoiceCommandAssistant
                     onVelocityScaleApplied={applyVelocityScale}
                     setActionMode={setActionMode}
                     addToast={addToast}
