@@ -1,5 +1,7 @@
 import { SignallingMessage } from "shared/util";
 import {
+    setOperatorInteractionSocket,
+    setOperatorLogSvc,
     setOperatorVoiceSessionToken,
     setOperatorVoiceSvc,
 } from "shared/operatorVoiceSession";
@@ -53,16 +55,19 @@ export class LocalSignaling extends BaseSignaling {
                     success: boolean;
                     voiceSessionToken?: string;
                     voiceSvc?: boolean;
+                    logSvc?: boolean;
                 }) => {
                     if (response.success) {
                         this.role = "operator";
                         // @flag voice_control_interface
                         setOperatorVoiceSvc(Boolean(response.voiceSvc));
+                        setOperatorInteractionSocket(this.socket);
                         if (response.voiceSessionToken) {
                             setOperatorVoiceSessionToken(
                                 response.voiceSessionToken,
                             );
                         }
+                        setOperatorLogSvc(Boolean(response.logSvc));
                     }
                     resolve(response.success);
                 },
@@ -75,6 +80,8 @@ export class LocalSignaling extends BaseSignaling {
         setOperatorVoiceSessionToken(undefined);
         // @flag voice_control_interface
         setOperatorVoiceSvc(false);
+        setOperatorLogSvc(false);
+        setOperatorInteractionSocket(null);
         this.socket.emit("bye", this.role);
     }
 

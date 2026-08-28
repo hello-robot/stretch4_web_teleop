@@ -144,6 +144,8 @@ io.on("connection", function (socket) {
                         voiceSessionToken: voiceSessionAuth.issueToken(
                             socket.id
                         ),
+                        // Operator SVC voice JSONL when launch used --log-svc
+                        logSvc: process.env.LOG_SVC === "1",
                     });
                 } else {
                     callback({ success: true });
