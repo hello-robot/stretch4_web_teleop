@@ -17,6 +17,7 @@ import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
 import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { getOperatorVoiceSvc } from "shared/operatorVoiceSession";
 import { ActionState } from "shared/util";
 import {
     getVoiceStatusSnapshot,
@@ -46,6 +47,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     isMainMenuOpenSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
+    const voiceSvc =
+        getOperatorVoiceSvc() && process.env.storage !== "firebase";
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
@@ -132,22 +135,27 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: localizeStatus !== "loading",
                 status: localizeStatus,
             },
-            {
-                id: "mic-mute",
-                name: micMuted ? "Unmute" : "Mute",
-                description: "Toggle microphone uplink to OpenAI",
-                onClick: () => {
-                    const nextMuted = !getVoiceStatusSnapshot().micMuted;
-                    setVoiceStatus({ micMuted: nextMuted });
-                    if (!nextMuted) {
-                        bumpVoiceCommandActivity();
-                        // Reacquire from this tap — iOS needs the gesture for getUserMedia.
-                        void recoverVoiceMicFromUserGesture();
-                    }
-                },
-                icon: micMuted ? <MicOffIcon /> : <MicIcon />,
-                enabled: voiceConnected,
-            },
+            ...(voiceSvc
+                ? [
+                      {
+                          id: "mic-mute",
+                          name: micMuted ? "Unmute" : "Mute",
+                          description: "Toggle microphone uplink to OpenAI",
+                          onClick: () => {
+                              const nextMuted =
+                                  !getVoiceStatusSnapshot().micMuted;
+                              setVoiceStatus({ micMuted: nextMuted });
+                              if (!nextMuted) {
+                                  bumpVoiceCommandActivity();
+                                  // Reacquire from this tap — iOS needs the gesture for getUserMedia.
+                                  void recoverVoiceMicFromUserGesture();
+                              }
+                          },
+                          icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                          enabled: voiceConnected,
+                      } satisfies SceneItem,
+                  ]
+                : []),
             {
                 id: "reload-app",
                 name: "Reload App",
@@ -191,6 +199,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             },
         ],
         [
+            voiceSvc,
             localizeStatus,
             onSceneSelectedChange,
             swipeableViewsIdxSet,
@@ -232,10 +241,16 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="scene-menu-button"
                     onPointerUp={() => isMainMenuOpenSet(true)}
                 >
-                    <VoicePilotSceneChrome
-                        sceneSelected={sceneSelected}
-                        fallbackName={sceneNameCurrent}
-                    />
+                    {voiceSvc ? (
+                        <VoicePilotSceneChrome
+                            sceneSelected={sceneSelected}
+                            fallbackName={sceneNameCurrent}
+                        />
+                    ) : (
+                        <span className="scene-menu-button__label">
+                            {sceneNameCurrent}
+                        </span>
+                    )}
                 </button>
                 <MainMenu
                     isOpen={isMainMenuOpen}

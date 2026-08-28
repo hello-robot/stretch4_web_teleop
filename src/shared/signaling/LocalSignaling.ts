@@ -1,5 +1,8 @@
 import { SignallingMessage } from "shared/util";
-import { setOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
+import {
+    setOperatorVoiceSessionToken,
+    setOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
 import { BaseSignaling, SignalingProps } from "./Signaling";
 import io, { Socket } from "socket.io-client";
 
@@ -49,9 +52,11 @@ export class LocalSignaling extends BaseSignaling {
                 (response: {
                     success: boolean;
                     voiceSessionToken?: string;
+                    voiceSvc?: boolean;
                 }) => {
                     if (response.success) {
                         this.role = "operator";
+                        setOperatorVoiceSvc(Boolean(response.voiceSvc));
                         if (response.voiceSessionToken) {
                             setOperatorVoiceSessionToken(
                                 response.voiceSessionToken,
@@ -67,6 +72,7 @@ export class LocalSignaling extends BaseSignaling {
     public leave(): void {
         console.log(`Leaving. My role: ${this.role}.`);
         setOperatorVoiceSessionToken(undefined);
+        setOperatorVoiceSvc(false);
         this.socket.emit("bye", this.role);
     }
 
