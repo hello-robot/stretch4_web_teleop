@@ -18,11 +18,24 @@ export type VoiceInteractionPayload = {
     detail: string;
     listening_state?: string;
     execution_mode?: string;
+    /** Realtime conversation item id — joins uplink Opus clip when logging. */
+    item_id?: string;
+    audio_start_ms?: number;
+    audio_end_ms?: number;
 };
 
 export type MicEventPayload = {
     event: string;
     details?: Record<string, unknown>;
+};
+
+export type VoiceAudioClipPayload = {
+    item_id: string;
+    sampleRate: number;
+    /** Int16 LE PCM mono */
+    pcm: ArrayBuffer;
+    audio_start_ms?: number;
+    audio_end_ms?: number;
 };
 
 /**
@@ -67,7 +80,10 @@ export function emitMicEvent(payload: MicEventPayload): void {
  * Emits a general VoiceCommandAssistant console log to the server logger.
  * No-op unless --log-svc.
  */
-export function emitVoiceAssistantLog(log: string): void {
+export function emitVoiceAssistantLog(
+    log: string,
+    meta?: { item_id?: string; audio_start_ms?: number; audio_end_ms?: number },
+): void {
     if (!getOperatorLogSvc()) {
         return;
     }
@@ -76,9 +92,39 @@ export function emitVoiceAssistantLog(log: string): void {
         if (!socket) {
             return;
         }
-        socket.emit("voice_assistant_log", { log });
+        socket.emit("voice_assistant_log", {
+            log,
+            item_id: meta?.item_id,
+            audio_start_ms: meta?.audio_start_ms,
+            audio_end_ms: meta?.audio_end_ms,
+        });
     } catch (e) {
         console.warn("[voiceInteractionEmitter] Failed to emit voice assistant log", e);
+    }
+}
+
+/**
+ * Uploads a pre-gate mic PCM clip for server-side Opus encoding.
+ * No-op unless --log-svc.
+ */
+export function emitVoiceAudioClip(payload: VoiceAudioClipPayload): void {
+    if (!getOperatorLogSvc()) {
+        return;
+    }
+    try {
+        const socket = getInteractionSocket();
+        if (!socket) {
+            return;
+        }
+        socket.emit("voice_audio_clip", {
+            item_id: payload.item_id,
+            sampleRate: payload.sampleRate,
+            pcm: payload.pcm,
+            audio_start_ms: payload.audio_start_ms,
+            audio_end_ms: payload.audio_end_ms,
+        });
+    } catch (e) {
+        console.warn("[voiceInteractionEmitter] Failed to emit voice audio clip", e);
     }
 }
 

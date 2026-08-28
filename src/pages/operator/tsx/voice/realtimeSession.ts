@@ -4,7 +4,10 @@
  * Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
  */
 
-import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
+import {
+    getOperatorLogSvc,
+    getOperatorVoiceSessionToken,
+} from "shared/operatorVoiceSession";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import {
     clearLastVoiceBaseMove,
@@ -23,7 +26,11 @@ import {
 } from "./executeSaveMapLocation";
 import { matchSavedLocation } from "./matchSavedLocation";
 import { logMicHealthStatus } from "./micHealthLog";
-import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
+import {
+    createMicLevelGate,
+    type MicLevelGate,
+    type UplinkRingMark,
+} from "./micLevelGate";
 import {
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
@@ -40,6 +47,9 @@ import {
     isPlaceholderArgs,
     NO_ARG_VOICE_TOOLS,
     STOP_MOTION,
+    VOICE_CLIP_SAMPLE_RATE,
+    VOICE_CLIP_SILENCE_RMS,
+    VOICE_CLIP_START_LOOKBACK_MS,
     type ExecuteToolResult,
     type SavedLocationsModalAction,
     type SetSavedLocationsModalResult,
@@ -62,13 +72,65 @@ import {
     VOICE_WAKE_PHRASE_DISPLAY,
 } from "./constants";
 import { bumpVoiceCommandActivity } from "./voiceCommandActivity";
-import { emitVoiceInteraction } from "./voiceInteractionEmitter";
+import {
+    emitVoiceAudioClip,
+    emitVoiceInteraction,
+} from "./voiceInteractionEmitter";
 import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 import {
     createVoiceWakeSleep,
     type VoiceListeningState,
     type VoiceWakeSleep,
 } from "./voiceWakeSleep";
+
+/** Log metadata for optional uplink Opus join (item_id / VAD ms). */
+export type VoiceLogMeta = {
+    item_id?: string;
+    audio_start_ms?: number;
+    audio_end_ms?: number;
+};
+
+/** Downsample float32 PCM to Int16 LE at targetRate (linear). */
+function downsampleFloat32ToInt16(
+    input: Float32Array,
+    fromRate: number,
+    toRate: number,
+): Int16Array {
+    if (input.length === 0 || fromRate <= 0 || toRate <= 0) {
+        return new Int16Array(0);
+    }
+    if (fromRate === toRate) {
+        const out = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+            const s = Math.max(-1, Math.min(1, input[i] ?? 0));
+            out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return out;
+    }
+    const ratio = fromRate / toRate;
+    const outLen = Math.max(1, Math.floor(input.length / ratio));
+    const out = new Int16Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+        const s = Math.max(
+            -1,
+            Math.min(1, input[Math.min(input.length - 1, Math.floor(i * ratio))] ?? 0),
+        );
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+}
+
+function float32Rms(samples: Float32Array): number {
+    if (samples.length === 0) {
+        return 0;
+    }
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const s = samples[i] ?? 0;
+        sum += s * s;
+    }
+    return Math.sqrt(sum / samples.length);
+}
 
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
@@ -574,7 +636,7 @@ export type RealtimeVoiceConnectOptions = {
     voiceSessionToken?: string;
     voiceProvider: ButtonFunctionProvider;
     onStatus?: (s: string) => void;
-    onLog?: (s: string) => void;
+    onLog?: (s: string, meta?: VoiceLogMeta) => void;
     /**
      * Normalized mic RMS (0–1) and whether the RMS threshold gate is open
      * (for UI). Uplink may still transmit while asleep via wake-sleep bypass
@@ -704,6 +766,52 @@ export async function connectOpenAIRealtimeVoice(
 
     /** Cleared on wake so trailing STT events from the same utterance are ignored. */
     const transcriptByItem = new Map<string, string>();
+    /**
+     * Item that last updated the transcript (delta or completed — not
+     * speech_started). Tool joins use this so a tool that fires before
+     * transcription.completed still gets the in-flight clip, while a later
+     * speech_started cannot overwrite the join.
+     */
+    let lastTranscriptItemId = "";
+    const logSvc = getOperatorLogSvc();
+
+    /** item_id → uplink ring mark (speech_started). Only when --log-svc. */
+    const uplinkMarks = logSvc
+        ? new Map<string, UplinkRingMark>()
+        : undefined;
+    /** item_id → VAD start/end ms. Only when --log-svc. */
+    const audioMetaByItem = logSvc
+        ? new Map<string, { audio_start_ms?: number; audio_end_ms?: number }>()
+        : undefined;
+    const AUDIO_META_CAP = 32;
+
+    const pruneAudioMetaIfNeeded = () => {
+        if (!audioMetaByItem || !uplinkMarks) {
+            return;
+        }
+        while (audioMetaByItem.size > AUDIO_META_CAP) {
+            const oldest = audioMetaByItem.keys().next().value;
+            if (oldest === undefined) {
+                break;
+            }
+            audioMetaByItem.delete(oldest);
+            uplinkMarks.delete(oldest);
+        }
+    };
+
+    const getAudioMeta = (itemId: string | undefined) =>
+        itemId && audioMetaByItem ? audioMetaByItem.get(itemId) : undefined;
+
+    /** Latest completed user transcript (for voice-interaction logging). */
+    let lastCompletedUserTranscript = "";
+    /** Any in-flight transcript(s), else the last completed one (for logging). */
+    const latestUserTranscriptForLog = (): string => {
+        if (transcriptByItem.size > 0) {
+            return [...transcriptByItem.values()].join(" ");
+        }
+        return lastCompletedUserTranscript;
+    };
+
     /** Dedupe accidental double tool fires for the same place. */
     let lastLoadedAutoNavLabel = "";
     let lastLoadedAutoNavAtMs = 0;
@@ -812,6 +920,7 @@ export async function connectOpenAIRealtimeVoice(
         onGateChange: (gateOpen: boolean, level: number) => {
             opts.onMicLevel?.(level, gateOpen);
         },
+        recordUplink: logSvc,
     });
 
     micGate = await createMicLevelGate(inputStream, micGateOptions());
@@ -1305,6 +1414,9 @@ export async function connectOpenAIRealtimeVoice(
             }
             const next = (transcriptByItem.get(itemId) ?? "") + delta;
             transcriptByItem.set(itemId, next);
+            if (itemId !== "_default") {
+                lastTranscriptItemId = itemId;
+            }
             opts.onLog?.(
                 `[Realtime] user transcript (partial): ${next.slice(0, 160)}`,
             );
@@ -1322,8 +1434,22 @@ export async function connectOpenAIRealtimeVoice(
         if (!transcript) {
             return;
         }
+        lastCompletedUserTranscript = transcript;
+        if (itemId !== "_default") {
+            lastTranscriptItemId = itemId;
+        }
+        const completedItemId =
+            itemId !== "_default" ? itemId : lastTranscriptItemId;
+        const meta = logSvc ? getAudioMeta(completedItemId) : undefined;
         opts.onLog?.(
             `[Realtime] user transcript: ${transcript.slice(0, 160)}`,
+            logSvc && completedItemId
+                ? {
+                      item_id: completedItemId,
+                      audio_start_ms: meta?.audio_start_ms,
+                      audio_end_ms: meta?.audio_end_ms,
+                  }
+                : undefined,
         );
         voiceWakeSleep?.tryPhraseFromTranscript(transcript, true);
     };
@@ -1399,6 +1525,10 @@ export async function connectOpenAIRealtimeVoice(
             //
         }
 
+        const toolItemId = logSvc
+            ? lastTranscriptItemId || undefined
+            : undefined;
+        const toolMeta = getAudioMeta(toolItemId);
         emitVoiceInteraction({
             transcript: latestUserTranscriptForLog(),
             stt_model: "gpt-4o-transcribe",
@@ -1409,6 +1539,9 @@ export async function connectOpenAIRealtimeVoice(
             detail: result.detail,
             listening_state: voiceWakeSleep?.state || "unknown",
             execution_mode: opts.voiceMoveExecutionMode || "button_provider",
+            item_id: toolItemId,
+            audio_start_ms: toolMeta?.audio_start_ms,
+            audio_end_ms: toolMeta?.audio_end_ms,
         });
 
         if (dc.readyState === "open") {
@@ -1416,8 +1549,118 @@ export async function connectOpenAIRealtimeVoice(
         }
     };
 
+    const handleVadSpeechEvents = (blob: Record<string, unknown>, eventType: string) => {
+        if (!logSvc || !audioMetaByItem || !uplinkMarks) {
+            return;
+        }
+        if (eventType === "input_audio_buffer.speech_started") {
+            const itemId =
+                typeof blob.item_id === "string" ? blob.item_id : "";
+            if (!itemId) {
+                return;
+            }
+            const audioStartMs =
+                typeof blob.audio_start_ms === "number"
+                    ? blob.audio_start_ms
+                    : undefined;
+            const prev = audioMetaByItem.get(itemId) ?? {};
+            audioMetaByItem.set(itemId, {
+                ...prev,
+                ...(audioStartMs !== undefined
+                    ? { audio_start_ms: audioStartMs }
+                    : {}),
+            });
+            pruneAudioMetaIfNeeded();
+            if (logSvc && micGate && !micGate.forceClosed) {
+                const mark = micGate.markUplink(VOICE_CLIP_START_LOOKBACK_MS);
+                if (mark) {
+                    uplinkMarks.set(itemId, mark);
+                }
+            }
+            return;
+        }
+
+        if (eventType !== "input_audio_buffer.speech_stopped") {
+            return;
+        }
+
+        const itemId =
+            typeof blob.item_id === "string" ? blob.item_id : "";
+        if (!itemId) {
+            return;
+        }
+        const audioEndMs =
+            typeof blob.audio_end_ms === "number"
+                ? blob.audio_end_ms
+                : undefined;
+        const prev = audioMetaByItem.get(itemId) ?? {};
+        const meta = {
+            ...prev,
+            ...(audioEndMs !== undefined ? { audio_end_ms: audioEndMs } : {}),
+        };
+        audioMetaByItem.set(itemId, meta);
+
+        if (!logSvc || !micGate || micGate.forceClosed) {
+            uplinkMarks.delete(itemId);
+            return;
+        }
+
+        const mark = uplinkMarks.get(itemId);
+        uplinkMarks.delete(itemId);
+        const floatSamples = mark
+            ? micGate.copyUplinkSince(mark)
+            : micGate.copyUplinkRecent(
+                  Math.max(
+                      VOICE_CLIP_START_LOOKBACK_MS,
+                      meta.audio_end_ms !== undefined &&
+                          meta.audio_start_ms !== undefined
+                          ? meta.audio_end_ms -
+                                meta.audio_start_ms +
+                                VOICE_CLIP_START_LOOKBACK_MS
+                          : 3000,
+                  ),
+              );
+
+        if (
+            floatSamples.length === 0 ||
+            float32Rms(floatSamples) < VOICE_CLIP_SILENCE_RMS
+        ) {
+            return;
+        }
+
+        const pcm = downsampleFloat32ToInt16(
+            floatSamples,
+            micGate.sampleRate,
+            VOICE_CLIP_SAMPLE_RATE,
+        );
+        if (pcm.length === 0) {
+            return;
+        }
+
+        emitVoiceAudioClip({
+            item_id: itemId,
+            sampleRate: VOICE_CLIP_SAMPLE_RATE,
+            pcm: pcm.buffer.slice(
+                pcm.byteOffset,
+                pcm.byteOffset + pcm.byteLength,
+            ) as ArrayBuffer,
+            audio_start_ms: meta.audio_start_ms,
+            audio_end_ms: meta.audio_end_ms,
+        });
+    };
+
     const handleRealtimeDataMessage = async (blob: Record<string, unknown>) => {
         const eventType = String(blob.type ?? "");
+
+        if (
+            eventType === "input_audio_buffer.speech_started" ||
+            eventType === "input_audio_buffer.speech_stopped"
+        ) {
+            if (logSvc) {
+                handleVadSpeechEvents(blob, eventType);
+            }
+            return;
+        }
 
         if (eventType.includes("input_audio_transcription")) {
             handleUserTranscription(blob, eventType);
