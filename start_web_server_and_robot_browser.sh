@@ -19,7 +19,7 @@ while getopts l:fs opt; do
 		STORAGE="firebase"
 		;;
 	s)
-		# Enable experimental SVC (from --svc)
+		# @flag svc
 		VOICE_SVC=1
 		;;
 	esac

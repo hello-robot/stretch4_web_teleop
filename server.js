@@ -52,6 +52,7 @@ let oper_sock = undefined;
 let protocol = undefined; // TODO(binit): ensure robot/operator protocol match
 let status = 'offline'; // ["online", "offline", "occupied"]
 
+// @flag svc
 const isVoiceSvcEnabled = () => process.env.VOICE_SVC === '1';
 
 if (isVoiceSvcEnabled()) {

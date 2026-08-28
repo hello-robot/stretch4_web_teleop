@@ -45,6 +45,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
+    // @flag svc
     const voiceSvc =
         getOperatorVoiceSvc() && process.env.storage !== "firebase";
     const [localizeStatus, localizeStatusSet] =
@@ -132,6 +133,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: localizeStatus !== "loading",
                 status: localizeStatus,
             },
+            // @flag svc
             ...(voiceSvc
                 ? [
                       {
@@ -230,6 +232,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="scene-menu-button"
                     onPointerUp={() => isMainMenuOpenSet(true)}
                 >
+                    {/* @flag svc */}
                     {voiceSvc ? (
                         <VoicePilotSceneChrome
                             sceneSelected={sceneSelected}
