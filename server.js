@@ -1,7 +1,8 @@
 var fs = require("fs");
 const { isEnabled } = require("./feature-flags");
 
-const { initVoiceInteractionLogger } = require("./voiceInteractionLogger");
+const crypto = require("crypto");
+const { initVoiceInteractionLogger, setClipSession } = require("./voiceInteractionLogger");
 
 require("dotenv").config();
 
@@ -35,8 +36,6 @@ app.enable("trust proxy");
 app.set("port", 443);
 server.listen(80);
 secure_server.listen(443);
-
-initVoiceInteractionLogger(app, io);
 
 var path = require("path");
 
@@ -73,6 +72,13 @@ if (isVoiceControlEnabled) {
         );
     }
 
+    const validateVoiceSession = (req) =>
+        voiceSessionAuth.validate(
+            req.get("X-Voice-Session-Token"),
+            oper_sock,
+            io
+        );
+
     /**
      * Validate the voice session token.
      *
@@ -82,13 +88,27 @@ if (isVoiceControlEnabled) {
      * OpenAI Realtime API.
      */
     registerOpenAiRealtimeRoutes(app, {
-        validateVoiceSession: (req) =>
-            voiceSessionAuth.validate(
-                req.get("X-Voice-Session-Token"),
-                oper_sock,
-                io
-            ),
+        validateVoiceSession,
     });
+
+    initVoiceInteractionLogger(app, io, {
+        getOperatorSocketId: () => oper_sock,
+        validateVoiceSession,
+    });
+}
+
+function beginOperatorClipSession() {
+    if (!isVoiceControlEnabled || process.env.LOG_SVC !== "1") {
+        return;
+    }
+    setClipSession(crypto.randomBytes(16).toString("hex"));
+}
+
+function endOperatorClipSession() {
+    if (!isVoiceControlEnabled) {
+        return;
+    }
+    setClipSession(null);
 }
 
 app.use("/", express.static(path.join(__dirname, "dist")));
@@ -138,13 +158,14 @@ io.on("connection", function (socket) {
                 oper_sock = socket.id;
                 console.log("join_as_operator SUCCESS");
                 if (isVoiceControlEnabled) {
+                    beginOperatorClipSession();
                     callback({
                         success: true,
                         voiceSvc: true,
                         voiceSessionToken: voiceSessionAuth.issueToken(
                             socket.id
                         ),
-                        // Operator SVC voice JSONL when launch used --log-svc
+                        // Operator SVC voice JSONL + Opus clips when launch used --log-svc
                         logSvc: process.env.LOG_SVC === "1",
                     });
                 } else {
@@ -187,6 +208,7 @@ io.on("connection", function (socket) {
                 status = "online";
                 if (isVoiceControlEnabled) {
                     voiceSessionAuth.revokeBySocket(socket.id);
+                    endOperatorClipSession();
                 }
                 oper_sock = undefined;
                 console.log("Operator disconnected");
@@ -206,6 +228,7 @@ io.on("connection", function (socket) {
             status = "online";
             if (isVoiceControlEnabled) {
                 voiceSessionAuth.revokeBySocket(socket.id);
+                endOperatorClipSession();
             }
             oper_sock = undefined;
             console.log("Operator disconnected");

@@ -3,6 +3,7 @@
     "version": "0.1.0",
     "private": true,
     "dependencies": {
+        "@audio/encode-opus": "^1.2.2",
         "@emotion/react": "^11.13.0",
         "@emotion/styled": "^11.13.0",
         "@mui/icons-material": "^6.1.2",
