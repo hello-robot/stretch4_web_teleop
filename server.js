@@ -123,6 +123,8 @@ io.on('connection', function (socket) {
                     success: true,
                     voiceSessionToken:
                         voiceSessionAuth.issueToken(socket.id),
+                    // Operator SVC voice JSONL when launch used --log-svc
+                    logSvc: process.env.LOG_SVC === '1',
                 });
             } else {
                 console.log(

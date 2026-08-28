@@ -1,12 +1,11 @@
-import io, { Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+import {
+    getOperatorInteractionSocket,
+    getOperatorLogSvc,
+} from "shared/operatorVoiceSession";
 
-let socketInstance: Socket | null = null;
-
-function getInteractionSocket(): Socket {
-    if (!socketInstance) {
-        socketInstance = io();
-    }
-    return socketInstance;
+function getInteractionSocket(): Socket | null {
+    return getOperatorInteractionSocket();
 }
 
 export type VoiceInteractionPayload = {
@@ -28,10 +27,17 @@ export type MicEventPayload = {
 
 /**
  * Emits a structured voice interaction record to the server logger.
+ * No-op unless launch used --log-svc (logSvc from join_as_operator).
  */
 export function emitVoiceInteraction(payload: VoiceInteractionPayload): void {
+    if (!getOperatorLogSvc()) {
+        return;
+    }
     try {
         const socket = getInteractionSocket();
+        if (!socket) {
+            return;
+        }
         socket.emit("voice_interaction", payload);
     } catch (e) {
         console.warn("[voiceInteractionEmitter] Failed to emit voice interaction", e);
@@ -40,10 +46,17 @@ export function emitVoiceInteraction(payload: VoiceInteractionPayload): void {
 
 /**
  * Emits a microphone lifecycle/health event record to the server logger.
+ * No-op unless --log-svc.
  */
 export function emitMicEvent(payload: MicEventPayload): void {
+    if (!getOperatorLogSvc()) {
+        return;
+    }
     try {
         const socket = getInteractionSocket();
+        if (!socket) {
+            return;
+        }
         socket.emit("mic_event", payload);
     } catch (e) {
         console.warn("[voiceInteractionEmitter] Failed to emit mic event", e);
@@ -52,10 +65,17 @@ export function emitMicEvent(payload: MicEventPayload): void {
 
 /**
  * Emits a general VoiceCommandAssistant console log to the server logger.
+ * No-op unless --log-svc.
  */
 export function emitVoiceAssistantLog(log: string): void {
+    if (!getOperatorLogSvc()) {
+        return;
+    }
     try {
         const socket = getInteractionSocket();
+        if (!socket) {
+            return;
+        }
         socket.emit("voice_assistant_log", { log });
     } catch (e) {
         console.warn("[voiceInteractionEmitter] Failed to emit voice assistant log", e);
@@ -67,7 +87,3 @@ export function emitVoiceAssistantLog(log: string): void {
  */
 export const emitVoice = emitVoiceInteraction;
 export const emitMic = emitMicEvent;
-
-
-
-
