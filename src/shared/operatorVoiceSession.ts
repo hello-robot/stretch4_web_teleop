@@ -2,6 +2,7 @@
 
 let operatorVoiceSessionToken: string | undefined;
 /** Server VOICE_SVC — experimental SVC (--svc). */
+// @flag svc
 let operatorVoiceSvc = false;
 
 export function setOperatorVoiceSessionToken(

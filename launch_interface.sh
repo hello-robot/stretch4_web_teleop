@@ -8,6 +8,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
 # Strip long flags before getopts (otherwise --svc is eaten by getopts)
+# @flag svc
 VOICE_SVC=0
 FILTERED_ARGS=()
 for arg in "$@"; do
@@ -178,6 +179,7 @@ if [ $? -ne 0 ]; then
 	echo_failure_help
 fi
 
+# @flag svc
 VOICE_SVC_FLAG=""
 if [[ "$VOICE_SVC" -eq 1 ]]; then
 	VOICE_SVC_FLAG="-s"

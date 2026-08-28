@@ -398,12 +398,14 @@ export const MobileOperator = (props: {
         return show ? <ControlModes key={"control-modes"} /> : <></>;
     };
 
+    // @flag svc
     const voiceSvc =
         getOperatorVoiceSvc() && process.env.storage !== "firebase";
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <Toasts toasts={toasts} toastsSet={toastsSet} />
+            {/* @flag svc */}
             {voiceSvc ? (
                 <VoiceCommandAssistant
                     onVelocityScaleApplied={applyVelocityScale}
