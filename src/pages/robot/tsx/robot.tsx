@@ -14,19 +14,16 @@ import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
-    JOINT_VELOCITIES,
-    parseToolMetadata,
+    getPlaybackJointVelocities,
+    getPlaybackJointVelocity,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    ToolMetadata,
     ValidJoints,
-    VideoProps,
-    getPlaybackJointVelocity,
-    getPlaybackJointVelocities,
+    VideoProps
 } from "shared/util";
 import {
     RobotPose,
@@ -128,10 +125,12 @@ export class Robot extends React.Component {
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam: Param;
+    private toolIsActuatedParam: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
     private stretchToolName: string = "unknown";
+    private toolIsActuated: boolean = true;
 
     constructor(props: {
         jointStateCallback: (
@@ -544,20 +543,22 @@ export class Robot extends React.Component {
             this.stretchToolName = value || "unknown";
         });
 
+        this.toolIsActuatedParam = new Param({
+            ros: this.ros,
+            name: "/stretch_driver:tool_info.is_actuated",
+        });
+        this.toolIsActuatedParam.get((value: boolean) => {
+            this.toolIsActuated = value ?? true;
+        });
+
         this.modeParam = new Param({
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
     }
 
-    hasGripperJoint(): boolean {
-        if (!this.jointState?.name) return false;
-        return this.jointState.name.some(
-            (n) =>
-                n === "gripper_joint" ||
-                n === "stretch_gripper_joint" ||
-                n === "gripper_aperture"
-        );
+    isToolActuated(): boolean {
+        return this.toolIsActuated;
     }
 
     getStretchTool() {
