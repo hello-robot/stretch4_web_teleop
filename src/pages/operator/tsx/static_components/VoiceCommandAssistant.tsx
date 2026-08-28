@@ -265,14 +265,20 @@ export const VoiceCommandAssistant = ({
                 onListeningState: (listeningState) => {
                     setVoiceStatus({ listeningState });
                 },
-                onLog: (lg) => {
+                onLog: (lg, meta) => {
                     if (
                         lg.includes("[WakeSleep]") ||
                         lg.includes("user transcript") ||
                         isVoiceToolLogLine(lg)
                     ) {
-                        console.log(VOICE_ASSISTANT_LOG_SLUG, lg.slice(0, 240));
-                        emitVoiceAssistantLog(lg);
+                        const audioHint = meta?.item_id
+                            ? ` item_id=${meta.item_id}`
+                            : "";
+                        console.log(
+                            VOICE_ASSISTANT_LOG_SLUG,
+                            (lg + audioHint).slice(0, 320),
+                        );
+                        emitVoiceAssistantLog(lg, meta);
                     }
                 },
                 onMicLevel: (_level, gateOpen) => {
