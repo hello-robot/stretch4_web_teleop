@@ -219,8 +219,8 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             remoteRobot.sensors.setLeaseStatus(message.holder, message.isDriverHolding);
             break;
         case "stretchTool":
-            console.log("index stretchTool", message.value);
             toolMetadata = message.toolMetadata || parseToolMetadata(message.value);
+            console.log("[Operator index] stretchTool message received:", message.value, "toolMetadata:", toolMetadata);
             break;
         case "occupancyGrid":
             if (!occupancyGrid) {

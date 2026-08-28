@@ -167,7 +167,7 @@ function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
 function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
-    const isActuated = robot.hasGripperJoint();
+    const isActuated = robot.isToolActuated();
     connection.sendData({
         type: "stretchTool",
         value: value,
