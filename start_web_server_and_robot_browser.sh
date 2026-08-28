@@ -8,7 +8,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)"
 export FEATURE_VOICE_CONTROL_INTERFACE
 
-while getopts l:o:f opt; do
+LOG_SVC=0
+while getopts l:o:fr opt; do
 	case $opt in
 	l)
 		# Usage: ./start_web_server_and_robot_browser.sh -l /tmp/some_folder
@@ -27,6 +28,11 @@ while getopts l:o:f opt; do
 		echo "Using firebase..."
 		STORAGE="firebase"
 		;;
+	r)
+		# Usage: ./start_web_server_and_robot_browser.sh -r
+		# Enable SVC voice JSONL + pre-gate uplink Opus clips (from --log-svc)
+		LOG_SVC=1
+		;;
 	esac
 done
 REDIRECT_LOGFILE="${REDIRECT_LOGFILE:-$REDIRECT_LOGDIR/start_web_server_and_robot_browser.txt}"
@@ -40,6 +46,10 @@ while IFS='=' read -r var value; do
 	flags+="$var: $value"
 done < <(node "$REPO_DIR/feature-flags.js" --all)
 echo "flags={$flags}" &>>$REDIRECT_LOGFILE
+echo "-r LOG_SVC=$LOG_SVC" &>>$REDIRECT_LOGFILE
+
+# Inherited by pm2-started Node processes (server.js voiceInteractionLogger)
+export LOG_SVC
 
 echo "Run webpack..."
 export NODE_EXTRA_CA_CERTS="/home/hello-robot/ament_ws/src/stretch4_web_teleop/certificates/rootCA.pem"
