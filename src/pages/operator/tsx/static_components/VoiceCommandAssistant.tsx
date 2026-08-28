@@ -21,6 +21,7 @@ import {
     subscribeVoiceStatus,
 } from "../voice/voiceStatusStore";
 import { registerVoiceMicRecover } from "../voice/voiceMicRecoverBridge";
+import { emitVoiceAssistantLog } from "../voice/voiceInteractionEmitter";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
@@ -264,13 +265,20 @@ export const VoiceCommandAssistant = ({
                 onListeningState: (listeningState) => {
                     setVoiceStatus({ listeningState });
                 },
-                onLog: (lg) => {
+                onLog: (lg, meta) => {
                     if (
                         lg.includes("[WakeSleep]") ||
                         lg.includes("user transcript") ||
                         isVoiceToolLogLine(lg)
                     ) {
-                        console.log(VOICE_ASSISTANT_LOG_SLUG, lg.slice(0, 240));
+                        const audioHint = meta?.item_id
+                            ? ` item_id=${meta.item_id}`
+                            : "";
+                        console.log(
+                            VOICE_ASSISTANT_LOG_SLUG,
+                            (lg + audioHint).slice(0, 320),
+                        );
+                        emitVoiceAssistantLog(lg, meta);
                     }
                 },
                 onMicLevel: (_level, gateOpen) => {
@@ -296,6 +304,7 @@ export const VoiceCommandAssistant = ({
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error(`${VOICE_ASSISTANT_LOG_SLUG} connect failed`, e);
+            emitVoiceAssistantLog(`connect failed: ${msg}`);
             setVoiceMoveExecutionContext(undefined);
             phaseSet("error");
             registerVoiceMicRecover(null);

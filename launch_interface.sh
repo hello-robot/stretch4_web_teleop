@@ -7,6 +7,21 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
+# Strip long flags before getopts (otherwise --log-svc is eaten by getopts)
+LOG_SVC=0
+FILTERED_ARGS=()
+for arg in "$@"; do
+	case "$arg" in
+	--log-svc)
+		LOG_SVC=1
+		;;
+	*)
+		FILTERED_ARGS+=("$arg")
+		;;
+	esac
+done
+set -- "${FILTERED_ARGS[@]}"
+
 while getopts m:t:f opt; do
 	case $opt in
 	m)
@@ -28,6 +43,31 @@ logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 logzip="$logdir/stretch4_web_teleop_logs.zip"
 mkdir -p $logdir
+
+echo ""
+echo "#############################################"
+echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
+echo "#############################################"
+echo ""
+
+# Is logging enabled?
+if [[ "$LOG_SVC" -eq 1 ]]; then
+	echo -e "${GREEN}✅ ENABLED SVC Logging (--log-svc)${NC}"
+fi
+# Voice uplink clip storage (never auto-purged — report only)
+voice_audio_dir="$HOME/stretch_user/log/web_teleop/voice_audio"
+mkdir -p "$voice_audio_dir"
+# SVC audio directory size and old files
+voice_audio_du=$(du -sh "$voice_audio_dir" 2>/dev/null | awk '{print $1}')
+voice_audio_old_count=$(find "$voice_audio_dir" -type f -mtime +7 2>/dev/null | wc -l | tr -d ' ')
+# Report current directory size
+echo -e "${BLUE}SVC audio total size:${NC} ${voice_audio_du:-0} in $voice_audio_dir"
+# Report if audio clips older than 7 days
+if [[ "$voice_audio_old_count" -gt 0 ]]; then
+	echo -e "${BLUE}SVC audio stale:${NC} $voice_audio_old_count file(s) older than 7 days (not deleted; purge manually if desired)"
+else
+	echo -e "${BLUE}SVC audio stale:${NC} no files older than 7 days"
+fi
 
 # Validate web teleop installation
 function validate_installation {
@@ -144,6 +184,7 @@ function print_interface_urls {
 	  }'
 }
 
+echo ""
 echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
@@ -161,7 +202,11 @@ fi
 
 # echo ""
 cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE |& tee $logfile_node
+LOG_SVC_FLAG=""
+if [[ "$LOG_SVC" -eq 1 ]]; then
+	LOG_SVC_FLAG="-r"
+fi
+./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE $LOG_SVC_FLAG |& tee $logfile_node
 if [ $? -ne 0 ]; then
 	echo_failure_help
 fi

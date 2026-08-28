@@ -3,6 +3,7 @@
     "version": "0.1.0",
     "private": true,
     "dependencies": {
+        "@audio/encode-opus": "^1.2.2",
         "@emotion/react": "^11.13.0",
         "@emotion/styled": "^11.13.0",
         "@mui/icons-material": "^6.1.2",
@@ -48,6 +49,11 @@
         "localstorage": "webpack --mode development --progress --env storage='localstorage'",
         "styleguide": "styleguidist server",
         "build": "webpack --mode production --progress --env storage='firebase'",
+        "watch-transcribe-model": "node scripts/watch_transcribe_model.js",
+        "watch-realtime-model": "node scripts/watch_realtime_model.js",
+        "watch-voice": "node scripts/watch_realtime_model.js",
+        "watch-mic": "node scripts/watch_mic_logs.js",
+        "watch-ros": "node scripts/watch_ros_logs.js",
         "postinstall": "npx playwright install-deps && npx playwright install"
     },
     "eslintConfig": {

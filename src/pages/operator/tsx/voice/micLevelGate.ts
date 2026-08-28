@@ -8,6 +8,7 @@ import {
     VOICE_MIC_GATE_LOOKBACK_MS,
     VOICE_MIC_GATE_POLL_MS,
     VOICE_MIC_RMS_THRESHOLD,
+    VOICE_UPLINK_RING_MS,
 } from "./constants";
 
 export type MicLevelGateOptions = {
@@ -19,12 +20,24 @@ export type MicLevelGateOptions = {
     bypassGate?: () => boolean;
     /** level = RMS (always); gateOpen = volume threshold met (not force-closed state). */
     onGateChange?: (gateOpen: boolean, level: number) => void;
+    /**
+     * When true, keep a ~15s pre-gate mic ring for VAD-segmented Opus clips.
+     * Off by default (--log-svc / logSvc from join_as_operator).
+     */
+    recordUplink?: boolean;
+};
+
+/** Absolute sample index into the uplink ring (with lookback already applied). */
+export type UplinkRingMark = {
+    absoluteSample: number;
 };
 
 export type MicLevelGate = {
     readonly transmitStream: MediaStream;
+    readonly sampleRate: number;
     readonly currentLevel: number;
     readonly gateOpen: boolean;
+    readonly forceClosed: boolean;
     setForceClosed: (closed: boolean) => void;
     resumeAfterForceClose: () => void;
     /**
@@ -42,6 +55,15 @@ export type MicLevelGate = {
      * Use after resume(); `isHealthy` can pass while the graph is still dead.
      */
     probeActivity: (timeoutMs?: number) => Promise<boolean>;
+    /**
+     * Mark uplink ring cursor with lookback (no-op when recording is off).
+     * Pass result to `copyUplinkSince` on speech_stopped.
+     */
+    markUplink: (lookbackMs: number) => UplinkRingMark | null;
+    /** Copy pre-gate mic samples from mark → now (empty when recording off). */
+    copyUplinkSince: (mark: UplinkRingMark) => Float32Array;
+    /** Copy the most recent N ms of pre-gate mic (empty when recording off). */
+    copyUplinkRecent: (ms: number) => Float32Array;
     stop: () => void;
 };
 
@@ -64,53 +86,62 @@ function computeRms(analyser: AnalyserNode, buffer: Float32Array<ArrayBuffer>): 
 }
 
 /**
- * Fixed-size buffer that stores the pre-gate audio
- *
- * Once full, new samples overwrite the oldest (FIFO wrap). `filled` tracks how
- * many valid samples are present (grows until capacity, then stays at capacity).
+ * Pre-gate mic ring. Capacity is lookback-only, or ~15s when recording clips.
+ * Tracks absolute sample counts so speech_started can mark a cursor.
  */
-class PreGateAudioBuffer {
+class PreGateAudioRing {
     private readonly buffer: Float32Array;
-    /** Next write index; advances with wrap-around. */
     private writePos = 0;
-    /** Number of valid samples currently stored (0 … buffer.length). */
     private filled = 0;
+    /** Total samples ever pushed (monotonic). */
+    private totalPushed = 0;
 
-    /**
-     * @param sampleRate AudioContext sample rate (Hz)
-     * @param lookbackMs How much recent audio to retain (ms) → capacity in samples
-     */
-    constructor(sampleRate: number, lookbackMs: number) {
+    constructor(sampleRate: number, capacityMs: number) {
         const capacity = Math.max(
             1,
-            Math.ceil((sampleRate * lookbackMs) / 1000),
+            Math.ceil((sampleRate * capacityMs) / 1000),
         );
         this.buffer = new Float32Array(capacity);
     }
 
-    /** Append samples; overwrites oldest data once the ring is full. */
     push(samples: Float32Array) {
         for (let i = 0; i < samples.length; i++) {
             this.buffer[this.writePos] = samples[i] ?? 0;
             this.writePos = (this.writePos + 1) % this.buffer.length;
             this.filled = Math.min(this.filled + 1, this.buffer.length);
+            this.totalPushed += 1;
         }
     }
 
-    /**
-     * Return stored samples in chronological order (oldest → newest).
-     * Length equals `filled` (may be shorter than capacity before the ring fills).
-     */
-    copyOut(): Float32Array {
-        const out = new Float32Array(this.filled);
-        // Oldest sample sits `filled` steps behind writePos (with wrap).
-        const start =
-            (this.writePos - this.filled + this.buffer.length) %
-            this.buffer.length;
-        for (let i = 0; i < this.filled; i++) {
-            out[i] = this.buffer[(start + i) % this.buffer.length] ?? 0;
+    mark(lookbackSamples: number): UplinkRingMark {
+        return {
+            absoluteSample: Math.max(0, this.totalPushed - lookbackSamples),
+        };
+    }
+
+    copyFromMark(mark: UplinkRingMark): Float32Array {
+        const oldestAbsolute = this.totalPushed - this.filled;
+        const startAbs = Math.max(mark.absoluteSample, oldestAbsolute);
+        const count = Math.max(0, this.totalPushed - startAbs);
+        if (count === 0) {
+            return new Float32Array(0);
+        }
+        const out = new Float32Array(count);
+        for (let i = 0; i < count; i++) {
+            const absolute = startAbs + i;
+            const age = this.totalPushed - absolute;
+            const idx =
+                (this.writePos - age + this.buffer.length) % this.buffer.length;
+            out[i] = this.buffer[idx] ?? 0;
         }
         return out;
+    }
+
+    copyRecent(sampleCount: number): Float32Array {
+        const n = Math.min(Math.max(0, sampleCount), this.filled);
+        return this.copyFromMark({
+            absoluteSample: this.totalPushed - n,
+        });
     }
 }
 
@@ -127,12 +158,16 @@ export async function createMicLevelGate(
     const hangMs = opts.hangMs ?? VOICE_MIC_GATE_HANG_MS;
     const lookbackMs = opts.lookbackMs ?? VOICE_MIC_GATE_LOOKBACK_MS;
     const pollMs = opts.pollIntervalMs ?? VOICE_MIC_GATE_POLL_MS;
+    const recordUplink = Boolean(opts.recordUplink);
 
     const audioContext = new AudioContext();
     await audioContext.resume();
 
     const sampleRate = audioContext.sampleRate;
-    const ring = new PreGateAudioBuffer(sampleRate, lookbackMs);
+    const ring = new PreGateAudioRing(
+        sampleRate,
+        recordUplink ? VOICE_UPLINK_RING_MS : lookbackMs,
+    );
 
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
@@ -203,7 +238,9 @@ export async function createMicLevelGate(
         if (flushing || forceClosed || (opts.bypassGate?.() ?? false)) {
             return;
         }
-        const samples = ring.copyOut();
+        const samples = ring.copyRecent(
+            Math.ceil((sampleRate * lookbackMs) / 1000),
+        );
         if (samples.length === 0) {
             return;
         }
@@ -276,11 +313,15 @@ export async function createMicLevelGate(
 
     return {
         transmitStream,
+        sampleRate,
         get currentLevel() {
             return currentLevel;
         },
         get gateOpen() {
             return gateOpen;
+        },
+        get forceClosed() {
+            return forceClosed;
         },
         setForceClosed(closed: boolean) {
             forceClosed = closed;
@@ -338,6 +379,28 @@ export async function createMicLevelGate(
                 };
                 check();
             });
+        },
+        markUplink(lookbackMsArg: number) {
+            if (!recordUplink) {
+                return null;
+            }
+            const lookbackSamples = Math.ceil(
+                (sampleRate * Math.max(0, lookbackMsArg)) / 1000,
+            );
+            return ring.mark(lookbackSamples);
+        },
+        copyUplinkSince(mark: UplinkRingMark) {
+            if (!recordUplink) {
+                return new Float32Array(0);
+            }
+            return ring.copyFromMark(mark);
+        },
+        copyUplinkRecent(ms: number) {
+            if (!recordUplink) {
+                return new Float32Array(0);
+            }
+            const n = Math.ceil((sampleRate * Math.max(0, ms)) / 1000);
+            return ring.copyRecent(n);
         },
         stop() {
             if (stopped) {

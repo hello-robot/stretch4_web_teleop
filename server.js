@@ -5,6 +5,9 @@ const {
 } = require('./ai-gateway/openai-realtime-api');
 const voiceSessionAuth = require('./ai-gateway/voice-session-auth');
 
+const crypto = require('crypto');
+const { initVoiceInteractionLogger, setClipSession } = require('./voiceInteractionLogger');
+
 require('dotenv').config();
 
 var options = {
@@ -52,6 +55,13 @@ let oper_sock = undefined;
 let protocol = undefined; // TODO(binit): ensure robot/operator protocol match
 let status = 'offline'; // ["online", "offline", "occupied"]
 
+const validateVoiceSession = (req) =>
+    voiceSessionAuth.validate(
+        req.get('X-Voice-Session-Token'),
+        oper_sock,
+        io,
+    );
+
 /**
  * Validate the voice session token.
  *
@@ -61,13 +71,24 @@ let status = 'offline'; // ["online", "offline", "occupied"]
  * OpenAI Realtime API.
  */
 registerOpenAiRealtimeRoutes(app, {
-    validateVoiceSession: (req) =>
-        voiceSessionAuth.validate(
-            req.get('X-Voice-Session-Token'),
-            oper_sock,
-            io,
-        ),
+    validateVoiceSession,
 });
+
+initVoiceInteractionLogger(app, io, {
+    getOperatorSocketId: () => oper_sock,
+    validateVoiceSession,
+});
+
+function beginOperatorClipSession() {
+    if (process.env.LOG_SVC !== '1') {
+        return;
+    }
+    setClipSession(crypto.randomBytes(16).toString('hex'));
+}
+
+function endOperatorClipSession() {
+    setClipSession(null);
+}
 
 app.use('/', express.static(path.join(__dirname, 'dist')));
 
@@ -114,11 +135,14 @@ io.on('connection', function (socket) {
                 socket.join(ROOM);
                 socket.in(ROOM).emit('joined');
                 oper_sock = socket.id;
+                beginOperatorClipSession();
                 console.log('join_as_operator SUCCESS');
                 callback({
                     success: true,
                     voiceSessionToken:
                         voiceSessionAuth.issueToken(socket.id),
+                    // Operator SVC voice JSONL + Opus clips when launch used --log-svc
+                    logSvc: process.env.LOG_SVC === '1',
                 });
             } else {
                 console.log(
@@ -156,6 +180,7 @@ io.on('connection', function (socket) {
             if (socket.id == oper_sock) {
                 status = 'online';
                 voiceSessionAuth.revokeBySocket(socket.id);
+                endOperatorClipSession();
                 oper_sock = undefined;
                 console.log('Operator disconnected');
             }
@@ -173,6 +198,7 @@ io.on('connection', function (socket) {
         if (socket.id == oper_sock) {
             status = 'online';
             voiceSessionAuth.revokeBySocket(socket.id);
+            endOperatorClipSession();
             oper_sock = undefined;
             console.log('Operator disconnected');
         }

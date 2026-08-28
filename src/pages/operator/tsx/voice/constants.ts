@@ -115,7 +115,7 @@ export type ExecuteJointMoveArgs = {
 
 /** Tool result sent back on the Realtime data channel (operator client). */
 export type ExecuteToolResult =
-    | { ok: true; detail: string }
+    | { ok: true; detail: string; label?: string }
     | {
         ok: false;
         detail: string;
@@ -174,6 +174,31 @@ export const VOICE_MIC_UNMUTE_COOLDOWN_MS = 500;
  * so that initial voice utterance is included.
  */
 export const VOICE_MIC_GATE_LOOKBACK_MS = 200;
+
+/**
+ * Pre-gate mic ring for optional Opus clip recording (speech_started → speech_stopped).
+ * Must cover a full voice turn plus VAD prefix padding.
+ */
+export const VOICE_UPLINK_RING_MS = 15_000;
+
+/**
+ * Match session turn_detection.prefix_padding_ms in ai-gateway/openai-realtime-api.js.
+ */
+export const VOICE_VAD_PREFIX_PADDING_MS = 300;
+
+/**
+ * Lookback when marking the uplink ring on `speech_started`.
+ * OpenAI's prefix_padding alone is not enough: the client marks when the
+ * Realtime event arrives, so we add slack for WebRTC/event latency or the
+ * clip truncates the start of the utterance.
+ */
+export const VOICE_CLIP_START_LOOKBACK_MS = VOICE_VAD_PREFIX_PADDING_MS + 1000;
+
+/** Target sample rate for uploaded uplink PCM (server encodes to Opus). */
+export const VOICE_CLIP_SAMPLE_RATE = 16_000;
+
+/** Skip near-silent uplink clips (RMS of float samples). */
+export const VOICE_CLIP_SILENCE_RMS = 0.005;
 
 /**
  * Minimum normalized RMS (0–1) to open mic gate toward OpenAI.

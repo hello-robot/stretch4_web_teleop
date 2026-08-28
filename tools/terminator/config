@@ -1,0 +1,134 @@
+[global_config]
+[keybindings]
+[profiles]
+  [[default]]
+    scrollback_infinite = True
+[layouts]
+  [[default]]
+    [[[window0]]]
+      type = Window
+      parent = ""
+      size = 2440, 1332
+      maximized = True
+    [[[vpaned0]]]
+      type = VPaned
+      parent = window0
+      order = 0
+      ratio = 0.25
+    [[[top_row]]]
+      type = Terminal
+      parent = vpaned0
+      order = 0
+      command = "bash -c 'watch -t -n 2 pm2 status; exec bash'"
+      title = pm2 status
+    [[[hpaned0]]]
+      type = HPaned
+      parent = vpaned0
+      order = 1
+      ratio = 0.25
+    [[[col1]]]
+      type = Terminal
+      parent = hpaned0
+      order = 0
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-transcribe-model; exec bash'"
+      title = Transcribe Model (STT)
+    [[[hpaned1]]]
+      type = HPaned
+      parent = hpaned0
+      order = 1
+      ratio = 0.333333333
+    [[[col2]]]
+      type = Terminal
+      parent = hpaned1
+      order = 0
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-realtime-model; exec bash'"
+      title = Realtime Model (Tools)
+    [[[hpaned2]]]
+      type = HPaned
+      parent = hpaned1
+      order = 1
+      ratio = 0.5
+    [[[col3]]]
+      type = Terminal
+      parent = hpaned2
+      order = 0
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-mic; exec bash'"
+      title = Mic Events
+    [[[col4]]]
+      type = Terminal
+      parent = hpaned2
+      order = 1
+      command = "bash -c 'cd $HOME/ament_ws/src/stretch4_web_teleop && npm run watch-ros; exec bash'"
+      title = ROS Launch Logs
+  [[web_interface_command_center]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 0:0
+      maximized = True
+      fullscreen = False
+      size = 2374, 1263
+      title = "Web Interface Command Center"
+      last_active_term = 476f3c4d-07c8-4456-9d22-f5becb3a60b5
+      last_active_window = True
+    [[[child1]]]
+      type = VPaned
+      parent = child0
+      order = 0
+      position = 314
+      ratio = 0.24960254372019078
+    [[[child2]]]
+      type = HPaned
+      parent = child1
+      order = 0
+      position = 1777
+      ratio = 0.75
+    [[[terminal3]]]
+      type = Terminal
+      parent = child2
+      order = 0
+      profile = default
+      title = pm2 status
+      uuid = 05b92dfe-31ef-4322-982c-e34f1371ae47
+    [[[terminal4]]]
+      type = Terminal
+      parent = child2
+      order = 1
+      profile = default
+      title = Mic Events
+      uuid = 8ca59f6e-ed73-4efd-b30e-7275a898d7ed
+    [[[child5]]]
+      type = HPaned
+      parent = child1
+      order = 1
+      position = 788
+      ratio = 0.33262980160405237
+    [[[terminal6]]]
+      type = Terminal
+      parent = child5
+      order = 0
+      profile = default
+      title = Transcribe Model (STT)
+      uuid = 476f3c4d-07c8-4456-9d22-f5becb3a60b5
+    [[[child7]]]
+      type = HPaned
+      parent = child5
+      order = 1
+      position = 701
+      ratio = 0.44367088607594934
+    [[[terminal8]]]
+      type = Terminal
+      parent = child7
+      order = 0
+      profile = default
+      title = Realtime Model (Tools)
+      uuid = d994a59c-ce8d-47e9-9c8d-0f6488e15be5
+    [[[terminal9]]]
+      type = Terminal
+      parent = child7
+      order = 1
+      profile = default
+      title = ROS Launch Logs
+      uuid = 82131b33-247b-4571-abf6-10995ff017e2
+[plugins]
