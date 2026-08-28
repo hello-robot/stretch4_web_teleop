@@ -8,6 +8,7 @@ import "operator/css/FooterGlobal.css";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
+import { getOperatorVoiceSvc } from "shared/operatorVoiceSession";
 import { ActionState } from "shared/util";
 import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import MainMenu from "../basic_components/MainMenu";
@@ -44,6 +45,9 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
+    // @flag svc
+    const voiceSvc =
+        getOperatorVoiceSvc() && process.env.storage !== "firebase";
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
@@ -129,22 +133,28 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: localizeStatus !== "loading",
                 status: localizeStatus,
             },
-            {
-                id: "mic-mute",
-                name: micMuted ? "Unmute" : "Mute",
-                description: "Toggle microphone uplink to OpenAI",
-                onClick: () => {
-                    const nextMuted = !getVoiceStatusSnapshot().micMuted;
-                    setVoiceStatus({ micMuted: nextMuted });
-                    if (!nextMuted) {
-                        bumpVoiceCommandActivity();
-                        // Reacquire from this tap — iOS needs the gesture for getUserMedia.
-                        void recoverVoiceMicFromUserGesture();
-                    }
-                },
-                icon: micMuted ? <MicOffIcon /> : <MicIcon />,
-                enabled: voiceConnected,
-            },
+            // @flag svc
+            ...(voiceSvc
+                ? [
+                      {
+                          id: "mic-mute",
+                          name: micMuted ? "Unmute" : "Mute",
+                          description: "Toggle microphone uplink to OpenAI",
+                          onClick: () => {
+                              const nextMuted =
+                                  !getVoiceStatusSnapshot().micMuted;
+                              setVoiceStatus({ micMuted: nextMuted });
+                              if (!nextMuted) {
+                                  bumpVoiceCommandActivity();
+                                  // Reacquire from this tap — iOS needs the gesture for getUserMedia.
+                                  void recoverVoiceMicFromUserGesture();
+                              }
+                          },
+                          icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                          enabled: voiceConnected,
+                      } satisfies SceneItem,
+                  ]
+                : []),
             {
                 id: "reload-app",
                 name: "Reload App",
@@ -190,6 +200,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         [
             micMuted,
             voiceConnected,
+            voiceSvc,
             localizeStatus,
             onSceneSelectedChange,
             swipeableViewsIdxSet,
@@ -221,10 +232,17 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="scene-menu-button"
                     onPointerUp={() => isMainMenuOpenSet(true)}
                 >
-                    <VoicePilotSceneChrome
-                        sceneSelected={sceneSelected}
-                        fallbackName={sceneNameCurrent}
-                    />
+                    {/* @flag svc */}
+                    {voiceSvc ? (
+                        <VoicePilotSceneChrome
+                            sceneSelected={sceneSelected}
+                            fallbackName={sceneNameCurrent}
+                        />
+                    ) : (
+                        <span className="scene-menu-button__label">
+                            {sceneNameCurrent}
+                        </span>
+                    )}
                 </button>
                 <MainMenu
                     isOpen={isMainMenuOpen}

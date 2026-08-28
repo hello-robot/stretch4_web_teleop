@@ -22,6 +22,12 @@ Next, launch the interface:
 ./launch_interface.sh
 ```
 
+Experimental speech voice control (SVC) is off by default. Enable it with:
+
+```
+./launch_interface.sh --svc
+```
+
 In the terminal, you will see output similar to:
 
 ```

@@ -52,22 +52,27 @@ let oper_sock = undefined;
 let protocol = undefined; // TODO(binit): ensure robot/operator protocol match
 let status = 'offline'; // ["online", "offline", "occupied"]
 
-/**
- * Validate the voice session token.
- *
- * Extra security measures are implemented to ensure that
- * only one operator on the socket connection will be
- * authorized to mint a voice session token, and use the
- * OpenAI Realtime API.
- */
-registerOpenAiRealtimeRoutes(app, {
-    validateVoiceSession: (req) =>
-        voiceSessionAuth.validate(
-            req.get('X-Voice-Session-Token'),
-            oper_sock,
-            io,
-        ),
-});
+// @flag svc
+const isVoiceSvcEnabled = () => process.env.VOICE_SVC === '1';
+
+if (isVoiceSvcEnabled()) {
+    /**
+     * Validate the voice session token.
+     *
+     * Extra security measures are implemented to ensure that
+     * only one operator on the socket connection will be
+     * authorized to mint a voice session token, and use the
+     * OpenAI Realtime API.
+     */
+    registerOpenAiRealtimeRoutes(app, {
+        validateVoiceSession: (req) =>
+            voiceSessionAuth.validate(
+                req.get('X-Voice-Session-Token'),
+                oper_sock,
+                io,
+            ),
+    });
+}
 
 app.use('/', express.static(path.join(__dirname, 'dist')));
 
@@ -115,11 +120,16 @@ io.on('connection', function (socket) {
                 socket.in(ROOM).emit('joined');
                 oper_sock = socket.id;
                 console.log('join_as_operator SUCCESS');
-                callback({
-                    success: true,
-                    voiceSessionToken:
-                        voiceSessionAuth.issueToken(socket.id),
-                });
+                if (isVoiceSvcEnabled()) {
+                    callback({
+                        success: true,
+                        voiceSvc: true,
+                        voiceSessionToken:
+                            voiceSessionAuth.issueToken(socket.id),
+                    });
+                } else {
+                    callback({ success: true });
+                }
             } else {
                 console.log(
                     'join_as_operator FAILURE: occupied by another operator'
@@ -155,7 +165,9 @@ io.on('connection', function (socket) {
             }
             if (socket.id == oper_sock) {
                 status = 'online';
-                voiceSessionAuth.revokeBySocket(socket.id);
+                if (isVoiceSvcEnabled()) {
+                    voiceSessionAuth.revokeBySocket(socket.id);
+                }
                 oper_sock = undefined;
                 console.log('Operator disconnected');
             }
@@ -172,7 +184,9 @@ io.on('connection', function (socket) {
         }
         if (socket.id == oper_sock) {
             status = 'online';
-            voiceSessionAuth.revokeBySocket(socket.id);
+            if (isVoiceSvcEnabled()) {
+                voiceSessionAuth.revokeBySocket(socket.id);
+            }
             oper_sock = undefined;
             console.log('Operator disconnected');
         }

@@ -1,5 +1,6 @@
 import "operator/css/MobileOperator.css";
 import React, { useState } from "react";
+import { getOperatorVoiceSvc } from "shared/operatorVoiceSession";
 import {
     ActionState,
     ActionState as MoveBaseState,
@@ -364,28 +365,35 @@ export const MobileOperator = (props: {
         return show ? <ControlModes key={"control-modes"} /> : <></>;
     };
 
+    // @flag svc
+    const voiceSvc =
+        getOperatorVoiceSvc() && process.env.storage !== "firebase";
+
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <Toasts toasts={toasts} toastsSet={toastsSet} />
-            <VoiceCommandAssistant
-                onVelocityScaleApplied={applyVelocityScale}
-                setActionMode={setActionMode}
-                addToast={addToast}
-                onSwitchScene={(scene) => {
-                    if (scene === "pilot") {
-                        swipeableViewsIdxSet(0);
-                        setSceneSelected("pilot-mode");
-                    } else {
-                        setSceneSelected("autonav");
-                        swipeableViewsIdxSet(1);
-                    }
-                }}
-                onSetSavedLocationsModal={handleSetSavedLocationsModal}
-                onControlAutoNav={handleControlAutoNav}
-                onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
-                onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
-                onLoadAutoNavLocation={handleLoadAutoNavLocation}
-            />
+            {/* @flag svc */}
+            {voiceSvc ? (
+                <VoiceCommandAssistant
+                    onVelocityScaleApplied={applyVelocityScale}
+                    setActionMode={setActionMode}
+                    addToast={addToast}
+                    onSwitchScene={(scene) => {
+                        if (scene === "pilot") {
+                            swipeableViewsIdxSet(0);
+                            setSceneSelected("pilot-mode");
+                        } else {
+                            setSceneSelected("autonav");
+                            swipeableViewsIdxSet(1);
+                        }
+                    }}
+                    onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                    onControlAutoNav={handleControlAutoNav}
+                    onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
+                    onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
+                    onLoadAutoNavLocation={handleLoadAutoNavLocation}
+                />
+            ) : null}
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
