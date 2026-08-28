@@ -7,6 +7,21 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
+# Strip long flags before getopts (otherwise --svc is eaten by getopts)
+VOICE_SVC=0
+FILTERED_ARGS=()
+for arg in "$@"; do
+	case "$arg" in
+	--svc)
+		VOICE_SVC=1
+		;;
+	*)
+		FILTERED_ARGS+=("$arg")
+		;;
+	esac
+done
+set -- "${FILTERED_ARGS[@]}"
+
 while getopts m:t:f opt; do
 	case $opt in
 	m)
@@ -148,6 +163,10 @@ echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
 
+if [[ "$VOICE_SVC" -eq 1 ]]; then
+	echo -e "${GREEN}ENABLED SVC (--svc)${NC}"
+fi
+
 validate_installation
 if [ $? -ne 0 ]; then
 	echo_failure_help
@@ -159,9 +178,14 @@ if [ $? -ne 0 ]; then
 	echo_failure_help
 fi
 
+VOICE_SVC_FLAG=""
+if [[ "$VOICE_SVC" -eq 1 ]]; then
+	VOICE_SVC_FLAG="-s"
+fi
+
 # echo ""
 cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE |& tee $logfile_node
+./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE $VOICE_SVC_FLAG |& tee $logfile_node
 if [ $? -ne 0 ]; then
 	echo_failure_help
 fi
