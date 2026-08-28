@@ -24,9 +24,12 @@ function formatAndPrintLine(line) {
             );
         } else if (type === 'final' || record.transcript) {
             const text = record.transcript || record.message || '';
+            const audioHint = record.audio_file
+                ? chalk.grey(` 🎧 ${record.audio_file}`)
+                : '';
             console.log(
                 `${chalk.grey(`[TranscribeModel ${timeShort}]`)} ` +
-                `🗣️  ${chalk.cyan.bold(`"${text}"`)}`
+                `🗣️  ${chalk.cyan.bold(`"${text}"`)}${audioHint}`
             );
         } else if (type === 'wake_sleep' || (record.message && record.message.includes('[WakeSleep]'))) {
             const text = record.message || record.transcript || '';

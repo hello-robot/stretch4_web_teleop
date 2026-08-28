@@ -43,7 +43,8 @@ function formatAndPrintLine(line) {
             `${chalk.grey(`[RealtimeModel ${timeShort}]`)} ` +
             `🗣️  ${chalk.cyan(transcriptText)} ➔ ` +
             `🛠️  ${chalk.yellow.bold(toolText)} ➔ ` +
-            `${statusIcon}${chalk.grey(detailText)}`
+            `${statusIcon}${chalk.grey(detailText)}` +
+            (record.audio_file ? chalk.grey(` 🎧 ${record.audio_file}`) : '')
         );
     } catch (e) {
         console.log(chalk.grey(`[RawRealtimeLog] ${line.trim()}`));
