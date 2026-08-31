@@ -560,18 +560,31 @@ export class Robot extends React.Component {
             name: "/stretch_driver:mode"
         });
 
-        const jointVelocityLimitsParam = new Param({
-            ros: this.ros,
-            name: "/stretch_driver/joint_velocity_limits",
-        });
-        jointVelocityLimitsParam.get((val: Record<string, number>) => {
-            if (val && typeof val === "object") {
-                updateJointVelocities(val);
-                if (this.jointVelocityLimitsCallback) {
-                    this.jointVelocityLimitsCallback(val);
+        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
+            lift_joint: "lift",
+            arm_joint: "arm",
+            wrist_yaw_joint: "wrist_yaw",
+            wrist_pitch_joint: "wrist_pitch",
+            wrist_roll_joint: "wrist_roll",
+            gripper_joint: "gripper",
+            translate_mobile_base: "omnibase.linear",
+            rotate_mobile_base: "omnibase.angular",
+        };
+        const jointVelocityLimits: Record<string, number> = {};
+        for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
+            new Param({
+                ros: this.ros,
+                name: `/stretch_driver:joint_velocity.${paramKey}`,
+            }).get((value: number) => {
+                if (typeof value === "number" && value > 0) {
+                    jointVelocityLimits[rosJointName] = value;
+                    updateJointVelocities({ [rosJointName]: value });
+                    if (this.jointVelocityLimitsCallback) {
+                        this.jointVelocityLimitsCallback({ ...jointVelocityLimits });
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     isToolActuated(): boolean {
