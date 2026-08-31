@@ -1,38 +1,37 @@
+import { FirebaseOptions } from "firebase/app";
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
-import { WebRTCConnection } from "shared/webrtcconnections";
-import {
-    WebRTCMessage,
-    RemoteStream,
-    RobotPose,
-    ROSOccupancyGrid,
-    StretchTool,
-    delay,
-    getStretchTool,
-    waitUntil,
-} from "shared/util";
-import { RemoteRobot } from "shared/remoterobot";
 import { cmd } from "shared/commands";
-import { Operator } from "./Operator";
-import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
-import { StorageHandler } from "./storage_handler/StorageHandler";
-import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
-import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
-import { FirebaseOptions } from "firebase/app";
+import { RemoteRobot } from "shared/remoterobot";
+import {
+    delay,
+    parseToolMetadata,
+    RemoteStream,
+    ROSOccupancyGrid,
+    JointVelocityLimitsMessage,
+    ToolMetadata,
+    updateJointVelocities,
+    waitUntil,
+    WebRTCMessage
+} from "shared/util";
+import { WebRTCConnection } from "shared/webrtcconnections";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
+import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
+import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
+import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
+import { StorageHandler } from "./storage_handler/StorageHandler";
 
-import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
-import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
-import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
-import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
-import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
-import { MobileOperator } from "./MobileOperator";
-import { isMobile } from "react-device-detect";
 import "operator/css/index.css";
-import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
-import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
 import { waitUntilAsync } from "../../../shared/util";
+import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
+import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
+import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
+import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
+import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
+import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
+import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
+import { MobileOperator } from "./MobileOperator";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -41,7 +40,7 @@ let allRemoteStreams: Map<string, RemoteStream> = new Map<
 let remoteRobot: RemoteRobot;
 let connection: WebRTCConnection;
 let root: Root;
-export let stretchTool: StretchTool;
+export let toolMetadata: ToolMetadata;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
 
@@ -219,8 +218,8 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             remoteRobot.sensors.setRunStopState(message.enabled);
             break;
         case "stretchTool":
-            console.log("index stretchTool", message.value);
-            stretchTool = getStretchTool(message.value);
+            toolMetadata = message.toolMetadata || parseToolMetadata(message.value);
+            console.log("[Operator index] stretchTool message received:", message.value, "toolMetadata:", toolMetadata);
             break;
         case "occupancyGrid":
             if (!occupancyGrid) {
@@ -266,6 +265,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             break;
         case "batteryVoltage":
             remoteRobot.sensors.setBatteryVoltage(message.message);
+            break;
+        case "jointVelocityLimits":
+            updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
             break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);

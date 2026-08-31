@@ -14,19 +14,17 @@ import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
-    getStretchTool,
-    JOINT_VELOCITIES,
+    getPlaybackJointVelocities,
+    getPlaybackJointVelocity,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    StretchTool,
+    updateJointVelocities,
     ValidJoints,
     VideoProps,
-    getPlaybackJointVelocity,
-    getPlaybackJointVelocities,
 } from "shared/util";
 import {
     RobotPose,
@@ -126,12 +124,15 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+    private jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam: Param;
+    private toolIsActuatedParam: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
-    private stretchTool: StretchTool;
+    private stretchToolName: string = "unknown";
+    private toolIsActuated: boolean = true;
 
     constructor(props: {
         jointStateCallback: (
@@ -150,6 +151,7 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+        jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -173,6 +175,7 @@ export class Robot extends React.Component {
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
         this.leaseStatusCallback = props.leaseStatusCallback;
+        this.jointVelocityLimitsCallback = props.jointVelocityLimitsCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -491,7 +494,7 @@ export class Robot extends React.Component {
                 if (status.name == "at_limit") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -506,7 +509,7 @@ export class Robot extends React.Component {
                 if (status.name == "in_collision") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -541,23 +544,56 @@ export class Robot extends React.Component {
             name: "/configure_video_streams_gripper:stretch_tool",
         });
         this.stretchToolParam.get((value: string) => {
-            this.stretchTool = getStretchTool(value);
+            this.stretchToolName = value || "unknown";
+        });
+
+        this.toolIsActuatedParam = new Param({
+            ros: this.ros,
+            name: "/stretch_driver:tool_info.is_actuated",
+        });
+        this.toolIsActuatedParam.get((value: boolean) => {
+            this.toolIsActuated = value ?? true;
         });
 
         this.modeParam = new Param({
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
+
+        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
+            lift_joint: "lift",
+            arm_joint: "arm",
+            wrist_yaw_joint: "wrist_yaw",
+            wrist_pitch_joint: "wrist_pitch",
+            wrist_roll_joint: "wrist_roll",
+            gripper_joint: "gripper",
+            translate_mobile_base: "omnibase.linear",
+            rotate_mobile_base: "omnibase.angular",
+        };
+        const jointVelocityLimits: Record<string, number> = {};
+        for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
+            new Param({
+                ros: this.ros,
+                name: `/stretch_driver:joint_velocity.${paramKey}`,
+            }).get((value: number) => {
+                if (typeof value === "number" && value > 0) {
+                    jointVelocityLimits[rosJointName] = value;
+                    updateJointVelocities({ [rosJointName]: value });
+                    if (this.jointVelocityLimitsCallback) {
+                        this.jointVelocityLimitsCallback({ ...jointVelocityLimits });
+                    }
+                }
+            });
+        }
+    }
+
+    isToolActuated(): boolean {
+        return this.toolIsActuated;
     }
 
     getStretchTool() {
-        // if (this.stretchTool == StretchTool.TABLET) {
-        //     this.subscribeToTabletTF();
-        // } else {
-        //     this.subscribeToGripperFingerTF();
-        // }
         if (this.stretchToolCallback)
-            this.stretchToolCallback(this.stretchTool);
+            this.stretchToolCallback(this.stretchToolName);
     }
 
     getOccupancyGrid() {
@@ -1179,7 +1215,15 @@ export class Robot extends React.Component {
             } catch (e) {
                 console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
             }
-            jointNames.push(jointName);
+            let targetJointName: ValidJoints = jointName;
+            if (jointName === "gripper_joint") {
+                if (this.jointState?.name?.includes("stretch_gripper_joint" as ValidJoints)) {
+                    targetJointName = "stretch_gripper_joint" as ValidJoints;
+                } else if (this.jointState?.name?.includes("gripper_aperture" as ValidJoints)) {
+                    targetJointName = "gripper_aperture" as ValidJoints;
+                }
+            }
+            jointNames.push(targetJointName);
             jointPositions.push(targetPos);
         }
 
@@ -1663,6 +1707,15 @@ export class Robot extends React.Component {
             }
         }
 
+        if (name === "gripper_joint") {
+            for (let gName of ["gripper_joint", "stretch_gripper_joint", "gripper_aperture"]) {
+                let idx = this.jointState.name.indexOf(gName as ValidJoints);
+                if (idx !== -1) {
+                    return this.jointState.position[idx];
+                }
+            }
+        }
+
         let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
         return this.jointState.position[jointIndex];
     }
@@ -1692,10 +1745,10 @@ export class Robot extends React.Component {
         let jointLimits = this.jointLimits[jointName];
         if (!jointLimits) return;
 
-        var eps = 0.03;
+        // jointLimits comes from the driver's /joint_limits topic (soft limits)
         let inLimits: [boolean, boolean] = [true, true];
-        inLimits[0] = jointValue - eps >= jointLimits[0]; // Lower joint limit
-        inLimits[1] = jointValue + eps <= jointLimits[1]; // Upper joint limit
+        inLimits[0] = jointValue >= jointLimits[0]; // Lower joint limit
+        inLimits[1] = jointValue <= jointLimits[1]; // Upper joint limit
         return inLimits;
     }
 

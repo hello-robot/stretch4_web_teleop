@@ -1,10 +1,10 @@
-import { Transform, Message } from "roslib";
+import { Message, Transform } from "roslib";
 import { cmd } from "./commands";
 
 export type ValidJoints =
     | "head_tilt_joint"
     | "head_pan_joint"
-    | "stretch_gripper_joint"
+    | "gripper_joint"
     | "arm_joint"
     | "wrist_extension"
     | "lift_joint"
@@ -13,7 +13,6 @@ export type ValidJoints =
     | "wrist_yaw_joint"
     | "translate_mobile_base"
     | "rotate_mobile_base"
-    | "gripper_aperture"
     | "arm_l0_joint"
     | "arm_l1_joint"
     | "arm_l2_joint"
@@ -52,24 +51,17 @@ export interface KeyValue {
     key: string;
     value: string;
 }
-export enum StretchTool {
-    DW4 = "eoa_wrist_dw4_tool_sg4",
-    TABLET = "eoa_wrist_dw3_tool_tablet",
-    UNKNOWN = "unknown",
+export interface ToolMetadata {
+    name: string;
+    isActuated: boolean;
 }
 
-
-
-export function getStretchTool(stretchTool: string) {
-    if (stretchTool === "eoa_wrist_dw3_tool_tablet") {
-        return StretchTool.TABLET;
-    } else if (stretchTool === "eoa_wrist_dw4_tool_sg4") {
-        return StretchTool.DW4;
-    } else {
-        return StretchTool.UNKNOWN;
-    }
+export function parseToolMetadata(toolName: string, isActuated?: boolean): ToolMetadata {
+    return {
+        name: toolName || "unknown",
+        isActuated: isActuated ?? true,
+    };
 }
-
 
 
 export interface ROSBatteryState extends Message {
@@ -108,6 +100,7 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | SeedLocalizationStateMessage
+    | JointVelocityLimitsMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -145,6 +138,12 @@ export interface IsRunStoppedMessage {
 export interface StretchToolMessage {
     type: "stretchTool";
     value: string;
+    toolMetadata?: ToolMetadata;
+}
+
+export interface JointVelocityLimitsMessage {
+    type: "jointVelocityLimits";
+    jointVelocities: Record<string, number>;
 }
 
 
@@ -215,19 +214,11 @@ export interface ROSOccupancyGrid {
     data: number[];
 }
 
-export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
-    arm_joint: [0.001, 0.518],
-    wrist_roll_joint: [-2.95, 2.94],
-    wrist_pitch_joint: [-1.57, 0.57],
-    wrist_yaw_joint: [-1.37, 4.41],
-    lift_joint: [0.001, 1.1],
-    translate_mobile_base: [-30.0, 30.0],
-    rotate_mobile_base: [-3.14, 3.14],
-    stretch_gripper_joint: [-0.37, 0.17],
-    head_tilt_joint: [-1.6, 0.3],
-    head_pan_joint: [-3.95, 1.7],
-};
 
+/**
+ * Default fallback joint velocities.
+ * Primary joint velocity limits are populated dynamically at runtime from stretch4_urdf via ROS parameters.
+ */
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
@@ -238,13 +229,21 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     wrist_yaw_joint: 1.0,
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.3,
-    stretch_gripper_joint: 0.1
+    gripper_joint: 0.1,
 };
+
+export function updateJointVelocities(newVelocities: Record<string, number>) {
+    for (const [key, val] of Object.entries(newVelocities)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_VELOCITIES as Record<string, number>)[key] = val;
+        }
+    }
+}
 
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,
     head_pan_joint: 0.1,
-    stretch_gripper_joint: 0.1,
+    gripper_joint: 0.1,
     arm_joint: 0.1,
     lift_joint: 0.1,
     wrist_roll_joint: 0.1,
