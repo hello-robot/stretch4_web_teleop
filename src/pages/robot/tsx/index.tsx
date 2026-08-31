@@ -1,4 +1,3 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
 import { Transform } from "roslib";
@@ -12,6 +11,7 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
+    JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
     navigationProps,
@@ -47,6 +47,7 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
+    jointVelocityLimitsCallback: forwardJointVelocityLimits,
 });
 
 export let connection: WebRTCConnection;
@@ -173,6 +174,15 @@ function forwardStretchTool(value: string) {
         value: value,
         toolMetadata: parseToolMetadata(value, isActuated),
     } as StretchToolMessage);
+}
+
+function forwardJointVelocityLimits(limits: Record<string, number>) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "jointVelocityLimits",
+        jointVelocities: limits,
+    } as JointVelocityLimitsMessage);
 }
 
 function forwardJointStates(
