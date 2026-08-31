@@ -27,7 +27,7 @@ import {
     ROSPose,
     updateJointVelocities,
     ValidJoints,
-    VideoProps
+    VideoProps,
 } from "shared/util";
 import {
     RobotPose,
@@ -135,6 +135,7 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+    private jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam?: Param;
     private toolIsActuatedParam?: Param;
@@ -164,6 +165,7 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+        jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -189,6 +191,7 @@ export class Robot extends React.Component {
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
         this.leaseStatusCallback = props.leaseStatusCallback;
+        this.jointVelocityLimitsCallback = props.jointVelocityLimitsCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -660,6 +663,18 @@ export class Robot extends React.Component {
         if (this.jointVelocityLimitsCallback) {
             this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
         }
+        const jointVelocityLimitsParam = new Param({
+            ros: this.ros,
+            name: "/stretch_driver/joint_velocity_limits",
+        });
+        jointVelocityLimitsParam.get((val: Record<string, number>) => {
+            if (val && typeof val === "object") {
+                updateJointVelocities(val);
+                if (this.jointVelocityLimitsCallback) {
+                    this.jointVelocityLimitsCallback(val);
+                }
+            }
+        });
     }
 
     isToolActuated(): boolean {
@@ -1885,10 +1900,10 @@ export class Robot extends React.Component {
         let jointLimits = this.jointLimits[jointName];
         if (!jointLimits) return;
 
-        var eps = 0.03;
+        // jointLimits comes from the driver's /joint_limits topic (soft limits)
         let inLimits: [boolean, boolean] = [true, true];
-        inLimits[0] = jointValue - eps >= jointLimits[0]; // Lower joint limit
-        inLimits[1] = jointValue + eps <= jointLimits[1]; // Upper joint limit
+        inLimits[0] = jointValue >= jointLimits[0]; // Lower joint limit
+        inLimits[1] = jointValue <= jointLimits[1]; // Upper joint limit
         return inLimits;
     }
 
