@@ -146,6 +146,7 @@ export class Robot extends React.Component {
     private toolIsActuated: boolean = true;
     private gripperApertureRange?: [number, number];
     private gripperVelocityLimit?: number;
+    private jointVelocityLimits: Record<string, number> = {};
     private stretchParamsReady: Promise<void> = Promise.resolve();
 
     constructor(props: {
