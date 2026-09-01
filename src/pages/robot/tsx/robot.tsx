@@ -160,23 +160,6 @@ function splitGripperFromPose(pose: RobotPose): {
     return { body, gripper };
 }
 
-function stripGripperFromPoses(poses: RobotPose[]): RobotPose[] {
-    return poses
-        .map((pose) => splitGripperFromPose(pose).body)
-        .filter((pose) => Object.keys(pose).length > 0);
-}
-
-function finalGripperPose(poses: RobotPose[]): RobotPose | undefined {
-    // Intentional: body keeps the full multi-point path; gripper applies only the
-    // last recorded aperture after body motion (driver cannot reliably mix
-    // gripper_joint into multi-joint goals). Mid-path open/close is not replayed.
-    for (let i = poses.length - 1; i >= 0; i--) {
-        const gripper = splitGripperFromPose(poses[i]).gripper;
-        if (gripper) return gripper;
-    }
-    return undefined;
-}
-
 export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
@@ -1347,106 +1330,6 @@ export class Robot extends React.Component {
         };
     }
 
-    makePoseGoals(poses: RobotPose[], minSegmentDuration: number = 0.5) {
-        if (!poses || poses.length === 0) {
-            throw new Error("Poses array cannot be empty");
-        }
-
-        // Standardize joint list using the union of keys or the first pose's keys
-        const jointNames = Object.keys(poses[0]) as ValidJoints[];
-        const points: any[] = [];
-        let cumulativeTime = 0.0;
-
-        // keep track of cumulative duration for timestamps for each point
-        poses.forEach((pose, index) => {
-            let segmentDuration = minSegmentDuration;
-            const jointPositions: number[] = [];
-
-            jointNames.forEach((name) => {
-                if (index === 0) {
-                    // First pose: evaluate vs. live state
-                    const currentPos = this.getJointValue(name);
-                    const targetPos = pose[name] !== undefined ? pose[name]! : currentPos;
-                    jointPositions.push(targetPos);
-
-                    if (targetPos !== undefined && currentPos !== undefined && !isNaN(currentPos)) {
-                        const distance = Math.abs(targetPos - currentPos);
-                        const velocityLimit = getPlaybackJointVelocity(name);
-                        if (velocityLimit > 0) {
-                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
-                        }
-                    }
-                } else {
-                    // Subsequent poses: evaluate vs. previous point's recorded target position
-                    const prevPos = points[index - 1].positions[jointNames.indexOf(name)];
-                    const targetPos = pose[name] !== undefined ? pose[name]! : prevPos;
-                    jointPositions.push(targetPos);
-
-                    if (targetPos !== undefined && prevPos !== undefined) {
-                        const distance = Math.abs(targetPos - prevPos);
-                        const velocityLimit = getPlaybackJointVelocity(name);
-                        if (velocityLimit > 0) {
-                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
-                        }
-                    }
-                }
-            });
-
-            cumulativeTime += segmentDuration;
-
-            // Safe nanosecond calculation
-            let secs = Math.floor(cumulativeTime);
-            let nsecs = Math.round((cumulativeTime - secs) * 1e9);
-            if (nsecs >= 1e9) {
-                secs += 1;
-                nsecs = 0;
-            }
-
-            const jointVelocities = getPlaybackJointVelocities(jointNames);
-
-            points.push({
-                positions: jointPositions,
-                velocities: jointVelocities,
-                time_from_start: {
-                    sec: secs,
-                    nanosec: nsecs,
-                    secs: secs,
-                    nsecs: nsecs,
-                },
-            });
-        });
-
-        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
-
-        const remappedPoints = points.map((point) => {
-            const remapped = remapGripperForTrajectory(
-                jointNames,
-                point.positions,
-                point.velocities,
-            );
-            return {
-                ...point,
-                positions: remapped.positions,
-                velocities: remapped.velocities,
-            };
-        });
-        // Names are identical for every point; remap once from the internal list.
-        const remappedNames = remapGripperForTrajectory(
-            jointNames,
-            points[0]?.positions ?? [],
-        ).jointNames;
-
-        return {
-            trajectory: {
-                header: {
-                    stamp: { secs: 0, nsecs: 0 },
-                },
-                joint_names: remappedNames,
-                points: remappedPoints,
-            },
-        };
-    }
-
     isAlreadyAtPose(pose: RobotPose, tolerance: number = 0.01): boolean {
         if (!this.jointState) {
             console.log("isAlreadyAtPose: No jointState received yet.");
@@ -1613,6 +1496,18 @@ export class Robot extends React.Component {
         return "success";
     }
 
+    private async runSplitPose(pose: RobotPose): Promise<TrajectoryOutcome> {
+        const { body, gripper } = splitGripperFromPose(pose);
+        return this.runBodyThenGripperTrajectories(
+            Object.keys(body).length > 0
+                ? this.makePoseGoal(body, 1.5)
+                : undefined,
+            body,
+            gripper ? this.makePoseGoal(gripper, 1.5) : undefined,
+            gripper,
+        );
+    }
+
     async executePoseGoal(pose: RobotPose) {
         await this.switchToNavigationMode();
 
@@ -1633,40 +1528,11 @@ export class Robot extends React.Component {
         console.log("executing pose goal", pose);
 
         this.stopExecution();
-        const { body, gripper } = splitGripperFromPose(pose);
-        const outcome = await this.runBodyThenGripperTrajectories(
-            Object.keys(body).length > 0
-                ? this.makePoseGoal(body, 1.5)
-                : undefined,
-            body,
-            gripper ? this.makePoseGoal(gripper, 1.5) : undefined,
-            gripper,
-        );
-        this.emitPlaybackOutcome(outcome);
+        this.emitPlaybackOutcome(await this.runSplitPose(pose));
     }
 
     async executePoseGoals(poses: RobotPose[], index: number) {
         await this.switchToNavigationMode();
-
-        if (poses.length > 0) {
-            const finalPose = poses[poses.length - 1];
-            if (this.isAlreadyAtPose(finalPose)) {
-                console.log(
-                    "Robot is already at final target pose, skipping execution.",
-                );
-                this.playbackPosesResultCallback({
-                    state: MovementState.Executing,
-                    alert_type: "info",
-                });
-                setTimeout(() => {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Success,
-                        alert_type: "info",
-                    });
-                }, 1000);
-                return;
-            }
-        }
 
         this.stopExecution();
         this.playbackPosesResultCallback({
@@ -1674,22 +1540,14 @@ export class Robot extends React.Component {
             alert_type: "info",
         });
 
-        const bodyPoses = stripGripperFromPoses(poses);
-        const gripperPose = finalGripperPose(poses);
-        const bodyFinal =
-            bodyPoses.length > 0
-                ? bodyPoses[bodyPoses.length - 1]
-                : undefined;
-
-        const outcome = await this.runBodyThenGripperTrajectories(
-            bodyPoses.length > 0
-                ? this.makePoseGoals(bodyPoses, 1.5)
-                : undefined,
-            bodyFinal,
-            gripperPose ? this.makePoseGoal(gripperPose, 1.5) : undefined,
-            gripperPose,
-        );
-        this.emitPlaybackOutcome(outcome);
+        for (const pose of poses) {
+            const outcome = await this.runSplitPose(pose);
+            if (outcome !== "success") {
+                this.emitPlaybackOutcome(outcome);
+                return;
+            }
+        }
+        this.emitPlaybackOutcome("success");
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
