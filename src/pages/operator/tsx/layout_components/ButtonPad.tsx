@@ -305,16 +305,34 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
     const functs: ButtonFunctions = buttonFunctionProvider.provideFunctions(
         props.funct
     );
+    const buttonState: ButtonState =
+        props.sharedState.buttonStateMap?.get(props.funct) ||
+        ButtonState.Inactive;
     const disabledDueToNotHomed =
         !props.sharedState.robotIsHomed &&
         notHomedDisabledFunctions.has(props.funct);
     const isGripperBtn = props.funct === ButtonPadButton.GripperOpen || props.funct === ButtonPadButton.GripperClose;
     const gripperDisabled = isGripperBtn && props.sharedState.stretchTool !== StretchTool.DW4;
+    const disabledDueToLimitOrCollision =
+        buttonState === ButtonState.Limit ||
+        buttonState === ButtonState.Collision;
 
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled;
+    const isDisabled =
+        props.sharedState.customizing ||
+        disabledDueToNotHomed ||
+        gripperDisabled ||
+        disabledDueToLimitOrCollision;
 
+    // Keep release handlers when only Limit/Collision disabled so a mid-hold
+    // transition still stops velocity if the pointer comes up.
     const clickProps = isDisabled
-        ? {}
+        ? disabledDueToLimitOrCollision
+            ? {
+                onPointerUp: functs.onRelease,
+                onPointerCancel: functs.onRelease,
+                onPointerLeave: functs.onLeave,
+            }
+            : {}
         : {
             onPointerDown: functs.onClick,
             onPointerUp: functs.onRelease,
@@ -322,9 +340,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
             onPointerLeave: functs.onLeave,
         };
 
-    const buttonState: ButtonState =
-        props.sharedState.buttonStateMap?.get(props.funct) ||
-        ButtonState.Inactive;
     const cardinalDirections = ["north", "south", "west", "east"];
     const rotateDirections = ["rotate-left", "rotate-right"];
     const getAriaLabel = (direction: string): string => {
@@ -589,21 +604,32 @@ const SingleButton = (props: SingleButtonProps) => {
     const functs: ButtonFunctions = buttonFunctionProvider.provideFunctions(
         props.funct
     );
+    const buttonState: ButtonState =
+        props.sharedState.buttonStateMap?.get(props.funct) ||
+        ButtonState.Inactive;
     const disabledDueToNotHomed =
         !props.sharedState.robotIsHomed &&
         notHomedDisabledFunctions.has(props.funct);
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed;
+    const disabledDueToLimitOrCollision =
+        buttonState === ButtonState.Limit ||
+        buttonState === ButtonState.Collision;
+    const isDisabled =
+        props.sharedState.customizing ||
+        disabledDueToNotHomed ||
+        disabledDueToLimitOrCollision;
 
     const clickProps = isDisabled
-        ? {}
+        ? disabledDueToLimitOrCollision
+            ? {
+                onMouseUp: functs.onRelease,
+                onMouseLeave: functs.onLeave,
+            }
+            : {}
         : {
             onMouseDown: functs.onClick,
             onMouseUp: functs.onRelease,
             onMouseLeave: functs.onLeave,
         };
-    const buttonState: ButtonState =
-        props.sharedState.buttonStateMap?.get(props.funct) ||
-        ButtonState.Inactive;
     const icon = getIcon(props.funct);
     const title = props.funct;
     const height = isMobile ? 75 : 85;

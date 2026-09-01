@@ -130,11 +130,13 @@ Methods `switchToNavigationMode()`, `switchToPositionMode()`, `switchToVelocityM
 | `setJointVelocity(joint, vel)` | Publishes `JointJog` to `/joint_vel` | Switches to velocity mode first |
 | `executeIncrementalMove(joint, inc)` | Sends goal to `/follow_joint_trajectory` | Adds `inc` to current joint value |
 | `executePoseGoal(pose)` | Sends goal to `/follow_joint_trajectory` | Switches to navigation mode |
-| `executePoseGoals(poses, idx)` | Sends multi-point goal to `/follow_joint_trajectory` | Used for movement playback |
+| `executePoseGoals(poses, idx)` | Sends each waypoint to `/follow_joint_trajectory` | Used for movement playback |
 | `executeMoveBaseGoal(pose)` | Sends goal to `/navigate_to_pose` | Nav2 autonomous navigation |
 | `stopTrajectoryClient()` | Cancels active trajectory goal | Fires `Cancel` callback |
 | `stopMoveBaseClient()` | Cancels active move-base goal | — |
 | `homeTheRobot()` | Calls `/home_the_robot` service | `std_srvs/Trigger` |
+
+Trajectory goals remap operator `stretch_gripper_joint` (finger rad) → driver `gripper_joint` (stretch_gripper pct). Pose playback / `executePoseGoal` run body joints then a gripper-only goal (driver gripper monitoring is pct-vs-world-rad and times out in mixed goals). Multi-pose recordings replay each waypoint the same way, so mid-path open/close is preserved. Velocity `/joint_vel` keeps `stretch_gripper_joint`.
 
 ## Full Data Flow (Robot Page)
 

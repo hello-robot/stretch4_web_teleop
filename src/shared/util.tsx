@@ -223,7 +223,7 @@ export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
     lift_joint: [0.001, 1.1],
     translate_mobile_base: [-30.0, 30.0],
     rotate_mobile_base: [-3.14, 3.14],
-    stretch_gripper_joint: [-0.37, 0.17],
+    stretch_gripper_joint: [0.0, 0.425],
     head_tilt_joint: [-1.6, 0.3],
     head_pan_joint: [-3.95, 1.7],
 };

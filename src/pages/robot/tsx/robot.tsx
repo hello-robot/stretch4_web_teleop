@@ -71,6 +71,95 @@ export enum GoalStatus {
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
 
+/**
+ * Operator / UI use `stretch_gripper_joint` in finger radians (published as
+ * gripper_finger_* on /joint_states). FollowJointTrajectory expects the
+ * driver's command-group name `gripper_joint` in stretch_gripper **pct**
+ * (move_to units: ~-100 closed / fingertips touching, ~+pct_max_open fully open).
+ *
+ * Do NOT reuse JointJog's gripper velocity ×300 — that scales rate for move_by,
+ * not absolute finger_rad → pct. Trajectory velocities must stay Feetech
+ * world-rad/s (StretchGripper passes them through), not pct/s.
+ *
+ * SE4 SG4 (range_deg [-100, 300]): pct_open = 300; finger_rad at open from
+ * GripperConversion.get_status (aperture_open_m / finger_length_m).
+ */
+const GRIPPER_TRAJECTORY_JOINT = "gripper_joint";
+const GRIPPER_PCT_CLOSED = -100;
+const GRIPPER_PCT_OPEN = 300;
+const GRIPPER_FINGER_RAD_CLOSED = 0;
+const GRIPPER_FINGER_RAD_OPEN = 0.4246;
+/**
+ * StretchGripper.move_to takes position in pct but passes velocity through as
+ * Feetech world-rad/s. On SE4, world_rad ≈ deg_to_rad(pct), so:
+ * d(world)/d(finger) = (π/180) * d(pct)/d(finger).
+ */
+const GRIPPER_FINGER_RAD_TO_WORLD_RAD_SCALE =
+    ((GRIPPER_PCT_OPEN - GRIPPER_PCT_CLOSED) * Math.PI) /
+    180 /
+    (GRIPPER_FINGER_RAD_OPEN - GRIPPER_FINGER_RAD_CLOSED);
+const GRIPPER_FINGER_JOINTS = [
+    "gripper_finger_left_joint",
+    "gripper_finger_right_joint",
+] as const;
+
+type TrajectoryOutcome = "success" | "fail" | "cancel";
+
+function fingerRadToGripperPct(fingerRad: number): number {
+    const t =
+        (fingerRad - GRIPPER_FINGER_RAD_CLOSED) /
+        (GRIPPER_FINGER_RAD_OPEN - GRIPPER_FINGER_RAD_CLOSED);
+    return GRIPPER_PCT_CLOSED + t * (GRIPPER_PCT_OPEN - GRIPPER_PCT_CLOSED);
+}
+
+/** Remap stretch_gripper_joint → gripper_joint (+ finger_rad → pct) for trajectory goals. */
+function remapGripperForTrajectory(
+    jointNames: string[],
+    positions: number[],
+    velocities?: number[],
+): { jointNames: string[]; positions: number[]; velocities?: number[] } {
+    const remappedNames = jointNames.map((name) =>
+        name === "stretch_gripper_joint" ? GRIPPER_TRAJECTORY_JOINT : name,
+    );
+    const remappedPositions = jointNames.map((name, i) =>
+        name === "stretch_gripper_joint"
+            ? fingerRadToGripperPct(positions[i])
+            : positions[i],
+    );
+    // Velocity stays world-rad/s for StretchGripper → Feetech (not pct/s).
+    const remappedVelocities = velocities
+        ? jointNames.map((name, i) =>
+              name === "stretch_gripper_joint"
+                  ? velocities[i] * GRIPPER_FINGER_RAD_TO_WORLD_RAD_SCALE
+                  : velocities[i],
+          )
+        : undefined;
+    return {
+        jointNames: remappedNames,
+        positions: remappedPositions,
+        velocities: remappedVelocities,
+    };
+}
+
+function splitGripperFromPose(pose: RobotPose): {
+    body: RobotPose;
+    gripper?: RobotPose;
+} {
+    const body: RobotPose = {};
+    let gripper: RobotPose | undefined;
+    for (const key in pose) {
+        const joint = key as ValidJoints;
+        const value = pose[joint];
+        if (value === undefined) continue;
+        if (joint === "stretch_gripper_joint") {
+            gripper = { stretch_gripper_joint: value };
+        } else {
+            body[joint] = value;
+        }
+    }
+    return { body, gripper };
+}
+
 export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
@@ -363,9 +452,19 @@ export class Robot extends React.Component {
                 this.jointState
             );
             robotPose["arm_joint"] = this.getJointValue("arm_joint");
+            // /joint_states publishes gripper_finger_* not stretch_gripper_joint
+            robotPose["stretch_gripper_joint"] =
+                this.getJointValue("stretch_gripper_joint");
             let jointValues: ValidJointStateDict = {};
             let effortValues: ValidJointStateDict = {};
-            const jointsToEvaluate = new Set([...this.jointState.name as ValidJoints[], "arm_joint" as ValidJoints, "wrist_extension" as ValidJoints]);
+            // Alias joints not published under operator names (arm telescoping links,
+            // stretch_gripper_joint vs gripper_finger_*).
+            const jointsToEvaluate = new Set([
+                ...(this.jointState.name as ValidJoints[]),
+                "arm_joint" as ValidJoints,
+                "wrist_extension" as ValidJoints,
+                "stretch_gripper_joint" as ValidJoints,
+            ]);
             jointsToEvaluate.forEach((name?: ValidJoints) => {
                 if (!name) return;
                 let inLimits = this.inJointLimits(name);
@@ -1203,17 +1302,22 @@ export class Robot extends React.Component {
         if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
 
         const playbackVelocities = getPlaybackJointVelocities(jointNames);
+        const remapped = remapGripperForTrajectory(
+            jointNames,
+            jointPositions,
+            playbackVelocities,
+        );
 
         return {
             trajectory: {
                 header: {
                     stamp: { secs: 0, nsecs: 0 }, // Execute immediately
                 },
-                joint_names: jointNames,
+                joint_names: remapped.jointNames,
                 points: [
                     {
-                        positions: jointPositions,
-                        velocities: playbackVelocities,
+                        positions: remapped.positions,
+                        velocities: remapped.velocities,
                         time_from_start: {
                             sec: secs,
                             nanosec: nsecs,
@@ -1222,88 +1326,6 @@ export class Robot extends React.Component {
                         },
                     },
                 ],
-            },
-        };
-    }
-
-    makePoseGoals(poses: RobotPose[], minSegmentDuration: number = 0.5) {
-        if (!poses || poses.length === 0) {
-            throw new Error("Poses array cannot be empty");
-        }
-
-        // Standardize joint list using the union of keys or the first pose's keys
-        const jointNames = Object.keys(poses[0]) as ValidJoints[];
-        const points: any[] = [];
-        let cumulativeTime = 0.0;
-
-        // keep track of cumulative duration for timestamps for each point
-        poses.forEach((pose, index) => {
-            let segmentDuration = minSegmentDuration;
-            const jointPositions: number[] = [];
-
-            jointNames.forEach((name) => {
-                if (index === 0) {
-                    // First pose: evaluate vs. live state
-                    const currentPos = this.getJointValue(name);
-                    const targetPos = pose[name] !== undefined ? pose[name]! : currentPos;
-                    jointPositions.push(targetPos);
-
-                    if (targetPos !== undefined && currentPos !== undefined && !isNaN(currentPos)) {
-                        const distance = Math.abs(targetPos - currentPos);
-                        const velocityLimit = getPlaybackJointVelocity(name);
-                        if (velocityLimit > 0) {
-                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
-                        }
-                    }
-                } else {
-                    // Subsequent poses: evaluate vs. previous point's recorded target position
-                    const prevPos = points[index - 1].positions[jointNames.indexOf(name)];
-                    const targetPos = pose[name] !== undefined ? pose[name]! : prevPos;
-                    jointPositions.push(targetPos);
-
-                    if (targetPos !== undefined && prevPos !== undefined) {
-                        const distance = Math.abs(targetPos - prevPos);
-                        const velocityLimit = getPlaybackJointVelocity(name);
-                        if (velocityLimit > 0) {
-                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
-                        }
-                    }
-                }
-            });
-
-            cumulativeTime += segmentDuration;
-
-            // Safe nanosecond calculation
-            let secs = Math.floor(cumulativeTime);
-            let nsecs = Math.round((cumulativeTime - secs) * 1e9);
-            if (nsecs >= 1e9) {
-                secs += 1;
-                nsecs = 0;
-            }
-
-            const jointVelocities = getPlaybackJointVelocities(jointNames);
-
-            points.push({
-                positions: jointPositions,
-                velocities: jointVelocities,
-                time_from_start: {
-                    sec: secs,
-                    nanosec: nsecs,
-                    secs: secs,
-                    nsecs: nsecs,
-                },
-            });
-        });
-
-        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
-
-        return {
-            trajectory: {
-                header: {
-                    stamp: { secs: 0, nsecs: 0 },
-                },
-                joint_names: jointNames,
-                points: points,
             },
         };
     }
@@ -1340,10 +1362,155 @@ export class Robot extends React.Component {
         return true;
     }
 
+    /**
+     * Send one FollowJointTrajectory goal and resolve when it finishes.
+     *
+     * GripperCommandGroup commands pct but monitors world-rad `pos`, so gripper
+     * goals often abort with "Goal timed out" after the hand has arrived. Treat
+     * that timeout as success when joints are already at the target.
+     */
+    private runTrajectoryGoal(
+        goal: Goal,
+        targetPose?: RobotPose,
+    ): Promise<TrajectoryOutcome> {
+        if (!this.trajectoryClient) {
+            throw new Error("trajectoryClient is undefined");
+        }
+        return new Promise((resolve) => {
+            this.poseGoal = goal;
+            this.poseGoalID = this.trajectoryClient!.sendGoal(
+                goal,
+                (result) => {
+                    console.log(
+                        "Result for action goal on " +
+                            this.trajectoryClient!.name +
+                            ": " +
+                            result.error_code,
+                    );
+                    this.poseGoal = undefined;
+                    this.poseGoalID = undefined;
+                    resolve(result.error_code == 0 ? "success" : "fail");
+                },
+                (feedback) => {
+                    console.log(
+                        "Feedback for action on " +
+                            this.trajectoryClient!.name +
+                            ": " +
+                            feedback,
+                    );
+                },
+                (error) => {
+                    this.poseGoal = undefined;
+                    this.poseGoalID = undefined;
+                    resolve(this.classifyTrajectoryGoalError(error, targetPose));
+                },
+            );
+        });
+    }
+
+    private classifyTrajectoryGoalError(
+        error: string,
+        targetPose?: RobotPose,
+    ): TrajectoryOutcome {
+        let error_code = -4;
+        try {
+            error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+        } catch (e) {
+            console.warn("Could not parse action error code:", e);
+        }
+        console.log(
+            "Error for action on " +
+                this.trajectoryClient!.name +
+                ": " +
+                error,
+        );
+
+        const timedOut =
+            typeof error === "string" && error.includes("Goal timed out");
+        if (timedOut && targetPose) {
+            // Gripper-only goals often time out after arrival (driver pct vs world-rad).
+            // Body goals use the tighter default tolerance.
+            const gripperOnly =
+                Object.keys(targetPose).length === 1 &&
+                targetPose.stretch_gripper_joint !== undefined;
+            const tolerance = gripperOnly ? 0.05 : 0.01;
+            if (this.isAlreadyAtPose(targetPose, tolerance)) {
+                console.log(
+                    "Trajectory timed out but joints are at target; treating as success.",
+                );
+                return "success";
+            }
+        }
+
+        return error_code == 0 ? "cancel" : "fail";
+    }
+
+    private emitPlaybackOutcome(outcome: TrajectoryOutcome) {
+        if (outcome === "success") {
+            this.playbackPosesResultCallback({
+                state: MovementState.Success,
+                alert_type: "info",
+            });
+        } else if (outcome === "cancel") {
+            this.playbackPosesResultCallback({
+                state: MovementState.Cancel,
+                alert_type: "error",
+            });
+        } else {
+            this.playbackPosesResultCallback({
+                state: MovementState.Fail,
+                alert_type: "error",
+            });
+        }
+    }
+
+    /**
+     * Run body joints and gripper as separate FollowJointTrajectory goals.
+     *
+     * Mixing gripper_joint with other end-of-arm joints in one goal is unreliable
+     * under the driver's 3s action_timeout (gripper monitoring never completes in
+     * pct-vs-world-rad units). Body first, then gripper-only, matches the path
+     * that Step Action already uses successfully.
+     */
+    private async runBodyThenGripperTrajectories(
+        bodyGoal: Goal | undefined,
+        bodyPose: RobotPose | undefined,
+        gripperGoal: Goal | undefined,
+        gripperPose: RobotPose | undefined,
+    ): Promise<TrajectoryOutcome> {
+        if (bodyGoal && bodyPose && Object.keys(bodyPose).length > 0) {
+            if (!this.isAlreadyAtPose(bodyPose)) {
+                const bodyOutcome = await this.runTrajectoryGoal(
+                    bodyGoal,
+                    bodyPose,
+                );
+                if (bodyOutcome !== "success") return bodyOutcome;
+            }
+        }
+        if (gripperGoal && gripperPose) {
+            if (this.isAlreadyAtPose(gripperPose, 0.05)) {
+                return "success";
+            }
+            return await this.runTrajectoryGoal(gripperGoal, gripperPose);
+        }
+        return "success";
+    }
+
+    private async runSplitPose(pose: RobotPose): Promise<TrajectoryOutcome> {
+        const { body, gripper } = splitGripperFromPose(pose);
+        return this.runBodyThenGripperTrajectories(
+            Object.keys(body).length > 0
+                ? this.makePoseGoal(body, 1.5)
+                : undefined,
+            body,
+            gripper ? this.makePoseGoal(gripper, 1.5) : undefined,
+            gripper,
+        );
+    }
+
     async executePoseGoal(pose: RobotPose) {
         await this.switchToNavigationMode();
 
-        /// check if at goal already
         if (this.isAlreadyAtPose(pose)) {
             console.log("Robot is already at target pose, skipping execution.");
             this.playbackPosesResultCallback({
@@ -1358,147 +1525,29 @@ export class Robot extends React.Component {
             }, 1000);
             return;
         }
-        console.log("executing pose goal");
+        console.log("executing pose goal", pose);
 
         this.stopExecution();
-        this.poseGoal = this.makePoseGoal(pose, 1.5);
-        console.log("execute: ", pose);
-        this.poseGoalID = this.trajectoryClient.sendGoal(
-            this.poseGoal,
-            (result) => {
-                console.log(
-                    "Result for action goal on " +
-                    this.trajectoryClient.name +
-                    ": " +
-                    result.error_code
-                );
-                if (result.error_code == 0) {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Success,
-                        alert_type: "info",
-                    });
-                }
-            },
-            (feedback) => {
-                console.log(
-                    "Feedback for action on " +
-                    this.trajectoryClient.name +
-                    ": " +
-                    feedback
-                );
-            },
-            (error) => {
-                let error_code = -4; // default fallback error code
-                try {
-                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
-                } catch (e) {
-                    console.warn("Could not parse action error code:", e);
-                }
-                console.log(
-                    "Error for action on " +
-                    this.trajectoryClient.name +
-                    ": " +
-                    error
-                );
-                if (error_code == 0) {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Cancel,
-                        alert_type: "error",
-                    });
-                } else {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Fail,
-                        alert_type: "error",
-                    });
-                }
-            }
-        );
+        this.emitPlaybackOutcome(await this.runSplitPose(pose));
     }
 
     async executePoseGoals(poses: RobotPose[], index: number) {
         await this.switchToNavigationMode();
 
-        // check if at goal already
-        if (poses.length > 0) {
-            const finalPose = poses[poses.length - 1];
-            if (this.isAlreadyAtPose(finalPose)) {
-                console.log("Robot is already at final target pose, skipping execution.");
-                this.playbackPosesResultCallback({
-                    state: MovementState.Executing,
-                    alert_type: "info",
-                });
-                setTimeout(() => {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Success,
-                        alert_type: "info",
-                    });
-                }, 1000);
-                return;
-            }
-        }
-
         this.stopExecution();
-        this.poseGoal = this.makePoseGoals(poses, 1.5);
         this.playbackPosesResultCallback({
             state: MovementState.Executing,
             alert_type: "info",
-        })
+        });
 
-        this.poseGoalID = this.trajectoryClient.sendGoal(
-            this.poseGoal,
-            (result) => {
-                console.log(
-                    "Result for action goal on " +
-                    this.trajectoryClient.name +
-                    ": " +
-                    result.error_code
-                );
-                if (result.error_code == 0) {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Success,
-                        alert_type: "info",
-                    });
-                } else {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Fail,
-                        alert_type: "error",
-                    });
-                }
-            },
-            (feedback) => {
-                console.log(
-                    "Feedback for action on " +
-                    this.trajectoryClient.name +
-                    ": " +
-                    feedback
-                );
-            },
-            (error) => {
-                let error_code = -4; // default fallback error code
-                try {
-                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
-                } catch (e) {
-                    console.warn("Could not parse action error code:", e);
-                }
-                console.log(
-                    "Error for action on " +
-                    this.trajectoryClient.name +
-                    ": " +
-                    error
-                );
-                if (error_code == 0) {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Cancel,
-                        alert_type: "error",
-                    });
-                } else {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Fail,
-                        alert_type: "error",
-                    });
-                }
+        for (const pose of poses) {
+            const outcome = await this.runSplitPose(pose);
+            if (outcome !== "success") {
+                this.emitPlaybackOutcome(outcome);
+                return;
             }
-        );
+        }
+        this.emitPlaybackOutcome("success");
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
@@ -1660,6 +1709,18 @@ export class Robot extends React.Component {
             let fallbackIdx = this.jointState.name.indexOf(fallbackName as ValidJoints);
             if (fallbackIdx !== -1) {
                 return this.jointState.position[fallbackIdx];
+            }
+        }
+
+        // stretch_gripper_joint is operator-facing; /joint_states publishes finger joints.
+        if (name === "stretch_gripper_joint") {
+            for (const finger of GRIPPER_FINGER_JOINTS) {
+                const fingerIdx = this.jointState!.name.indexOf(
+                    finger as ValidJoints,
+                );
+                if (fingerIdx !== -1) {
+                    return this.jointState!.position[fingerIdx];
+                }
             }
         }
 
