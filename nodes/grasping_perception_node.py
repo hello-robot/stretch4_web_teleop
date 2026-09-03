@@ -28,20 +28,11 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import CameraInfo, CompressedImage, Image, JointState, PointCloud2
+from sensor_msgs.msg import CameraInfo, CompressedImage
 from std_msgs.msg import Int8
 from std_srvs.srv import SetBool, Trigger
 
-from stretch4_body.core.robot_params import RobotParams
-
-try:
-    from stretch4_urdf import get_transform, get_urdf_from_robot_params
-except ImportError:
-    get_transform = None
-    try:
-        from stretch4_urdf import get_urdf_from_robot_params
-    except ImportError:
-        get_urdf_from_robot_params = None
+from stretch4_urdf import get_transform, get_urdf_from_robot_params
 
 from stretch4_web_teleop_helpers.conversions import (
     cv2_image_to_ros_msg,
@@ -63,7 +54,7 @@ except ImportError:
     SweptVolumeModel = None
 
 # ==============================================================================
-# ALL_CAPS PERCEPTION & THRESHOLD CONSTANTS
+# PERCEPTION & THRESHOLD CONSTANTS
 # ==============================================================================
 N_POINTS_MIN_YELLOW = 100        # Minimum points in window for YELLOW state
 N_POINTS_MIN_GREEN = 1000        # Minimum points in window for GREEN state
@@ -221,6 +212,7 @@ class GraspingPerceptionNode(Node):
             self.camera_matrix = K
             if hasattr(msg, "d") and len(msg.d) >= 5:
                 self.distortion_coefficients = np.array(msg.d[:5], dtype=np.float32)
+            self._init_tcp_reticle_projection()
 
     def _init_tcp_reticle_projection(self) -> None:
         grasp_center_3d, source_desc = self._compute_3d_grasp_center()
@@ -241,8 +233,8 @@ class GraspingPerceptionNode(Node):
             else:
                 self.grasp_center_radius_px = 9.0
 
-            self.get_logger().info(f"TCP Source: {source_desc}")
-            self.get_logger().info(f"2D TCP Reticle: u={u:.1f}px, v={v:.1f}px (radius={self.grasp_center_radius_px:.2f}px)")
+            # self.get_logger().info(f"TCP Source: {source_desc}")
+            # self.get_logger().info(f"2D TCP Reticle: u={u:.1f}px, v={v:.1f}px (radius={self.grasp_center_radius_px:.2f}px)")
 
     def _compute_3d_grasp_center(self) -> Tuple[Optional[np.ndarray], str]:
         grasp_center_3d = None
@@ -391,13 +383,7 @@ class GraspingPerceptionNode(Node):
         self.get_logger().info(res.message)
         return res
 
-    def _update_reticle_depth_window(self, depth_img: Optional[np.ndarray], vis_w: int, vis_h: int) -> None:
-        if depth_img is None or depth_img.size == 0:
-            return
-
-        depth_m = depth_img
-
-        z_max = self.grasp_z_max
+    def _get_reticle_window_mask(self, vis_w: int, vis_h: int) -> np.ndarray:
         u_reticle = self.grasp_center_2d[0] if self.grasp_center_2d is not None else (vis_w / 2.0)
         v_reticle = self.grasp_center_2d[1] if self.grasp_center_2d is not None else (vis_h / 2.0)
         fx = float(self.camera_matrix[0, 0])
@@ -411,8 +397,16 @@ class GraspingPerceptionNode(Node):
 
         window_mask = np.zeros((vis_h, vis_w), dtype=bool)
         window_mask[:v_bottom, u_min:u_max] = True
+        return window_mask
 
-        sv_mask = np.zeros((vis_h, vis_w), dtype=bool)
+    def _update_reticle_depth_window(self, depth_img: Optional[np.ndarray], vis_w: int, vis_h: int) -> None:
+        if depth_img is None or depth_img.size == 0:
+            return
+
+        depth_m = depth_img
+
+        window_mask = self._get_reticle_window_mask(vis_w, vis_h)
+
         if self.swept_volume_data:
             sv_mask_u8 = np.zeros((vis_h, vis_w), dtype=np.uint8)
             for finger_data in self.swept_volume_data:
@@ -425,10 +419,13 @@ class GraspingPerceptionNode(Node):
                         cv2.fillPoly(sv_mask_u8, [hull], 255)
                     prev_ring = pts_2d
             sv_mask = (sv_mask_u8 > 0)
+            counting_mask = window_mask & sv_mask
+        else:
+            counting_mask = window_mask
 
-        union_counting_mask = window_mask & sv_mask
+        z_max = getattr(self, "grasp_z_max", GRASP_Z_MAX_DEFAULT)
         depth_in_range = (depth_m > 0.01) & (depth_m <= z_max)
-        graspable_in_mask = depth_in_range & union_counting_mask
+        graspable_in_mask = depth_in_range & counting_mask
         self.num_window_pts = int(np.count_nonzero(graspable_in_mask))
 
         near_in_mask = graspable_in_mask & (depth_m <= Z_NEAR_M)
@@ -448,40 +445,44 @@ class GraspingPerceptionNode(Node):
         vis_h, vis_w = vis_frame.shape[:2]
         self._update_reticle_depth_window(depth_img, vis_w, vis_h)
 
-        if not self.show_swept_volume or not self.swept_volume_data:
-            return vis_frame
-
-        vol_overlay = vis_frame.copy()
-        wire_overlay = vis_frame.copy()
-        highlight_overlay = vis_frame.copy()
-
         combined_mask_2d = np.zeros((vis_h, vis_w), dtype=np.uint8)
-        manifold_color = (128, 128, 128)
 
-        for finger_data in self.swept_volume_data:
-            rings_2d = finger_data["rings_2d"]
-            prev_ring = None
-            for pts_2d in rings_2d:
-                if prev_ring is not None:
-                    quad_pts = np.vstack((prev_ring, pts_2d))
-                    hull = cv2.convexHull(quad_pts)
-                    cv2.fillPoly(vol_overlay, [hull], manifold_color)
-                    cv2.fillPoly(combined_mask_2d, [hull], 255)
-                prev_ring = pts_2d
+        if self.show_swept_volume and self.swept_volume_data:
+            vol_overlay = vis_frame.copy()
+            wire_overlay = vis_frame.copy()
+            manifold_color = (128, 128, 128)
 
-            wire_color = (180, 180, 180)
-            for pts_2d in rings_2d:
-                cv2.polylines(
-                    wire_overlay, [pts_2d], isClosed=True, color=wire_color, thickness=1, lineType=cv2.LINE_AA
-                )
+            for finger_data in self.swept_volume_data:
+                rings_2d = finger_data["rings_2d"]
+                prev_ring = None
+                for pts_2d in rings_2d:
+                    if prev_ring is not None:
+                        quad_pts = np.vstack((prev_ring, pts_2d))
+                        hull = cv2.convexHull(quad_pts)
+                        cv2.fillPoly(vol_overlay, [hull], manifold_color)
+                        cv2.fillPoly(combined_mask_2d, [hull], 255)
+                    prev_ring = pts_2d
 
-        vis_frame = cv2.addWeighted(vol_overlay, 0.20, vis_frame, 0.80, 0)
-        vis_frame = cv2.addWeighted(wire_overlay, 0.50, vis_frame, 0.50, 0)
+                wire_color = (180, 180, 180)
+                for pts_2d in rings_2d:
+                    cv2.polylines(
+                        wire_overlay, [pts_2d], isClosed=True, color=wire_color, thickness=1, lineType=cv2.LINE_AA
+                    )
+
+            vis_frame = cv2.addWeighted(vol_overlay, 0.20, vis_frame, 0.80, 0)
+            vis_frame = cv2.addWeighted(wire_overlay, 0.50, vis_frame, 0.50, 0)
 
         if depth_img is not None and depth_img.size > 0 and self.show_depth_points:
+            highlight_overlay = vis_frame.copy()
             depth_m = depth_img
-            z_max = self.grasp_z_max
-            graspable_mask = (combined_mask_2d > 0) & (depth_m > 0.01) & (depth_m <= z_max)
+            z_max = getattr(self, "grasp_z_max", GRASP_Z_MAX_DEFAULT)
+
+            if self.swept_volume_data:
+                valid_mask = (combined_mask_2d > 0)
+            else:
+                valid_mask = self._get_reticle_window_mask(vis_w, vis_h)
+
+            graspable_mask = valid_mask & (depth_m > 0.01) & (depth_m <= z_max)
             if np.any(graspable_mask):
                 z_min_bound = 0.10
                 z_max_bound = max(z_max, z_min_bound + 0.01)
