@@ -17,6 +17,7 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
+    | GetJointVelocity
     | HomeTheRobotCommand
     | SeedLocalizationCommand;
 
@@ -81,6 +82,10 @@ export interface GetOccupancyGrid {
 
 export interface GetStretchTool {
     type: "getStretchTool";
+}
+
+export interface GetJointVelocity {
+    type: "getJointVelocity";
 }
 
 export interface MoveBaseCommand {

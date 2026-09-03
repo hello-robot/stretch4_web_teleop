@@ -328,6 +328,7 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+    remoteRobot.getJointVelocity("getJointVelocity");
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(

@@ -134,6 +134,7 @@ export class Robot extends React.Component {
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
+    private jointVelocityLimits: Record<string, number> = {};
 
     constructor(props: {
         jointStateCallback: (
@@ -566,7 +567,7 @@ export class Robot extends React.Component {
         // parameter doesn't exist yet on the robot) so getStretchTool()
         // can't hang forever waiting on this promise.
         this.stretchParamsReady = Promise.race([
-            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => {}),
+            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => { }),
             new Promise<void>((resolve) => setTimeout(resolve, 3000)),
         ]);
 
@@ -585,17 +586,16 @@ export class Robot extends React.Component {
             translate_mobile_base: "omnibase.linear",
             rotate_mobile_base: "omnibase.angular",
         };
-        const jointVelocityLimits: Record<string, number> = {};
         for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
             new Param({
                 ros: this.ros,
                 name: `/stretch_driver:joint_velocity.${paramKey}`,
             }).get((value: number) => {
                 if (typeof value === "number" && value > 0) {
-                    jointVelocityLimits[rosJointName] = value;
+                    this.jointVelocityLimits[rosJointName] = value;
                     updateJointVelocities({ [rosJointName]: value });
                     if (this.jointVelocityLimitsCallback) {
-                        this.jointVelocityLimitsCallback({ ...jointVelocityLimits });
+                        this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
                     }
                 }
             });
@@ -613,6 +613,18 @@ export class Robot extends React.Component {
         await this.stretchParamsReady;
         if (this.stretchToolCallback)
             this.stretchToolCallback(this.stretchToolName);
+    }
+
+    /**
+     * Returns the joint velocity limits fetched so far from ROS params, on
+     * demand. This lets a newly (re)connected operator pull the current
+     * values instead of relying solely on the one-time push that fires when
+     * each param resolves, which can be missed if it happens before the
+     * operator's WebRTC data channel is open.
+     */
+    getJointVelocityLimits() {
+        if (this.jointVelocityLimitsCallback)
+            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
     }
 
     getOccupancyGrid() {
