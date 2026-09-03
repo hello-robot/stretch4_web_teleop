@@ -366,6 +366,9 @@ function handleMessage(message: WebRTCMessage) {
         case "getStretchTool":
             robot.getStretchTool();
             break;
+        case "getJointVelocity":
+            robot.getJointVelocityLimits();
+            break;
         case "homeTheRobot":
             robot.homeTheRobot();
             break;
