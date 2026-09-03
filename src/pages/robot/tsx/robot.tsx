@@ -74,8 +74,21 @@ export class Robot extends React.Component {
     private readonly rosURL = "wss://localhost:9090";
     private rosReconnectTimerID?: ReturnType<typeof setTimeout>;
     private onRosConnectCallback?: () => Promise<void>;
+    /**
+     * Simulation only [lower, upper] position bounds per joint
+     * Only the simulated (mujoco) driver publishes to the /joint_limits topic.
+     */
     private jointLimits: { [key in ValidJoints]?: [number, number] } = {};
+    /**
+     * [withinLowerLimit, withinUpperLimit] per joint, from the real driver's
+     * /joint_states_diagnostics topic (the "at_limit" status). This is the
+     * authoritative source for at-limit state on real hardware.
+     */
     private diagnosticJointLimits: { [key in ValidJoints]?: [boolean, boolean] } = {};
+    /**
+     * [inCollisionNeg, inCollisionPos] per joint, from the real driver's
+     * /joint_states_diagnostics topic (the "in_collision" status).
+     */
     private diagnosticInCollision: { [key in ValidJoints]?: [boolean, boolean] } = {};
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
@@ -576,6 +589,7 @@ export class Robot extends React.Component {
             name: "/stretch_driver:mode"
         });
 
+        // Real driver's per-joint velocity limits, from /stretch_driver:joint_velocity.* params
         const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
             lift_joint: "lift",
             arm_joint: "arm",
@@ -1773,10 +1787,14 @@ export class Robot extends React.Component {
             return this.diagnosticJointLimits[alias];
         }
 
+        // this.jointLimits comes from the /joint_limits topic, which only the
+        // simulated (mujoco) driver publishes. The real stretch_driver never
+        // publishes it, so this fallback stays empty and inert on hardware -
+        // meaningful at-limit values there always come from diagnosticJointLimits
+        // above (populated from /joint_states_diagnostics).
         let jointLimits = this.jointLimits[jointName];
         if (!jointLimits) return;
 
-        // jointLimits comes from the driver's /joint_limits topic (soft limits)
         let inLimits: [boolean, boolean] = [true, true];
         inLimits[0] = jointValue >= jointLimits[0]; // Lower joint limit
         inLimits[1] = jointValue <= jointLimits[1]; // Upper joint limit
