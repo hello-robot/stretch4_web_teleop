@@ -38,7 +38,7 @@ let allRemoteStreams: Map<string, RemoteStream> = new Map<
 let remoteRobot: RemoteRobot;
 let connection: WebRTCConnection;
 let root: Root;
-export let toolMetadata: ToolMetadata;
+let toolMetadata: ToolMetadata | undefined = undefined;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
 
@@ -84,6 +84,27 @@ export function subscribeOccupancyGridReady(
 function resetOccupancyGrid() {
     occupancyGrid = undefined;
     occupancyGridReadyListeners.clear();
+}
+
+type ToolMetadataListener = (toolMetadata: ToolMetadata) => void;
+const toolMetadataListeners = new Set<ToolMetadataListener>();
+
+/** Subscribe to tool metadata updates. Fires immediately if already known. */
+export function subscribeToolMetadata(
+    callback: ToolMetadataListener,
+): () => void {
+    toolMetadataListeners.add(callback);
+    if (toolMetadata) {
+        callback(toolMetadata);
+    }
+    return () => {
+        toolMetadataListeners.delete(callback);
+    };
+}
+
+function setToolMetadata(newToolMetadata: ToolMetadata) {
+    toolMetadata = newToolMetadata;
+    toolMetadataListeners.forEach((listener) => listener(newToolMetadata));
 }
 
 // Create the function providers. These abstract the logic between the React
@@ -216,8 +237,15 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             remoteRobot.sensors.setRunStopState(message.enabled);
             break;
         case "stretchTool":
-            toolMetadata = message.toolMetadata || parseToolMetadata(message.value);
-            console.log("[Operator index] stretchTool message received:", message.value, "toolMetadata:", toolMetadata);
+            setToolMetadata(
+                message.toolMetadata || parseToolMetadata(message.value),
+            );
+            console.log(
+                "[Operator index] stretchTool message received:",
+                message.value,
+                "toolMetadata:",
+                toolMetadata,
+            );
             break;
         case "occupancyGrid":
             if (!occupancyGrid) {
