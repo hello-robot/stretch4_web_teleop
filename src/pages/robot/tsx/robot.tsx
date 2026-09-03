@@ -14,19 +14,16 @@ import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
-    getStretchTool,
-    JOINT_VELOCITIES,
+    getPlaybackJointVelocities,
+    getPlaybackJointVelocity,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    StretchTool,
     ValidJoints,
-    VideoProps,
-    getPlaybackJointVelocity,
-    getPlaybackJointVelocities,
+    VideoProps
 } from "shared/util";
 import {
     RobotPose,
@@ -127,11 +124,14 @@ export class Robot extends React.Component {
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     private subscriptions: Topic[] = [];
-    private stretchToolParam: Param;
+    private stretchToolParam?: Param;
+    private toolIsActuatedParam?: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
-    private stretchTool: StretchTool;
+    private stretchToolName: string = "unknown";
+    private toolIsActuated: boolean = true;
+    private stretchParamsReady: Promise<void> = Promise.resolve();
 
     constructor(props: {
         jointStateCallback: (
@@ -491,7 +491,7 @@ export class Robot extends React.Component {
                 if (status.name == "at_limit") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -506,7 +506,7 @@ export class Robot extends React.Component {
                 if (status.name == "in_collision") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -540,9 +540,31 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/configure_video_streams_gripper:stretch_tool",
         });
-        this.stretchToolParam.get((value: string) => {
-            this.stretchTool = getStretchTool(value);
+        const stretchToolReady = new Promise<void>((resolve) => {
+            this.stretchToolParam!.get((value: string) => {
+                this.stretchToolName = value || "unknown";
+                resolve();
+            });
         });
+
+        this.toolIsActuatedParam = new Param({
+            ros: this.ros,
+            name: "/stretch_driver:tool_info.is_actuated",
+        });
+        const toolIsActuatedReady = new Promise<void>((resolve) => {
+            this.toolIsActuatedParam!.get((value: boolean) => {
+                this.toolIsActuated = value ?? true;
+                resolve();
+            });
+        });
+
+        // Guard against a Param.get() that never calls back (e.g. the
+        // parameter doesn't exist yet on the robot) so getStretchTool()
+        // can't hang forever waiting on this promise.
+        this.stretchParamsReady = Promise.race([
+            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => {}),
+            new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]);
 
         this.modeParam = new Param({
             ros: this.ros,
@@ -550,14 +572,17 @@ export class Robot extends React.Component {
         });
     }
 
-    getStretchTool() {
-        // if (this.stretchTool == StretchTool.TABLET) {
-        //     this.subscribeToTabletTF();
-        // } else {
-        //     this.subscribeToGripperFingerTF();
-        // }
+    isToolActuated(): boolean {
+        return this.toolIsActuated;
+    }
+
+    async getStretchTool() {
+        // Wait for the initial Param fetches so a request that arrives
+        // right after connecting reports the robot's real values instead
+        // of racing initStretchParams() and reading its hardcoded defaults.
+        await this.stretchParamsReady;
         if (this.stretchToolCallback)
-            this.stretchToolCallback(this.stretchTool);
+            this.stretchToolCallback(this.stretchToolName);
     }
 
     getOccupancyGrid() {
@@ -1179,7 +1204,15 @@ export class Robot extends React.Component {
             } catch (e) {
                 console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
             }
-            jointNames.push(jointName);
+            let targetJointName: ValidJoints = jointName;
+            if (jointName === "gripper_joint") {
+                if (this.jointState?.name?.includes("stretch_gripper_joint" as ValidJoints)) {
+                    targetJointName = "stretch_gripper_joint" as ValidJoints;
+                } else if (this.jointState?.name?.includes("gripper_aperture" as ValidJoints)) {
+                    targetJointName = "gripper_aperture" as ValidJoints;
+                }
+            }
+            jointNames.push(targetJointName);
             jointPositions.push(targetPos);
         }
 
@@ -1660,6 +1693,15 @@ export class Robot extends React.Component {
             let fallbackIdx = this.jointState.name.indexOf(fallbackName as ValidJoints);
             if (fallbackIdx !== -1) {
                 return this.jointState.position[fallbackIdx];
+            }
+        }
+
+        if (name === "gripper_joint") {
+            for (let gName of ["gripper_joint", "stretch_gripper_joint", "gripper_aperture"]) {
+                let idx = this.jointState.name.indexOf(gName as ValidJoints);
+                if (idx !== -1) {
+                    return this.jointState.position[idx];
+                }
             }
         }
 

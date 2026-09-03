@@ -1,57 +1,44 @@
-import React, { PointerEventHandler, useState } from "react";
-import {
-    ActionModeType,
-    ButtonPadIdMobile,
-    CameraViewId,
-    ComponentDefinition,
-    ComponentType,
-    MapDefinition,
-    LayoutDefinition,
-    PilotButtonPadType,
-} from "./utils/component_definitions";
+import "operator/css/MobileOperator.css";
+import React, { useState } from "react";
 import {
     ActionState,
-    className,
     ActionState as MoveBaseState,
     RemoteStream,
+    ToolMetadata,
 } from "shared/util";
 import {
     buttonFunctionProvider,
-    stretchTool,
-    movementRecorderFunctionProvider,
-    underMapFunctionProvider,
     homeTheRobotFunctionProvider,
+    movementRecorderFunctionProvider,
+    subscribeToolMetadata,
+    underMapFunctionProvider,
 } from ".";
 import {
     ButtonPadButton,
     ButtonState,
     ButtonStateMap,
 } from "./function_providers/ButtonFunctionProvider";
-import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import PilotMode from "./layout_components/PilotMode";
-import "operator/css/MobileOperator.css";
-import { SimpleCameraView } from "./layout_components/SimpleCameraView";
-import { SharedState } from "./layout_components/CustomizableComponent";
-import FooterPilotMode from "./layout_components/FooterPilotMode";
 import { ButtonPad } from "./layout_components/ButtonPad";
-// import Swipe from "./static_components/Swipe";
-import { Map as MapComponent } from "./layout_components/Map";
-import { TabGroup } from "./basic_components/TabGroup";
-import SwipeableViews from "react-swipeable-views";
+import { SharedState } from "./layout_components/CustomizableComponent";
+import PilotMode from "./layout_components/PilotMode";
+import { StorageHandler } from "./storage_handler/StorageHandler";
 import {
-    MovementRecorder,
-    MovementRecorderFunction,
-} from "./layout_components/MovementRecorder";
+    ActionModeType,
+    ButtonPadIdMobile,
+    CameraViewId,
+    ComponentType,
+    LayoutDefinition,
+    PilotButtonPadType
+} from "./utils/component_definitions";
+// import Swipe from "./static_components/Swipe";
+import SwipeableViews from "react-swipeable-views";
+import { TabGroup } from "./basic_components/TabGroup";
 import AutoNav from "./layout_components/AutoNav";
-import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
-import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 
-import { Alert } from "./basic_components/Alert";
-import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
-import GripperCamPIP from "./layout_components/GripperCamPIP";
-import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
+import FooterGlobal from "./layout_components/FooterGlobal";
+import GripperCamPIP from "./layout_components/GripperCamPIP";
 import Toasts, { useToasts } from "./layout_components/Toasts";
 
 /** Operator interface webpage */
@@ -87,6 +74,12 @@ export const MobileOperator = (props: {
 
     // Track homed state in local React state
     const [robotIsHomed, robotIsHomedSet] = useState<boolean>(true);
+    // Track tool metadata in local React state so MobileOperator (and its
+    // descendants, e.g. ButtonPad) re-render when the attached tool changes
+    const [toolMetadata, toolMetadataSet] = useState<ToolMetadata | undefined>(
+        undefined,
+    );
+    React.useEffect(() => subscribeToolMetadata(toolMetadataSet), []);
     // True once `HomingBanner` has fully dismissed (after success strip + exit), not merely `robotIsHomed`
     const [homingBannerDismissed, homingBannerDismissedSet] =
         useState(false);
@@ -271,7 +264,7 @@ export const MobileOperator = (props: {
         },
         buttonStateMap: buttonStateMap.current,
         hideLabels: false,
-        stretchTool: stretchTool,
+        toolMetadata: toolMetadata,
         robotIsHomed: true,
         playbackPosesState: playbackPosesState,
         idxFixedRecordingPlaying: idxFixedRecordingPlaying,
