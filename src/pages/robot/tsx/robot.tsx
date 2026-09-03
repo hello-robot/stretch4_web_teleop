@@ -22,8 +22,9 @@ import {
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
+    updateJointVelocities,
     ValidJoints,
-    VideoProps
+    VideoProps,
 } from "shared/util";
 import {
     RobotPose,
@@ -73,8 +74,21 @@ export class Robot extends React.Component {
     private readonly rosURL = "wss://localhost:9090";
     private rosReconnectTimerID?: ReturnType<typeof setTimeout>;
     private onRosConnectCallback?: () => Promise<void>;
+    /**
+     * Simulation only [lower, upper] position bounds per joint
+     * Only the simulated (mujoco) driver publishes to the /joint_limits topic.
+     */
     private jointLimits: { [key in ValidJoints]?: [number, number] } = {};
+    /**
+     * [withinLowerLimit, withinUpperLimit] per joint, from the real driver's
+     * /joint_states_diagnostics topic (the "at_limit" status). This is the
+     * authoritative source for at-limit state on real hardware.
+     */
     private diagnosticJointLimits: { [key in ValidJoints]?: [boolean, boolean] } = {};
+    /**
+     * [inCollisionNeg, inCollisionPos] per joint, from the real driver's
+     * /joint_states_diagnostics topic (the "in_collision" status).
+     */
     private diagnosticInCollision: { [key in ValidJoints]?: [boolean, boolean] } = {};
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
@@ -123,6 +137,7 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+    private jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam?: Param;
     private toolIsActuatedParam?: Param;
@@ -132,6 +147,7 @@ export class Robot extends React.Component {
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
+    private jointVelocityLimits: Record<string, number> = {};
 
     constructor(props: {
         jointStateCallback: (
@@ -150,6 +166,7 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+        jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -173,6 +190,7 @@ export class Robot extends React.Component {
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
         this.leaseStatusCallback = props.leaseStatusCallback;
+        this.jointVelocityLimitsCallback = props.jointVelocityLimitsCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -562,7 +580,7 @@ export class Robot extends React.Component {
         // parameter doesn't exist yet on the robot) so getStretchTool()
         // can't hang forever waiting on this promise.
         this.stretchParamsReady = Promise.race([
-            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => {}),
+            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => { }),
             new Promise<void>((resolve) => setTimeout(resolve, 3000)),
         ]);
 
@@ -570,6 +588,32 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
+
+        // Real driver's per-joint velocity limits, from /stretch_driver:joint_velocity.* params
+        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
+            lift_joint: "lift",
+            arm_joint: "arm",
+            wrist_yaw_joint: "wrist_yaw",
+            wrist_pitch_joint: "wrist_pitch",
+            wrist_roll_joint: "wrist_roll",
+            gripper_joint: "gripper",
+            translate_mobile_base: "omnibase.linear",
+            rotate_mobile_base: "omnibase.angular",
+        };
+        for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
+            new Param({
+                ros: this.ros,
+                name: `/stretch_driver:joint_velocity.${paramKey}`,
+            }).get((value: number) => {
+                if (typeof value === "number" && value > 0) {
+                    this.jointVelocityLimits[rosJointName] = value;
+                    updateJointVelocities({ [rosJointName]: value });
+                    if (this.jointVelocityLimitsCallback) {
+                        this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+                    }
+                }
+            });
+        }
     }
 
     isToolActuated(): boolean {
@@ -583,6 +627,18 @@ export class Robot extends React.Component {
         await this.stretchParamsReady;
         if (this.stretchToolCallback)
             this.stretchToolCallback(this.stretchToolName);
+    }
+
+    /**
+     * Returns the joint velocity limits fetched so far from ROS params, on
+     * demand. This lets a newly (re)connected operator pull the current
+     * values instead of relying solely on the one-time push that fires when
+     * each param resolves, which can be missed if it happens before the
+     * operator's WebRTC data channel is open.
+     */
+    getJointVelocityLimits() {
+        if (this.jointVelocityLimitsCallback)
+            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
     }
 
     getOccupancyGrid() {
@@ -1731,13 +1787,17 @@ export class Robot extends React.Component {
             return this.diagnosticJointLimits[alias];
         }
 
+        // this.jointLimits comes from the /joint_limits topic, which only the
+        // simulated (mujoco) driver publishes. The real stretch_driver never
+        // publishes it, so this fallback stays empty and inert on hardware -
+        // meaningful at-limit values there always come from diagnosticJointLimits
+        // above (populated from /joint_states_diagnostics).
         let jointLimits = this.jointLimits[jointName];
         if (!jointLimits) return;
 
-        var eps = 0.03;
         let inLimits: [boolean, boolean] = [true, true];
-        inLimits[0] = jointValue - eps >= jointLimits[0]; // Lower joint limit
-        inLimits[1] = jointValue + eps <= jointLimits[1]; // Upper joint limit
+        inLimits[0] = jointValue >= jointLimits[0]; // Lower joint limit
+        inLimits[1] = jointValue <= jointLimits[1]; // Upper joint limit
         return inLimits;
     }
 

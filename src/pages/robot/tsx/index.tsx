@@ -23,6 +23,7 @@ import {
     BatteryVoltageMessage,
     delay,
     parseToolMetadata,
+    JointVelocityLimitsMessage,
 } from "shared/util";
 import { AllVideoStreamComponent, VideoStream } from "./videostreams";
 import { AudioStream } from "./audiostreams";
@@ -43,6 +44,7 @@ export const robot = new Robot({
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
+    jointVelocityLimitsCallback: forwardJointVelocityLimits,
 });
 
 export let connection: WebRTCConnection;
@@ -159,6 +161,15 @@ function forwardStretchTool(value: string) {
         value: value,
         toolMetadata: parseToolMetadata(value, isActuated),
     } as StretchToolMessage);
+}
+
+function forwardJointVelocityLimits(limits: Record<string, number>) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "jointVelocityLimits",
+        jointVelocities: limits,
+    } as JointVelocityLimitsMessage);
 }
 
 function forwardJointStates(
@@ -327,6 +338,9 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "getStretchTool":
             robot.getStretchTool();
+            break;
+        case "getJointVelocity":
+            robot.getJointVelocityLimits();
             break;
         case "homeTheRobot":
             robot.homeTheRobot();

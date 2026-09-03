@@ -100,6 +100,7 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | SeedLocalizationStateMessage
+    | JointVelocityLimitsMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -138,6 +139,11 @@ export interface StretchToolMessage {
     type: "stretchTool";
     value: string;
     toolMetadata?: ToolMetadata;
+}
+
+export interface JointVelocityLimitsMessage {
+    type: "jointVelocityLimits";
+    jointVelocities: Record<string, number>;
 }
 
 
@@ -208,19 +214,11 @@ export interface ROSOccupancyGrid {
     data: number[];
 }
 
-export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
-    arm_joint: [0.001, 0.518],
-    wrist_roll_joint: [-2.95, 2.94],
-    wrist_pitch_joint: [-1.57, 0.57],
-    wrist_yaw_joint: [-1.37, 4.41],
-    lift_joint: [0.001, 1.1],
-    translate_mobile_base: [-30.0, 30.0],
-    rotate_mobile_base: [-3.14, 3.14],
-    gripper_joint: [-0.37, 0.17],
-    head_tilt_joint: [-1.6, 0.3],
-    head_pan_joint: [-3.95, 1.7],
-};
 
+/**
+ * Default fallback joint velocities.
+ * Primary joint velocity limits are populated dynamically at runtime from stretch4_urdf via ROS parameters.
+ */
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
@@ -233,6 +231,14 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     rotate_mobile_base: 0.3,
     gripper_joint: 0.1,
 };
+
+export function updateJointVelocities(newVelocities: Record<string, number>) {
+    for (const [key, val] of Object.entries(newVelocities)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_VELOCITIES as Record<string, number>)[key] = val;
+        }
+    }
+}
 
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,

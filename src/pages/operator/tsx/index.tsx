@@ -8,7 +8,9 @@ import {
     parseToolMetadata,
     RemoteStream,
     ROSOccupancyGrid,
+    JointVelocityLimitsMessage,
     ToolMetadata,
+    updateJointVelocities,
     waitUntil,
     WebRTCMessage
 } from "shared/util";
@@ -292,6 +294,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "batteryVoltage":
             remoteRobot.sensors.setBatteryVoltage(message.message);
             break;
+        case "jointVelocityLimits":
+            updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
+            break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
     }
@@ -323,6 +328,7 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+    remoteRobot.getJointVelocity("getJointVelocity");
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(
