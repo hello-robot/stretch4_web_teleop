@@ -4,13 +4,14 @@ import { isVoiceControlEnabled } from "shared/operatorVoiceSession";
 import {
     ActionState,
     ActionState as MoveBaseState,
-    RemoteStream
+    RemoteStream,
+    ToolMetadata,
 } from "shared/util";
 import {
     buttonFunctionProvider,
     homeTheRobotFunctionProvider,
     movementRecorderFunctionProvider,
-    toolMetadata,
+    subscribeToolMetadata,
     underMapFunctionProvider,
 } from ".";
 import {
@@ -91,6 +92,12 @@ export const MobileOperator = (props: {
 
     // Track homed state in local React state
     const [robotIsHomed, robotIsHomedSet] = useState<boolean>(true);
+    // Track tool metadata in local React state so MobileOperator (and its
+    // descendants, e.g. ButtonPad) re-render when the attached tool changes
+    const [toolMetadata, toolMetadataSet] = useState<ToolMetadata | undefined>(
+        undefined,
+    );
+    React.useEffect(() => subscribeToolMetadata(toolMetadataSet), []);
     // True once `HomingBanner` has fully dismissed (after success strip + exit), not merely `robotIsHomed`
     const [homingBannerDismissed, homingBannerDismissedSet] =
         useState(false);
