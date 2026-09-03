@@ -124,13 +124,14 @@ export class Robot extends React.Component {
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     private subscriptions: Topic[] = [];
-    private stretchToolParam: Param;
-    private toolIsActuatedParam: Param;
+    private stretchToolParam?: Param;
+    private toolIsActuatedParam?: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
+    private stretchParamsReady: Promise<void> = Promise.resolve();
 
     constructor(props: {
         jointStateCallback: (
@@ -539,17 +540,31 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/configure_video_streams_gripper:stretch_tool",
         });
-        this.stretchToolParam.get((value: string) => {
-            this.stretchToolName = value || "unknown";
+        const stretchToolReady = new Promise<void>((resolve) => {
+            this.stretchToolParam!.get((value: string) => {
+                this.stretchToolName = value || "unknown";
+                resolve();
+            });
         });
 
         this.toolIsActuatedParam = new Param({
             ros: this.ros,
             name: "/stretch_driver:tool_info.is_actuated",
         });
-        this.toolIsActuatedParam.get((value: boolean) => {
-            this.toolIsActuated = value ?? true;
+        const toolIsActuatedReady = new Promise<void>((resolve) => {
+            this.toolIsActuatedParam!.get((value: boolean) => {
+                this.toolIsActuated = value ?? true;
+                resolve();
+            });
         });
+
+        // Guard against a Param.get() that never calls back (e.g. the
+        // parameter doesn't exist yet on the robot) so getStretchTool()
+        // can't hang forever waiting on this promise.
+        this.stretchParamsReady = Promise.race([
+            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => {}),
+            new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]);
 
         this.modeParam = new Param({
             ros: this.ros,
@@ -561,7 +576,11 @@ export class Robot extends React.Component {
         return this.toolIsActuated;
     }
 
-    getStretchTool() {
+    async getStretchTool() {
+        // Wait for the initial Param fetches so a request that arrives
+        // right after connecting reports the robot's real values instead
+        // of racing initStretchParams() and reading its hardcoded defaults.
+        await this.stretchParamsReady;
         if (this.stretchToolCallback)
             this.stretchToolCallback(this.stretchToolName);
     }
