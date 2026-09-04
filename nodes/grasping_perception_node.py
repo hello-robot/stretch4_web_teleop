@@ -28,7 +28,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import CameraInfo, CompressedImage
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_msgs.msg import Int8
 from std_srvs.srv import SetBool, Trigger
 
@@ -92,19 +92,18 @@ class GraspingPerceptionNode(Node):
         self.latest_rgb_msg: Optional[CompressedImage] = None
         self.cached_depth_img: Optional[np.ndarray] = None
 
-        # Camera calibration intrinsics
-        self.camera_matrix, self.distortion_coefficients = self._init_camera_intrinsics()
+        # Camera calibration intrinsics (populated exclusively via /cameras_gripper/right/camera_info subscription)
+        self.camera_matrix: Optional[np.ndarray] = None
+        self.distortion_coefficients: Optional[np.ndarray] = None
 
         # Tool Grasp Center Point (TCP) projection
         self.grasp_center_2d: Optional[Tuple[float, float]] = None
         self.grasp_center_3d_cam: Optional[np.ndarray] = None
         self.grasp_center_radius_px: float = 9.0
-        self._init_tcp_reticle_projection()
 
         # Pre-compute compliant fingertip swept volume trajectory geometry
         self.swept_volume_data: list[dict[str, Any]] = []
         self.grasp_z_max: float = GRASP_Z_MAX_DEFAULT
-        self._init_swept_volume_model(max_open=self.max_open)
 
         # Real-time statistics & state
         self.num_window_pts: int = 0
@@ -140,6 +139,9 @@ class GraspingPerceptionNode(Node):
 
         # Publishers
         self.pub_reticle_state = self.create_publisher(Int8, "/grasping_perception/reticle_state", 10)
+        self.pub_annotated_raw = self.create_publisher(
+            Image, "/grasping_perception/annotated_image", 10
+        )
         self.pub_annotated_img = self.create_publisher(
             CompressedImage, "/grasping_perception/annotated_image/compressed", 10
         )
@@ -163,58 +165,28 @@ class GraspingPerceptionNode(Node):
 
         self.get_logger().info("Grasping Perception Node fully initialized and running.")
 
-    def _init_camera_intrinsics(self) -> Tuple[np.ndarray, np.ndarray]:
-        K = None
-        dist_coeffs = np.zeros(5, dtype=np.float32)
-
-        model_path = cu.get_default_model_path() if cu is not None else None
-        if model_path and os.path.exists(model_path):
-            try:
-                with open(model_path, "r") as f:
-                    model_data = yaml.safe_load(f)
-                calib_dir = os.path.dirname(os.path.abspath(model_path))
-                yaml_files = glob.glob(os.path.join(calib_dir, "*_gripper_data_*.yaml"))
-                if yaml_files:
-                    with open(yaml_files[0], "r") as f:
-                        data = yaml.safe_load(f)
-                        meta = data.get("metadata", {})
-                        if "camera_matrix" in meta:
-                            raw_K = np.array(meta["camera_matrix"], dtype=np.float32)
-                            res = meta.get("image_resolution", [1280, 800])
-                            scale = 640.0 / float(res[0])
-                            K = raw_K.copy()
-                            K[0, 0] *= scale
-                            K[1, 1] *= scale
-                            K[0, 2] *= scale
-                            K[1, 2] *= scale
-                            if "distortion_coefficients" in meta:
-                                dist_coeffs = np.array(meta["distortion_coefficients"], dtype=np.float32)
-                            self.get_logger().info(f"Loaded camera matrix from calibration dataset: {yaml_files[0]}")
-            except Exception as err:
-                self.get_logger().warning(f"Failed loading camera intrinsics from YAML: {err}")
-
-        if K is None:
-            self.get_logger().info("Using default OAK-D SR 640x400 camera matrix.")
-            K = np.array(
-                [
-                    [397.78253, 0.0, 315.42755],
-                    [0.0, 397.70575, 209.46078],
-                    [0.0, 0.0, 1.0],
-                ],
-                dtype=np.float32,
-            )
-
-        return K.astype(np.float32), dist_coeffs.astype(np.float32)
-
     def _camera_info_cb(self, msg: CameraInfo) -> None:
         if hasattr(msg, "k") and len(msg.k) == 9 and msg.k[0] > 0:
             K = np.array(msg.k, dtype=np.float32).reshape(3, 3)
             self.camera_matrix = K
-            if hasattr(msg, "d") and len(msg.d) >= 5:
-                self.distortion_coefficients = np.array(msg.d[:5], dtype=np.float32)
-            self._init_tcp_reticle_projection()
+            if hasattr(msg, "d") and len(msg.d) > 0:
+                self.distortion_coefficients = np.array(msg.d, dtype=np.float32)
+            else:
+                self.distortion_coefficients = np.zeros(5, dtype=np.float32)
+
+            if self.grasp_center_2d is None or self.grasp_center_3d_cam is None:
+                self._init_tcp_reticle_projection()
+
+            if not self.swept_volume_data:
+                self._init_swept_volume_model(max_open=self.max_open)
+        else:
+            self.get_logger().warning("::_camera_info_cb: Received invalid camera_info message; ignoring.")
 
     def _init_tcp_reticle_projection(self) -> None:
+        if self.camera_matrix is None or self.camera_matrix[0, 0] <= 0:
+            self.get_logger().warning("::_init_tcp_reticle_projection: Camera matrix not available; cannot compute TCP reticle projection.")
+            return
+
         grasp_center_3d, source_desc = self._compute_3d_grasp_center()
         if grasp_center_3d is not None:
             self.grasp_center_3d_cam = grasp_center_3d.ravel()
@@ -271,6 +243,9 @@ class GraspingPerceptionNode(Node):
         return grasp_center_3d, source_desc
 
     def _init_swept_volume_model(self, max_open: float = MAX_OPEN_PCT) -> None:
+        if self.camera_matrix is None or self.camera_matrix[0, 0] <= 0:
+            return
+
         self.swept_volume_data = []
 
         if FingertipVisualizer is None or SweptVolumeModel is None or cu is None:
@@ -334,7 +309,7 @@ class GraspingPerceptionNode(Node):
 
             if self.swept_volume_data:
                 self.grasp_z_max = max(d["z_max"] for d in self.swept_volume_data) + 0.01
-                self.get_logger().info(f"Pre-computed swept volume manifold (Z_max={self.grasp_z_max:.3f}m).")
+                # self.get_logger().info(f"Pre-computed swept volume manifold (Z_max={self.grasp_z_max:.3f}m).")
         except Exception as err:
             self.get_logger().warning(f"Error initializing swept volume models: {err}")
 
@@ -384,6 +359,9 @@ class GraspingPerceptionNode(Node):
         return res
 
     def _get_reticle_window_mask(self, vis_w: int, vis_h: int) -> np.ndarray:
+        if self.camera_matrix is None or self.camera_matrix[0, 0] <= 0:
+            return np.zeros((vis_h, vis_w), dtype=bool)
+
         u_reticle = self.grasp_center_2d[0] if self.grasp_center_2d is not None else (vis_w / 2.0)
         v_reticle = self.grasp_center_2d[1] if self.grasp_center_2d is not None else (vis_h / 2.0)
         fx = float(self.camera_matrix[0, 0])
@@ -447,7 +425,7 @@ class GraspingPerceptionNode(Node):
 
         combined_mask_2d = np.zeros((vis_h, vis_w), dtype=np.uint8)
 
-        if self.show_swept_volume and self.swept_volume_data:
+        if self.swept_volume_data:
             vol_overlay = vis_frame.copy()
             wire_overlay = vis_frame.copy()
             manifold_color = (128, 128, 128)
@@ -469,15 +447,16 @@ class GraspingPerceptionNode(Node):
                         wire_overlay, [pts_2d], isClosed=True, color=wire_color, thickness=1, lineType=cv2.LINE_AA
                     )
 
-            vis_frame = cv2.addWeighted(vol_overlay, 0.20, vis_frame, 0.80, 0)
-            vis_frame = cv2.addWeighted(wire_overlay, 0.50, vis_frame, 0.50, 0)
+            if self.show_swept_volume:
+                vis_frame = cv2.addWeighted(vol_overlay, 0.20, vis_frame, 0.80, 0)
+                vis_frame = cv2.addWeighted(wire_overlay, 0.50, vis_frame, 0.50, 0)
 
         if depth_img is not None and depth_img.size > 0 and self.show_depth_points:
             highlight_overlay = vis_frame.copy()
             depth_m = depth_img
             z_max = getattr(self, "grasp_z_max", GRASP_Z_MAX_DEFAULT)
 
-            if self.swept_volume_data:
+            if np.any(combined_mask_2d > 0):
                 valid_mask = (combined_mask_2d > 0)
             else:
                 valid_mask = self._get_reticle_window_mask(vis_w, vis_h)
@@ -495,12 +474,25 @@ class GraspingPerceptionNode(Node):
         return vis_frame
 
     def _draw_reticle_overlay(self, vis_frame: np.ndarray) -> np.ndarray:
-        if not self.show_reticle or self.grasp_center_2d is None:
+        if not self.show_reticle:
+            return vis_frame
+
+        if self.grasp_center_2d is None:
+            self._init_tcp_reticle_projection()
+
+        if self.grasp_center_2d is None:
             return vis_frame
 
         u_vis, v_vis = int(self.grasp_center_2d[0]), int(self.grasp_center_2d[1])
         r_vis = max(2, int(self.grasp_center_radius_px))
         tick_len = 10
+
+        # hack
+        # u_vis, v_vis = [20, 100]  # x = u (left-right), y = v (top-down)
+
+        # vis_h, vis_w = vis_frame.shape[:2]
+        # self.get_logger().info(f"Window resolution: (width={vis_w}, height={vis_h})")
+        # self.get_logger().info(f"Drawing reticle at (u={u_vis}, v={v_vis}), radius={r_vis}px, state={self.reticle_state}")
 
         if self.reticle_state == STATE_GREEN:
             reticle_color = (0, 255, 0)      # GREEN
@@ -554,7 +546,12 @@ class GraspingPerceptionNode(Node):
         state_msg.data = int(self.reticle_state)
         self.pub_reticle_state.publish(state_msg)
 
-        # Publish annotated image
+        # Publish raw annotated image (for RViz2)
+        raw_msg = cv2_image_to_ros_msg(vis_frame, compress=False)
+        raw_msg.header = rgb_msg.header
+        self.pub_annotated_raw.publish(raw_msg)
+
+        # Publish compressed annotated image (for web frontend)
         annotated_msg = cv2_image_to_ros_msg(vis_frame, compress=True)
         annotated_msg.header = rgb_msg.header
         self.pub_annotated_img.publish(annotated_msg)
