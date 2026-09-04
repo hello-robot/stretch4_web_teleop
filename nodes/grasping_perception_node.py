@@ -13,7 +13,6 @@ Processes gripper camera RGB-D streams and generates real-time perception visual
 Emits reticle state metadata and annotated compressed video stream.
 """
 
-import glob
 import os
 import sys
 import threading
@@ -21,8 +20,6 @@ from typing import Any, Optional, Tuple
 
 import cv2
 import numpy as np
-import yaml
-
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -31,7 +28,6 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from std_msgs.msg import Int8
 from std_srvs.srv import SetBool, Trigger
-
 from stretch4_urdf import get_transform, get_urdf_from_robot_params
 
 from stretch4_web_teleop_helpers.conversions import (
@@ -40,14 +36,20 @@ from stretch4_web_teleop_helpers.conversions import (
 )
 
 # Import compliant gripper modeling utilities
-gripper_pkg_dir = os.path.join(os.path.expanduser("~"), "repos/stretch4_compliant_gripper/src")
+gripper_pkg_dir = os.path.join(
+    os.path.expanduser("~"), "repos/stretch4_compliant_gripper/src"
+)
 if gripper_pkg_dir not in sys.path:
     sys.path.insert(0, gripper_pkg_dir)
 
 try:
     from stretch4_gripper_modeling_and_control import calibration_utils as cu
-    from stretch4_gripper_modeling_and_control.fingertip_visualizer import FingertipVisualizer
-    from stretch4_gripper_modeling_and_control.swept_volume_model import SweptVolumeModel
+    from stretch4_gripper_modeling_and_control.fingertip_visualizer import (
+        FingertipVisualizer,
+    )
+    from stretch4_gripper_modeling_and_control.swept_volume_model import (
+        SweptVolumeModel,
+    )
 except ImportError:
     cu = None
     FingertipVisualizer = None
@@ -56,17 +58,17 @@ except ImportError:
 # ==============================================================================
 # PERCEPTION & THRESHOLD CONSTANTS
 # ==============================================================================
-N_POINTS_MIN_YELLOW = 100        # Minimum points in window for YELLOW state
-N_POINTS_MIN_GREEN = 1000        # Minimum points in window for GREEN state
-Z_NEAR_M = 0.20                  # Near point distance threshold in meters
-WINDOW_HALF_WIDTH_M = 0.02       # Half-width of 4cm window (0.02m = 2cm)
-RETICLE_RADIUS_M = 0.005         # Physical radius corresponding to 1cm circle (0.5cm = 0.005m)
-GRASP_Z_MAX_DEFAULT = 0.259      # Default Z max depth bound (meters)
-MAX_OPEN_PCT = 280.0             # Maximum physical gripper opening percentage
-DEFAULT_TCP_Z = 0.216            # Default baseline TCP Z offset (meters)
-STATE_RED = 0                    # Reticle state 0: RED
-STATE_YELLOW = 1                 # Reticle state 1: YELLOW
-STATE_GREEN = 2                  # Reticle state 2: GREEN
+N_POINTS_MIN_YELLOW = 100  # Minimum points in window for YELLOW state
+N_POINTS_MIN_GREEN = 1000  # Minimum points in window for GREEN state
+Z_NEAR_M = 0.20  # Near point distance threshold in meters
+WINDOW_HALF_WIDTH_M = 0.02  # Half-width of 4cm window (0.02m = 2cm)
+RETICLE_RADIUS_M = 0.005  # Physical radius corresponding to 1cm circle (0.5cm = 0.005m)
+GRASP_Z_MAX_DEFAULT = 0.259  # Default Z max depth bound (meters)
+MAX_OPEN_PCT = 280.0  # Maximum physical gripper opening percentage
+DEFAULT_TCP_Z = 0.216  # Default baseline TCP Z offset (meters)
+STATE_RED = 0  # Reticle state 0: RED
+STATE_YELLOW = 1  # Reticle state 1: YELLOW
+STATE_GREEN = 2  # Reticle state 2: GREEN
 # ==============================================================================
 
 
@@ -138,7 +140,9 @@ class GraspingPerceptionNode(Node):
         )
 
         # Publishers
-        self.pub_reticle_state = self.create_publisher(Int8, "/grasping_perception/reticle_state", 10)
+        self.pub_reticle_state = self.create_publisher(
+            Int8, "/grasping_perception/reticle_state", 10
+        )
         self.pub_annotated_raw = self.create_publisher(
             Image, "/grasping_perception/annotated_image", 10
         )
@@ -148,22 +152,30 @@ class GraspingPerceptionNode(Node):
 
         # Services
         self.srv_toggle_sv = self.create_service(
-            Trigger, "/grasping_perception/toggle_swept_volume", self._toggle_swept_volume_cb
+            Trigger,
+            "/grasping_perception/toggle_swept_volume",
+            self._toggle_swept_volume_cb,
         )
         self.srv_toggle_depth = self.create_service(
-            Trigger, "/grasping_perception/toggle_depth_heatmap", self._toggle_depth_heatmap_cb
+            Trigger,
+            "/grasping_perception/toggle_depth_heatmap",
+            self._toggle_depth_heatmap_cb,
         )
         self.srv_toggle_reticle = self.create_service(
             Trigger, "/grasping_perception/toggle_reticle", self._toggle_reticle_cb
         )
         self.srv_enable_processing = self.create_service(
-            SetBool, "/grasping_perception/enable_processing", self._enable_processing_cb
+            SetBool,
+            "/grasping_perception/enable_processing",
+            self._enable_processing_cb,
         )
 
         # Main processing timer (15 Hz)
         self.timer = self.create_timer(1.0 / 15.0, self._process_loop)
 
-        self.get_logger().info("Grasping Perception Node fully initialized and running.")
+        self.get_logger().info(
+            "Grasping Perception Node fully initialized and running."
+        )
 
     def _camera_info_cb(self, msg: CameraInfo) -> None:
         if hasattr(msg, "k") and len(msg.k) == 9 and msg.k[0] > 0:
@@ -180,11 +192,15 @@ class GraspingPerceptionNode(Node):
             if not self.swept_volume_data:
                 self._init_swept_volume_model(max_open=self.max_open)
         else:
-            self.get_logger().warning("::_camera_info_cb: Received invalid camera_info message; ignoring.")
+            self.get_logger().warning(
+                "::_camera_info_cb: Received invalid camera_info message; ignoring."
+            )
 
     def _init_tcp_reticle_projection(self) -> None:
         if self.camera_matrix is None or self.camera_matrix[0, 0] <= 0:
-            self.get_logger().warning("::_init_tcp_reticle_projection: Camera matrix not available; cannot compute TCP reticle projection.")
+            self.get_logger().warning(
+                "::_init_tcp_reticle_projection: Camera matrix not available; cannot compute TCP reticle projection."
+            )
             return
 
         grasp_center_3d, source_desc = self._compute_3d_grasp_center()
@@ -194,7 +210,9 @@ class GraspingPerceptionNode(Node):
             rvec = np.zeros((3, 1), dtype=np.float32)
             tvec = np.zeros((3, 1), dtype=np.float32)
 
-            pts_2d, _ = cv2.projectPoints(P_3d, rvec, tvec, self.camera_matrix, self.distortion_coefficients)
+            pts_2d, _ = cv2.projectPoints(
+                P_3d, rvec, tvec, self.camera_matrix, self.distortion_coefficients
+            )
             u, v = pts_2d.ravel()
             self.grasp_center_2d = (float(u), float(v))
 
@@ -221,24 +239,34 @@ class GraspingPerceptionNode(Node):
                     pos_r, _ = vis_model.predict("right", 0.0)
                     if pos_l is not None and pos_r is not None:
                         grasp_center_3d = (pos_l + pos_r) / 2.0
-                        source_desc = f"FingertipVisualizer ('{os.path.basename(model_path)}')"
+                        source_desc = (
+                            f"FingertipVisualizer ('{os.path.basename(model_path)}')"
+                        )
                 except Exception as err:
-                    self.get_logger().warning(f"Failed computing grasp center with FingertipVisualizer: {err}")
+                    self.get_logger().warning(
+                        f"Failed computing grasp center with FingertipVisualizer: {err}"
+                    )
 
         if grasp_center_3d is None:
             try:
                 if get_urdf_from_robot_params is not None and get_transform is not None:
                     urdf_str = get_urdf_from_robot_params()
                     frame_name = "gripper_right_camera_color_optical_frame"
-                    T = get_transform(urdf_str, frame_to="grasp_center_link", frame_from=frame_name)
+                    T = get_transform(
+                        urdf_str, frame_to="grasp_center_link", frame_from=frame_name
+                    )
                     grasp_center_3d = T[:3, 3].astype(np.float32)
                     source_desc = "Stretch 4 URDF Kinematics (grasp_center_link)"
             except Exception as err:
-                self.get_logger().warning(f"Failed computing grasp center from URDF: {err}")
+                self.get_logger().warning(
+                    f"Failed computing grasp center from URDF: {err}"
+                )
 
         if grasp_center_3d is None:
             grasp_center_3d = np.array([0.0, 0.0, DEFAULT_TCP_Z], dtype=np.float32)
-            source_desc = f"Default Stretch 4 Gripper Baseline Offset (Z={DEFAULT_TCP_Z:.3f}m)"
+            source_desc = (
+                f"Default Stretch 4 Gripper Baseline Offset (Z={DEFAULT_TCP_Z:.3f}m)"
+            )
 
         return grasp_center_3d, source_desc
 
@@ -249,12 +277,16 @@ class GraspingPerceptionNode(Node):
         self.swept_volume_data = []
 
         if FingertipVisualizer is None or SweptVolumeModel is None or cu is None:
-            self.get_logger().warning("SweptVolumeModel or FingertipVisualizer not available.")
+            self.get_logger().warning(
+                "SweptVolumeModel or FingertipVisualizer not available."
+            )
             return
 
         model_path = cu.get_default_model_path()
         if not model_path or not os.path.exists(model_path):
-            self.get_logger().warning("Compliant gripper model path not found for swept volume.")
+            self.get_logger().warning(
+                "Compliant gripper model path not found for swept volume."
+            )
             return
 
         try:
@@ -272,7 +304,9 @@ class GraspingPerceptionNode(Node):
                 if not sv_model.valid:
                     continue
 
-                pcts = sv_model.get_sampled_pcts(sampling_method="pos_pct", num_samples=30)
+                pcts = sv_model.get_sampled_pcts(
+                    sampling_method="pos_pct", num_samples=30
+                )
                 side_rings_2d: list[np.ndarray] = []
                 side_rings_3d: list[np.ndarray] = []
                 z_depths: list[float] = []
@@ -308,7 +342,9 @@ class GraspingPerceptionNode(Node):
                     )
 
             if self.swept_volume_data:
-                self.grasp_z_max = max(d["z_max"] for d in self.swept_volume_data) + 0.01
+                self.grasp_z_max = (
+                    max(d["z_max"] for d in self.swept_volume_data) + 0.01
+                )
                 # self.get_logger().info(f"Pre-computed swept volume manifold (Z_max={self.grasp_z_max:.3f}m).")
         except Exception as err:
             self.get_logger().warning(f"Error initializing swept volume models: {err}")
@@ -330,28 +366,38 @@ class GraspingPerceptionNode(Node):
         except Exception as err:
             self.get_logger().warning(f"Error decoding depth ROS message: {err}")
 
-    def _toggle_swept_volume_cb(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+    def _toggle_swept_volume_cb(
+        self, req: Trigger.Request, res: Trigger.Response
+    ) -> Trigger.Response:
         self.show_swept_volume = not self.show_swept_volume
         res.success = True
         res.message = f"Swept volume overlay {'enabled' if self.show_swept_volume else 'disabled'}."
         self.get_logger().info(res.message)
         return res
 
-    def _toggle_depth_heatmap_cb(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+    def _toggle_depth_heatmap_cb(
+        self, req: Trigger.Request, res: Trigger.Response
+    ) -> Trigger.Response:
         self.show_depth_points = not self.show_depth_points
         res.success = True
         res.message = f"Depth heatmap overlay {'enabled' if self.show_depth_points else 'disabled'}."
         self.get_logger().info(res.message)
         return res
 
-    def _toggle_reticle_cb(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+    def _toggle_reticle_cb(
+        self, req: Trigger.Request, res: Trigger.Response
+    ) -> Trigger.Response:
         self.show_reticle = not self.show_reticle
         res.success = True
-        res.message = f"Reticle crosshair {'enabled' if self.show_reticle else 'disabled'}."
+        res.message = (
+            f"Reticle crosshair {'enabled' if self.show_reticle else 'disabled'}."
+        )
         self.get_logger().info(res.message)
         return res
 
-    def _enable_processing_cb(self, req: SetBool.Request, res: SetBool.Response) -> SetBool.Response:
+    def _enable_processing_cb(
+        self, req: SetBool.Request, res: SetBool.Response
+    ) -> SetBool.Response:
         self.processing_enabled = req.data
         res.success = True
         res.message = f"Perception processing {'enabled' if self.processing_enabled else 'disabled'}."
@@ -362,10 +408,22 @@ class GraspingPerceptionNode(Node):
         if self.camera_matrix is None or self.camera_matrix[0, 0] <= 0:
             return np.zeros((vis_h, vis_w), dtype=bool)
 
-        u_reticle = self.grasp_center_2d[0] if self.grasp_center_2d is not None else (vis_w / 2.0)
-        v_reticle = self.grasp_center_2d[1] if self.grasp_center_2d is not None else (vis_h / 2.0)
+        u_reticle = (
+            self.grasp_center_2d[0]
+            if self.grasp_center_2d is not None
+            else (vis_w / 2.0)
+        )
+        v_reticle = (
+            self.grasp_center_2d[1]
+            if self.grasp_center_2d is not None
+            else (vis_h / 2.0)
+        )
         fx = float(self.camera_matrix[0, 0])
-        z_tcp = float(self.grasp_center_3d_cam[2]) if self.grasp_center_3d_cam is not None else DEFAULT_TCP_Z
+        z_tcp = (
+            float(self.grasp_center_3d_cam[2])
+            if self.grasp_center_3d_cam is not None
+            else DEFAULT_TCP_Z
+        )
         w_half_px = (fx * WINDOW_HALF_WIDTH_M) / z_tcp if z_tcp > 0 else 37.0
         r_px = float(self.grasp_center_radius_px)
 
@@ -377,7 +435,9 @@ class GraspingPerceptionNode(Node):
         window_mask[:v_bottom, u_min:u_max] = True
         return window_mask
 
-    def _update_reticle_depth_window(self, depth_img: Optional[np.ndarray], vis_w: int, vis_h: int) -> None:
+    def _update_reticle_depth_window(
+        self, depth_img: Optional[np.ndarray], vis_w: int, vis_h: int
+    ) -> None:
         if depth_img is None or depth_img.size == 0:
             return
 
@@ -396,7 +456,7 @@ class GraspingPerceptionNode(Node):
                         hull = cv2.convexHull(quad_pts)
                         cv2.fillPoly(sv_mask_u8, [hull], 255)
                     prev_ring = pts_2d
-            sv_mask = (sv_mask_u8 > 0)
+            sv_mask = sv_mask_u8 > 0
             counting_mask = window_mask & sv_mask
         else:
             counting_mask = window_mask
@@ -419,7 +479,9 @@ class GraspingPerceptionNode(Node):
         else:
             self.reticle_state = STATE_RED
 
-    def _draw_swept_volume_overlay(self, vis_frame: np.ndarray, depth_img: Optional[np.ndarray]) -> np.ndarray:
+    def _draw_swept_volume_overlay(
+        self, vis_frame: np.ndarray, depth_img: Optional[np.ndarray]
+    ) -> np.ndarray:
         vis_h, vis_w = vis_frame.shape[:2]
         self._update_reticle_depth_window(depth_img, vis_w, vis_h)
 
@@ -444,7 +506,12 @@ class GraspingPerceptionNode(Node):
                 wire_color = (180, 180, 180)
                 for pts_2d in rings_2d:
                     cv2.polylines(
-                        wire_overlay, [pts_2d], isClosed=True, color=wire_color, thickness=1, lineType=cv2.LINE_AA
+                        wire_overlay,
+                        [pts_2d],
+                        isClosed=True,
+                        color=wire_color,
+                        thickness=1,
+                        lineType=cv2.LINE_AA,
                     )
 
             if self.show_swept_volume:
@@ -457,7 +524,7 @@ class GraspingPerceptionNode(Node):
             z_max = getattr(self, "grasp_z_max", GRASP_Z_MAX_DEFAULT)
 
             if np.any(combined_mask_2d > 0):
-                valid_mask = (combined_mask_2d > 0)
+                valid_mask = combined_mask_2d > 0
             else:
                 valid_mask = self._get_reticle_window_mask(vis_w, vis_h)
 
@@ -465,7 +532,9 @@ class GraspingPerceptionNode(Node):
             if np.any(graspable_mask):
                 z_min_bound = 0.10
                 z_max_bound = max(z_max, z_min_bound + 0.01)
-                depth_norm = np.clip((depth_m - z_min_bound) / (z_max_bound - z_min_bound), 0.0, 1.0)
+                depth_norm = np.clip(
+                    (depth_m - z_min_bound) / (z_max_bound - z_min_bound), 0.0, 1.0
+                )
                 depth_u8 = np.clip((1.0 - depth_norm) * 255.0, 0, 255).astype(np.uint8)
                 jet_color_map = cv2.applyColorMap(depth_u8, cv2.COLORMAP_JET)
                 highlight_overlay[graspable_mask] = jet_color_map[graspable_mask]
@@ -495,25 +564,81 @@ class GraspingPerceptionNode(Node):
         # self.get_logger().info(f"Drawing reticle at (u={u_vis}, v={v_vis}), radius={r_vis}px, state={self.reticle_state}")
 
         if self.reticle_state == STATE_GREEN:
-            reticle_color = (0, 255, 0)      # GREEN
+            reticle_color = (0, 255, 0)  # GREEN
         elif self.reticle_state == STATE_YELLOW:
-            reticle_color = (0, 255, 255)    # YELLOW
+            reticle_color = (0, 255, 255)  # YELLOW
         else:
-            reticle_color = (0, 0, 255)      # RED
+            reticle_color = (0, 0, 255)  # RED
 
         # Draw black outline background
         cv2.circle(vis_frame, (u_vis, v_vis), r_vis, (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis - r_vis - tick_len, v_vis), (u_vis - r_vis, v_vis), (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis + r_vis, v_vis), (u_vis + r_vis + tick_len, v_vis), (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis, v_vis - r_vis - tick_len), (u_vis, v_vis - r_vis), (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis, v_vis + r_vis), (u_vis, v_vis + r_vis + tick_len), (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.line(
+            vis_frame,
+            (u_vis - r_vis - tick_len, v_vis),
+            (u_vis - r_vis, v_vis),
+            (0, 0, 0),
+            3,
+            cv2.LINE_AA,
+        )
+        cv2.line(
+            vis_frame,
+            (u_vis + r_vis, v_vis),
+            (u_vis + r_vis + tick_len, v_vis),
+            (0, 0, 0),
+            3,
+            cv2.LINE_AA,
+        )
+        cv2.line(
+            vis_frame,
+            (u_vis, v_vis - r_vis - tick_len),
+            (u_vis, v_vis - r_vis),
+            (0, 0, 0),
+            3,
+            cv2.LINE_AA,
+        )
+        cv2.line(
+            vis_frame,
+            (u_vis, v_vis + r_vis),
+            (u_vis, v_vis + r_vis + tick_len),
+            (0, 0, 0),
+            3,
+            cv2.LINE_AA,
+        )
 
         # Draw dynamic reticle foreground
         cv2.circle(vis_frame, (u_vis, v_vis), r_vis, reticle_color, 2, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis - r_vis - tick_len, v_vis), (u_vis - r_vis, v_vis), reticle_color, 2, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis + r_vis, v_vis), (u_vis + r_vis + tick_len, v_vis), reticle_color, 2, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis, v_vis - r_vis - tick_len), (u_vis, v_vis - r_vis), reticle_color, 2, cv2.LINE_AA)
-        cv2.line(vis_frame, (u_vis, v_vis + r_vis), (u_vis, v_vis + r_vis + tick_len), reticle_color, 2, cv2.LINE_AA)
+        cv2.line(
+            vis_frame,
+            (u_vis - r_vis - tick_len, v_vis),
+            (u_vis - r_vis, v_vis),
+            reticle_color,
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.line(
+            vis_frame,
+            (u_vis + r_vis, v_vis),
+            (u_vis + r_vis + tick_len, v_vis),
+            reticle_color,
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.line(
+            vis_frame,
+            (u_vis, v_vis - r_vis - tick_len),
+            (u_vis, v_vis - r_vis),
+            reticle_color,
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.line(
+            vis_frame,
+            (u_vis, v_vis + r_vis),
+            (u_vis, v_vis + r_vis + tick_len),
+            reticle_color,
+            2,
+            cv2.LINE_AA,
+        )
 
         return vis_frame
 
