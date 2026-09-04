@@ -30,6 +30,7 @@ ament_python_install_package(${PROJECT_NAME}_helpers)
 install(PROGRAMS
   nodes/compressed_image_visualizer.py
   nodes/configure_video_streams.py
+  nodes/grasping_perception_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -46,6 +47,10 @@ install(DIRECTORY nodes
 )
 
 install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY rviz
   DESTINATION share/${PROJECT_NAME}
 )
 

@@ -262,6 +262,15 @@ def generate_launch_description():
         )
         ld.add_action(configure_video_streams_node)
 
+    # Grasping Perception Node
+    grasping_perception_node = Node(
+        package="stretch4_web_teleop",
+        executable="grasping_perception_node.py",
+        name="grasping_perception_node",
+        output="screen",
+    )
+    ld.add_action(grasping_perception_node)
+
     navigation_bringup_launch = GroupAction(
         condition=IfCondition(
             NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
