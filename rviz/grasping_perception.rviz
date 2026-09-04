@@ -1,14 +1,16 @@
 Panels:
   - Class: rviz_common/Displays
-    Help Height: 70
+    Help Height: 0
     Name: Displays
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Status1
         - /Image (Annotated Stream)1
-        - /Image (Raw Gripper RGB)1
+        - /Image (Annotated Stream)1/Status1
+        - /Image (Annotated Stream)1/Topic1
       Splitter Ratio: 0.5
-    Tree Height: 174
+    Tree Height: 244
   - Class: rviz_common/Views
     Expanded:
       - /Current View1
@@ -29,21 +31,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /grasping_perception/annotated_image/compressed
-      Value: true
-    - Class: rviz_default_plugins/Image
-      Enabled: true
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Image (Raw Gripper RGB)
-      Normalize Range: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /cameras_gripper/right/image_raw/compressed
+        Value: /grasping_perception/annotated_image
       Value: true
   Enabled: true
   Global Options:
@@ -91,9 +79,7 @@ Window Geometry:
   Hide Right Dock: false
   Image (Annotated Stream):
     collapsed: false
-  Image (Raw Gripper RGB):
-    collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000003e7000004fffc0200000004fb0000002e0049006d006100670065002000280052006100770020004700720069007000700065007200200052004700420029000000003f000001a60000001700fffffffb000000300049006d006100670065002000280041006e006e006f00740061007400650064002000530074007200650061006d0029010000003f000002700000001700fffffffb000000100044006900730070006c00610079007301000002b500000134000000cc00fffffffb0000000a0056006900650077007301000003ef0000014f000000a900ffffff000000ea000004ff00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000003e7000004fffc0200000004fb0000002e0049006d006100670065002000280052006100770020004700720069007000700065007200200052004700420029000000003f000001a60000000000000000fb000000300049006d006100670065002000280041006e006e006f00740061007400650064002000530074007200650061006d0029010000003f000002700000001700fffffffb000000100044006900730070006c00610079007301000002b500000134000000cc00fffffffb0000000a0056006900650077007301000003ef0000014f000000a900ffffff000000ea000004ff00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
   Width: 1239
