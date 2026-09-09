@@ -7,21 +7,14 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
-# Strip long flags before getopts (otherwise --svc is eaten by getopts)
-# @flag svc
-VOICE_SVC=0
-FILTERED_ARGS=()
-for arg in "$@"; do
-	case "$arg" in
-	--svc)
-		VOICE_SVC=1
-		;;
-	*)
-		FILTERED_ARGS+=("$arg")
-		;;
-	esac
-done
-set -- "${FILTERED_ARGS[@]}"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# @flag voice_control_interface
+# Resolved from features.json, with the FEATURE_VOICE_CONTROL_INTERFACE
+# environment variable taking precedence. Exported as 1/0 so server.js and
+# webpack see a canonical value whatever spelling the caller used.
+FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
+export FEATURE_VOICE_CONTROL_INTERFACE
 
 while getopts m:t:f opt; do
 	case $opt in
@@ -164,8 +157,8 @@ echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
 
-if [[ "$VOICE_SVC" -eq 1 ]]; then
-	echo -e "${GREEN}ENABLED SVC (--svc)${NC}"
+if [[ "$FEATURE_VOICE_CONTROL_INTERFACE" -eq 1 ]]; then
+	echo -e "${GREEN}ENABLED VOICE CONTROL INTERFACE${NC}"
 fi
 
 validate_installation
@@ -179,15 +172,9 @@ if [ $? -ne 0 ]; then
 	echo_failure_help
 fi
 
-# @flag svc
-VOICE_SVC_FLAG=""
-if [[ "$VOICE_SVC" -eq 1 ]]; then
-	VOICE_SVC_FLAG="-s"
-fi
-
 # echo ""
 cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE $VOICE_SVC_FLAG |& tee $logfile_node
+./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE |& tee $logfile_node
 if [ $? -ne 0 ]; then
 	echo_failure_help
 fi

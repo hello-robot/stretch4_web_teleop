@@ -10,14 +10,13 @@ import SceneCarousel, {
     SceneItemStatus,
 } from "../basic_components/SceneCarousel";
 import MagneticWrapper from "../static_components/MagneticWrapper";
-import VoicePilotSceneChrome from "../static_components/VoicePilotSceneChrome";
 import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
 import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
-import { getOperatorVoiceSvc } from "shared/operatorVoiceSession";
+import { isVoiceControlEnabled } from "shared/operatorVoiceSession";
 import { ActionState } from "shared/util";
 import {
     getVoiceStatusSnapshot,
@@ -31,6 +30,14 @@ import { MapFunction } from "./AutoNav";
 /** Menu tiles that run an action without changing the selected scene/footer label. */
 const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco", "reload-app"]);
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
+
+// @flag voice_control_interface
+// Loaded lazily so the animated voice chrome is fetched only once
+// isVoiceControlEnabled() is true.
+const VoicePilotSceneChrome = React.lazy(
+    () => import("../static_components/VoicePilotSceneChrome")
+);
+
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
     sceneSelected: string;
@@ -47,9 +54,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     isMainMenuOpenSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
-    // @flag svc
-    const voiceSvc =
-        getOperatorVoiceSvc() && process.env.storage !== "firebase";
+    // @flag voice_control_interface
+    const voiceSvc = isVoiceControlEnabled();
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
@@ -136,27 +142,27 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: localizeStatus !== "loading",
                 status: localizeStatus,
             },
-            // @flag svc
+            // @flag voice_control_interface
             ...(voiceSvc
                 ? [
-                      {
-                          id: "mic-mute",
-                          name: micMuted ? "Unmute" : "Mute",
-                          description: "Toggle microphone uplink to OpenAI",
-                          onClick: () => {
-                              const nextMuted =
-                                  !getVoiceStatusSnapshot().micMuted;
-                              setVoiceStatus({ micMuted: nextMuted });
-                              if (!nextMuted) {
-                                  bumpVoiceCommandActivity();
-                                  // Reacquire from this tap — iOS needs the gesture for getUserMedia.
-                                  void recoverVoiceMicFromUserGesture();
-                              }
-                          },
-                          icon: micMuted ? <MicOffIcon /> : <MicIcon />,
-                          enabled: voiceConnected,
-                      } satisfies SceneItem,
-                  ]
+                    {
+                        id: "mic-mute",
+                        name: micMuted ? "Unmute" : "Mute",
+                        description: "Toggle microphone uplink to OpenAI",
+                        onClick: () => {
+                            const nextMuted =
+                                !getVoiceStatusSnapshot().micMuted;
+                            setVoiceStatus({ micMuted: nextMuted });
+                            if (!nextMuted) {
+                                bumpVoiceCommandActivity();
+                                // Reacquire from this tap — iOS needs the gesture for getUserMedia.
+                                void recoverVoiceMicFromUserGesture();
+                            }
+                        },
+                        icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                        enabled: voiceConnected,
+                    } satisfies SceneItem,
+                ]
                 : []),
             {
                 id: "reload-app",
@@ -243,12 +249,20 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="scene-menu-button"
                     onPointerUp={() => isMainMenuOpenSet(true)}
                 >
-                    {/* @flag svc */}
+                    {/* @flag voice_control_interface */}
                     {voiceSvc ? (
-                        <VoicePilotSceneChrome
-                            sceneSelected={sceneSelected}
-                            fallbackName={sceneNameCurrent}
-                        />
+                        <React.Suspense
+                            fallback={
+                                <span className="scene-menu-button__label">
+                                    {sceneNameCurrent}
+                                </span>
+                            }
+                        >
+                            <VoicePilotSceneChrome
+                                sceneSelected={sceneSelected}
+                                fallbackName={sceneNameCurrent}
+                            />
+                        </React.Suspense>
                     ) : (
                         <span className="scene-menu-button__label">
                             {sceneNameCurrent}

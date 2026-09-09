@@ -1,0 +1,6 @@
+{
+    "voice_control_interface": {
+        "enabled": false,
+        "description": "Voice control for the web interface: OpenAI Realtime session, operator microphone capture, and the voice tool runners that dispatch robot motion."
+    }
+}

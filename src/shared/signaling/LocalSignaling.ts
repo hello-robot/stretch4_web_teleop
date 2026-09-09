@@ -56,7 +56,7 @@ export class LocalSignaling extends BaseSignaling {
                 }) => {
                     if (response.success) {
                         this.role = "operator";
-                        // @flag svc
+                        // @flag voice_control_interface
                         setOperatorVoiceSvc(Boolean(response.voiceSvc));
                         if (response.voiceSessionToken) {
                             setOperatorVoiceSessionToken(
@@ -73,7 +73,7 @@ export class LocalSignaling extends BaseSignaling {
     public leave(): void {
         console.log(`Leaving. My role: ${this.role}.`);
         setOperatorVoiceSessionToken(undefined);
-        // @flag svc
+        // @flag voice_control_interface
         setOperatorVoiceSvc(false);
         this.socket.emit("bye", this.role);
     }

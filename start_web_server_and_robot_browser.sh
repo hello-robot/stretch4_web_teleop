@@ -4,8 +4,12 @@ set -e
 REDIRECT_LOGDIR="$HOME/stretch_user/log/web_teleop"
 mkdir -p $REDIRECT_LOGDIR
 STORAGE="localstorage"
-VOICE_SVC=0
-while getopts l:fs opt; do
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)"
+export FEATURE_VOICE_CONTROL_INTERFACE
+
+while getopts l:f opt; do
 	case $opt in
 	l)
 		# Usage: ./start_web_server_and_robot_browser.sh -l /tmp/some_folder
@@ -18,18 +22,13 @@ while getopts l:fs opt; do
 		echo "Using firebase..."
 		STORAGE="firebase"
 		;;
-	s)
-		# @flag svc
-		VOICE_SVC=1
-		;;
 	esac
 done
-export VOICE_SVC
 REDIRECT_LOGFILE="$REDIRECT_LOGDIR/start_web_server_and_robot_browser.$(date '+%Y%m%d%H%M')_redirected.txt"
 echo "Arguments:" &>>$REDIRECT_LOGFILE
 echo "-l $REDIRECT_LOGDIR" &>>$REDIRECT_LOGFILE
 echo "-f $STORAGE" &>>$REDIRECT_LOGFILE
-echo "-s VOICE_SVC=$VOICE_SVC" &>>$REDIRECT_LOGFILE
+echo "FEATURE_VOICE_CONTROL_INTERFACE=$FEATURE_VOICE_CONTROL_INTERFACE" &>>$REDIRECT_LOGFILE
 
 echo "Run webpack..."
 export NODE_EXTRA_CA_CERTS="/home/hello-robot/ament_ws/src/stretch4_web_teleop/certificates/rootCA.pem"
