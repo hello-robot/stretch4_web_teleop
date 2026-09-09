@@ -26,6 +26,9 @@ import {
     ROSOdometry,
     ROSPose,
     updateJointVelocities,
+    updateJointIncrements,
+    JOINT_VELOCITY_HEARTBEAT_MS,
+    GRIPPER_INCREMENT_RANGE_FRACTION,
     ValidJoints,
     VideoProps,
 } from "shared/util";
@@ -614,6 +617,21 @@ export class Robot extends React.Component {
             ]).then(() => { }),
             new Promise<void>((resolve) => setTimeout(resolve, 3000)),
         ]);
+
+        // Scale the gripper's jog increment from the attached tool's advertised travel.
+        new Param({
+            ros: this.ros,
+            name: "/stretch_driver:tool_info.urdf_range",
+        }).get((value: number[]) => {
+            if (Array.isArray(value) && value.length === 2) {
+                const travel = Math.abs(value[1] - value[0]);
+                if (travel > 0) {
+                    updateJointIncrements({
+                        gripper_joint: travel * GRIPPER_INCREMENT_RANGE_FRACTION,
+                    });
+                }
+            }
+        });
 
         this.modeParam = new Param({
             ros: this.ros,
@@ -1283,7 +1301,7 @@ export class Robot extends React.Component {
         let jointVelocities = {
             joint_names: [jointName],
             velocities: [velocity],
-            duration: 0.05  // multiple of a heartbeat (0.025s)
+            duration: JOINT_VELOCITY_HEARTBEAT_MS / 1000
         };
         if (!this.jointVelTopic) throw "jointVelTopic is undefined";
         this.jointVelTopic.publish(jointVelocities);
