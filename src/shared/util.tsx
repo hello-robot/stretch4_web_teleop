@@ -269,6 +269,10 @@ export function updateJointVelocities(newVelocities: Record<string, number>) {
     }
 }
 
+/**
+ * Default fallback jog increments. The gripper's is refreshed at runtime from the driver's
+ * tool_info.urdf_range, since the right step depends on which tool is attached.
+ */
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,
     head_pan_joint: 0.1,
@@ -281,6 +285,24 @@ export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.5,
 };
+
+export function updateJointIncrements(newIncrements: Record<string, number>) {
+    for (const [key, val] of Object.entries(newIncrements)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_INCREMENTS as Record<string, number>)[key] = val;
+        }
+    }
+}
+
+/**
+ * Republish period for continuous joint velocity commands, in ms. The JointJog `duration` must
+ * match it: the driver multiplies rate by duration to get each command's displacement, so a
+ * mismatch scales the realised joint speed by the ratio between them.
+ */
+export const JOINT_VELOCITY_HEARTBEAT_MS = 50;
+
+/** Fraction of a tool's full travel that one jog click should cover. */
+export const GRIPPER_INCREMENT_RANGE_FRACTION = 0.1;
 
 const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
 
