@@ -656,6 +656,11 @@ export type RealtimeVoiceConnectOptions = {
      */
     onControlAutoNav?: (action: ControlAutoNavAction) => ControlAutoNavResult;
     /**
+     * Cancel AutoNav if currently navigating (used by bare stop / stop_motion).
+     * No-ops when not navigating; VoiceCommandAssistant toasts success only.
+     */
+    onCancelAutoNavOnStop?: () => ControlAutoNavResult;
+    /**
      * Saved pose names for load_autonav_location matching.
      * Return null when AutoNav controls are unavailable / not on AutoNav.
      */
@@ -674,8 +679,6 @@ export type RealtimeVoiceConnectOptions = {
     onSetSavedPosesModalFeedback?: (result: SetSavedPosesModalResult) => void;
     onSavePoseFeedback?: (result: SavePoseResult) => void;
     onMoveToPoseFeedback?: (result: MoveToPoseResult) => void;
-    /** Fast-path / stop_motion cancel hook for active AutoNav navigation */
-    onCancelAutoNavOnStop?: () => ControlAutoNavResult;
 };
 
 export type ActiveRealtimeVoiceSession = {
@@ -1162,10 +1165,23 @@ export async function connectOpenAIRealtimeVoice(
             }
             return executeJointMoveOnProvider(voiceProvider, rawArgs);
         },
-        stop_motion: (voiceProvider) =>
-            executeStopMotionOnProvider(voiceProvider, {
-                cancelAutoNav: opts.onCancelAutoNavOnStop,
-            }),
+        // stop_motion: (voiceProvider) =>
+        //     executeStopMotionOnProvider(voiceProvider, {
+        //         cancelAutoNav: opts.onCancelAutoNavOnStop,
+        //     }),
+        stop_motion: (voiceProvider) => {
+            const stopResult = executeStopMotionOnProvider(voiceProvider);
+            const cancelResult = opts.onCancelAutoNavOnStop?.();
+            if (cancelResult?.ok) {
+                return {
+                    ok: true,
+                    detail: stopResult.ok
+                        ? `${stopResult.detail} Cancelled AutoNav.`
+                        : cancelResult.detail,
+                };
+            }
+            return stopResult;
+        },
         repeat_base_move: (voiceProvider) =>
             executeRepeatBaseMoveOnProvider(voiceProvider),
         execute_macro: (voiceProvider, fc) => {
@@ -1553,6 +1569,8 @@ export async function connectOpenAIRealtimeVoice(
                     executeStopMotionOnProvider(opts.voiceProvider, {
                         cancelAutoNav: opts.onCancelAutoNavOnStop,
                     });
+                    // executeStopMotionOnProvider(opts.voiceProvider);
+                    // opts.onCancelAutoNavOnStop?.();
                 }
             }
             return;
