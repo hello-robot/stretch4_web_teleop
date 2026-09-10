@@ -8,7 +8,6 @@ let currentTranscribeLogFile = null;
 let latestTranscribeSymlinkPath = null;
 let currentRealtimeLogFile = null;
 let latestRealtimeSymlinkPath = null;
-let legacyLatestSymlinkPath = null;
 let currentMicLogFile = null;
 let latestMicSymlinkPath = null;
 
@@ -64,10 +63,12 @@ function getLogDir() {
 }
 
 /**
- * Stable voice-audio dir (not the launch timestamp folder). Never auto-purged.
+ * Audio-snippet clip dir for this run — nested under the same run's log
+ * directory (getLogDir) as the JSONL logs, so everything from one run lands
+ * in the same timestamped folder.
  */
 function getVoiceAudioDir() {
-    const dir = path.join(os.homedir(), 'stretch_user', 'log', 'web_teleop', 'voice_audio');
+    const dir = path.join(getLogDir(), 'voice_audio');
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
@@ -315,7 +316,6 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
     currentRealtimeLogFile = path.join(logDir, `realtime_model_${ts}.jsonl`);
     latestRealtimeSymlinkPath = path.join(logDir, `realtime_model_latest.jsonl`);
     createOrUpdateSymlink(currentRealtimeLogFile, latestRealtimeSymlinkPath);
-    createOrUpdateSymlink(currentRealtimeLogFile, legacyLatestSymlinkPath);
 
     // Mic Events Logger
     currentMicLogFile = path.join(logDir, `mic_events_${ts}.jsonl`);
@@ -365,7 +365,7 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
             res.sendFile(currentTranscribeLogFile);
         });
 
-        // Realtime Model SSE & Latest Endpoints (and legacy /voice-logs)
+        // Realtime Model SSE & Latest Endpoints
         const handleRealtimeStream = (req, res) => {
             res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
@@ -383,7 +383,6 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
         };
 
         app.get('/realtime-model-logs/stream', handleRealtimeStream);
-        app.get('/voice-logs/stream', handleRealtimeStream);
 
         const handleRealtimeLatest = (req, res) => {
             if (!currentRealtimeLogFile || !fs.existsSync(currentRealtimeLogFile)) {
@@ -393,7 +392,6 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
         };
 
         app.get('/realtime-model-logs/latest', handleRealtimeLatest);
-        app.get('/voice-logs/latest', handleRealtimeLatest);
 
         // Mic Logs SSE & Latest Endpoints
         app.get('/mic-logs/stream', (req, res) => {

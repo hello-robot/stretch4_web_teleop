@@ -40,20 +40,13 @@ echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
 echo "#############################################"
 echo ""
 
-# Voice uplink clip storage (never auto-purged — report only)
-voice_audio_dir="$HOME/stretch_user/log/web_teleop/voice_audio"
-mkdir -p "$voice_audio_dir"
-# SVC audio directory size and old files
-voice_audio_du=$(du -sh "$voice_audio_dir" 2>/dev/null | awk '{print $1}')
-voice_audio_old_count=$(find "$voice_audio_dir" -type f -mtime +7 2>/dev/null | wc -l | tr -d ' ')
-# Report current directory size
-echo -e "${BLUE}SVC audio total size:${NC} ${voice_audio_du:-0} in $voice_audio_dir"
-# Report if audio clips older than 7 days
-if [[ "$voice_audio_old_count" -gt 0 ]]; then
-	echo -e "${BLUE}SVC audio stale:${NC} $voice_audio_old_count file(s) older than 7 days (not deleted; purge manually if desired)"
-else
-	echo -e "${BLUE}SVC audio stale:${NC} no files older than 7 days"
-fi
+# Voice JSONL logs and audio-snippet clips (when voice_input_recording is
+# enabled) are written under this run's own timestamped $logdir — see
+# voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
+# in a separate persistent directory across runs, so there is no pre-run disk
+# usage to report here.
+web_teleop_du=$(du -sh "$HOME/stretch_user/log/web_teleop" 2>/dev/null | awk '{print $1}')
+echo -e "${BLUE}web_teleop logs total size:${NC} ${web_teleop_du:-0} in $HOME/stretch_user/log/web_teleop (not auto-purged; purge old run folders manually if desired)"
 
 # Validate web teleop installation
 function validate_installation {

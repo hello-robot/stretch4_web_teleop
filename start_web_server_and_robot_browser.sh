@@ -29,6 +29,9 @@ while getopts l:o:f opt; do
 		;;
 	esac
 done
+# Inherited by pm2-started Node processes (server.js voiceInteractionLogger),
+# so JSONL logs and audio-snippet clips land in this run's timestamped dir.
+export REDIRECT_LOGDIR
 REDIRECT_LOGFILE="${REDIRECT_LOGFILE:-$REDIRECT_LOGDIR/start_web_server_and_robot_browser.txt}"
 mkdir -p "$(dirname "$REDIRECT_LOGFILE")"
 echo "Arguments:" &>>$REDIRECT_LOGFILE
