@@ -72,7 +72,7 @@ export interface AutoNavFunctions {
         poseNames: string[],
         poseTypes: string[],
     ) => void;
-    DisplayGoalMarker: (pose: Vector3) => void;
+    DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) => void;
     Play: () => void;
     RemoveGoalMarker: () => void;
     GoalReached: () => Promise<boolean>;
@@ -202,8 +202,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
         /**
          * Display a goal marker on the map at the given pose.
          */
-        DisplayGoalMarker: (pose: Vector3) =>
-            occupancyGrid!.createGoalMarker(pose.x, pose.y, true),
+        DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) =>
+            occupancyGrid!.createGoalMarker(pose.x, pose.y, true, rotation),
 
         /**
          * Play the current navigation sequence (if supported by occupancyGrid).
