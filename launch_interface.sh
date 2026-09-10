@@ -9,10 +9,6 @@ NC='\033[0m' # No Color (Reset)
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# @flag voice_control_interface
-# Resolved from features.json, with the FEATURE_VOICE_CONTROL_INTERFACE
-# environment variable taking precedence. Exported as 1/0 so server.js and
-# webpack see a canonical value whatever spelling the caller used.
 FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
 export FEATURE_VOICE_CONTROL_INTERFACE
 
@@ -43,7 +39,7 @@ function validate_installation {
 	local cert_dir="$HOME/ament_ws/src/stretch4_web_teleop/certificates"
 	local env_file="$HOME/ament_ws/src/stretch4_web_teleop/.env"
 
-	echo -e "${BLUE}Validating web teleop installation...${NC}"
+	echo -e "Validating web teleop installation..."
 
 	# Check certificates folder exists
 	if [ ! -d "$cert_dir" ]; then
@@ -157,9 +153,14 @@ echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
 
-if [[ "$FEATURE_VOICE_CONTROL_INTERFACE" -eq 1 ]]; then
-	echo -e "${GREEN}ENABLED VOICE CONTROL INTERFACE${NC}"
-fi
+echo "Feature Flags:"
+while IFS='=' read -r var value; do
+	if [[ "$value" -eq 1 ]]; then
+		echo -e "  ${GREEN}$var=$value${NC}"
+	else
+		echo -e "  ${RED}$var=$value${NC}"
+	fi
+done < <(node "$REPO_DIR/feature-flags.js" --all)
 
 validate_installation
 if [ $? -ne 0 ]; then
@@ -174,7 +175,7 @@ fi
 
 # echo ""
 cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE |& tee $logfile_node
+./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE |& tee -a $logfile_node
 if [ $? -ne 0 ]; then
 	echo_failure_help
 fi

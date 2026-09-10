@@ -8,6 +8,8 @@
  *   - webpack.config.js       defines process.env.FEATURE_<NAME> in the bundle
  *   - launch scripts          via the CLI below, which prints "1" or "0":
  *                                 node feature-flags.js <name>
+ *                             or lists every flag as NAME=1/0:
+ *                                 node feature-flags.js --all
  */
 
 const fs = require("fs");
@@ -79,13 +81,22 @@ function isEnabled(name) {
 module.exports = { envVarName, isEnabled, loadFeatures };
 
 if (require.main === module) {
-    const name = process.argv[2];
-    if (!name) {
-        process.stderr.write("Usage: node feature-flags.js <feature-name>\n");
+    const arg = process.argv[2];
+    if (arg === "--all") {
+        // Usage: node feature-flags.js --all
+        // Prints every declared flag as NAME=1/0, one per line -- for launch-script logging.
+        const features = loadFeatures();
+        for (const [name, enabled] of Object.entries(features)) {
+            process.stdout.write(`${envVarName(name)}=${enabled ? "1" : "0"}\n`);
+        }
+        process.exit(0);
+    }
+    if (!arg) {
+        process.stderr.write("Usage: node feature-flags.js <feature-name>|--all\n");
         process.exit(2);
     }
     try {
-        process.stdout.write(isEnabled(name) ? "1" : "0");
+        process.stdout.write(isEnabled(arg) ? "1" : "0");
     } catch (e) {
         process.stderr.write(`${e.message}\n`);
         process.exit(1);
