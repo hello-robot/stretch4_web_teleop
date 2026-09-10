@@ -33,6 +33,11 @@ logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 logzip="$logdir/stretch4_web_teleop_logs.zip"
 mkdir -p $logdir
+# Stable pointer at this run's timestamped $logdir (mirrors ROS's own
+# ~/.ros/log/latest convention) so tools started outside this script — e.g.
+# `terminator -g tools/terminator/config`'s watch-* panes, which have no
+# REDIRECT_LOGDIR of their own — tail the current run instead of a stale one.
+ln -sfn "$logdir" "$HOME/stretch_user/log/web_teleop/latest_run"
 
 echo ""
 echo "#############################################"

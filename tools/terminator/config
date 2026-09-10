@@ -69,7 +69,7 @@
       maximized = True
       fullscreen = False
       size = 2374, 1263
-      title = "Web Interface Command Center"
+      title = Web Interface Command Center
       last_active_term = 476f3c4d-07c8-4456-9d22-f5becb3a60b5
       last_active_window = True
     [[[child1]]]

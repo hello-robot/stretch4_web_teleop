@@ -1,20 +1,36 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const chalk = require('chalk');
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const chalk = require("chalk");
 
-const BANNER_RULE = '======================================================';
+const BANNER_RULE = "======================================================";
 const DEFAULT_POLL_MS = 500;
 
 function webTeleopLogDir() {
-    const defaultDir = path.join(os.homedir(), 'stretch_user', 'log', 'web_teleop');
-    return process.env.REDIRECT_LOGDIR || defaultDir;
+    const rootDir = path.join(
+        os.homedir(),
+        "stretch_user",
+        "log",
+        "web_teleop"
+    );
+    if (process.env.REDIRECT_LOGDIR) {
+        return process.env.REDIRECT_LOGDIR;
+    }
+    const latestRunLink = path.join(rootDir, "latest_run");
+    if (fs.existsSync(latestRunLink)) {
+        try {
+            return fs.realpathSync(latestRunLink);
+        } catch (_) {
+            // fall through to rootDir
+        }
+    }
+    return rootDir;
 }
 
 function isSessionJsonl(filename, prefixes) {
     return (
-        filename.endsWith('.jsonl') &&
-        !filename.includes('latest') &&
+        filename.endsWith(".jsonl") &&
+        !filename.includes("latest") &&
         prefixes.some((prefix) => filename.startsWith(prefix))
     );
 }
@@ -39,7 +55,7 @@ function resolveLatestJsonl(latestName, prefixes) {
 
     if (fs.existsSync(textRefFile)) {
         try {
-            const target = fs.readFileSync(textRefFile, 'utf8').trim();
+            const target = fs.readFileSync(textRefFile, "utf8").trim();
             if (fs.existsSync(target)) {
                 return target;
             }
@@ -48,7 +64,8 @@ function resolveLatestJsonl(latestName, prefixes) {
 
     if (fs.existsSync(targetDir)) {
         try {
-            const files = fs.readdirSync(targetDir)
+            const files = fs
+                .readdirSync(targetDir)
                 .filter((f) => isSessionJsonl(f, prefixes))
                 .map((f) => ({
                     path: path.join(targetDir, f),
@@ -99,13 +116,19 @@ function watchJsonl(opts) {
     console.log(chalk.grey(`Target Log File: ${logPath}\n`));
 
     if (!fs.existsSync(logPath)) {
-        console.log(chalk.yellow(`Waiting for log file to be created at: ${logPath} ...`));
+        console.log(
+            chalk.yellow(
+                `Waiting for log file to be created at: ${logPath} ...`
+            )
+        );
     }
 
     let fileSize = 0;
     if (fs.existsSync(logPath)) {
         fileSize = fs.statSync(logPath).size;
-        fs.readFileSync(logPath, 'utf8').split('\n').forEach(formatAndPrintLine);
+        fs.readFileSync(logPath, "utf8")
+            .split("\n")
+            .forEach(formatAndPrintLine);
     }
 
     const watchTimer = setInterval(() => {
@@ -113,7 +136,9 @@ function watchJsonl(opts) {
         if (currentResolved !== logPath && fs.existsSync(currentResolved)) {
             logPath = currentResolved;
             fileSize = 0;
-            console.log(switchColor(`\nSwitched to active log file: ${logPath}\n`));
+            console.log(
+                switchColor(`\nSwitched to active log file: ${logPath}\n`)
+            );
         }
 
         if (!fs.existsSync(logPath)) return;
@@ -123,11 +148,11 @@ function watchJsonl(opts) {
                 const stream = fs.createReadStream(logPath, {
                     start: fileSize,
                     end: stats.size,
-                    encoding: 'utf8',
+                    encoding: "utf8",
                 });
                 fileSize = stats.size;
-                stream.on('data', (chunk) => {
-                    chunk.split('\n').forEach(formatAndPrintLine);
+                stream.on("data", (chunk) => {
+                    chunk.split("\n").forEach(formatAndPrintLine);
                 });
             } else if (stats.size < fileSize) {
                 fileSize = stats.size;
@@ -135,7 +160,7 @@ function watchJsonl(opts) {
         } catch (_) {}
     }, pollMs);
 
-    process.on('SIGINT', () => {
+    process.on("SIGINT", () => {
         clearInterval(watchTimer);
         console.log(chalk.grey(`\nExiting ${exitLabel}.\n`));
         process.exit(0);
