@@ -2,8 +2,9 @@
 
 /**
  * Live watcher utility for Transcribe Model Logs (STT: gpt-4o-transcribe).
- * Tails ~/stretch_user/log/web_teleop/transcribe_model_latest.jsonl
- * with syntax highlighting and pretty formatting.
+ * Tails the newest transcribe_model_*.jsonl in the current run's log
+ * directory (see scripts/lib/watchJsonl.js) with syntax highlighting and
+ * pretty formatting.
  */
 
 const chalk = require('chalk');
@@ -49,7 +50,6 @@ function formatAndPrintLine(line) {
 }
 
 watchJsonl({
-    latestName: 'transcribe_model_latest.jsonl',
     prefixes: ['transcribe_model_'],
     title: '   TRANSCRIBE MODEL LIVE STREAM (gpt-4o-transcribe)   ',
     titleColor: chalk.bold.cyan,

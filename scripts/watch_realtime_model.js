@@ -2,8 +2,9 @@
 
 /**
  * Live watcher utility for Realtime Model Logs (Reasoning & Tools: gpt-realtime-2.1).
- * Tails ~/stretch_user/log/web_teleop/realtime_model_latest.jsonl
- * with syntax highlighting and pretty formatting.
+ * Tails the newest realtime_model_*.jsonl in the current run's log directory
+ * (see scripts/lib/watchJsonl.js) with syntax highlighting and pretty
+ * formatting.
  */
 
 const chalk = require('chalk');
@@ -52,8 +53,7 @@ function formatAndPrintLine(line) {
 }
 
 watchJsonl({
-    latestName: 'realtime_model_latest.jsonl',
-    prefixes: ['realtime_model_', 'voice_interactions_'],
+    prefixes: ['realtime_model_'],
     title: '    REALTIME MODEL LIVE STREAM (gpt-realtime-2.1)     ',
     titleColor: chalk.bold.yellow,
     switchColor: chalk.yellow,

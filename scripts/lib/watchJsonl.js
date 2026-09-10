@@ -36,31 +36,16 @@ function isSessionJsonl(filename, prefixes) {
 }
 
 /**
- * Resolve the active JSONL log: latest symlink, .txt path fallback, then newest matching file.
- * @param {string} latestName e.g. 'transcribe_model_latest.jsonl'
+ * Resolve the active JSONL log for this run: the most recently modified file
+ * in the target directory (see webTeleopLogDir) matching one of `prefixes`.
+ * Each run gets its own directory, so there is normally exactly one match;
+ * mtime-sorting also covers a pm2 crash-restart writing a second, newer file
+ * into the same run's directory.
  * @param {string[]} prefixes session-file prefixes, e.g. ['transcribe_model_']
  */
-function resolveLatestJsonl(latestName, prefixes) {
+function resolveLatestJsonl(prefixes) {
     const targetDir = webTeleopLogDir();
-    const latestFile = path.join(targetDir, latestName);
-    const textRefFile = `${latestFile}.txt`;
-
-    if (fs.existsSync(latestFile)) {
-        try {
-            return fs.realpathSync(latestFile);
-        } catch (_) {
-            return latestFile;
-        }
-    }
-
-    if (fs.existsSync(textRefFile)) {
-        try {
-            const target = fs.readFileSync(textRefFile, "utf8").trim();
-            if (fs.existsSync(target)) {
-                return target;
-            }
-        } catch (_) {}
-    }
+    const placeholder = path.join(targetDir, `${prefixes[0]}*.jsonl`);
 
     if (fs.existsSync(targetDir)) {
         try {
@@ -79,13 +64,12 @@ function resolveLatestJsonl(latestName, prefixes) {
         } catch (_) {}
     }
 
-    return latestFile;
+    return placeholder;
 }
 
 /**
  * Print a banner, dump existing lines, then tail the resolved JSONL path.
  * @param {{
- *   latestName: string,
  *   prefixes: string[],
  *   title: string,
  *   titleColor: (s: string) => string,
@@ -97,7 +81,6 @@ function resolveLatestJsonl(latestName, prefixes) {
  */
 function watchJsonl(opts) {
     const {
-        latestName,
         prefixes,
         title,
         titleColor,
@@ -107,7 +90,7 @@ function watchJsonl(opts) {
         pollMs = DEFAULT_POLL_MS,
     } = opts;
 
-    const resolvePath = () => resolveLatestJsonl(latestName, prefixes);
+    const resolvePath = () => resolveLatestJsonl(prefixes);
     let logPath = resolvePath();
 
     console.log(titleColor(`\n${BANNER_RULE}`));

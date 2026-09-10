@@ -2,8 +2,9 @@
 
 /**
  * Live watcher utility for Microphone Event Logs.
- * Tails ~/stretch_user/log/web_teleop/mic_events_latest.jsonl
- * with syntax highlighting and pretty formatting.
+ * Tails the newest mic_events_*.jsonl in the current run's log directory
+ * (see scripts/lib/watchJsonl.js) with syntax highlighting and pretty
+ * formatting.
  */
 
 const chalk = require('chalk');
@@ -40,7 +41,6 @@ function formatAndPrintLine(line) {
 }
 
 watchJsonl({
-    latestName: 'mic_events_latest.jsonl',
     prefixes: ['mic_events_'],
     title: '       STRETCH MICROPHONE EVENTS LIVE WATCHER         ',
     titleColor: chalk.bold.cyan,

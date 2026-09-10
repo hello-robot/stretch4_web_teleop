@@ -5,11 +5,8 @@ const chalk = require('chalk');
 const { isEnabled } = require('./feature-flags');
 
 let currentTranscribeLogFile = null;
-let latestTranscribeSymlinkPath = null;
 let currentRealtimeLogFile = null;
-let latestRealtimeSymlinkPath = null;
 let currentMicLogFile = null;
-let latestMicSymlinkPath = null;
 
 let transcribeSseClients = [];
 let realtimeSseClients = [];
@@ -241,29 +238,6 @@ async function encodeAndWriteVoiceClip(data) {
 }
 
 /**
- * Helper to create or update a symlink with fallback
- */
-function createOrUpdateSymlink(targetFile, symlinkPath) {
-    try {
-        // Touch target file to make sure it exists
-        if (!fs.existsSync(targetFile)) {
-            try {
-                fs.writeFileSync(targetFile, '', { flag: 'a' });
-            } catch (_) {}
-        }
-        // Unlink any existing or broken symlink
-        try {
-            fs.unlinkSync(symlinkPath);
-        } catch (_) {}
-        fs.symlinkSync(targetFile, symlinkPath);
-    } catch (e) {
-        try {
-            fs.writeFileSync(symlinkPath + '.txt', targetFile, 'utf8');
-        } catch (_) {}
-    }
-}
-
-/**
  * Max Int16 PCM upload size (~1 MiB; covers ~15s @ 16 kHz with headroom).
  */
 const MAX_VOICE_CLIP_PCM_BYTES = 1_048_576;
@@ -309,18 +283,12 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
 
     // Model 1: Speech-to-Text Transcribe Model (gpt-4o-transcribe)
     currentTranscribeLogFile = path.join(logDir, `transcribe_model_${ts}.jsonl`);
-    latestTranscribeSymlinkPath = path.join(logDir, `transcribe_model_latest.jsonl`);
-    createOrUpdateSymlink(currentTranscribeLogFile, latestTranscribeSymlinkPath);
 
     // Model 2: Realtime Reasoning & Tool Model (gpt-realtime-2.1)
     currentRealtimeLogFile = path.join(logDir, `realtime_model_${ts}.jsonl`);
-    latestRealtimeSymlinkPath = path.join(logDir, `realtime_model_latest.jsonl`);
-    createOrUpdateSymlink(currentRealtimeLogFile, latestRealtimeSymlinkPath);
 
     // Mic Events Logger
     currentMicLogFile = path.join(logDir, `mic_events_${ts}.jsonl`);
-    latestMicSymlinkPath = path.join(logDir, `mic_events_latest.jsonl`);
-    createOrUpdateSymlink(currentMicLogFile, latestMicSymlinkPath);
 
     console.log(chalk.cyan(`[VoiceInteractionLogger] Logging Transcribe Model to: ${currentTranscribeLogFile}`));
     console.log(chalk.cyan(`[VoiceInteractionLogger] Logging Realtime Model to: ${currentRealtimeLogFile}`));
