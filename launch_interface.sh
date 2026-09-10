@@ -12,21 +12,6 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
 export FEATURE_VOICE_CONTROL_INTERFACE
 
-# Strip long flags before getopts (otherwise --log-svc is eaten by getopts)
-LOG_SVC=0
-FILTERED_ARGS=()
-for arg in "$@"; do
-	case "$arg" in
-	--log-svc)
-		LOG_SVC=1
-		;;
-	*)
-		FILTERED_ARGS+=("$arg")
-		;;
-	esac
-done
-set -- "${FILTERED_ARGS[@]}"
-
 while getopts m:t:f opt; do
 	case $opt in
 	m)
@@ -55,10 +40,6 @@ echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
 echo "#############################################"
 echo ""
 
-# Is logging enabled?
-if [[ "$LOG_SVC" -eq 1 ]]; then
-	echo -e "${GREEN}✅ ENABLED SVC Logging (--log-svc)${NC}"
-fi
 # Voice uplink clip storage (never auto-purged — report only)
 voice_audio_dir="$HOME/stretch_user/log/web_teleop/voice_audio"
 mkdir -p "$voice_audio_dir"
@@ -216,11 +197,7 @@ fi
 
 # echo ""
 cd $HOME/ament_ws/src/stretch4_web_teleop
-LOG_SVC_FLAG=""
-if [[ "$LOG_SVC" -eq 1 ]]; then
-	LOG_SVC_FLAG="-r"
-fi
-./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE $LOG_SVC_FLAG |& tee -a $logfile_node
+./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE |& tee -a $logfile_node
 if [ $? -ne 0 ]; then
 	echo_failure_help
 fi

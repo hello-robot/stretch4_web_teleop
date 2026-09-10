@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const chalk = require('chalk');
+const { isEnabled } = require('./feature-flags');
 
 let currentTranscribeLogFile = null;
 let latestTranscribeSymlinkPath = null;
@@ -39,8 +40,13 @@ function getTimestampString(date = new Date()) {
     return `${yyyy}${mm}${dd}_${hh}${mm}${ss}`;
 }
 
-function isLogSvcEnabled() {
-    return process.env.LOG_SVC === '1';
+/**
+ * Whether the voice_input_recording feature flag is enabled. Gates only the
+ * Opus (mp3-style) audio-snippet clip recording — voice JSONL logging (below)
+ * always runs once the logger is initialized, i.e. whenever SVC is enabled.
+ */
+function isVoiceInputRecordingEnabled() {
+    return isEnabled('voice_input_recording');
 }
 
 /**
@@ -128,7 +134,7 @@ function voiceAudioPathsForItem(itemId) {
 }
 
 function attachAudioFields(record, itemId, audioStartMs, audioEndMs) {
-    if (!isLogSvcEnabled() || !itemId) {
+    if (!isVoiceInputRecordingEnabled() || !itemId) {
         return record;
     }
     const paths = voiceAudioPathsForItem(itemId);
@@ -184,7 +190,7 @@ async function getEncodeOpusFactory() {
  * Encode Int16 LE mono PCM → Ogg Opus on disk at the deterministic path.
  */
 async function encodeAndWriteVoiceClip(data) {
-    if (!isLogSvcEnabled()) {
+    if (!isVoiceInputRecordingEnabled()) {
         return;
     }
     if (!clipSessionId) {
@@ -280,7 +286,10 @@ function pcmByteLength(pcm) {
 /**
  * Initializes the Voice Interaction Logger and Mic Event Logger
  * Sets up log files, SSE endpoints, and socket handlers.
- * No-op unless LOG_SVC=1 (--log-svc at launch).
+ * Called only when SVC (voice_control_interface) is enabled — JSONL voice,
+ * mic, and transcribe logging then always run. Opus (mp3-style) audio-snippet
+ * clip recording is additionally gated by the voice_input_recording feature
+ * flag; see isVoiceInputRecordingEnabled.
  *
  * @param {import('express').Application} app
  * @param {import('socket.io').Server} io
@@ -290,15 +299,6 @@ function pcmByteLength(pcm) {
  * }} [opts]
  */
 function initVoiceInteractionLogger(app, io, opts = {}) {
-    if (!isLogSvcEnabled()) {
-        console.log(
-            chalk.grey(
-                '[VoiceInteractionLogger] Disabled (launch with --log-svc to enable JSONL + uplink Opus clips)',
-            ),
-        );
-        return;
-    }
-
     const getOperatorSocketId = opts.getOperatorSocketId;
     const validateVoiceSession = opts.validateVoiceSession;
 
@@ -314,7 +314,6 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
     // Model 2: Realtime Reasoning & Tool Model (gpt-realtime-2.1)
     currentRealtimeLogFile = path.join(logDir, `realtime_model_${ts}.jsonl`);
     latestRealtimeSymlinkPath = path.join(logDir, `realtime_model_latest.jsonl`);
-    legacyLatestSymlinkPath = path.join(logDir, `voice_interactions_latest.jsonl`);
     createOrUpdateSymlink(currentRealtimeLogFile, latestRealtimeSymlinkPath);
     createOrUpdateSymlink(currentRealtimeLogFile, legacyLatestSymlinkPath);
 
@@ -326,11 +325,19 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
     console.log(chalk.cyan(`[VoiceInteractionLogger] Logging Transcribe Model to: ${currentTranscribeLogFile}`));
     console.log(chalk.cyan(`[VoiceInteractionLogger] Logging Realtime Model to: ${currentRealtimeLogFile}`));
     console.log(chalk.cyan(`[VoiceInteractionLogger] Logging Mic events to: ${currentMicLogFile}`));
-    console.log(
-        chalk.cyan(
-            `[VoiceInteractionLogger] SVC uplink recording ON → ${getVoiceAudioDir()}`,
-        ),
-    );
+    if (isVoiceInputRecordingEnabled()) {
+        console.log(
+            chalk.cyan(
+                `[VoiceInteractionLogger] Audio snippet recording ON → ${getVoiceAudioDir()}`,
+            ),
+        );
+    } else {
+        console.log(
+            chalk.grey(
+                '[VoiceInteractionLogger] Audio snippet recording OFF (enable the voice_input_recording feature flag)',
+            ),
+        );
+    }
 
     // Register HTTP endpoints for live SSE streams and latest files
     if (app) {
@@ -412,7 +419,7 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
             res.sendFile(currentMicLogFile);
         });
 
-        // Uplink Opus clips (LOG_SVC / --log-svc) — operator voice session required
+        // Uplink Opus clips (voice_input_recording feature flag) — operator voice session required
         app.get('/voice-audio/:itemId', (req, res) => {
             if (!validateVoiceSession || !validateVoiceSession(req)) {
                 return res.status(403).json({ error: 'Forbidden' });
@@ -489,7 +496,7 @@ function initVoiceInteractionLogger(app, io, opts = {}) {
  * Logs a single voice interaction record to disk, stdout, and live SSE stream.
  */
 function logVoiceInteraction(data) {
-    if (!isLogSvcEnabled() || !data) return;
+    if (!data) return;
 
     const now = new Date();
     const isoTimestamp = now.toISOString();
@@ -560,7 +567,7 @@ function logVoiceInteraction(data) {
  * Logs a single microphone lifecycle/health event to disk, stdout, and live SSE stream.
  */
 function logMicEvent(data) {
-    if (!isLogSvcEnabled() || !data) return;
+    if (!data) return;
 
     const now = new Date();
     const isoTimestamp = now.toISOString();
@@ -607,7 +614,7 @@ function logMicEvent(data) {
  * Logs VoiceCommandAssistant live logs, dynamically routing between Transcribe Model and Realtime Model.
  */
 function logVoiceAssistantLog(data) {
-    if (!isLogSvcEnabled() || !data) return;
+    if (!data) return;
 
     const now = new Date();
     const isoTimestamp = now.toISOString();

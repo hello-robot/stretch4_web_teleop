@@ -26,7 +26,8 @@ export type MicLevelGateOptions = {
     onGateChange?: (gateOpen: boolean, level: number) => void;
     /**
      * When true, keep a ~15s pre-gate mic ring for VAD-segmented Opus clips.
-     * Off by default (--log-svc / logSvc from join_as_operator).
+     * Off by default (voice_input_recording feature flag, relayed via
+     * join_as_operator).
      */
     recordUplink?: boolean;
 };

@@ -1,7 +1,7 @@
 import type { Socket } from "socket.io-client";
 import {
     getOperatorInteractionSocket,
-    getOperatorLogSvc,
+    getOperatorVoiceInputRecording,
 } from "shared/operatorVoiceSession";
 
 function getInteractionSocket(): Socket | null {
@@ -40,12 +40,10 @@ export type VoiceAudioClipPayload = {
 
 /**
  * Emits a structured voice interaction record to the server logger.
- * No-op unless launch used --log-svc (logSvc from join_as_operator).
+ * Runs whenever the operator interaction socket is set (SVC enabled) — voice
+ * JSONL logging is not gated by the voice_input_recording feature flag.
  */
 export function emitVoiceInteraction(payload: VoiceInteractionPayload): void {
-    if (!getOperatorLogSvc()) {
-        return;
-    }
     try {
         const socket = getInteractionSocket();
         if (!socket) {
@@ -59,12 +57,10 @@ export function emitVoiceInteraction(payload: VoiceInteractionPayload): void {
 
 /**
  * Emits a microphone lifecycle/health event record to the server logger.
- * No-op unless --log-svc.
+ * Runs whenever the operator interaction socket is set (SVC enabled) — voice
+ * JSONL logging is not gated by the voice_input_recording feature flag.
  */
 export function emitMicEvent(payload: MicEventPayload): void {
-    if (!getOperatorLogSvc()) {
-        return;
-    }
     try {
         const socket = getInteractionSocket();
         if (!socket) {
@@ -78,15 +74,13 @@ export function emitMicEvent(payload: MicEventPayload): void {
 
 /**
  * Emits a general VoiceCommandAssistant console log to the server logger.
- * No-op unless --log-svc.
+ * Runs whenever the operator interaction socket is set (SVC enabled) — voice
+ * JSONL logging is not gated by the voice_input_recording feature flag.
  */
 export function emitVoiceAssistantLog(
     log: string,
     meta?: { item_id?: string; audio_start_ms?: number; audio_end_ms?: number },
 ): void {
-    if (!getOperatorLogSvc()) {
-        return;
-    }
     try {
         const socket = getInteractionSocket();
         if (!socket) {
@@ -104,11 +98,12 @@ export function emitVoiceAssistantLog(
 }
 
 /**
- * Uploads a pre-gate mic PCM clip for server-side Opus encoding.
- * No-op unless --log-svc.
+ * Uploads a pre-gate mic PCM clip for server-side Opus (mp3-style
+ * audio-snippet) encoding. No-op unless the voice_input_recording feature
+ * flag is enabled.
  */
 export function emitVoiceAudioClip(payload: VoiceAudioClipPayload): void {
-    if (!getOperatorLogSvc()) {
+    if (!getOperatorVoiceInputRecording()) {
         return;
     }
     try {

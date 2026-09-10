@@ -2,5 +2,9 @@
     "voice_control_interface": {
         "enabled": false,
         "description": "Voice control for the web interface: OpenAI Realtime session, operator microphone capture, and the voice tool runners that dispatch robot motion."
+    },
+    "voice_input_recording": {
+        "enabled": false,
+        "description": "Records Opus (mp3-style) audio-snippet clips of voice control inputs. Does not gate the voice JSONL interaction/mic/transcribe logs, which always run when voice_control_interface is enabled."
     }
 }

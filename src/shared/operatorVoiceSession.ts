@@ -7,8 +7,12 @@ let operatorVoiceSessionToken: string | undefined;
 /** Whether the signaling server registered its SVC routes for this session. */
 // @flag voice_control_interface
 let operatorVoiceSvc = false;
-/** Server LOG_SVC — voice JSONL + pre-gate uplink Opus clips (--log-svc). */
-let operatorLogSvc = false;
+/**
+ * Server `voice_input_recording` feature flag — pre-gate uplink Opus (mp3)
+ * audio-snippet clips. Does not gate voice JSONL logging, which always runs
+ * whenever SVC is enabled.
+ */
+let operatorVoiceInputRecording = false;
 /**
  * Operator signaling socket (join_as_operator). SVC log/clip emits must use this
  * so server can gate voice_audio_clip on oper_sock — not a second io() client.
@@ -49,12 +53,12 @@ export function isVoiceControlEnabled(): boolean {
     );
 }
 
-export function setOperatorLogSvc(enabled: boolean): void {
-    operatorLogSvc = Boolean(enabled);
+export function setOperatorVoiceInputRecording(enabled: boolean): void {
+    operatorVoiceInputRecording = Boolean(enabled);
 }
 
-export function getOperatorLogSvc(): boolean {
-    return operatorLogSvc;
+export function getOperatorVoiceInputRecording(): boolean {
+    return operatorVoiceInputRecording;
 }
 
 export function setOperatorInteractionSocket(socket: Socket | null): void {

@@ -58,6 +58,13 @@ const isVoiceControlEnabled = isEnabled("voice_control_interface");
 /** Set only when SVC is enabled; guard every use with isVoiceControlEnabled. */
 let voiceSessionAuth;
 
+// @flag voice_input_recording
+// Read once, same rationale as isVoiceControlEnabled. Gates only the
+// operator's Opus (mp3-style) audio-snippet clip session — voice JSONL
+// logging always runs whenever SVC is enabled.
+const isVoiceInputRecordingEnabled =
+    isVoiceControlEnabled && isEnabled("voice_input_recording");
+
 if (isVoiceControlEnabled) {
     // Required lazily so the OpenAI Realtime client and the voice session
     // token store never load when the flag is off.
@@ -98,7 +105,7 @@ if (isVoiceControlEnabled) {
 }
 
 function beginOperatorClipSession() {
-    if (!isVoiceControlEnabled || process.env.LOG_SVC !== "1") {
+    if (!isVoiceInputRecordingEnabled) {
         return;
     }
     setClipSession(crypto.randomBytes(16).toString("hex"));
@@ -165,8 +172,9 @@ io.on("connection", function (socket) {
                         voiceSessionToken: voiceSessionAuth.issueToken(
                             socket.id
                         ),
-                        // Operator SVC voice JSONL + Opus clips when launch used --log-svc
-                        logSvc: process.env.LOG_SVC === "1",
+                        // @flag voice_input_recording
+                        // Opus (mp3-style) audio-snippet clip recording for this operator session.
+                        voiceInputRecording: isVoiceInputRecordingEnabled,
                     });
                 } else {
                     callback({ success: true });

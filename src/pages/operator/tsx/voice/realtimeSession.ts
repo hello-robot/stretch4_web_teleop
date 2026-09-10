@@ -5,7 +5,7 @@
  */
 
 import {
-    getOperatorLogSvc,
+    getOperatorVoiceInputRecording,
     getOperatorVoiceSessionToken,
 } from "shared/operatorVoiceSession";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
@@ -773,14 +773,14 @@ export async function connectOpenAIRealtimeVoice(
      * speech_started cannot overwrite the join.
      */
     let lastTranscriptItemId = "";
-    const logSvc = getOperatorLogSvc();
+    const voiceInputRecording = getOperatorVoiceInputRecording();
 
-    /** item_id → uplink ring mark (speech_started). Only when --log-svc. */
-    const uplinkMarks = logSvc
+    /** item_id → uplink ring mark (speech_started). Only when voice_input_recording is on. */
+    const uplinkMarks = voiceInputRecording
         ? new Map<string, UplinkRingMark>()
         : undefined;
-    /** item_id → VAD start/end ms. Only when --log-svc. */
-    const audioMetaByItem = logSvc
+    /** item_id → VAD start/end ms. Only when voice_input_recording is on. */
+    const audioMetaByItem = voiceInputRecording
         ? new Map<string, { audio_start_ms?: number; audio_end_ms?: number }>()
         : undefined;
     const AUDIO_META_CAP = 32;
@@ -920,7 +920,7 @@ export async function connectOpenAIRealtimeVoice(
         onGateChange: (gateOpen: boolean, level: number) => {
             opts.onMicLevel?.(level, gateOpen);
         },
-        recordUplink: logSvc,
+        recordUplink: voiceInputRecording,
     });
 
     micGate = await createMicLevelGate(inputStream, micGateOptions());
@@ -1440,10 +1440,10 @@ export async function connectOpenAIRealtimeVoice(
         }
         const completedItemId =
             itemId !== "_default" ? itemId : lastTranscriptItemId;
-        const meta = logSvc ? getAudioMeta(completedItemId) : undefined;
+        const meta = voiceInputRecording ? getAudioMeta(completedItemId) : undefined;
         opts.onLog?.(
             `[Realtime] user transcript: ${transcript.slice(0, 160)}`,
-            logSvc && completedItemId
+            voiceInputRecording && completedItemId
                 ? {
                       item_id: completedItemId,
                       audio_start_ms: meta?.audio_start_ms,
@@ -1525,7 +1525,7 @@ export async function connectOpenAIRealtimeVoice(
             //
         }
 
-        const toolItemId = logSvc
+        const toolItemId = voiceInputRecording
             ? lastTranscriptItemId || undefined
             : undefined;
         const toolMeta = getAudioMeta(toolItemId);
@@ -1550,7 +1550,7 @@ export async function connectOpenAIRealtimeVoice(
     };
 
     const handleVadSpeechEvents = (blob: Record<string, unknown>, eventType: string) => {
-        if (!logSvc || !audioMetaByItem || !uplinkMarks) {
+        if (!voiceInputRecording || !audioMetaByItem || !uplinkMarks) {
             return;
         }
         if (eventType === "input_audio_buffer.speech_started") {
@@ -1571,7 +1571,7 @@ export async function connectOpenAIRealtimeVoice(
                     : {}),
             });
             pruneAudioMetaIfNeeded();
-            if (logSvc && micGate && !micGate.forceClosed) {
+            if (voiceInputRecording && micGate && !micGate.forceClosed) {
                 const mark = micGate.markUplink(VOICE_CLIP_START_LOOKBACK_MS);
                 if (mark) {
                     uplinkMarks.set(itemId, mark);
@@ -1600,7 +1600,7 @@ export async function connectOpenAIRealtimeVoice(
         };
         audioMetaByItem.set(itemId, meta);
 
-        if (!logSvc || !micGate || micGate.forceClosed) {
+        if (!voiceInputRecording || !micGate || micGate.forceClosed) {
             uplinkMarks.delete(itemId);
             return;
         }
@@ -1656,7 +1656,7 @@ export async function connectOpenAIRealtimeVoice(
             eventType === "input_audio_buffer.speech_started" ||
             eventType === "input_audio_buffer.speech_stopped"
         ) {
-            if (logSvc) {
+            if (voiceInputRecording) {
                 handleVadSpeechEvents(blob, eventType);
             }
             return;
