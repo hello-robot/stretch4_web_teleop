@@ -1,20 +1,21 @@
-import "home/css/SideBySideView.css";
-import React, { useEffect, useState } from "react";
-import { isTablet, isBrowser } from "react-device-detect";
-import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid2";
 import AppBar from "@mui/material/AppBar";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Grid from "@mui/material/Grid2";
+import Snackbar from "@mui/material/Snackbar";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import Snackbar from "@mui/material/Snackbar";
-import { Changelog } from "./Changelog";
-import { CallRobotSelector } from "./CallRobotSelector";
+import "home/css/SideBySideView.css";
+import React, { useState } from "react";
+import { isBrowser, isTablet } from "react-device-detect";
 import { loginHandler } from "../index";
+import { CallRobotSelector } from "./CallRobotSelector";
+import { UserMaps } from "./UserMaps";
 
 export const SideBySideView = (props) => {
     const [openFailureToast, setOpenFailureToast] = useState(false);
     const [failureToastMessage, setfailureToastMessage] = useState("");
+    const [selectedMap, setSelectedMap] = useState<string | null>(null);
 
     const handleLogout = () => {
         loginHandler.logout().catch((error) => {
@@ -34,7 +35,7 @@ export const SideBySideView = (props) => {
                         component="div"
                         sx={{ flexGrow: 1 }}
                     >
-                        Stretch Web Teleop
+                        Stretch Web Interface
                     </Typography>
                     <Button color="inherit" onClick={handleLogout}>
                         Logout
@@ -48,12 +49,15 @@ export const SideBySideView = (props) => {
                 className="sbs-container"
             >
                 <Grid size={{ md: 12, lg: 6 }}>
-                    <Changelog
+                    <UserMaps
+                        selectedMap={selectedMap}
+                        onSelectMap={setSelectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>
                 <Grid size={{ md: 12, lg: 6 }}>
                     <CallRobotSelector
+                        selectedMap={selectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>
@@ -78,7 +82,7 @@ export const SideBySideView = (props) => {
                         component="div"
                         sx={{ flexGrow: 1 }}
                     >
-                        Stretch Web Teleop
+                        Stretch Web Interface
                     </Typography>
                     <Button color="inherit" onClick={handleLogout}>
                         Logout
@@ -88,11 +92,14 @@ export const SideBySideView = (props) => {
             <Grid container spacing={2} className="sbs-container">
                 <Grid size={12}>
                     <CallRobotSelector
+                        selectedMap={selectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>
                 <Grid size={12}>
-                    <Changelog
+                    <UserMaps
+                        selectedMap={selectedMap}
+                        onSelectMap={setSelectedMap}
                         style={{ height: "500px", maxHeight: "500px" }}
                     />
                 </Grid>

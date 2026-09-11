@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 const { firefox } = require("playwright");
 const chalk = require("chalk");
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const logId = "start_robot_browser.js";
 
 // You may want to change this to test that the
@@ -9,6 +11,11 @@ let robotHostname = "localhost"; // or NGROK_URL
 if (process.argv.length > 2) {
     robotHostname = process.argv[2];
 }
+
+const fleetId = process.env.HELLO_FLEET_ID || "unknown";
+const roboUser = process.env.roboUsername || "";
+const roboPass = process.env.roboPassword || "";
+const urlParams = `?fleet_id=${fleetId}&user=${encodeURIComponent(roboUser)}&pass=${encodeURIComponent(roboPass)}`;
 
 const listenConsole = async (page) => {
     // make args accessible
@@ -81,7 +88,7 @@ const listenConsole = async (page) => {
 
     while (try_again) {
         try {
-            await page.goto(`https://${robotHostname}/robot`);
+            await page.goto(`https://${robotHostname}/robot${urlParams}`);
             console.log(logId + ": finished loading");
             try_again = false;
         } catch (e) {
