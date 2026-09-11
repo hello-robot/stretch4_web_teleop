@@ -4,11 +4,14 @@ import { createRoot, Root } from "react-dom/client";
 import { cmd } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
 import {
+    apertureTravel,
     delay,
+    GRIPPER_INCREMENT_RANGE_FRACTION,
     parseToolMetadata,
     RemoteStream,
     ROSOccupancyGrid,
     ToolMetadata,
+    updateJointIncrements,
     waitUntil,
     WebRTCMessage
 } from "shared/util";
@@ -104,6 +107,13 @@ export function subscribeToolMetadata(
 
 function setToolMetadata(newToolMetadata: ToolMetadata) {
     toolMetadata = newToolMetadata;
+    // Size one step-action click as a fraction of the attached tool's travel.
+    const travel = apertureTravel(newToolMetadata.apertureRange);
+    if (travel !== undefined) {
+        updateJointIncrements({
+            gripper_joint: travel * GRIPPER_INCREMENT_RANGE_FRACTION,
+        });
+    }
     toolMetadataListeners.forEach((listener) => listener(newToolMetadata));
 }
 

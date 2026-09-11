@@ -13,15 +13,19 @@ import {
 import {
     ActionState,
     ActionStatusList,
+    apertureTravel,
     DiagnosticArray,
     getPlaybackJointVelocities,
     getPlaybackJointVelocity,
+    GRIPPER_VELOCITY_RANGE_FRACTION,
+    MAX_VELOCITY_SCALE,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
+    updateJointVelocities,
     ValidJoints,
     VideoProps
 } from "shared/util";
@@ -139,6 +143,8 @@ export class Robot extends React.Component {
     private seedLocalizationService?: Service;
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
+    private gripperApertureRange?: [number, number];
+    private gripperVelocityLimit?: number;
     private stretchParamsReady: Promise<void> = Promise.resolve();
 
     constructor(props: {
@@ -568,11 +574,26 @@ export class Robot extends React.Component {
             });
         });
 
-        // Guard against a Param.get() that never calls back (e.g. the
-        // parameter doesn't exist yet on the robot) so getStretchTool()
-        // can't hang forever waiting on this promise.
+        const gripperRangeReady = new Promise<void>((resolve) => {
+            new Param({
+                ros: this.ros,
+                name: "/stretch_driver:tool_info.aperture_range",
+            }).get((value: number[]) => {
+                if (apertureTravel(value) !== undefined) {
+                    this.gripperApertureRange = [value[0], value[1]];
+                    this.refreshGripperJogVelocity();
+                }
+                resolve();
+            });
+        });
+
+
         this.stretchParamsReady = Promise.race([
-            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => {}),
+            Promise.all([
+                stretchToolReady,
+                toolIsActuatedReady,
+                gripperRangeReady,
+            ]).then(() => { }),
             new Promise<void>((resolve) => setTimeout(resolve, 3000)),
         ]);
 
@@ -580,19 +601,84 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
+
+        // Real driver's per-joint velocity limits, from /stretch_driver:joint_velocity.* params
+        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
+            lift_joint: "lift",
+            arm_joint: "arm",
+            wrist_yaw_joint: "wrist_yaw",
+            wrist_pitch_joint: "wrist_pitch",
+            wrist_roll_joint: "wrist_roll",
+            gripper_joint: "gripper",
+            translate_mobile_base: "omnibase.linear",
+            rotate_mobile_base: "omnibase.angular",
+        };
+        for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
+            new Param({
+                ros: this.ros,
+                name: `/stretch_driver:joint_velocity.${paramKey}`,
+            }).get((value: number) => {
+                if (typeof value === "number" && value > 0) {
+                    if (rosJointName === "gripper_joint") {
+                        this.gripperVelocityLimit = value;
+                        this.refreshGripperJogVelocity();
+                        return;
+                    }
+                    this.jointVelocityLimits[rosJointName] = value;
+                    updateJointVelocities({ [rosJointName]: value });
+                    if (this.jointVelocityLimitsCallback) {
+                        this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Sets the gripper's base jog speed to a fixed fraction of the attached tool's own travel
+     * per second, clamped to stay under the driver's limit at the fastest speed setting.
+     *
+     */
+    private refreshGripperJogVelocity() {
+        const limit = this.gripperVelocityLimit;
+        const ceiling =
+            limit !== undefined && limit > 0 ? limit / MAX_VELOCITY_SCALE : undefined;
+
+        const travel = apertureTravel(this.gripperApertureRange);
+
+        let velocity: number | undefined;
+        if (travel !== undefined) {
+            velocity = travel * GRIPPER_VELOCITY_RANGE_FRACTION;
+        } else {
+            velocity = ceiling;
+        }
+        if (velocity === undefined) return;
+        if (ceiling !== undefined) velocity = Math.min(velocity, ceiling);
+
+        this.jointVelocityLimits["gripper_joint"] = velocity;
+        updateJointVelocities({ gripper_joint: velocity });
+        if (this.jointVelocityLimitsCallback) {
+            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+        }
     }
 
     isToolActuated(): boolean {
         return this.toolIsActuated;
     }
 
+    getGripperApertureRange(): [number, number] | undefined {
+        return this.gripperApertureRange;
+    }
+
     async getStretchTool() {
-        // Wait for the initial Param fetches so a request that arrives
-        // right after connecting reports the robot's real values instead
-        // of racing initStretchParams() and reading its hardcoded defaults.
         await this.stretchParamsReady;
         if (this.stretchToolCallback)
             this.stretchToolCallback(this.stretchToolName);
+    }
+
+    getJointVelocityLimits() {
+        if (this.jointVelocityLimitsCallback)
+            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
     }
 
     getOccupancyGrid() {

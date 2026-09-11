@@ -168,10 +168,11 @@ function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
     const isActuated = robot.isToolActuated();
+    const apertureRange = robot.getGripperApertureRange();
     connection.sendData({
         type: "stretchTool",
         value: value,
-        toolMetadata: parseToolMetadata(value, isActuated),
+        toolMetadata: parseToolMetadata(value, isActuated, apertureRange),
     } as StretchToolMessage);
 }
 

@@ -54,13 +54,34 @@ export interface KeyValue {
 export interface ToolMetadata {
     name: string;
     isActuated: boolean;
+    /**
+     * The attached tool's fingertip aperture bounds in meters, (closed, open) ascending, from
+     * the driver's tool_info.aperture_range. Sent as the range rather than a travel scalar:
+     * travel is just the width of it, and the bounds themselves are the only description of
+     * the gripper's extent the operator has.
+     */
+    apertureRange?: [number, number];
 }
 
-export function parseToolMetadata(toolName: string, isActuated?: boolean): ToolMetadata {
+export function parseToolMetadata(
+    toolName: string,
+    isActuated?: boolean,
+    apertureRange?: [number, number]
+): ToolMetadata {
     return {
         name: toolName || "unknown",
         isActuated: isActuated ?? true,
+        apertureRange,
     };
+}
+
+/** Width of a tool's aperture range, or undefined if it isn't a usable range. */
+export function apertureTravel(
+    range?: [number, number] | number[]
+): number | undefined {
+    if (!Array.isArray(range) || range.length !== 2) return undefined;
+    const travel = Math.abs(range[1] - range[0]);
+    return travel > 0 ? travel : undefined;
 }
 
 
@@ -261,10 +282,23 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     gripper_joint: 0.1,
 };
 
+export function updateJointVelocities(newVelocities: Record<string, number>) {
+    for (const [key, val] of Object.entries(newVelocities)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_VELOCITIES as Record<string, number>)[key] = val;
+        }
+    }
+}
+
+/**
+ * Default fallback jog increments. The gripper's is replaced at runtime with a fraction of
+ * the attached tool's aperture travel, since the right step depends on which tool is on the
+ * robot - see setToolMetadata() on the operator, which is the side that reads these.
+ */
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,
     head_pan_joint: 0.1,
-    gripper_joint: 0.1,
+    gripper_joint: 0.005,
     arm_joint: 0.1,
     lift_joint: 0.1,
     wrist_roll_joint: 0.1,
@@ -274,7 +308,36 @@ export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     rotate_mobile_base: 0.5,
 };
 
-const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
+export function updateJointIncrements(newIncrements: Record<string, number>) {
+    for (const [key, val] of Object.entries(newIncrements)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_INCREMENTS as Record<string, number>)[key] = val;
+        }
+    }
+}
+
+/**
+ * Republish period for continuous joint velocity commands, in ms.
+ */
+export const JOINT_VELOCITY_HEARTBEAT_MS = 50;
+
+/** Fraction of a tool's full travel that one jog click should cover. */
+export const GRIPPER_INCREMENT_RANGE_FRACTION = 0.1;
+
+/**
+ * Fraction of a tool's full travel the gripper should cover per second at speed scale 1
+ */
+export const GRIPPER_VELOCITY_RANGE_FRACTION = 0.25;
+
+/**
+ * Largest multiplier the interface's speed settings apply to a joint's base velocity
+ */
+export const MAX_VELOCITY_SCALE = 1.6;
+
+/**
+ * Joint speed multiplier applied while playing back a saved pose.
+ */
+const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;
 
 export function getPlaybackJointVelocity(jointName: ValidJoints): number {
     return (JOINT_VELOCITIES[jointName] || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;

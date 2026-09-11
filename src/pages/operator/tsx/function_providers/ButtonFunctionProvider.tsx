@@ -293,39 +293,20 @@ export class ButtonFunctionProvider extends FunctionProvider {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Increment for joint ${jointName} is undefined!`);
         }
 
+        const motion = getMotionTarget(buttonPadFunction, velocity);
+
         switch (FunctionProvider.actionMode) {
             case ActionModeType.StepActions:
-                switch (buttonPadFunction) {
-                    case ButtonPadButton.OmniForward:
-                    case ButtonPadButton.OmniBackward:
-                    case ButtonPadButton.BaseForward:
-                    case ButtonPadButton.BaseReverse:
-                        action = () => this.setBaseVelocity(velocity, 0.0, 0.0);
-                        break;
-                    case ButtonPadButton.StrafeLeft:
-                    case ButtonPadButton.StrafeRight:
-                        action = () => this.setBaseVelocity(0.0, velocity, 0.0);
-                        break;
-                    case ButtonPadButton.BaseRotateLeft:
-                    case ButtonPadButton.BaseRotateRight:
-                        action = () => this.setBaseVelocity(0.0, 0.0, velocity);
-                        break;
-                    case ButtonPadButton.ArmLower:
-                    case ButtonPadButton.ArmLift:
-                    case ButtonPadButton.ArmExtend:
-                    case ButtonPadButton.ArmRetract:
-                    case ButtonPadButton.WristRotateIn:
-                    case ButtonPadButton.WristRotateOut:
-                    case ButtonPadButton.WristPitchUp:
-                    case ButtonPadButton.WristPitchDown:
-                    case ButtonPadButton.WristRollLeft:
-                    case ButtonPadButton.WristRollRight:
-                    case ButtonPadButton.GripperOpen:
-                    case ButtonPadButton.GripperClose:
-                        action = () =>
+                action =
+                    motion.kind === "base"
+                        ? () =>
+                            this.setBaseVelocity(
+                                motion.x,
+                                motion.y,
+                                motion.theta
+                            )
+                        : () =>
                             this.incrementalJointMove(jointName, increment);
-                        break;
-                }
                 return {
                     onClick: () => {
                         action();
@@ -340,38 +321,16 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 };
             case ActionModeType.PressAndHold:
             case ActionModeType.ClickClick:
-                switch (buttonPadFunction) {
-                    case ButtonPadButton.OmniForward:
-                    case ButtonPadButton.OmniBackward:
-                    case ButtonPadButton.BaseForward:
-                    case ButtonPadButton.BaseReverse:
-                        action = () => this.setBaseVelocity(velocity, 0.0, 0.0);
-                        break;
-                    case ButtonPadButton.StrafeLeft:
-                    case ButtonPadButton.StrafeRight:
-                        action = () => this.setBaseVelocity(0.0, velocity, 0.0);
-                        break;
-                    case ButtonPadButton.BaseRotateLeft:
-                    case ButtonPadButton.BaseRotateRight:
-                        action = () => this.setBaseVelocity(0.0, 0.0, velocity);
-                        break;
-
-                    case ButtonPadButton.ArmLower:
-                    case ButtonPadButton.ArmLift:
-                    case ButtonPadButton.ArmExtend:
-                    case ButtonPadButton.ArmRetract:
-                    case ButtonPadButton.WristRotateIn:
-                    case ButtonPadButton.WristRotateOut:
-                    case ButtonPadButton.WristPitchUp:
-                    case ButtonPadButton.WristPitchDown:
-                    case ButtonPadButton.WristRollLeft:
-                    case ButtonPadButton.WristRollRight:
-                    case ButtonPadButton.GripperOpen:
-                    case ButtonPadButton.GripperClose:
-                        action = () =>
+                action =
+                    motion.kind === "base"
+                        ? () =>
+                            this.setBaseVelocity(
+                                motion.x,
+                                motion.y,
+                                motion.theta
+                            )
+                        : () =>
                             this.continuousJointMovement(jointName, velocity);
-                        break;
-                }
 
                 return FunctionProvider.actionMode ===
                     ActionModeType.PressAndHold
@@ -437,6 +396,40 @@ export class ButtonFunctionProvider extends FunctionProvider {
                         // onLeave: onLeave,
                     };
         }
+    }
+}
+
+
+type MotionTarget =
+    | { kind: "base"; x: number; y: number; theta: number }
+    | { kind: "joint" };
+
+/**
+ * Classifies a button pad button as either driving the base (returning its
+ * velocity components) or a joint
+ *
+ * @param buttonPadFunction the {@link ButtonPadButton}
+ * @param velocity the signed velocity to apply along the relevant base axis
+ * @returns the {@link MotionTarget} for the button
+ */
+function getMotionTarget(
+    buttonPadFunction: ButtonPadButton,
+    velocity: number
+): MotionTarget {
+    switch (buttonPadFunction) {
+        case ButtonPadButton.OmniForward:
+        case ButtonPadButton.OmniBackward:
+        case ButtonPadButton.BaseForward:
+        case ButtonPadButton.BaseReverse:
+            return { kind: "base", x: velocity, y: 0.0, theta: 0.0 };
+        case ButtonPadButton.StrafeLeft:
+        case ButtonPadButton.StrafeRight:
+            return { kind: "base", x: 0.0, y: velocity, theta: 0.0 };
+        case ButtonPadButton.BaseRotateLeft:
+        case ButtonPadButton.BaseRotateRight:
+            return { kind: "base", x: 0.0, y: 0.0, theta: velocity };
+        default:
+            return { kind: "joint" };
     }
 }
 
