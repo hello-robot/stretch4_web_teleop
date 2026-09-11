@@ -1,4 +1,10 @@
 var fs = require('fs');
+// OpenAI Realtime API
+const {
+    registerOpenAiRealtimeRoutes,
+} = require('./ai-gateway/openai-realtime-api');
+const voiceSessionAuth = require('./ai-gateway/voice-session-auth');
+
 require('dotenv').config();
 
 var options = {
@@ -33,7 +39,6 @@ server.listen(80);
 secure_server.listen(443);
 
 var path = require('path');
-app.use('/', express.static(path.join(__dirname, 'dist')));
 
 app.listen(process.env.port);
 
@@ -46,6 +51,26 @@ let robo_sock = undefined;
 let oper_sock = undefined;
 let protocol = undefined; // TODO(binit): ensure robot/operator protocol match
 let status = 'offline'; // ["online", "offline", "occupied"]
+
+/**
+ * Validate the voice session token.
+ *
+ * Extra security measures are implemented to ensure that
+ * only one operator on the socket connection will be
+ * authorized to mint a voice session token, and use the
+ * OpenAI Realtime API.
+ */
+registerOpenAiRealtimeRoutes(app, {
+    validateVoiceSession: (req) =>
+        voiceSessionAuth.validate(
+            req.get('X-Voice-Session-Token'),
+            oper_sock,
+            io,
+        ),
+});
+
+app.use('/', express.static(path.join(__dirname, 'dist')));
+
 function updateRooms() {
     io.emit('update_rooms', {
         robot_id: {
@@ -90,7 +115,11 @@ io.on('connection', function (socket) {
                 socket.in(ROOM).emit('joined');
                 oper_sock = socket.id;
                 console.log('join_as_operator SUCCESS');
-                callback({ success: true });
+                callback({
+                    success: true,
+                    voiceSessionToken:
+                        voiceSessionAuth.issueToken(socket.id),
+                });
             } else {
                 console.log(
                     'join_as_operator FAILURE: occupied by another operator'
@@ -126,6 +155,7 @@ io.on('connection', function (socket) {
             }
             if (socket.id == oper_sock) {
                 status = 'online';
+                voiceSessionAuth.revokeBySocket(socket.id);
                 oper_sock = undefined;
                 console.log('Operator disconnected');
             }
@@ -142,6 +172,7 @@ io.on('connection', function (socket) {
         }
         if (socket.id == oper_sock) {
             status = 'online';
+            voiceSessionAuth.revokeBySocket(socket.id);
             oper_sock = undefined;
             console.log('Operator disconnected');
         }

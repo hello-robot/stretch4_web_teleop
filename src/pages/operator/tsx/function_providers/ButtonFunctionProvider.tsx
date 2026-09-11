@@ -1,10 +1,11 @@
 import {
-    JOINT_VELOCITIES,
     JOINT_INCREMENTS,
+    JOINT_VELOCITIES,
     ValidJoints,
     ValidJointStateDict,
 } from "shared/util";
 import { ActionModeType } from "../utils/component_definitions";
+import { clampDurationMs } from "../voice/constants";
 import { FunctionProvider } from "./FunctionProvider";
 
 /**
@@ -221,6 +222,36 @@ export class ButtonFunctionProvider extends FunctionProvider {
     }
 
     /**
+     * Simulates press-and-hold on a ButtonPad for durationMs.
+     * Also, VC automatically sets ActionMode to PressAndHold.
+     */
+    public timedButtonPadPress(
+        buttonPadButton: ButtonPadButton,
+        durationMs: number,
+    ): boolean {
+        if (!FunctionProvider.remoteRobot) {
+            return false;
+        }
+
+        const clampedMs = clampDurationMs(durationMs);
+        this.stopCurrentAction(true);
+        this.timedVoiceMoveActive = true;
+        this.activeButtonPadFunction = buttonPadButton;
+
+        const functs = this.provideFunctions(buttonPadButton);
+        functs.onClick();
+
+        this.timedVoiceMoveTimer = setTimeout(() => {
+            this.timedVoiceMoveTimer = undefined;
+            this.timedVoiceMoveActive = false;
+            functs.onRelease?.();
+            this.setButtonInactiveState(buttonPadButton);
+            this.stopCurrentAction(true);
+        }, clampedMs);
+        return true;
+    }
+
+    /**
      * Takes a ButtonPadFunction which indicates the type of button (e.g. drive
      * base forward, lift arm), and returns a set of functions to execute when
      * the user interacts with the button.
@@ -246,7 +277,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             : 1;
         const velocity =
             multiplier *
-            JOINT_VELOCITIES[jointName] *
+            (JOINT_VELOCITIES[jointName] ?? 0.1) *
             FunctionProvider.velocityScale;
 
         if (velocity === undefined) {
@@ -255,7 +286,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
 
         const increment =
             multiplier *
-            JOINT_INCREMENTS[jointName] *
+            (JOINT_INCREMENTS[jointName] ?? 0.1) *
             FunctionProvider.velocityScale;
 
         if (increment === undefined) {

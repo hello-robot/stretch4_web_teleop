@@ -53,6 +53,14 @@ import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
+import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
+import type {
+    ControlAutoNavAction,
+    ControlAutoNavResult,
+    LoadAutoNavLocationResult,
+    SavedLocationsModalAction,
+    SetSavedLocationsModalResult,
+} from "./voice/constants";
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -113,7 +121,14 @@ export const MobileOperator = (props: {
     const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
         useState(false);
 
-
+    /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
+    const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
+    const registerAutoNavNavControls = React.useCallback(
+        (controls: AutoNavNavControls | null) => {
+            autoNavNavControlsRef.current = controls;
+        },
+        [],
+    );
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
@@ -176,7 +191,48 @@ export const MobileOperator = (props: {
         },
         [],
     );
-    const alertTimeoutDuration = 100; // milliseconds
+
+    const handleSetSavedLocationsModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saved Locations is only available in AutoNav",
+                };
+            }
+            isModalLocationsMenuVisibleSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Locations."
+                        : "Closed Saved Locations.",
+            };
+        },
+        [],
+    );
+
+    const handleControlAutoNav = React.useCallback(
+        (action: ControlAutoNavAction): ControlAutoNavResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav controls are only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return action === "start" ? controls.start() : controls.cancel();
+        },
+        [],
+    );
+
+    const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
@@ -324,7 +380,25 @@ export const MobileOperator = (props: {
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <Toasts toasts={toasts} toastsSet={toastsSet} />
-
+            <VoiceCommandAssistant
+                onVelocityScaleApplied={applyVelocityScale}
+                setActionMode={setActionMode}
+                addToast={addToast}
+                onSwitchScene={(scene) => {
+                    if (scene === "pilot") {
+                        swipeableViewsIdxSet(0);
+                        setSceneSelected("pilot-mode");
+                    } else {
+                        setSceneSelected("autonav");
+                        swipeableViewsIdxSet(1);
+                    }
+                }}
+                onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                onControlAutoNav={handleControlAutoNav}
+                onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
+                onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
+                onLoadAutoNavLocation={handleLoadAutoNavLocation}
+            />
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
@@ -396,7 +470,7 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-                            setVelocityScale={applyVelocityScale}
+                            onVelocityScaleChange={applyVelocityScale}
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
@@ -436,6 +510,9 @@ export const MobileOperator = (props: {
                             }
 
                             moveBaseState={moveBaseState}
+                            onRegisterAutoNavNavControls={
+                                registerAutoNavNavControls
+                            }
                         />
                     </div>
                 </SwipeableViews>

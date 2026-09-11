@@ -1,38 +1,41 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
-import { Robot } from "../../robot/tsx/robot";
-import { WebRTCConnection } from "../../../shared/webrtcconnections";
+import { Transform } from "roslib";
+import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
 import {
-    navigationProps,
-    gripperProps,
-    audioProps,
-    WebRTCMessage,
-    ValidJointStateDict,
-    ValidJointStateMessage,
-    ModeMessage,
-    IsHomedMessage,
-    IsRunStoppedMessage,
-    RobotPose,
-    ROSOccupancyGrid,
-    OccupancyGridMessage,
-    MapPoseMessage,
     ActionState,
     ActionStateMessage,
-    ROSBatteryState,
+    audioProps,
     BatteryVoltageMessage,
     delay,
+    gripperProps,
+    IsHomedMessage,
+    IsRunStoppedMessage,
+    MapPoseMessage,
+    ModeMessage,
+    navigationProps,
+    OccupancyGridMessage,
+    OdomMessage,
+    RobotPose,
+    ROSBatteryState,
+    ROSOccupancyGrid,
+    ROSOdometry,
+    ValidJointStateDict,
+    ValidJointStateMessage,
+    WebRTCMessage,
 } from "shared/util";
-import { AllVideoStreamComponent, VideoStream } from "./videostreams";
-import { AudioStream } from "./audiostreams";
-import { Transform } from "roslib";
 import { StretchToolMessage } from "../../../shared/util";
-import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
+import { WebRTCConnection } from "../../../shared/webrtcconnections";
+import { Robot } from "../../robot/tsx/robot";
+import { AudioStream } from "./audiostreams";
+import { AllVideoStreamComponent, VideoStream } from "./videostreams";
 
 export const robot = new Robot({
     jointStateCallback: forwardJointStates,
     batteryStateCallback: forwardBatteryState,
     occupancyGridCallback: forwardOccupancyGrid,
+    odomCallback: forwardOdom,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
     playbackPosesResultCallback: (goalState: ActionState) =>
@@ -42,6 +45,7 @@ export const robot = new Robot({
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
+    leaseStatusCallback: forwardLeaseStatus,
 });
 
 export let connection: WebRTCConnection;
@@ -149,6 +153,16 @@ function forwardIsRunStopped(isRunStopped: boolean) {
     } as IsRunStoppedMessage);
 }
 
+function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "leaseStatus",
+        holder: holder,
+        isDriverHolding: isDriverHolding,
+    } as LeaseStatusMessage);
+}
+
 function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
@@ -180,6 +194,15 @@ function forwardBatteryState(batteryState: ROSBatteryState) {
         type: "batteryVoltage",
         message: batteryState.voltage,
     } as BatteryVoltageMessage);
+}
+
+function forwardOdom(odom: ROSOdometry) {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "odom",
+        message: odom,
+    } as OdomMessage);
 }
 
 function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {

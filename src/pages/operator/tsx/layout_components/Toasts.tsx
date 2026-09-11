@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import genUUID from '../utils/genUUID';
+import { AnimatePresence, motion } from 'framer-motion';
+import React, { useCallback, useEffect, useState } from 'react';
 import '../../css/Toasts.css';
+import genUUID from '../utils/genUUID';
 
 export type ToastVariant = 'voice';
 
