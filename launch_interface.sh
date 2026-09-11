@@ -33,6 +33,25 @@ logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 logzip="$logdir/stretch4_web_teleop_logs.zip"
 mkdir -p $logdir
+# Stable pointer at this run's timestamped $logdir (mirrors ROS's own
+# ~/.ros/log/latest convention) so tools started outside this script — e.g.
+# `terminator -g tools/terminator/config`'s watch-* panes, which have no
+# REDIRECT_LOGDIR of their own — tail the current run instead of a stale one.
+ln -sfn "$logdir" "$HOME/stretch_user/log/web_teleop/latest_run"
+
+echo ""
+echo "#############################################"
+echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
+echo "#############################################"
+echo ""
+
+# Voice JSONL logs and audio-snippet clips (when voice_input_recording is
+# enabled) are written under this run's own timestamped $logdir — see
+# voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
+# in a separate persistent directory across runs, so there is no pre-run disk
+# usage to report here.
+web_teleop_du=$(du -sh "$HOME/stretch_user/log/web_teleop" 2>/dev/null | awk '{print $1}')
+echo -e "${BLUE}web_teleop logs total size:${NC} ${web_teleop_du:-0} in $HOME/stretch_user/log/web_teleop (not auto-purged; purge old run folders manually if desired)"
 
 # Validate web teleop installation
 function validate_installation {
@@ -149,6 +168,7 @@ function print_interface_urls {
 	  }'
 }
 
+echo ""
 echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"

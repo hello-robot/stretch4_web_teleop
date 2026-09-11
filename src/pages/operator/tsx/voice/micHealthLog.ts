@@ -8,6 +8,7 @@
  */
 
 import { MIC_HEALTH_STATUS_SLUG } from "./logTags";
+import { emitMicEvent } from "./voiceInteractionEmitter";
 
 export type MicHealthStatusEvent =
     | "User access granted"
@@ -19,4 +20,5 @@ export type MicHealthStatusEvent =
 
 export function logMicHealthStatus(event: MicHealthStatusEvent): void {
     console.log(`${MIC_HEALTH_STATUS_SLUG} ${event}`);
+    emitMicEvent({ event });
 }

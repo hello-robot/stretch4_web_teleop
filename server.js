@@ -1,6 +1,9 @@
 var fs = require("fs");
 const { isEnabled } = require("./feature-flags");
 
+const crypto = require("crypto");
+const { initVoiceInteractionLogger, setClipSession } = require("./voiceInteractionLogger");
+
 require("dotenv").config();
 
 var options = {
@@ -55,6 +58,13 @@ const isVoiceControlEnabled = isEnabled("voice_control_interface");
 /** Set only when SVC is enabled; guard every use with isVoiceControlEnabled. */
 let voiceSessionAuth;
 
+// @flag voice_input_recording
+// Read once, same rationale as isVoiceControlEnabled. Gates only the
+// operator's Opus (mp3-style) audio-snippet clip session — voice JSONL
+// logging always runs whenever SVC is enabled.
+const isVoiceInputRecordingEnabled =
+    isVoiceControlEnabled && isEnabled("voice_input_recording");
+
 if (isVoiceControlEnabled) {
     // Required lazily so the OpenAI Realtime client and the voice session
     // token store never load when the flag is off.
@@ -69,6 +79,13 @@ if (isVoiceControlEnabled) {
         );
     }
 
+    const validateVoiceSession = (req) =>
+        voiceSessionAuth.validate(
+            req.get("X-Voice-Session-Token"),
+            oper_sock,
+            io
+        );
+
     /**
      * Validate the voice session token.
      *
@@ -78,13 +95,27 @@ if (isVoiceControlEnabled) {
      * OpenAI Realtime API.
      */
     registerOpenAiRealtimeRoutes(app, {
-        validateVoiceSession: (req) =>
-            voiceSessionAuth.validate(
-                req.get("X-Voice-Session-Token"),
-                oper_sock,
-                io
-            ),
+        validateVoiceSession,
     });
+
+    initVoiceInteractionLogger(app, io, {
+        getOperatorSocketId: () => oper_sock,
+        validateVoiceSession,
+    });
+}
+
+function beginOperatorClipSession() {
+    if (!isVoiceInputRecordingEnabled) {
+        return;
+    }
+    setClipSession(crypto.randomBytes(16).toString("hex"));
+}
+
+function endOperatorClipSession() {
+    if (!isVoiceControlEnabled) {
+        return;
+    }
+    setClipSession(null);
 }
 
 app.use("/", express.static(path.join(__dirname, "dist")));
@@ -134,12 +165,16 @@ io.on("connection", function (socket) {
                 oper_sock = socket.id;
                 console.log("join_as_operator SUCCESS");
                 if (isVoiceControlEnabled) {
+                    beginOperatorClipSession();
                     callback({
                         success: true,
                         voiceSvc: true,
                         voiceSessionToken: voiceSessionAuth.issueToken(
                             socket.id
                         ),
+                        // @flag voice_input_recording
+                        // Opus (mp3-style) audio-snippet clip recording for this operator session.
+                        voiceInputRecording: isVoiceInputRecordingEnabled,
                     });
                 } else {
                     callback({ success: true });
@@ -181,6 +216,7 @@ io.on("connection", function (socket) {
                 status = "online";
                 if (isVoiceControlEnabled) {
                     voiceSessionAuth.revokeBySocket(socket.id);
+                    endOperatorClipSession();
                 }
                 oper_sock = undefined;
                 console.log("Operator disconnected");
@@ -200,6 +236,7 @@ io.on("connection", function (socket) {
             status = "online";
             if (isVoiceControlEnabled) {
                 voiceSessionAuth.revokeBySocket(socket.id);
+                endOperatorClipSession();
             }
             oper_sock = undefined;
             console.log("Operator disconnected");
