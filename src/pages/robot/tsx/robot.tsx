@@ -164,7 +164,6 @@ export class Robot extends React.Component {
     private gripperVelocityLimit?: number;
     private jointVelocityLimits: Record<string, number> = {};
     private stretchParamsReady: Promise<void> = Promise.resolve();
-    private jointVelocityLimits: Record<string, number> = {};
 
     constructor(props: {
         jointStateCallback: (
