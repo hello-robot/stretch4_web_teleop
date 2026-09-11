@@ -10,25 +10,26 @@ import {
     Topic,
     Transform,
 } from "roslib";
+import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
     getPlaybackJointVelocities,
     getPlaybackJointVelocity,
+    GRIPPER_INCREMENT_RANGE_FRACTION,
+    JOINT_VELOCITY_HEARTBEAT_MS,
+    JointVelocityLimits,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    JointVelocityLimits,
     SPEED_PROFILES,
     SpeedProfile,
-    updateJointVelocities,
     updateJointIncrements,
-    JOINT_VELOCITY_HEARTBEAT_MS,
-    GRIPPER_INCREMENT_RANGE_FRACTION,
+    updateJointVelocities,
     ValidJoints,
     VideoProps,
 } from "shared/util";
@@ -37,7 +38,6 @@ import {
     rosJointStatetoRobotPose,
     ValidJointStateDict
 } from "../../../shared/util";
-import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 const { createRosReconnectGuard } = require("./rosReconnectGuard");
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
