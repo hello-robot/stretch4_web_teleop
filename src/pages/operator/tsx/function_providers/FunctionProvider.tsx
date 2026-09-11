@@ -7,7 +7,7 @@ import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
-import { clampDurationMs } from "../voice/constants";
+import { clampTimedMoveMs } from "../utils/timed-move";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
 
 const x = PilotButtonPads;
@@ -131,7 +131,7 @@ export abstract class FunctionProvider {
             return false;
         }
 
-        const clampedMs = clampDurationMs(durationMs);
+        const clampedMs = clampTimedMoveMs(durationMs);
 
         this.stopCurrentAction(true);
         this.timedVoiceMoveActive = true;
@@ -184,7 +184,7 @@ export abstract class FunctionProvider {
             return false;
         }
 
-        const clampedMs = clampDurationMs(durationMs);
+        const clampedMs = clampTimedMoveMs(durationMs);
 
         this.stopCurrentAction(true);
         this.timedVoiceMoveActive = true;

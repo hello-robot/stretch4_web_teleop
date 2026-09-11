@@ -7,10 +7,8 @@
  */
 
 import { useSyncExternalStore } from "react";
-import {
-    logMicHealthStatus,
-    type VoiceListeningState,
-} from "./realtimeSession";
+import { logMicHealthStatus } from "./micHealthLog";
+import type { VoiceListeningState } from "./voiceWakeSleep";
 
 export type VoiceStatusSnapshot = {
     /** Realtime session is up. */

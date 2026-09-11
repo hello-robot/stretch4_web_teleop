@@ -5,7 +5,7 @@ import {
     ValidJointStateDict,
 } from "shared/util";
 import { ActionModeType } from "../utils/component_definitions";
-import { clampDurationMs } from "../voice/constants";
+import { clampTimedMoveMs } from "../utils/timed-move";
 import { FunctionProvider } from "./FunctionProvider";
 
 /**
@@ -233,7 +233,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             return false;
         }
 
-        const clampedMs = clampDurationMs(durationMs);
+        const clampedMs = clampTimedMoveMs(durationMs);
         this.stopCurrentAction(true);
         this.timedVoiceMoveActive = true;
         this.activeButtonPadFunction = buttonPadButton;

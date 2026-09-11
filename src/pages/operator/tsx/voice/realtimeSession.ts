@@ -21,6 +21,8 @@ import {
     type SaveMapLocationResult,
 } from "./executeSaveMapLocation";
 import { matchSavedLocation } from "./matchSavedLocation";
+import { logMicHealthStatus } from "./micHealthLog";
+import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
 import {
     EXECUTE_BASE_MOVE,
     EXECUTE_JOINT_MOVE,
@@ -35,7 +37,6 @@ import {
     MAIN_MENU_ACTIONS,
     AUTONAV_NAV_ACTIONS,
     isPlaceholderArgs,
-    MIC_HEALTH_STATUS_SLUG,
     NO_ARG_VOICE_TOOLS,
     STOP_MOTION,
     type ExecuteToolResult,
@@ -59,7 +60,6 @@ import {
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
 } from "./constants";
-import { createMicLevelGate, type MicLevelGate } from "./micLevelGate";
 import { bumpVoiceCommandActivity } from "./voiceCommandActivity";
 import {
     createVoiceWakeSleep,
@@ -72,22 +72,10 @@ import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
 const OAI_REALTIME_AUDIO_PATH = "/v1/realtime/calls";
 const OAI_REALTIME_HC = "https://api.openai.com";
 
-export type MicHealthStatusEvent =
-    | "User access granted"
-    | "User access rejected"
-    | "Connected"
-    | "Disconnected"
-    | "Muted"
-    | "Unmuted";
-
 /** Last logged privilege — avoids spam on connect-retry after denial. */
 let lastMicPrivilege: "granted" | "rejected" | null = null;
 /** Last logged capture connectedness (live input track). */
 let lastMicCaptureConnected: boolean | null = null;
-
-export function logMicHealthStatus(event: MicHealthStatusEvent): void {
-    console.log(`${MIC_HEALTH_STATUS_SLUG} ${event}`);
-}
 
 function logMicPrivilege(granted: boolean): void {
     const next = granted ? "granted" : "rejected";

@@ -1,4 +1,5 @@
 import React, { PointerEventHandler, useState } from "react";
+import { isVoiceControlEnabled } from "shared/operatorVoiceSession";
 import {
     ActionModeType,
     ButtonPadIdMobile,
@@ -53,7 +54,6 @@ import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
-import VoiceCommandAssistant from "./static_components/VoiceCommandAssistant";
 import type {
     ControlAutoNavAction,
     ControlAutoNavResult,
@@ -63,6 +63,14 @@ import type {
     SetMainMenuResult,
     SetSavedLocationsModalResult,
 } from "./voice/constants";
+
+// @flag voice_control_interface
+// Loaded lazily so the Realtime session, microphone capture, and the voice
+// tool runners stay out of the operator bundle's initial chunk. The chunk is
+// never requested while isVoiceControlEnabled() is false.
+const VoiceCommandAssistant = React.lazy(
+    () => import("./static_components/VoiceCommandAssistant")
+);
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -397,29 +405,37 @@ export const MobileOperator = (props: {
         return show ? <ControlModes key={"control-modes"} /> : <></>;
     };
 
+    // @flag voice_control_interface
+    const voiceSvc = isVoiceControlEnabled();
+
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <Toasts toasts={toasts} toastsSet={toastsSet} />
-            <VoiceCommandAssistant
-                onVelocityScaleApplied={applyVelocityScale}
-                setActionMode={setActionMode}
-                addToast={addToast}
-                onSwitchScene={(scene) => {
-                    if (scene === "pilot") {
-                        swipeableViewsIdxSet(0);
-                        setSceneSelected("pilot-mode");
-                    } else {
-                        setSceneSelected("autonav");
-                        swipeableViewsIdxSet(1);
-                    }
-                }}
-                onSetSavedLocationsModal={handleSetSavedLocationsModal}
-                onSetMainMenu={handleSetMainMenu}
-                onControlAutoNav={handleControlAutoNav}
-                onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
-                onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
-                onLoadAutoNavLocation={handleLoadAutoNavLocation}
-            />
+            {/* @flag voice_control_interface */}
+            {voiceSvc ? (
+                <React.Suspense fallback={null}>
+                    <VoiceCommandAssistant
+                        onVelocityScaleApplied={applyVelocityScale}
+                        setActionMode={setActionMode}
+                        addToast={addToast}
+                        onSwitchScene={(scene) => {
+                            if (scene === "pilot") {
+                                swipeableViewsIdxSet(0);
+                                setSceneSelected("pilot-mode");
+                            } else {
+                                setSceneSelected("autonav");
+                                swipeableViewsIdxSet(1);
+                            }
+                        }}
+                        onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                        onSetMainMenu={handleSetMainMenu}
+                        onControlAutoNav={handleControlAutoNav}
+                        onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
+                        onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
+                        onLoadAutoNavLocation={handleLoadAutoNavLocation}
+                    />
+                </React.Suspense>
+            ) : null}
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
