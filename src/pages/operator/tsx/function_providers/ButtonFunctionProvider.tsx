@@ -280,22 +280,10 @@ export class ButtonFunctionProvider extends FunctionProvider {
             (JOINT_VELOCITIES[jointName] ?? 0.1) *
             FunctionProvider.velocityScale;
 
-        if (velocity === undefined) {
-            throw new Error(`ButtonFunctionProvider::provideFunctions: Velocity for joint ${jointName} is undefined!`);
-        }
-        const velocity =
-            multiplier * jointVelocity * FunctionProvider.velocityScale;
-
         const increment =
             multiplier *
             (JOINT_INCREMENTS[jointName] ?? 0.1) *
             FunctionProvider.velocityScale;
-
-        if (increment === undefined) {
-            throw new Error(`ButtonFunctionProvider::provideFunctions: Increment for joint ${jointName} is undefined!`);
-        }
-        const increment =
-            multiplier * jointIncrement * FunctionProvider.velocityScale;
 
         const motion = getMotionTarget(buttonPadFunction, velocity);
 
