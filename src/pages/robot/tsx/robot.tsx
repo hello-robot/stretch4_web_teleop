@@ -803,7 +803,7 @@ export class Robot extends React.Component {
     createCmdVelTopic(use_vel_nav: boolean = true) {
         this.cmdVelTopic = new Topic({
             ros: this.ros,
-            name: use_vel_nav ? "/cmd_vel_nav" : "/cmd_vel",
+            name: use_vel_nav ? "/teleop/cmd_vel_nav" : "/teleop/cmd_vel",
             messageType: "geometry_msgs/Twist",
         });
     }
@@ -811,7 +811,7 @@ export class Robot extends React.Component {
     createJointVelTopic() {
         this.jointVelTopic = new Topic({
             ros: this.ros,
-            name: "/joint_vel",
+            name: "/teleop/joint_vel",
             messageType: "control_msgs/JointJog",
         });
     }
