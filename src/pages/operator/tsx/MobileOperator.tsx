@@ -170,6 +170,19 @@ export const MobileOperator = (props: {
         [],
     );
 
+    const handleSetSavedPosesModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            movementRecorderFunctionProvider.setModalOpen(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Poses."
+                        : "Closed Saved Poses.",
+            };
+        },
+        [],
+    );
 
     /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
     const handleCancelAutoNavOnStop =
@@ -428,6 +441,7 @@ export const MobileOperator = (props: {
                             }
                         }}
                         onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                        onSetSavedPosesModal={handleSetSavedPosesModal}
                         onSetMainMenu={handleSetMainMenu}
                         onControlAutoNav={handleControlAutoNav}
                         onCancelAutoNavOnStop={handleCancelAutoNavOnStop}

@@ -323,7 +323,8 @@ const RecordingItem: React.FC<RecordingItemProps> = ({
             **************************/}
             <Flex gap={10} flex={1} align="center">
                 <button
-                    onPointerDown={handlePlay}
+                    type="button"
+                    onClick={handlePlay}
                     className="button-playback"
                     disabled={isDisabled}
                 >

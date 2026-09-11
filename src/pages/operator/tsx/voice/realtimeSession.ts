@@ -24,6 +24,11 @@ import {
     executeSaveMapLocation,
     type SaveMapLocationResult,
 } from "./executeSaveMapLocation";
+import {
+    executeMoveToPose,
+    executeSavePose,
+    executeSetSavedPosesModal,
+} from "./executePoseCommands";
 import { matchSavedLocation } from "./matchSavedLocation";
 import { logMicHealthStatus } from "./micHealthLog";
 import {
@@ -41,6 +46,9 @@ import {
     SET_MAIN_MENU,
     CONTROL_AUTONAV,
     LOAD_AUTONAV_LOCATION,
+    SET_SAVED_POSES_MODAL,
+    SAVE_POSE,
+    MOVE_TO_POSE,
     SAVED_LOCATIONS_MODAL_ACTIONS,
     MAIN_MENU_ACTIONS,
     AUTONAV_NAV_ACTIONS,
@@ -53,6 +61,10 @@ import {
     type ExecuteToolResult,
     type SavedLocationsModalAction,
     type SetSavedLocationsModalResult,
+    type SavedPosesModalAction,
+    type SetSavedPosesModalResult,
+    type SavePoseResult,
+    type MoveToPoseResult,
     type MainMenuAction,
     type SetMainMenuResult,
     type ControlAutoNavAction,
@@ -691,6 +703,13 @@ export type RealtimeVoiceConnectOptions = {
     onLoadAutoNavLocation?: (poseName: string) => LoadAutoNavLocationResult;
     /** Asleep/awake listening mode (wake/sleep phrases). */
     onListeningState?: (state: VoiceListeningState) => void;
+    /** Programmatically open or close Saved Poses / Movement Recorder modal */
+    onSetSavedPosesModal?: (
+        action: SavedPosesModalAction,
+    ) => SetSavedPosesModalResult;
+    onSetSavedPosesModalFeedback?: (result: SetSavedPosesModalResult) => void;
+    onSavePoseFeedback?: (result: SavePoseResult) => void;
+    onMoveToPoseFeedback?: (result: MoveToPoseResult) => void;
 };
 
 export type ActiveRealtimeVoiceSession = {
@@ -958,7 +977,9 @@ export async function connectOpenAIRealtimeVoice(
      * stop motion, asleep, muted.
      */
     const resetSvcToSafeDefaults = () => {
-        executeStopMotionOnProvider(opts.voiceProvider);
+        executeStopMotionOnProvider(opts.voiceProvider, {
+            cancelAutoNav: opts.onCancelAutoNavOnStop,
+        });
         voiceWakeSleep?.sleep("disconnect");
         micMutedIntent = true;
         micGate?.setForceClosed(true);
@@ -1138,7 +1159,7 @@ export async function connectOpenAIRealtimeVoice(
         (
             voiceProvider: ButtonFunctionProvider,
             fc: ExtractedFnCall,
-        ) => ExecuteToolResult
+        ) => ExecuteToolResult | Promise<ExecuteToolResult>
     > = {
         execute_base_move: (voiceProvider, fc) => {
             let rawArgs: Record<string, unknown>;
@@ -1171,8 +1192,13 @@ export async function connectOpenAIRealtimeVoice(
             return executeJointMoveOnProvider(voiceProvider, rawArgs);
         },
         stop_motion: (voiceProvider) => {
-            const stopResult = executeStopMotionOnProvider(voiceProvider);
-            const cancelResult = opts.onCancelAutoNavOnStop?.();
+            let cancelResult: ControlAutoNavResult | undefined;
+            const stopResult = executeStopMotionOnProvider(voiceProvider, {
+                cancelAutoNav: () => {
+                    cancelResult = opts.onCancelAutoNavOnStop?.();
+                    return cancelResult ?? { ok: false };
+                },
+            });
             if (cancelResult?.ok) {
                 return {
                     ok: true,
@@ -1386,6 +1412,24 @@ export async function connectOpenAIRealtimeVoice(
             }
             return tryLoadAutoNavLocationLabel(label, "tool");
         },
+        set_saved_poses_modal: (_voiceProvider, fc) => {
+            const res = executeSetSavedPosesModal(
+                fc.arguments,
+                opts.onSetSavedPosesModal,
+            );
+            opts.onSetSavedPosesModalFeedback?.(res);
+            return res;
+        },
+        save_pose: async (_voiceProvider, fc) => {
+            const res = await executeSavePose(fc.arguments, opts.voiceProvider);
+            opts.onSavePoseFeedback?.(res);
+            return res;
+        },
+        move_to_pose: (_voiceProvider, fc) => {
+            const res = executeMoveToPose(fc.arguments);
+            opts.onMoveToPoseFeedback?.(res);
+            return res;
+        },
     };
 
     /** `item_id` → accumulated transcript from streaming deltas. */
@@ -1508,7 +1552,7 @@ export async function connectOpenAIRealtimeVoice(
                 detail: `Unknown tool: ${fc.name}`,
                 ignored: true,
             }
-            : voiceToolRunners[fc.name](opts.voiceProvider, fc);
+            : await voiceToolRunners[fc.name](opts.voiceProvider, fc);
 
         if (result.ok) {
             bumpVoiceCommandActivity();
@@ -1688,8 +1732,9 @@ export async function connectOpenAIRealtimeVoice(
                     opts.onLog?.(
                         `[Realtime] Fast-path stop triggered by transcript: "${transcript.trim()}"`,
                     );
-                    executeStopMotionOnProvider(opts.voiceProvider);
-                    opts.onCancelAutoNavOnStop?.();
+                    executeStopMotionOnProvider(opts.voiceProvider, {
+                        cancelAutoNav: opts.onCancelAutoNavOnStop,
+                    });
                 }
             }
             return;
