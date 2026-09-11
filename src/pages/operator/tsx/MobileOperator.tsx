@@ -58,7 +58,9 @@ import type {
     ControlAutoNavAction,
     ControlAutoNavResult,
     LoadAutoNavLocationResult,
+    MainMenuAction,
     SavedLocationsModalAction,
+    SetMainMenuResult,
     SetSavedLocationsModalResult,
 } from "./voice/constants";
 
@@ -121,6 +123,9 @@ export const MobileOperator = (props: {
     const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
         useState(false);
 
+    // Main Menu (owned here so voice can open/close via Realtime tool)
+    const [isMainMenuOpen, isMainMenuOpenSet] = useState(false);
+
     /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
     const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
     const registerAutoNavNavControls = React.useCallback(
@@ -142,6 +147,21 @@ export const MobileOperator = (props: {
             isModalLocationsMenuVisibleSet(false);
         }
     }, [sceneSelected]);
+
+    const handleSetMainMenu = React.useCallback(
+        (action: MainMenuAction): SetMainMenuResult => {
+            isMainMenuOpenSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Main Menu."
+                        : "Closed Main Menu.",
+            };
+        },
+        [],
+    );
+
 
     /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
     const handleCancelAutoNavOnStop =
@@ -394,6 +414,7 @@ export const MobileOperator = (props: {
                     }
                 }}
                 onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                onSetMainMenu={handleSetMainMenu}
                 onControlAutoNav={handleControlAutoNav}
                 onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
                 onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
@@ -520,6 +541,8 @@ export const MobileOperator = (props: {
                     swipeableViewsIdxSet={swipeableViewsIdxSet}
                     sceneSelected={sceneSelected}
                     onSceneSelectedChange={setSceneSelected}
+                    isMainMenuOpen={isMainMenuOpen}
+                    isMainMenuOpenSet={isMainMenuOpenSet}
                 />
             </div>
         </div>
