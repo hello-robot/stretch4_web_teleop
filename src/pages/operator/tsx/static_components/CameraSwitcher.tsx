@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import ModalMobile from "../basic_components/ModalMobile";
+import { useDismissTimeout } from "../react_hooks/useDismissTimeout";
+import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import MagneticWrapper from "./MagneticWrapper";
 import "operator/css/CameraSwitcher.css";
 import { CameraViewId, OverheadCameraID } from "../utils/component_definitions";
@@ -62,6 +64,16 @@ export const CameraSwitcher: React.FC<MenuCameraSelectProps> = ({
     setCameraVeilCallback,
 }) => {
     const [isModalOpen, isModalOpenSet] = useState<boolean>(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(
+        "cameraSwitcher",
+        isModalOpen,
+        () => {
+            isModalOpenSet(false);
+            setCameraVeilCallback(false);
+        },
+        { restoreVeil: setCameraVeilCallback },
+    );
     const [cameraID, setCameraID] = useState<OverheadCameraID>(OverheadCameraID.right);
 
     return (
@@ -111,6 +123,8 @@ const ModalMenuCameraSelect: React.FC<ModalMenuCameraSelectProps> = ({
     isOpen,
     handleClose,
 }) => {
+    const scheduleClose = useDismissTimeout(isOpen);
+
     const handleCameraSelection = (id: OverheadCameraID) => {
         setCameraID(id);
         if (id === OverheadCameraID.left) {
@@ -126,7 +140,7 @@ const ModalMenuCameraSelect: React.FC<ModalMenuCameraSelectProps> = ({
                 CameraSwitcherFunctions.SetCameraRight
             )();
         }
-        setTimeout(() => handleClose(), 500);
+        scheduleClose(handleClose);
     };
 
     return (

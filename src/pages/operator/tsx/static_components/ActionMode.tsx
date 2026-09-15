@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import ModalMobile from "../basic_components/ModalMobile";
+import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionMode.css";
 import { ActionModeType } from "../utils/component_definitions";
@@ -42,6 +43,17 @@ export type ActionModeProps = {
  */
 export const ActionMode = (props: ActionModeProps) => {
     const [isModalOpen, setIsModalOpen] = React.useState<boolean>(false);
+
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(
+        "actionMode",
+        isModalOpen,
+        () => {
+            setIsModalOpen(false);
+            props.setCameraVeilCallback(false);
+        },
+        { restoreVeil: props.setCameraVeilCallback },
+    );
 
     return (
         <div className="action-mode">

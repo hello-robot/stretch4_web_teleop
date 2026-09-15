@@ -26,6 +26,7 @@ import { SharedState } from './CustomizableComponent';
 import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
 import { Map } from './Map';
 import type { AddToastFn } from './Toasts';
+import { useExclusiveModal } from '../react_hooks/useExclusiveModal';
 
 interface AutoNavProps {
     sharedState: SharedState;
@@ -264,6 +265,10 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // Modal visibility state for adding a location
     const [isModalAddLocationVisible, isModalAddLocationVisibleSet] = useState<boolean>(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal('addLocation', isModalAddLocationVisible, () =>
+        isModalAddLocationVisibleSet(false),
+    );
     // Whether to display all goal markers on the map
     const [displayGoals, displayGoalsSet] = useState<boolean>(false);
     // Navigation goal selection state (true if selecting a goal).

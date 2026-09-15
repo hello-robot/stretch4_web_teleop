@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import ModalMobile from "../basic_components/ModalMobile";
+import { useDismissTimeout } from "../react_hooks/useDismissTimeout";
+import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionSpeed.css";
 import { buttonFunctionProvider } from "..";
@@ -72,6 +74,16 @@ const getIconBySpeed = (speed: number): string => {
  */
 export const ActionSpeed = (props: ActionSpeedProps) => {
     const [isModalOpen, setIsModalOpen] = React.useState<boolean>(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(
+        "actionSpeed",
+        isModalOpen,
+        () => {
+            setIsModalOpen(false);
+            props.setCameraVeilCallback(false);
+        },
+        { restoreVeil: props.setCameraVeilCallback },
+    );
     const speedLabel =
         getLabelBySpeed(props.speed) ?? VELOCITY_SCALE_UI[1].label;
 
@@ -80,10 +92,12 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
             <ModalActionSpeed
                 isOpen={isModalOpen}
                 speedLabel={speedLabel}
-                handleClose={(newSpeedLabel: string) => {
+                onSelect={(newSpeedLabel: string) => {
+                    props.onChange(getSpeedByLabel(newSpeedLabel));
+                }}
+                handleClose={() => {
                     setIsModalOpen(false);
                     props.setCameraVeilCallback(false);
-                    props.onChange(getSpeedByLabel(newSpeedLabel));
                 }}
             />
             <MagneticWrapper>
@@ -111,11 +125,10 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
 interface ModalActionSpeedProps {
     isOpen: boolean;
     speedLabel: string;
-    /**
-     * Function handles behavior modal close
-     * @param newSpeedLabel the label for the newly selected speed
-     */
-    handleClose: (newSpeedLabel: string) => void;
+    /** Apply the chosen speed immediately (before the dismiss animation). */
+    onSelect: (newSpeedLabel: string) => void;
+    /** Hide the modal and camera veil. */
+    handleClose: () => void;
 }
 
 interface OptionItem {
@@ -125,9 +138,11 @@ interface OptionItem {
 const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
     isOpen,
     speedLabel,
+    onSelect,
     handleClose,
 }) => {
     const [selectedSpeed, setSelectedSpeed] = useState<string>(speedLabel);
+    const scheduleClose = useDismissTimeout(isOpen);
 
     React.useEffect(() => {
         setSelectedSpeed(speedLabel);
@@ -139,12 +154,12 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
 
     const handleSpeedSelection = (speed: string) => {
         setSelectedSpeed(speed);
-        setTimeout(() => handleClose(speed), 500);
+        onSelect(speed);
+        scheduleClose(handleClose);
     };
 
     const close = () => {
-        // Close without selecting a new button pad
-        setTimeout(() => handleClose(selectedSpeed), 500);
+        scheduleClose(handleClose);
     };
 
     return (
