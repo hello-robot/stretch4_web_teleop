@@ -13,17 +13,19 @@ import {
 import {
     ActionState,
     ActionStatusList,
+    apertureTravel,
     DiagnosticArray,
     getPlaybackJointVelocities,
     getPlaybackJointVelocity,
-    getStretchTool,
+    GRIPPER_VELOCITY_RANGE_FRACTION,
+    MAX_VELOCITY_SCALE,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    StretchTool,
+    updateJointVelocities,
     ValidJoints,
     VideoProps
 } from "shared/util";
@@ -134,11 +136,16 @@ export class Robot extends React.Component {
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
     private subscriptions: Topic[] = [];
-    private stretchToolParam: Param;
+    private stretchToolParam?: Param;
+    private toolIsActuatedParam?: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
-    private stretchTool: StretchTool;
+    private stretchToolName: string = "unknown";
+    private toolIsActuated: boolean = true;
+    private gripperApertureRange?: [number, number];
+    private gripperVelocityLimit?: number;
+    private stretchParamsReady: Promise<void> = Promise.resolve();
 
     constructor(props: {
         jointStateCallback: (
@@ -500,7 +507,7 @@ export class Robot extends React.Component {
                 if (status.name == "at_limit") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -515,7 +522,7 @@ export class Robot extends React.Component {
                 if (status.name == "in_collision") {
                     status.values.forEach((v) => {
                         let rawKey = v.key;
-                        let jointName = (rawKey === "gripper_joint" ? "stretch_gripper_joint" : rawKey) as ValidJoints;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
                         let valStr = v.value;
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
@@ -549,24 +556,129 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/configure_video_streams_gripper:stretch_tool",
         });
-        this.stretchToolParam.get((value: string) => {
-            this.stretchTool = getStretchTool(value);
+        const stretchToolReady = new Promise<void>((resolve) => {
+            this.stretchToolParam!.get((value: string) => {
+                this.stretchToolName = value || "unknown";
+                resolve();
+            });
         });
+
+        this.toolIsActuatedParam = new Param({
+            ros: this.ros,
+            name: "/stretch_driver:tool_info.is_actuated",
+        });
+        const toolIsActuatedReady = new Promise<void>((resolve) => {
+            this.toolIsActuatedParam!.get((value: boolean) => {
+                this.toolIsActuated = value ?? true;
+                resolve();
+            });
+        });
+
+        const gripperRangeReady = new Promise<void>((resolve) => {
+            new Param({
+                ros: this.ros,
+                name: "/stretch_driver:tool_info.aperture_range",
+            }).get((value: number[]) => {
+                if (apertureTravel(value) !== undefined) {
+                    this.gripperApertureRange = [value[0], value[1]];
+                    this.refreshGripperJogVelocity();
+                }
+                resolve();
+            });
+        });
+
+
+        this.stretchParamsReady = Promise.race([
+            Promise.all([
+                stretchToolReady,
+                toolIsActuatedReady,
+                gripperRangeReady,
+            ]).then(() => { }),
+            new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]);
 
         this.modeParam = new Param({
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
+
+        // Real driver's per-joint velocity limits, from /stretch_driver:joint_velocity.* params
+        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
+            lift_joint: "lift",
+            arm_joint: "arm",
+            wrist_yaw_joint: "wrist_yaw",
+            wrist_pitch_joint: "wrist_pitch",
+            wrist_roll_joint: "wrist_roll",
+            gripper_joint: "gripper",
+            translate_mobile_base: "omnibase.linear",
+            rotate_mobile_base: "omnibase.angular",
+        };
+        for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
+            new Param({
+                ros: this.ros,
+                name: `/stretch_driver:joint_velocity.${paramKey}`,
+            }).get((value: number) => {
+                if (typeof value === "number" && value > 0) {
+                    if (rosJointName === "gripper_joint") {
+                        this.gripperVelocityLimit = value;
+                        this.refreshGripperJogVelocity();
+                        return;
+                    }
+                    this.jointVelocityLimits[rosJointName] = value;
+                    updateJointVelocities({ [rosJointName]: value });
+                    if (this.jointVelocityLimitsCallback) {
+                        this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+                    }
+                }
+            });
+        }
     }
 
-    getStretchTool() {
-        // if (this.stretchTool == StretchTool.TABLET) {
-        //     this.subscribeToTabletTF();
-        // } else {
-        //     this.subscribeToGripperFingerTF();
-        // }
+    /**
+     * Sets the gripper's base jog speed to a fixed fraction of the attached tool's own travel
+     * per second, clamped to stay under the driver's limit at the fastest speed setting.
+     *
+     */
+    private refreshGripperJogVelocity() {
+        const limit = this.gripperVelocityLimit;
+        const ceiling =
+            limit !== undefined && limit > 0 ? limit / MAX_VELOCITY_SCALE : undefined;
+
+        const travel = apertureTravel(this.gripperApertureRange);
+
+        let velocity: number | undefined;
+        if (travel !== undefined) {
+            velocity = travel * GRIPPER_VELOCITY_RANGE_FRACTION;
+        } else {
+            velocity = ceiling;
+        }
+        if (velocity === undefined) return;
+        if (ceiling !== undefined) velocity = Math.min(velocity, ceiling);
+
+        this.jointVelocityLimits["gripper_joint"] = velocity;
+        updateJointVelocities({ gripper_joint: velocity });
+        if (this.jointVelocityLimitsCallback) {
+            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+        }
+    }
+
+    isToolActuated(): boolean {
+        return this.toolIsActuated;
+    }
+
+    getGripperApertureRange(): [number, number] | undefined {
+        return this.gripperApertureRange;
+    }
+
+    async getStretchTool() {
+        await this.stretchParamsReady;
         if (this.stretchToolCallback)
-            this.stretchToolCallback(this.stretchTool);
+            this.stretchToolCallback(this.stretchToolName);
+    }
+
+    getJointVelocityLimits() {
+        if (this.jointVelocityLimitsCallback)
+            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
     }
 
     getOccupancyGrid() {
@@ -1236,7 +1348,15 @@ export class Robot extends React.Component {
             } catch (e) {
                 console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
             }
-            jointNames.push(jointName);
+            let targetJointName: ValidJoints = jointName;
+            if (jointName === "gripper_joint") {
+                if (this.jointState?.name?.includes("stretch_gripper_joint" as ValidJoints)) {
+                    targetJointName = "stretch_gripper_joint" as ValidJoints;
+                } else if (this.jointState?.name?.includes("gripper_aperture" as ValidJoints)) {
+                    targetJointName = "gripper_aperture" as ValidJoints;
+                }
+            }
+            jointNames.push(targetJointName);
             jointPositions.push(targetPos);
         }
 
@@ -1724,6 +1844,15 @@ export class Robot extends React.Component {
             let fallbackIdx = this.jointState.name.indexOf(fallbackName as ValidJoints);
             if (fallbackIdx !== -1) {
                 return this.jointState.position[fallbackIdx];
+            }
+        }
+
+        if (name === "gripper_joint") {
+            for (let gName of ["gripper_joint", "stretch_gripper_joint", "gripper_aperture"]) {
+                let idx = this.jointState.name.indexOf(gName as ValidJoints);
+                if (idx !== -1) {
+                    return this.jointState.position[idx];
+                }
             }
         }
 
