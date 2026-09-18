@@ -51,7 +51,8 @@ type JointActionMeta = {
  * Velocity magnitudes come from `JOINT_VELOCITIES` in shared/util.tsx:
  *   lift_joint: 0.04 m/s  |  arm_joint: 0.04 m/s
  *   wrist_roll_joint: 0.1 rad/s  |  wrist_pitch_joint: 0.1 rad/s  |  wrist_yaw_joint: 0.4 rad/s
- *   stretch_gripper_joint: not in JOINT_VELOCITIES → falls back to GRIPPER_FALLBACK_VEL
+ *   gripper_joint: 0.1 default, refreshed at runtime from the driver's
+ *   joint_velocity.gripper parameter, so it tracks whichever tool is attached.
  */
 const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     // Lift (m) — ArmLower is in negativeButtonPadFunctions
@@ -70,15 +71,19 @@ const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     wrist_yaw_in: { jointName: "wrist_yaw_joint", sign: 1, unit: "rad" },
     wrist_yaw_out: { jointName: "wrist_yaw_joint", sign: -1, unit: "rad" },
     // Gripper (duration-only) — GripperClose is in negativeButtonPadFunctions
-    gripper_open: { jointName: "stretch_gripper_joint", sign: 1, unit: "duration" },
-    gripper_close: { jointName: "stretch_gripper_joint", sign: -1, unit: "duration" },
+    // 'gripper_joint' is the tool-agnostic name: GripperCommandGroup accepts it for
+    // any attached tool, and stretch_driver registers it for JointJog too. The old
+    // SG4-only name matched nothing on a custom tool -- and, not being in
+    // ValidJoints, only passed because the build does not type-check.
+    gripper_open: { jointName: "gripper_joint", sign: 1, unit: "duration" },
+    gripper_close: { jointName: "gripper_joint", sign: -1, unit: "duration" },
 };
 
 // ── Validation sets ───────────────────────────────────────────────────────────
 
 const VALID_JOINT_ACTIONS = new Set<string>(JOINT_MOVE_ACTIONS);
 
-/** stretch_gripper_joint is not in JOINT_VELOCITIES; use this fallback. */
+/** Guard for a joint missing from JOINT_VELOCITIES; gripper_joint is normally present. */
 const GRIPPER_FALLBACK_VEL = 0.1;
 
 // ── Concrete executor class ───────────────────────────────────────────────────
