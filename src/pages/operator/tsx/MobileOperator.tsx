@@ -1,5 +1,5 @@
 import "operator/css/MobileOperator.css";
-import { default as React, default as React, useState } from "react";
+import { default as React, useState } from "react";
 import { isVoiceControlEnabled } from "shared/operatorVoiceSession";
 import {
     ActionState,

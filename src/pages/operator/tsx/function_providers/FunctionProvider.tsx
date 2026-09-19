@@ -1,7 +1,7 @@
 import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
-import { RobotPose, ValidJoints } from "shared/util";
+import { JOINT_VELOCITY_HEARTBEAT_MS, RobotPose, ValidJoints } from "shared/util";
 import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 import {
     ActionModeType,
@@ -162,7 +162,7 @@ export abstract class FunctionProvider {
                     jointName,
                     velocity
                 );
-        }, 50);
+        }, JOINT_VELOCITY_HEARTBEAT_MS);
     }
 
     /**
