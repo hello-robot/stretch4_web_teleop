@@ -104,9 +104,15 @@ export class Robot extends React.Component {
     private moveBaseInsideTolStreak = 0;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
-    private cmdVelTopic?: Topic;
-    private eeCmdVelTopic?: Topic;
+    /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
+    private cmdVelNavTopic?: Topic;
+    /** Drive straight to the driver; used only while collision_monitor is not active. */
+    private cmdVelDirectTopic?: Topic;
+    private collisionMonitorStateService?: Service;
+    private collisionMonitorActive = false;
+    private collisionMonitorPollTimerID?: ReturnType<typeof setInterval>;
     private jointVelTopic?: Topic;
+    private eeCmdVelTopic?: Topic;
     private useCenterCameraService?: Service;
     private useLeftCameraService?: Service;
     private useRightCameraService?: Service;
@@ -306,7 +312,6 @@ export class Robot extends React.Component {
 
     async onConnect() {
         console.log("onConnect");
-        const collisionMonitorActive = await this.isCollisionMonitorActive();
 
         this.subscribeToJointState();
         this.subscribeToJointLimits();
@@ -328,7 +333,8 @@ export class Robot extends React.Component {
             "Navigation failed!",
         );
 
-        this.createCmdVelTopic(collisionMonitorActive);
+        this.createCmdVelTopics();
+        this.startCollisionMonitorPoll();
         this.createJointVelTopic();
         this.createEeCmdVelTopic();
         this.createUseCenterCameraService();
@@ -350,6 +356,7 @@ export class Robot extends React.Component {
     }
 
     closeROSConnection() {
+        this.stopCollisionMonitorPoll();
         this.subscriptions.forEach((topic) => {
             topic.unsubscribe();
         });
@@ -802,12 +809,29 @@ export class Robot extends React.Component {
         });
     }
 
-    createCmdVelTopic(use_vel_nav: boolean = true) {
-        this.cmdVelTopic = new Topic({
+    createCmdVelTopics() {
+        this.cmdVelNavTopic = new Topic({
             ros: this.ros,
-            name: use_vel_nav ? "/cmd_vel_nav" : "/cmd_vel",
+            name: "/cmd_vel_nav",
             messageType: "geometry_msgs/Twist",
         });
+        this.cmdVelDirectTopic = new Topic({
+            ros: this.ros,
+            name: "/cmd_vel",
+            messageType: "geometry_msgs/Twist",
+        });
+        this.collisionMonitorStateService = new Service({
+            ros: this.ros,
+            name: "/collision_monitor/get_state",
+            serviceType: "lifecycle_msgs/srv/GetState",
+        });
+    }
+
+    /** Drive publisher for the current safety state. */
+    private get cmdVelTopic(): Topic | undefined {
+        return this.collisionMonitorActive
+            ? this.cmdVelNavTopic
+            : this.cmdVelDirectTopic;
     }
 
     createJointVelTopic() {
@@ -1810,34 +1834,49 @@ export class Robot extends React.Component {
         return res;
     }
 
-    async isCollisionMonitorActive(timeoutMs: number = 3000): Promise<boolean> {
-        const startTime = Date.now();
+    /**
+     * collision_monitor is a lifecycle node. It exists in the graph as soon as
+     * Nav2 loads it, but it only forwards /cmd_vel_nav -> /cmd_vel once ACTIVE.
+     * If Nav2 bringup aborts (e.g. no map TF) it sits INACTIVE forever, so a
+     * "node exists" check is not enough.
+     */
+    startCollisionMonitorPoll(intervalMs: number = 2000) {
+        this.stopCollisionMonitorPoll();
+        const poll = () => this.queryCollisionMonitorActive();
+        poll();
+        this.collisionMonitorPollTimerID = setInterval(poll, intervalMs);
+    }
 
-        while (Date.now() - startTime < timeoutMs) {
-            const isActive = await new Promise<boolean>((resolve) => {
-                const rosAny = this.ros as any;
-                if (rosAny.getNodes !== undefined) {
-                    rosAny.getNodes(
-                        (nodes: string[]) => {
-                            resolve(nodes.some((node: string) => node.endsWith("collision_monitor")));
-                        },
-                        () => resolve(false)
-                    );
-                } else {
-                    resolve(false);
-                }
-            });
-
-            if (isActive) {
-                return true;
-            }
-
-            // Wait 500ms before checking again
-            await new Promise((resolve) => setTimeout(resolve, 500));
+    stopCollisionMonitorPoll() {
+        if (this.collisionMonitorPollTimerID !== undefined) {
+            clearInterval(this.collisionMonitorPollTimerID);
+            this.collisionMonitorPollTimerID = undefined;
         }
+    }
 
-        console.log("Timed out waiting for collision_monitor node. Defaulting to /cmd_vel.");
-        return false;
+    private queryCollisionMonitorActive() {
+        if (!this.collisionMonitorStateService) return;
+        // lifecycle_msgs/State: PRIMARY_STATE_ACTIVE = 3
+        const ACTIVE = 3;
+        this.collisionMonitorStateService.callService(
+            {},
+            (response: { current_state?: { id?: number } }) => {
+                this.setCollisionMonitorActive(
+                    response?.current_state?.id === ACTIVE
+                );
+            },
+            () => this.setCollisionMonitorActive(false)
+        );
+    }
+
+    private setCollisionMonitorActive(active: boolean) {
+        if (active === this.collisionMonitorActive) return;
+        this.collisionMonitorActive = active;
+        console.log(
+            active
+                ? "collision_monitor ACTIVE: Drive -> /cmd_vel_nav"
+                : "collision_monitor not active: Drive -> /cmd_vel (no obstacle stopping)"
+        );
     }
 
     /**
