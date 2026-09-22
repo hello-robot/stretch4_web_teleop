@@ -355,6 +355,9 @@
     /* Reserve the 1px active ring so :active does not change box size */
     border: 1px solid transparent;
     transition: var(--surface-transition), color 300ms ease-out;
+    /* Shallow perspective so the arrow's rotateX reads as depth; the button
+       surface and border stay flat. */
+    perspective: 280px;
 }
 
 .fgpad .fgpad-inner-btn--up {
@@ -367,6 +370,40 @@
 
 .fgpad .fgpad-inner-btn .fgpad-icon {
     font-size: var(--icon-arrow);
+    transform-origin: center;
+    transform: rotateX(0deg);
+    /* Release path: the transition eases the arrow back to flat */
+    transition: transform 220ms ease-out;
+    will-change: transform;
+}
+
+/* The arrow rocks in the direction it points.*/
+.fgpad .fgpad-inner-btn--up:active .fgpad-icon {
+    transform: rotateX(35deg);
+    animation: fgpad-tilt-forward 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.fgpad .fgpad-inner-btn--down:active .fgpad-icon {
+    transform: rotateX(-35deg);
+    animation: fgpad-tilt-backward 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes fgpad-tilt-forward {
+    from {
+        transform: rotateX(0deg);
+    }
+    to {
+        transform: rotateX(28deg);
+    }
+}
+
+@keyframes fgpad-tilt-backward {
+    from {
+        transform: rotateX(0deg);
+    }
+    to {
+        transform: rotateX(-28deg);
+    }
 }
 
 .fgpad .fgpad-inner-btn:active {
