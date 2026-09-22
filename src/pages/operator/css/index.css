@@ -36,14 +36,14 @@
 
     /* Button pad tokens, shared by DirectionalPad (Drive / Arm + Hand /
        Wrist) and FlyingGripperPad*/
-    --pad-border-width: 2px;
+    --pad-border-width: 1.5px;
     --pad-border-style: ridge;
     --pad-border-color: hsl(0deg 0% 100% / 75%);
     /* the shaded half of a `ridge` border, for outlines drawn as SVG strokes */
     --pad-border-color-dark: hsl(0deg 0% 62% / 75%);
     /* inset glow color; each pad picks its own size-relative blur radius */
     --pad-glow-color: hsl(204deg 100% 98% / 30%);
-    --pad-active-color: hsl(204deg 100% 50%);
+    --pad-active-color: hsla(204deg 100% 50% / 1);
     --pad-active-glow: 0px 0px 10px 0px var(--pad-active-color);
     --pad-active-border: 1px solid var(--pad-active-color);
     /* App icon SVGs are blue; pads render them white until pressed */

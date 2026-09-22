@@ -31,7 +31,7 @@
     --radial-border-width: calc(var(--pad-border-width) * (2 / 3));
     --glow-wedge: inset 0px 0px calc(var(--wedge) / 10) 0px var(--pad-glow-color);
     --glow-inner: inset 0px 0px calc(var(--inner) / 10) 0px var(--pad-glow-color);
-    --glow-panel-blur: calc(var(--panel-w) / 15);
+    --glow-panel-blur: calc(var(--panel-w) / 5);
     --surface-transition: border-color 500ms ease-out, border-width 500ms ease-out,
         box-shadow 500ms ease-out;
 
@@ -134,11 +134,19 @@
 .fgpad .fgpad-panel-stroke-outer {
     stroke: var(--pad-border-color);
     stroke-width: var(--pad-border-width);
+    opacity: 1;
+    transition: opacity 300ms ease-out;
 }
 
 .fgpad .fgpad-panel-stroke-inner {
     stroke: var(--pad-border-color-dark);
     stroke-width: var(--pad-border-width);
+    opacity: 1;
+    transition: opacity 300ms ease-out;
+}
+
+.fgpad .fgpad-panel:active .fgpad-panel-stroke-outer, .fgpad .fgpad-panel:active .fgpad-panel-stroke-inner {
+    opacity: 0.2;
 }
 
 /* Inset glow: a blurred stroke clipped to the interior. Blur radius equals the
@@ -174,6 +182,7 @@
 
 .fgpad .fgpad-panel:active .fgpad-panel-glow {
     stroke: var(--pad-active-color);
+    opacity: 0.5;
 }
 
 /* ---------------------------------------------------------------------------
@@ -192,14 +201,21 @@
     justify-content: center;
     padding-top: calc(var(--w) * 0.012);
     border-radius: 4px 4px 7px 7px;
-    /* #1E313D */
-    background: hsl(203deg 60% 20% / 70%);
-    color: hsl(204, 44%, 66%);
+    /* #1E313D; hover/active only shift lightness and alpha of these two */
+    --close-bg-l: 20%;
+    --close-bg-a: 70%;
+    --close-fg-l: 66%;
+    background: hsl(203deg 60% var(--close-bg-l) / var(--close-bg-a));
+    color: hsl(204deg 44% var(--close-fg-l));
     font-weight: 600;
     font-size: 16px;
     line-height: 1.2;
     letter-spacing: -0.02em;
     white-space: nowrap;
+    transition:
+        background-color 160ms ease-out,
+        color 160ms ease-out,
+        transform 120ms ease-out;
     --bite-cy: calc(var(--row-bottom) + var(--close-h) - var(--ring-cy-up));
     -webkit-mask: radial-gradient(
         circle var(--bite-r) at 50% var(--bite-cy),
@@ -213,8 +229,23 @@
     );
 }
 
+/* Hover only on devices that have one, so touch does not get stuck lit */
+@media (hover: hover) {
+    .fgpad .fgpad-close:hover {
+        --close-bg-l: 26%;
+        --close-bg-a: 85%;
+        --close-fg-l: 80%;
+    }
+}
+
+/* Pressed: fill goes opaque and lighter, text goes white, pill sits down a
+   hair. translate is stacked after the centering translate so the centering
+   is not lost. */
 .fgpad .fgpad-close:active {
-    filter: brightness(1.15);
+    --close-bg-l: 50%;
+    --close-bg-a: 100%;
+    --close-fg-l: 100%;
+    transition-duration: 100ms;
 }
 
 /* ---------------------------------------------------------------------------
