@@ -18,6 +18,7 @@ import {
 } from "shared/util";
 import {
     buttonFunctionProvider,
+    flyingGripperFunctionProvider,
     stretchTool,
     movementRecorderFunctionProvider,
     underMapFunctionProvider,
@@ -153,6 +154,7 @@ export const MobileOperator = (props: {
     const setFlyingGripper = React.useCallback((flying: boolean) => {
         // Never carry an in-flight press across a pad swap.
         buttonFunctionProvider.disableActiveButton();
+        flyingGripperFunctionProvider.disableActiveButton();
         isFlyingGripperSet(flying);
     }, []);
     const enterFlyingGripper = React.useCallback(

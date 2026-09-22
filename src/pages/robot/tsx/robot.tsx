@@ -105,6 +105,7 @@ export class Robot extends React.Component {
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     private cmdVelTopic?: Topic;
+    private eeCmdVelTopic?: Topic;
     private jointVelTopic?: Topic;
     private useCenterCameraService?: Service;
     private useLeftCameraService?: Service;
@@ -329,6 +330,7 @@ export class Robot extends React.Component {
 
         this.createCmdVelTopic(collisionMonitorActive);
         this.createJointVelTopic();
+        this.createEeCmdVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
         this.createUseRightCameraService();
@@ -816,6 +818,14 @@ export class Robot extends React.Component {
         });
     }
 
+    createEeCmdVelTopic() {
+        this.eeCmdVelTopic = new Topic({
+            ros: this.ros,
+            name: "/ee_cmd_vel",
+            messageType: "geometry_msgs/Twist",
+        });
+    }
+
     createUseLeftCameraService() {
         this.useLeftCameraService = new Service({
             ros: this.ros,
@@ -1134,6 +1144,25 @@ export class Robot extends React.Component {
         console.log("Publishing base velocity twist message");
         this.cmdVelTopic.publish(twist);
     };
+
+    async setTaskSpaceVelocity(linX: number, linY: number, linZ: number) {
+        await this.switchToVelocityMode();
+        this.stopExecution();
+        const twist = {
+            linear: {
+                x: linX,
+                y: linY,
+                z: linZ,
+            },
+            angular: {
+                x: 0,
+                y: 0,
+                z: 0,
+            },
+        };
+        if (!this.eeCmdVelTopic) throw "eeCmdVelTopic is undefined";
+        this.eeCmdVelTopic.publish(twist);
+    }
 
     async setJointVelocity(jointName: ValidJoints, velocity: number) {
         await this.switchToVelocityMode();

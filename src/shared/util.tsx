@@ -268,6 +268,9 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     stretch_gripper_joint: 0.1
 };
 
+/** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
+export const TASK_SPACE_LINEAR_VEL = 0.15;
+
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,
     head_pan_joint: 0.1,

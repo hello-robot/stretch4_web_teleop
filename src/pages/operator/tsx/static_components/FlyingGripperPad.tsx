@@ -5,6 +5,10 @@ import chevronIcon from "operator/icons/Chevron.svg";
 import gripperOpenIcon from "operator/icons/GripperOpen.svg";
 import gripperCloseIcon from "operator/icons/GripperClose.svg";
 import { StretchTool } from "shared/util";
+import { flyingGripperFunctionProvider } from "operator/tsx/index";
+import {
+    FlyingGripperButton,
+} from "../function_providers/FlyingGripperFunctionProvider";
 import { SharedState } from "../layout_components/CustomizableComponent";
 import {
     fgpadRatioVars,
@@ -16,6 +20,7 @@ import "operator/css/FlyingGripperPad.css";
 type PadButton = {
     id: string;
     ariaLabel: string;
+    funct: FlyingGripperButton;
     isGripper?: boolean;
     iconSrc?: string;
     Icon?: React.ElementType;
@@ -25,21 +30,25 @@ const RING_BUTTONS: readonly PadButton[] = [
     {
         id: "north",
         ariaLabel: "Flying gripper: up",
+        funct: FlyingGripperButton.Up,
         iconSrc: chevronIcon,
     },
     {
         id: "south",
         ariaLabel: "Flying gripper: down",
+        funct: FlyingGripperButton.Down,
         iconSrc: chevronIcon,
     },
     {
         id: "west",
         ariaLabel: "Flying gripper: left",
+        funct: FlyingGripperButton.Left,
         iconSrc: chevronIcon,
     },
     {
         id: "east",
         ariaLabel: "Flying gripper: right",
+        funct: FlyingGripperButton.Right,
         iconSrc: chevronIcon,
     },
 ];
@@ -48,11 +57,13 @@ const INNER_BUTTONS: readonly PadButton[] = [
     {
         id: "up",
         ariaLabel: "Flying gripper: forward",
+        funct: FlyingGripperButton.Forward,
         Icon: ArrowUpwardIcon,
     },
     {
         id: "down",
         ariaLabel: "Flying gripper: backward",
+        funct: FlyingGripperButton.Backward,
         Icon: ArrowDownwardIcon,
     },
 ];
@@ -60,6 +71,7 @@ const INNER_BUTTONS: readonly PadButton[] = [
 const BAR_LEFT: PadButton = {
     id: "gripper-open",
     ariaLabel: "Flying gripper: open gripper",
+    funct: FlyingGripperButton.GripperOpen,
     isGripper: true,
     iconSrc: gripperOpenIcon,
 };
@@ -67,6 +79,7 @@ const BAR_LEFT: PadButton = {
 const BAR_RIGHT: PadButton = {
     id: "gripper-close",
     ariaLabel: "Flying gripper: close gripper",
+    funct: FlyingGripperButton.GripperClose,
     isGripper: true,
     iconSrc: gripperCloseIcon,
 };
@@ -77,7 +90,15 @@ const PadButtonEl: React.FC<{
     disabled: boolean;
     children?: React.ReactNode;
 }> = ({ button, className, disabled, children }) => {
-    const clickProps = disabled ? {} : { onPointerDown: () => {} };
+    const functs = flyingGripperFunctionProvider.provideFunctions(button.funct);
+    const clickProps = disabled
+        ? {}
+        : {
+              onPointerDown: functs.onClick,
+              onPointerUp: functs.onRelease,
+              onPointerCancel: functs.onRelease,
+              onPointerLeave: functs.onLeave,
+          };
     return (
         <button
             type="button"
