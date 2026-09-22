@@ -33,6 +33,22 @@
     /* Sizing */
     --scene-area-width: calc(((100dvh - 151px) * 9) / 16);
     --scene-area-height: calc(-151px + 100dvh);
+
+    /* Button pad tokens, shared by DirectionalPad (Drive / Arm + Hand /
+       Wrist) and FlyingGripperPad*/
+    --pad-border-width: 2px;
+    --pad-border-style: ridge;
+    --pad-border-color: hsl(0deg 0% 100% / 75%);
+    /* the shaded half of a `ridge` border, for outlines drawn as SVG strokes */
+    --pad-border-color-dark: hsl(0deg 0% 62% / 75%);
+    /* inset glow color; each pad picks its own size-relative blur radius */
+    --pad-glow-color: hsl(204deg 100% 98% / 30%);
+    --pad-active-color: hsl(204deg 100% 50%);
+    --pad-active-glow: 0px 0px 10px 0px var(--pad-active-color);
+    --pad-active-border: 1px solid var(--pad-active-color);
+    /* App icon SVGs are blue; pads render them white until pressed */
+    --pad-icon-filter-idle: saturate(0) brightness(3);
+    --pad-icon-filter-active: saturate(1) brightness(1);
 }
 
 /* Reset box model and font inheritance for all elements */
@@ -75,6 +91,7 @@ body,
 
 /* Allow scrolling on landscape mobile devices */
 @media screen and (orientation: landscape) and (max-device-width: 900px) {
+
     html,
     body,
     #root {
@@ -237,10 +254,12 @@ input:focus {
 
 /* Glow effect */
 @keyframes pulse-glow {
+
     0%,
     100% {
         opacity: 0.2;
     }
+
     50% {
         opacity: 0;
     }

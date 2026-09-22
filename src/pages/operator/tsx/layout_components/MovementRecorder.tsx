@@ -172,6 +172,8 @@ interface MovementRecorderProps {
     setCameraVeilCallback?: (visible: boolean) => void;
     isRecording: boolean;
     isRecordingSet: React.Dispatch<React.SetStateAction<boolean>>;
+    /** Hide the corner button without unmounting (e.g. flying gripper owns that space). */
+    hideButton?: boolean;
 }
 
 export const MovementRecorder = (props: MovementRecorderProps) => {
@@ -807,7 +809,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         props.setCameraVeilCallback?.(newModalState);
     }, [isModalOpen, props.setCameraVeilCallback]);
 
-    const isButtonVisible = !props.isCameraVeilVisible;
+    const isButtonVisible = !props.isCameraVeilVisible && !props.hideButton;
 
     // Determine if any recording
     // is currently playing (including this one)
