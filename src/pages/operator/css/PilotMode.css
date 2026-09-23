@@ -17,3 +17,27 @@
     height: 100%;
     flex: 1;
 }
+
+/* Slot that holds either the Pilot d-pad TabGroup or the flying gripper pad */
+.pilot-mode-pad-slot {
+    position: absolute;
+    inset: 0;
+}
+
+/* Flying gripper: the overhead feed stays mounted but reads as "behind".
+   Scoped to the inner Pilot wrapper only; GripperCamPIP is a sibling, so the
+   hero gripper video is never filtered. */
+.pilot-mode-wrapper
+    .controls
+    > .simple-camera-view-wrapper_XP
+    video.simple-video-canvas {
+    /* No filter is applied outside flying gripper; `none` -> blur() still transitions. */
+    transition: filter 450ms ease-out;
+}
+
+.pilot-mode-wrapper.is-flying-gripper
+    .controls
+    > .simple-camera-view-wrapper_XP
+    video.simple-video-canvas {
+    filter: blur(5px) brightness(0.5);
+}

@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 import { SimpleCameraView } from "./SimpleCameraView";
 import { CameraViewId } from "../utils/component_definitions";
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
@@ -7,6 +8,15 @@ import IconExpand from "operator/icons/IconExpand.svg";
 import IconCollapse from "operator/icons/IconCollapse.svg";
 
 import "../../css/GripperCamPIP.css";
+
+/** Border radius lives in `style` so framer-motion can correct it mid-layout-animation. */
+const FRAME_BORDER_RADIUS_PX = 12;
+
+const FRAME_LAYOUT_TRANSITION = {
+    type: "spring",
+    duration: 0.65,
+    bounce: 0.15,
+} as const;
 
 interface GripperCamPIPProps {
     cameraID: CameraViewId;
@@ -17,6 +27,8 @@ interface GripperCamPIPProps {
     isGripperCamLarge: boolean;
     isGripperCamLargeSet: React.Dispatch<React.SetStateAction<boolean>>;
     homingBannerDismissed: boolean;
+    isFlyingGripper: boolean;
+    onEnterFlyingGripper: () => void;
 }
 
 const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
@@ -27,23 +39,55 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
     isGripperCamPIPVizSet,
     isGripperCamLarge,
     isGripperCamLargeSet,
-    homingBannerDismissed
+    homingBannerDismissed,
+    isFlyingGripper,
+    onEnterFlyingGripper,
 }) => {
+    const isVisible = isGripperCamPIPViz && homingBannerDismissed;
+    const canEnterFlyingGripper = isVisible && !isFlyingGripper;
+
+    const wrapperClassName = [
+        "gripper-cam-pip-wrapper",
+        isVisible ? "" : "hidden",
+        isGripperCamLarge ? "large" : "",
+        isFlyingGripper ? "flying" : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
+
     return (
-        <div className={`gripper-cam-pip-wrapper ${isGripperCamPIPViz && homingBannerDismissed ? "" : "hidden"} ${isGripperCamLarge ? "large" : ""}`}>
+        <div className={wrapperClassName}>
             <div className="controls">
                 <div className="simple-camera-view-wrapper_XP">
-                    <SimpleCameraView
-                        id={cameraID}
-                        remoteStreams={remoteStreams}
-                        isCameraVeilVisible={isCameraVeilVisible}
-                    />
+                    <motion.div
+                        layout
+                        transition={FRAME_LAYOUT_TRANSITION}
+                        className="gripper-cam-frame"
+                        style={{ borderRadius: FRAME_BORDER_RADIUS_PX }}
+                        onPointerDown={
+                            canEnterFlyingGripper ? onEnterFlyingGripper : undefined
+                        }
+                        role={canEnterFlyingGripper ? "button" : undefined}
+                        aria-label={
+                            canEnterFlyingGripper ? "Open flying gripper" : undefined
+                        }
+                    >
+                        <SimpleCameraView
+                            id={cameraID}
+                            remoteStreams={remoteStreams}
+                            isCameraVeilVisible={isCameraVeilVisible}
+                        />
+                    </motion.div>
                 </div>
             </div>
-            <div className="button-grippercampip-wrapper">
+            <div
+                className="button-grippercampip-wrapper"
+                aria-hidden={isFlyingGripper}
+            >
                 <button
                     className="button-grippercampip-toggle"
                     onPointerDown={() => isGripperCamPIPVizSet(!isGripperCamPIPViz)}
+                    disabled={isFlyingGripper}
                     aria-label="Toggle"
                 >
                     {
@@ -53,7 +97,7 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
                 <button
                     className="button-grippercampip-size-toggle"
                     onPointerDown={() => isGripperCamLargeSet(!isGripperCamLarge)}
-                    disabled={!isGripperCamPIPViz}
+                    disabled={!isGripperCamPIPViz || isFlyingGripper}
                     aria-label="Change size"
                 >
                     {

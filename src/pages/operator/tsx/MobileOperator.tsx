@@ -18,6 +18,7 @@ import {
 } from "shared/util";
 import {
     buttonFunctionProvider,
+    flyingGripperFunctionProvider,
     stretchTool,
     movementRecorderFunctionProvider,
     underMapFunctionProvider,
@@ -146,6 +147,35 @@ export const MobileOperator = (props: {
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
+
+    // Flying gripper: Pilot-only overlay where the gripper cam becomes the hero
+    // view. Session-only, never persisted.
+    const [isFlyingGripper, isFlyingGripperSet] = useState(false);
+    const setFlyingGripper = React.useCallback((flying: boolean) => {
+        // Never carry an in-flight press across a pad swap.
+        buttonFunctionProvider.disableActiveButton();
+        flyingGripperFunctionProvider.disableActiveButton();
+        isFlyingGripperSet(flying);
+    }, []);
+    const enterFlyingGripper = React.useCallback(
+        () => setFlyingGripper(true),
+        [setFlyingGripper],
+    );
+    const exitFlyingGripper = React.useCallback(
+        () => setFlyingGripper(false),
+        [setFlyingGripper],
+    );
+
+    // Leaving Pilot (scene or slide) always drops flying gripper so AutoNav
+    // never sits on top of it.
+    React.useEffect(() => {
+        if (
+            isFlyingGripper &&
+            (sceneSelected !== "pilot-mode" || swipeableViewsIdx !== 0)
+        ) {
+            setFlyingGripper(false);
+        }
+    }, [isFlyingGripper, sceneSelected, swipeableViewsIdx, setFlyingGripper]);
 
     const { toasts, toastsSet, addToast } = useToasts();
 
@@ -529,6 +559,8 @@ export const MobileOperator = (props: {
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
                             sharedState={sharedState}
+                            isFlyingGripper={isFlyingGripper}
+                            onExitFlyingGripper={exitFlyingGripper}
                         />
                         <GripperCamPIP
                             cameraID={CameraViewId.gripper}
@@ -539,6 +571,8 @@ export const MobileOperator = (props: {
                             isGripperCamLarge={isGripperCamLarge}
                             isGripperCamLargeSet={isGripperCamLargeSet}
                             homingBannerDismissed={homingBannerDismissed}
+                            isFlyingGripper={isFlyingGripper}
+                            onEnterFlyingGripper={enterFlyingGripper}
                         />
                     </div>
                     <div
