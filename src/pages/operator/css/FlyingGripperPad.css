@@ -27,13 +27,16 @@
     --bite-r: calc(var(--ring) / 2 + var(--bite-gap));
 
     /* Shared pad surface (see :root --pad-* in index.css) */
-    --border: var(--pad-border-width) var(--pad-border-style) var(--pad-border-color);
+    --border: var(--pad-border-width) var(--pad-border-style)
+        var(--pad-border-color);
     --radial-border-width: calc(var(--pad-border-width) * (2 / 3));
-    --glow-wedge: inset 0px 0px calc(var(--wedge) / 10) 0px var(--pad-glow-color);
-    --glow-inner: inset 0px 0px calc(var(--inner) / 10) 0px var(--pad-glow-color);
+    --glow-wedge: inset 0px 0px calc(var(--wedge) / 10) 0px
+        var(--pad-glow-color);
+    --glow-inner: inset 0px 0px calc(var(--inner) / 10) 0px
+        var(--pad-glow-color);
     --glow-panel-blur: calc(var(--panel-w) / 5);
-    --surface-transition: border-color 500ms ease-out, border-width 500ms ease-out,
-        box-shadow 500ms ease-out;
+    --surface-transition: border-color 500ms ease-out,
+        border-width 500ms ease-out, box-shadow 500ms ease-out;
 
     --icon: hsl(0, 0%, 100%);
     --icon-chevron: calc(var(--w) * 0.075);
@@ -145,7 +148,8 @@
     transition: opacity 300ms ease-out;
 }
 
-.fgpad .fgpad-panel:active .fgpad-panel-stroke-outer, .fgpad .fgpad-panel:active .fgpad-panel-stroke-inner {
+.fgpad .fgpad-panel:active .fgpad-panel-stroke-outer,
+.fgpad .fgpad-panel:active .fgpad-panel-stroke-inner {
     opacity: 0.2;
 }
 
@@ -385,7 +389,9 @@
     box-shadow: var(--glow-inner);
     /* Reserve the 1px active ring so :active does not change box size */
     border: 1px solid transparent;
-    transition: var(--surface-transition), color 300ms ease-out;
+    transition:
+        var(--surface-transition),
+        color 300ms ease-out;
     /* Shallow perspective so the arrow's rotateX reads as depth; the button
        surface and border stay flat. */
     perspective: 280px;
@@ -502,7 +508,9 @@
        while the matrix stays well-conditioned for non-scaling-stroke. */
     transform: scaleY(0.02);
     /* Release path, matched to the arrow's ease back to flat */
-    transition: transform 220ms ease-out, stroke 300ms ease-out;
+    transition:
+        transform 220ms ease-out,
+        stroke 300ms ease-out;
     will-change: transform;
 }
 

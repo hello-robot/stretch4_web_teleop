@@ -91,7 +91,6 @@ body,
 
 /* Allow scrolling on landscape mobile devices */
 @media screen and (orientation: landscape) and (max-device-width: 900px) {
-
     html,
     body,
     #root {
@@ -254,7 +253,6 @@ input:focus {
 
 /* Glow effect */
 @keyframes pulse-glow {
-
     0%,
     100% {
         opacity: 0.2;
