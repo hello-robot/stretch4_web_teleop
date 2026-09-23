@@ -84,6 +84,14 @@ const BAR_RIGHT: PadButton = {
     iconSrc: gripperCloseIcon,
 };
 
+/* Equator of the inner disc in a 0-100 viewBox: a quadratic whose midpoint
+   sags 8 units below center. CSS scales it flat at rest and bows it toward
+   the pressed arrow. */
+const INNER_LINE_PATH = "M 0 50 Q 50 56 100 50";
+/* Two half-width strokes, light over shaded, emulate the `ridge` border used
+   on the disc outline; a CSS border cannot follow a curve. */
+const INNER_LINE_TONES = ["light", "dark"] as const;
+
 const PadButtonEl: React.FC<{
     button: PadButton;
     className: string;
@@ -256,7 +264,18 @@ const FlyingGripperPad: React.FC<FlyingGripperPadProps> = ({
                         disabled={motionDisabled}
                     />
                 ))}
-                <div className="fgpad-inner-line" aria-hidden />
+                <div className="fgpad-inner-line" aria-hidden>
+                    {INNER_LINE_TONES.map((tone) => (
+                        <svg
+                            key={tone}
+                            className={`fgpad-inner-line-svg fgpad-inner-line-svg--${tone}`}
+                            viewBox="0 0 100 100"
+                            preserveAspectRatio="none"
+                        >
+                            <path d={INNER_LINE_PATH} />
+                        </svg>
+                    ))}
+                </div>
             </div>
         </div>
     );

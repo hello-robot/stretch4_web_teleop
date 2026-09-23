@@ -393,10 +393,14 @@
 
 .fgpad .fgpad-inner-btn--up {
     border-radius: var(--inner) var(--inner) 0 0 / var(--inner) var(--inner) 0 0;
+    /* No border on the shared edge: a transparent 1px border there is a dark
+       gutter, and it shows once the equator bows off the midline. */
+    border-bottom-width: 0;
 }
 
 .fgpad .fgpad-inner-btn--down {
     border-radius: 0 0 var(--inner) var(--inner) / 0 0 var(--inner) var(--inner);
+    border-top-width: 0;
 }
 
 .fgpad .fgpad-inner-btn .fgpad-icon {
@@ -443,13 +447,102 @@
     color: var(--blue);
 }
 
+/* Equator between the two halves (see INNER_LINE_PATH in FlyingGripperPad.tsx).
+   The path is authored as a downward bow; at rest it is scaled flat about the
+   disc's center line, and a press bows it toward the pressed arrow so arrow
+   and seam read as sitting on one ball. Clipped to the disc so the stroke
+   cannot run past the circle. */
 .fgpad-inner-line {
     position: absolute;
-    top: calc(50% - var(--pad-border-width) / 2);
-    left: 0;
-    width: 100%;
-    height: 0;
-    border-top: var(--border);
+    inset: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    /* SVG strokes can paint past overflow:hidden; clip-path keeps the equator
+       inside the disc on those engines too. */
+    clip-path: circle(50%);
     mix-blend-mode: soft-light;
     pointer-events: none;
+}
+
+.fgpad-inner-line-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Ridge emulation: the two half-width strokes sit edge to edge, light above
+   shaded, so together they span --pad-border-width like the disc outline.
+   Offsets live on the <svg> (a CSS box) so they are true pixels. */
+.fgpad-inner-line-svg--light {
+    translate: 0 calc(var(--pad-border-width) / -4);
+}
+
+.fgpad-inner-line-svg--dark {
+    translate: 0 calc(var(--pad-border-width) / 4);
+}
+
+.fgpad-inner-line-svg--light path {
+    stroke: var(--pad-border-color);
+}
+
+.fgpad-inner-line-svg--dark path {
+    stroke: var(--pad-border-color-dark);
+}
+
+.fgpad-inner-line path {
+    fill: none;
+    stroke-width: calc(var(--pad-border-width) / 2);
+    vector-effect: non-scaling-stroke;
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+    /* Near-zero rather than 0: a singular matrix would drop the path from
+       rendering. At 0.02 the bow is a fraction of a pixel, so it reads flat,
+       while the matrix stays well-conditioned for non-scaling-stroke. */
+    transform: scaleY(0.02);
+    /* Release path, matched to the arrow's ease back to flat */
+    transition: transform 220ms ease-out, stroke 300ms ease-out;
+    will-change: transform;
+}
+
+/* The equator rolls toward the pressed arrow: forward bows up (∩),
+   backward bows down (∪). Same attack as the arrow tilt. The two-tone
+   ridge becomes a single active-blue stroke, matching the half's ring. */
+.fgpad .fgpad-inner-btn--up:active ~ .fgpad-inner-line,
+.fgpad .fgpad-inner-btn--down:active ~ .fgpad-inner-line {
+    mix-blend-mode: screen;
+}
+
+.fgpad .fgpad-inner-btn--up:active ~ .fgpad-inner-line path,
+.fgpad .fgpad-inner-btn--down:active ~ .fgpad-inner-line path {
+    stroke: var(--pad-active-color);
+}
+
+.fgpad .fgpad-inner-btn--up:active ~ .fgpad-inner-line path {
+    transform: scaleY(-1);
+    animation: fgpad-bow-up 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.fgpad .fgpad-inner-btn--down:active ~ .fgpad-inner-line path {
+    transform: scaleY(1);
+    animation: fgpad-bow-down 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes fgpad-bow-down {
+    from {
+        transform: scaleY(0.02);
+    }
+    to {
+        transform: scaleY(1);
+    }
+}
+
+@keyframes fgpad-bow-up {
+    from {
+        transform: scaleY(-0.02);
+    }
+    to {
+        transform: scaleY(-1);
+    }
 }
