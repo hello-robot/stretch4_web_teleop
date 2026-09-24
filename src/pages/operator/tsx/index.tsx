@@ -33,6 +33,7 @@ import "operator/css/index.css";
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
 import { waitUntilAsync } from "../../../shared/util";
+import { RobotAudioPlayer } from "./utils/robotAudioPlayer";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -170,7 +171,7 @@ new Promise<void>(async (resolve) => {
 const container = document.getElementById("root");
 root = createRoot(container!);
 
-/** Handle when the WebRTC connection adds a new track on a camera video stream. */
+/** Handle when the WebRTC connection adds a new track on a camera video or audio stream. */
 function handleRemoteTrackAdded(event: RTCTrackEvent) {
     const track = event.track;
     const stream = event.streams[0];
@@ -186,6 +187,11 @@ function handleRemoteTrackAdded(event: RTCTrackEvent) {
     console.log("OPERATOR: adding remote tracks");
 
     allRemoteStreams.set(streamName, { track: track, stream: stream });
+
+    if (streamName === "audio" || track.kind === "audio") {
+        console.log("OPERATOR: Routing robot audio stream to RobotAudioPlayer");
+        RobotAudioPlayer.getInstance().playStream(stream);
+    }
 }
 
 /**
@@ -418,17 +424,23 @@ function renderOperator(storageHandler: StorageHandler) {
     initConnectionStateCheck();
 }
 
-function disconnectFromRobot() {
+/**
+ * Disconnects the operator from the robot and cleans up audio and WebRTC sessions.
+ */
+function disconnectFromRobot(): void {
+    RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 }
 
 window.onbeforeunload = () => {
+    RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 };
 
 window.onunload = () => {
+    RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 };
