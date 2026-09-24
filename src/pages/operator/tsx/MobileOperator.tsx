@@ -54,6 +54,7 @@ import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
+import { useExclusiveModal } from "./react_hooks/useExclusiveModal";
 import type {
     ControlAutoNavAction,
     ControlAutoNavResult,
@@ -133,6 +134,11 @@ export const MobileOperator = (props: {
 
     // Main Menu (owned here so voice can open/close via Realtime tool)
     const [isMainMenuOpen, isMainMenuOpenSet] = useState(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(isMainMenuOpen, () => isMainMenuOpenSet(false));
+    useExclusiveModal(isModalLocationsMenuVisible, () =>
+        isModalLocationsMenuVisibleSet(false),
+    );
 
     /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
     const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);

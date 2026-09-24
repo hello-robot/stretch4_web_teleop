@@ -6,6 +6,7 @@ import IconRecord from "operator/icons/Record.svg";
 import IconRecordPressed from "operator/icons/Record_Pressed.svg";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import ModalMobile from "../basic_components/ModalMobile";
+import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import Flex from "../basic_components/Flex";
 import { ButtonCancelPlayback } from '../static_components/ButtonCancelPlayback';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -537,6 +538,11 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         closeModal();
         props.setCameraVeilCallback(false);
     };
+
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(isModalOpen, handleClose, {
+        restoreVeil: (visible) => props.setCameraVeilCallback?.(visible),
+    });
 
     const titleCalc = useCallback(() => {
         if (!showRecordingStartButton && !isNamingModalVisible) {
