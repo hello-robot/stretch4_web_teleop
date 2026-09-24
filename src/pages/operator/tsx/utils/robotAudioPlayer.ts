@@ -10,9 +10,10 @@ export class RobotAudioPlayer {
     private gainNode?: GainNode;
     private sourceNode?: MediaStreamAudioSourceNode;
     private dummyAudioElement?: HTMLAudioElement;
-    private isMuted: boolean = false;
+    private isMuted: boolean = true;
     private currentGain: number = 1.0;
     private hasUserGestureListener: boolean = false;
+    private muteListeners: Set<(muted: boolean) => void> = new Set();
 
     /**
      * Retrieves the singleton instance of RobotAudioPlayer.
@@ -185,7 +186,25 @@ export class RobotAudioPlayer {
                 this.isMuted ? 0 : this.currentGain,
                 this.audioContext.currentTime
             );
+            if (!this.isMuted && this.audioContext.state === "suspended") {
+                this.audioContext.resume().catch((err) => {
+                    console.warn("RobotAudioPlayer: Error resuming AudioContext on unmute:", err);
+                });
+            }
         }
+        this.muteListeners.forEach((listener) => listener(this.isMuted));
+    }
+
+    /**
+     * Toggles the mute status of the audio stream.
+     *
+     * Returns:
+     *     The new mute boolean status.
+     */
+    public toggleMuted(): boolean {
+        const nextMuted = !this.isMuted;
+        this.setMuted(nextMuted);
+        return nextMuted;
     }
 
     /**
@@ -196,6 +215,22 @@ export class RobotAudioPlayer {
      */
     public getMuted(): boolean {
         return this.isMuted;
+    }
+
+    /**
+     * Adds a listener callback invoked when mute status changes.
+     *
+     * Args:
+     *     listener: Callback receiving the new mute boolean status.
+     *
+     * Returns:
+     *     Unsubscribe function to remove the listener.
+     */
+    public addMuteListener(listener: (muted: boolean) => void): () => void {
+        this.muteListeners.add(listener);
+        return () => {
+            this.muteListeners.delete(listener);
+        };
     }
 
     /**

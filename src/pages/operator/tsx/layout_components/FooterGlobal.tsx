@@ -26,9 +26,15 @@ import {
 import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
 import { MapFunction } from "./AutoNav";
+import { RobotAudioPlayer } from "../utils/robotAudioPlayer";
 
 /** Menu tiles that run an action without changing the selected scene/footer label. */
-const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco", "reload-app"]);
+const ACTION_TILE_IDS = new Set([
+    "mic-mute",
+    "robot-mic-mute",
+    "localize-aruco",
+    "reload-app",
+]);
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
 
 // @flag voice_control_interface
@@ -54,6 +60,9 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     isMainMenuOpenSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
+    const [isRobotAudioMuted, isRobotAudioMutedSet] = useState<boolean>(
+        RobotAudioPlayer.getInstance().getMuted()
+    );
     // @flag voice_control_interface
     const voiceSvc = isVoiceControlEnabled();
     const [localizeStatus, localizeStatusSet] =
@@ -88,7 +97,11 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     });
 
     useEffect(() => {
+        const unsubscribe = RobotAudioPlayer.getInstance().addMuteListener(
+            (muted) => isRobotAudioMutedSet(muted)
+        );
         return () => {
+            unsubscribe();
             if (localizeSuccessTimeoutRef.current) {
                 clearTimeout(localizeSuccessTimeoutRef.current);
             }
@@ -141,6 +154,16 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 icon: <CheckCircleIcon />,
                 enabled: localizeStatus !== "loading",
                 status: localizeStatus,
+            },
+            {
+                id: "robot-mic-mute",
+                name: isRobotAudioMuted ? "Unmute Robot Mic" : "Mute Robot Mic",
+                description: "Toggle robot microphone audio stream playback",
+                onClick: () => {
+                    RobotAudioPlayer.getInstance().toggleMuted();
+                },
+                icon: isRobotAudioMuted ? <MicOffIcon /> : <MicIcon />,
+                enabled: true,
             },
             // @flag voice_control_interface
             ...(voiceSvc
@@ -213,6 +236,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             swipeableViewsIdxSet,
             micMuted,
             voiceConnected,
+            isRobotAudioMuted,
         ]
     );
 
@@ -225,7 +249,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             scene.onClick?.();
             return;
         }
-        if (scene.id === "mic-mute") {
+        if (scene.id === "robot-mic-mute" || scene.id === "mic-mute") {
             scene.onClick?.();
             isMainMenuOpenSet(false);
             return;
