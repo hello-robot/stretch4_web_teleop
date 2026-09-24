@@ -74,7 +74,9 @@ robot.setOnRosConnectCallback(async () => {
     });
     gripperStream.start();
 
-    audioStream.start();
+    await audioStream.start().catch((err) => {
+        console.error("AudioStream start failed:", err);
+    });
 
     robot.getOccupancyGrid();
 
@@ -94,7 +96,12 @@ robot.setOnRosConnectCallback(async () => {
 });
 robot.connect();
 
-function handleSessionStart() {
+/**
+ * Handles WebRTC session start when an operator joins the robot room.
+ * Removes existing tracks, attaches navigation, gripper, and robot audio tracks,
+ * and opens the bidirectional data channels.
+ */
+function handleSessionStart(): void {
     connection.removeTracks();
 
     console.log("adding local media stream to peer connection");
@@ -109,10 +116,18 @@ function handleSessionStart() {
         .getTracks()
         .forEach((track) => connection.addTrack(track, stream, "gripper"));
 
-    stream = audioStream.outputAudioStream!;
-    stream
-        .getTracks()
-        .forEach((track) => connection.addTrack(track, stream, "audio"));
+    if (audioStream.outputAudioStream) {
+        stream = audioStream.outputAudioStream;
+        const audioTracks = stream.getTracks();
+        if (audioTracks.length > 0) {
+            audioTracks.forEach((track) =>
+                connection.addTrack(track, stream, "audio")
+            );
+            console.log("Added robot audio track to peer connection");
+        } else {
+            console.warn("No audio tracks found on robot outputAudioStream");
+        }
+    }
 
     connection.openDataChannels();
 }
