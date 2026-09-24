@@ -46,7 +46,6 @@ export const ActionMode = (props: ActionModeProps) => {
 
     // Apply exclusive modal to prevent multiple modals
     useExclusiveModal(
-        "actionMode",
         isModalOpen,
         () => {
             setIsModalOpen(false);

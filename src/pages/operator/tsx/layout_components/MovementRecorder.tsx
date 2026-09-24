@@ -540,7 +540,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
     };
 
     // Apply exclusive modal to prevent multiple modals
-    useExclusiveModal("savedPoses", isModalOpen, handleClose, {
+    useExclusiveModal(isModalOpen, handleClose, {
         restoreVeil: (visible) => props.setCameraVeilCallback?.(visible),
     });
 

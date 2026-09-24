@@ -76,7 +76,6 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
     const [isModalOpen, setIsModalOpen] = React.useState<boolean>(false);
     // Apply exclusive modal to prevent multiple modals
     useExclusiveModal(
-        "actionSpeed",
         isModalOpen,
         () => {
             setIsModalOpen(false);

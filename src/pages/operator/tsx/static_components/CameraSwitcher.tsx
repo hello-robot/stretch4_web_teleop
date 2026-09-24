@@ -66,7 +66,6 @@ export const CameraSwitcher: React.FC<MenuCameraSelectProps> = ({
     const [isModalOpen, isModalOpenSet] = useState<boolean>(false);
     // Apply exclusive modal to prevent multiple modals
     useExclusiveModal(
-        "cameraSwitcher",
         isModalOpen,
         () => {
             isModalOpenSet(false);

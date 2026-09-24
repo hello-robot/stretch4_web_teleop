@@ -266,7 +266,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
     // Modal visibility state for adding a location
     const [isModalAddLocationVisible, isModalAddLocationVisibleSet] = useState<boolean>(false);
     // Apply exclusive modal to prevent multiple modals
-    useExclusiveModal('addLocation', isModalAddLocationVisible, () =>
+    useExclusiveModal(isModalAddLocationVisible, () =>
         isModalAddLocationVisibleSet(false),
     );
     // Whether to display all goal markers on the map

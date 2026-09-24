@@ -1,24 +1,17 @@
 /**
  * Only one modal (ModalMobile / MainMenu) can be open at a time.
  * Call at each modal's `isOpen` owner. Opening one closes any other.
+ * Identity is this hook instance's close ref, so a new modal only calls the hook.
  * Veil-using modals pass `restoreVeil`; others omit it.
  */
 
 import { useEffect, useRef } from "react";
 
-export type ExclusiveModalId =
-    | "mainMenu"
-    | "savedLocations"
-    | "addLocation"
-    | "savedPoses"
-    | "actionSpeed"
-    | "actionMode"
-    | "cameraSwitcher";
-
 type ModalClose = () => void;
+type ModalSlot = { current: ModalClose };
 
-const closeById = new Map<ExclusiveModalId, ModalClose>();
-let openId: ExclusiveModalId | null = null;
+const closeBySlot = new Map<ModalSlot, ModalClose>();
+let openSlot: ModalSlot | null = null;
 
 export type ExclusiveModalOptions = {
     /**
@@ -33,7 +26,6 @@ export type ExclusiveModalOptions = {
  * When `isOpen` becomes true, any other registered modal is closed.
  */
 export function useExclusiveModal(
-    id: ExclusiveModalId,
     isOpen: boolean,
     close: ModalClose,
     options?: ExclusiveModalOptions,
@@ -44,26 +36,27 @@ export function useExclusiveModal(
     restoreVeilRef.current = options?.restoreVeil;
 
     useEffect(() => {
-        closeById.set(id, () => closeRef.current());
+        const slot = closeRef;
+        closeBySlot.set(slot, () => closeRef.current());
         return () => {
-            closeById.delete(id);
-            if (openId === id) {
-                openId = null;
+            closeBySlot.delete(slot);
+            if (openSlot === slot) {
+                openSlot = null;
             }
         };
-    }, [id]);
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
-            if (openId && openId !== id) {
-                closeById.get(openId)?.();
+            if (openSlot && openSlot !== closeRef) {
+                closeBySlot.get(openSlot)?.();
             }
-            openId = id;
+            openSlot = closeRef;
             restoreVeilRef.current?.(true);
             return;
         }
-        if (openId === id) {
-            openId = null;
+        if (openSlot === closeRef) {
+            openSlot = null;
         }
-    }, [isOpen, id]);
+    }, [isOpen]);
 }

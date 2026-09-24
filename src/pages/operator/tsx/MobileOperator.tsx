@@ -135,13 +135,9 @@ export const MobileOperator = (props: {
     // Main Menu (owned here so voice can open/close via Realtime tool)
     const [isMainMenuOpen, isMainMenuOpenSet] = useState(false);
     // Apply exclusive modal to prevent multiple modals
-    useExclusiveModal("mainMenu", isMainMenuOpen, () =>
-        isMainMenuOpenSet(false),
-    );
-    useExclusiveModal(
-        "savedLocations",
-        isModalLocationsMenuVisible,
-        () => isModalLocationsMenuVisibleSet(false),
+    useExclusiveModal(isMainMenuOpen, () => isMainMenuOpenSet(false));
+    useExclusiveModal(isModalLocationsMenuVisible, () =>
+        isModalLocationsMenuVisibleSet(false),
     );
 
     /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
