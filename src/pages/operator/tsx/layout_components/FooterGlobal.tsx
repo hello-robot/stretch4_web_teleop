@@ -170,7 +170,9 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 ? [
                     {
                         id: "mic-mute",
-                        name: micMuted ? "Unmute" : "Mute",
+                        name: micMuted
+                            ? "Enable Voice Control"
+                            : "Disable Voice Control",
                         description: "Toggle microphone uplink to OpenAI",
                         onClick: () => {
                             const nextMuted =
