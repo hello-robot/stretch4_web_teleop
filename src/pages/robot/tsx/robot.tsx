@@ -1169,14 +1169,14 @@ export class Robot extends React.Component {
         this.cmdVelTopic.publish(twist);
     };
 
-    async setTaskSpaceVelocity(linX: number, linY: number, linZ: number) {
+    async setTaskSpaceVelocity(linear_X: number, linear_Y: number, linear_Z: number) {
         await this.switchToVelocityMode();
         this.stopExecution();
         const twist = {
             linear: {
-                x: linX,
-                y: linY,
-                z: linZ,
+                x: linear_X,
+                y: linear_Y,
+                z: linear_Z,
             },
             angular: {
                 x: 0,

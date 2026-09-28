@@ -167,17 +167,17 @@ export abstract class FunctionProvider {
 
     /** Heartbeat tool-frame twist to /ee_cmd_vel (watchdog is 0.4s). */
     public continuousTaskSpaceMovement(
-        linX: number,
-        linY: number,
-        linZ: number,
+        linear_X: number,
+        linear_Y: number,
+        linear_Z: number,
     ) {
         this.stopCurrentAction();
         this.velocityExecutionHeartbeat = window.setInterval(() => {
             this.activeVelocityAction =
                 FunctionProvider.remoteRobot?.setTaskSpaceVelocity(
-                    linX,
-                    linY,
-                    linZ,
+                    linear_X,
+                    linear_Y,
+                    linear_Z,
                 );
         }, 50);
     }
