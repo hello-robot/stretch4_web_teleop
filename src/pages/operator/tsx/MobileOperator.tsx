@@ -1,4 +1,5 @@
 import React, { PointerEventHandler, useState } from "react";
+import { isVoiceControlEnabled } from "shared/operatorVoiceSession";
 import {
     ActionModeType,
     ButtonPadIdMobile,
@@ -17,6 +18,7 @@ import {
 } from "shared/util";
 import {
     buttonFunctionProvider,
+    flyingGripperFunctionProvider,
     stretchTool,
     movementRecorderFunctionProvider,
     underMapFunctionProvider,
@@ -53,6 +55,23 @@ import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
+import type {
+    ControlAutoNavAction,
+    ControlAutoNavResult,
+    LoadAutoNavLocationResult,
+    MainMenuAction,
+    SavedLocationsModalAction,
+    SetMainMenuResult,
+    SetSavedLocationsModalResult,
+} from "./voice/constants";
+
+// @flag voice_control_interface
+// Loaded lazily so the Realtime session, microphone capture, and the voice
+// tool runners stay out of the operator bundle's initial chunk. The chunk is
+// never requested while isVoiceControlEnabled() is false.
+const VoiceCommandAssistant = React.lazy(
+    () => import("./static_components/VoiceCommandAssistant")
+);
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -113,11 +132,50 @@ export const MobileOperator = (props: {
     const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
         useState(false);
 
+    // Main Menu (owned here so voice can open/close via Realtime tool)
+    const [isMainMenuOpen, isMainMenuOpenSet] = useState(false);
 
+    /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
+    const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
+    const registerAutoNavNavControls = React.useCallback(
+        (controls: AutoNavNavControls | null) => {
+            autoNavNavControlsRef.current = controls;
+        },
+        [],
+    );
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
+
+    // Flying gripper: Pilot-only overlay where the gripper cam becomes the hero
+    // view. Session-only, never persisted.
+    const [isFlyingGripper, isFlyingGripperSet] = useState(false);
+    const setFlyingGripper = React.useCallback((flying: boolean) => {
+        // Never carry an in-flight press across a pad swap.
+        buttonFunctionProvider.disableActiveButton();
+        flyingGripperFunctionProvider.disableActiveButton();
+        isFlyingGripperSet(flying);
+    }, []);
+    const enterFlyingGripper = React.useCallback(
+        () => setFlyingGripper(true),
+        [setFlyingGripper],
+    );
+    const exitFlyingGripper = React.useCallback(
+        () => setFlyingGripper(false),
+        [setFlyingGripper],
+    );
+
+    // Leaving Pilot (scene or slide) always drops flying gripper so AutoNav
+    // never sits on top of it.
+    React.useEffect(() => {
+        if (
+            isFlyingGripper &&
+            (sceneSelected !== "pilot-mode" || swipeableViewsIdx !== 0)
+        ) {
+            setFlyingGripper(false);
+        }
+    }, [isFlyingGripper, sceneSelected, swipeableViewsIdx, setFlyingGripper]);
 
     const { toasts, toastsSet, addToast } = useToasts();
 
@@ -127,6 +185,34 @@ export const MobileOperator = (props: {
             isModalLocationsMenuVisibleSet(false);
         }
     }, [sceneSelected]);
+
+    const handleSetMainMenu = React.useCallback(
+        (action: MainMenuAction): SetMainMenuResult => {
+            isMainMenuOpenSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Main Menu."
+                        : "Closed Main Menu.",
+            };
+        },
+        [],
+    );
+
+    const handleSetSavedPosesModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            movementRecorderFunctionProvider.setModalOpen(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Poses."
+                        : "Closed Saved Poses.",
+            };
+        },
+        [],
+    );
 
     /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
     const handleCancelAutoNavOnStop =
@@ -176,7 +262,48 @@ export const MobileOperator = (props: {
         },
         [],
     );
-    const alertTimeoutDuration = 100; // milliseconds
+
+    const handleSetSavedLocationsModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saved Locations is only available in AutoNav",
+                };
+            }
+            isModalLocationsMenuVisibleSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Locations."
+                        : "Closed Saved Locations.",
+            };
+        },
+        [],
+    );
+
+    const handleControlAutoNav = React.useCallback(
+        (action: ControlAutoNavAction): ControlAutoNavResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav controls are only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return action === "start" ? controls.start() : controls.cancel();
+        },
+        [],
+    );
+
+    const alertTimeoutDuration = 5000; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
@@ -321,10 +448,38 @@ export const MobileOperator = (props: {
         return show ? <ControlModes key={"control-modes"} /> : <></>;
     };
 
+    // @flag voice_control_interface
+    const voiceSvc = isVoiceControlEnabled();
+
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
             <Toasts toasts={toasts} toastsSet={toastsSet} />
-
+            {/* @flag voice_control_interface */}
+            {voiceSvc ? (
+                <React.Suspense fallback={null}>
+                    <VoiceCommandAssistant
+                        onVelocityScaleApplied={applyVelocityScale}
+                        setActionMode={setActionMode}
+                        addToast={addToast}
+                        onSwitchScene={(scene) => {
+                            if (scene === "pilot") {
+                                swipeableViewsIdxSet(0);
+                                setSceneSelected("pilot-mode");
+                            } else {
+                                setSceneSelected("autonav");
+                                swipeableViewsIdxSet(1);
+                            }
+                        }}
+                        onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                        onSetSavedPosesModal={handleSetSavedPosesModal}
+                        onSetMainMenu={handleSetMainMenu}
+                        onControlAutoNav={handleControlAutoNav}
+                        onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
+                        onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
+                        onLoadAutoNavLocation={handleLoadAutoNavLocation}
+                    />
+                </React.Suspense>
+            ) : null}
             <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
@@ -396,7 +551,7 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-                            setVelocityScale={applyVelocityScale}
+                            onVelocityScaleChange={applyVelocityScale}
                             setActionMode={setActionMode}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
@@ -404,6 +559,8 @@ export const MobileOperator = (props: {
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
                             sharedState={sharedState}
+                            isFlyingGripper={isFlyingGripper}
+                            onExitFlyingGripper={exitFlyingGripper}
                         />
                         <GripperCamPIP
                             cameraID={CameraViewId.gripper}
@@ -414,6 +571,8 @@ export const MobileOperator = (props: {
                             isGripperCamLarge={isGripperCamLarge}
                             isGripperCamLargeSet={isGripperCamLargeSet}
                             homingBannerDismissed={homingBannerDismissed}
+                            isFlyingGripper={isFlyingGripper}
+                            onEnterFlyingGripper={enterFlyingGripper}
                         />
                     </div>
                     <div
@@ -436,6 +595,9 @@ export const MobileOperator = (props: {
                             }
 
                             moveBaseState={moveBaseState}
+                            onRegisterAutoNavNavControls={
+                                registerAutoNavNavControls
+                            }
                         />
                     </div>
                 </SwipeableViews>
@@ -443,6 +605,8 @@ export const MobileOperator = (props: {
                     swipeableViewsIdxSet={swipeableViewsIdxSet}
                     sceneSelected={sceneSelected}
                     onSceneSelectedChange={setSceneSelected}
+                    isMainMenuOpen={isMainMenuOpen}
+                    isMainMenuOpenSet={isMainMenuOpenSet}
                 />
             </div>
         </div>

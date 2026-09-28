@@ -110,7 +110,8 @@ const ButtonCTA = (props: {
     ) {
         return (
             <button
-                onPointerDown={() => props.showRecordingStartButtonSet(true)}
+                type="button"
+                onClick={() => props.showRecordingStartButtonSet(true)}
                 className="btn btn-tertiary mrecord-modal-cta-btn"
             >
                 <RadioButtonCheckedIcon color="primary" fontSize="small" />
@@ -127,7 +128,8 @@ const ButtonCTA = (props: {
     ) {
         return (
             <button
-                onPointerDown={props.startRecording}
+                type="button"
+                onClick={props.startRecording}
                 disabled={!props.isOneJointSelected}
                 className={`btn btn-primary mrecord-modal-cta-btn ${props.isOneJointSelected ? 'glow' : ''}`}
             >
@@ -147,7 +149,8 @@ const ButtonCTA = (props: {
             && !props.isRecordingNameDuplicate;
         return (
             <button
-                onPointerDown={props.handleSaveRecording}
+                type="button"
+                onClick={props.handleSaveRecording}
                 className={`btn btn-primary mrecord-modal-cta-btn ${canSave ? 'glow' : ''}`}
                 disabled={!canSave}
             >
@@ -169,6 +172,8 @@ interface MovementRecorderProps {
     setCameraVeilCallback?: (visible: boolean) => void;
     isRecording: boolean;
     isRecordingSet: React.Dispatch<React.SetStateAction<boolean>>;
+    /** Hide the corner button without unmounting (e.g. flying gripper owns that space). */
+    hideButton?: boolean;
 }
 
 export const MovementRecorder = (props: MovementRecorderProps) => {
@@ -212,7 +217,44 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         ) as (names: string[]) => void,
     }), []);
 
+    const {
+        playbackPosesState,
+        idxFixedRecordingPlaying,
+        idxFixedRecordingPlayingSet
+    } = props.sharedState;
+
+    const [recordings, recordingsSet] = useState<string[]>(
+        functions.SavedRecordingNames(),
+    );
     const [isModalOpen, isModalOpenSet] = React.useState<boolean>(false);
+
+    useEffect(() => {
+        movementRecorderFunctionProvider.setModalOpenHandler((open) => {
+            isModalOpenSet(open);
+            props.setCameraVeilCallback?.(open);
+        });
+        movementRecorderFunctionProvider.setCameraVeilHandler((visible) => {
+            props.setCameraVeilCallback?.(visible);
+        });
+        movementRecorderFunctionProvider.setIdxFixedRecordingPlayingHandler((idx) => {
+            idxFixedRecordingPlayingSet(idx);
+        });
+        movementRecorderFunctionProvider.setRefreshRecordingsHandler(() => {
+            recordingsSet(functions.SavedRecordingNames());
+        });
+        return () => {
+            movementRecorderFunctionProvider.setModalOpenHandler(undefined);
+            movementRecorderFunctionProvider.setCameraVeilHandler(undefined);
+            movementRecorderFunctionProvider.setIdxFixedRecordingPlayingHandler(undefined);
+            movementRecorderFunctionProvider.setRefreshRecordingsHandler(undefined);
+        };
+    }, [props.setCameraVeilCallback, idxFixedRecordingPlayingSet, functions]);
+
+    useEffect(() => {
+        if (isModalOpen) {
+            recordingsSet(functions.SavedRecordingNames());
+        }
+    }, [isModalOpen, functions]);
 
     /*******************
      * Joint selection *
@@ -226,6 +268,18 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
     const [isPlaybackStatusbarVisible, isPlaybackStatusbarVisibleSet] = React.useState<boolean>(false);
     const [typePlaybackStatusbar, typePlaybackStatusbarSet] = React.useState<StatusbarType>('info');
     const [childrenPlaybackStatusbar, childrenPlaybackStatusbarSet] = React.useState<React.ReactNode | null>(null);
+
+    const showButtonPadWithDelay = useCallback(() => {
+        setTimeout(() => { props.setCameraVeilCallback(false) }, DELAYMS_BUTTONPAD)
+    }, [props.setCameraVeilCallback]);
+
+    const hideStatusBar = useCallback(() => {
+        setTimeout(() => {
+            isPlaybackStatusbarVisibleSet(false);
+            showButtonPadWithDelay();
+        }, DELAYMS_STATUSBAR_BEFORE_HIDE)
+    }, [showButtonPadWithDelay]);
+
     const [isOneJointSelected, isOneJointSelectedSet] = React.useState<boolean>(false);
     const selectAllJoints = useCallback(() => {
         setArm(true);
@@ -296,9 +350,6 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
     /*************
      * Recording *
      *************/
-    const [recordings, recordingsSet] = useState<string[]>(
-        functions.SavedRecordingNames(),
-    );
     const [showRecordingStartButton, showRecordingStartButtonSet] =
         useState<boolean>(false);
     const [isNamingModalVisible, isNamingModalVisibleSet] = React.useState<boolean>(false);
@@ -462,11 +513,6 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
      * Unset index to -1 when playback ended     *
      * due to success, canceled, or failed state *
      *********************************************/
-    const {
-        playbackPosesState,
-        idxFixedRecordingPlaying,
-        idxFixedRecordingPlayingSet
-    } = props.sharedState;
     const playbackTerminated = movementStatesTerminal.includes(playbackPosesState?.state as MovementState)
 
     // When playback ends, whether due to
@@ -674,8 +720,9 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
             {!showRecordingStartButton && !isNamingModalVisible
                 ? (<MagneticWrapper>
                     <button
+                        type="button"
                         className="btn btn-tertiary"
-                        onPointerDown={handleClose}
+                        onClick={handleClose}
                     >
                         Close
                     </button>
@@ -684,20 +731,23 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                     ? (
                         <MagneticWrapper>
                             <button
+                                type="button"
                                 className="btn btn-tertiary"
-                                onPointerDown={dumpToInitialState}
+                                onClick={dumpToInitialState}
                             >
                                 Back
                             </button>
                         </MagneticWrapper>
                     )
                     : (
-                        <MagneticWrapper>                            <button
-                            className="btn btn-tertiary"
-                            onPointerDown={handleDiscardRecording}
-                        >
-                            Discard
-                        </button>
+                        <MagneticWrapper>
+                            <button
+                                type="button"
+                                className="btn btn-tertiary"
+                                onClick={handleDiscardRecording}
+                            >
+                                Discard
+                            </button>
                         </MagneticWrapper>
                     )}
         </Flex>
@@ -759,19 +809,15 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         props.setCameraVeilCallback?.(newModalState);
     }, [isModalOpen, props.setCameraVeilCallback]);
 
-    const isButtonVisible = !props.isCameraVeilVisible;
+    const isButtonVisible = !props.isCameraVeilVisible && !props.hideButton;
 
     // Determine if any recording
     // is currently playing (including this one)
     const isRecordingPlaying = movementStatesTransitory.includes(playbackPosesState?.state as MovementState);
 
-    const showButtonPadWithDelay = useCallback(() => {
-        setTimeout(() => { props.setCameraVeilCallback(false) }, DELAYMS_BUTTONPAD)
-    }, []);
-
     const handlePlaybackCancel = useCallback(() => {
 
-        const recordingName = recordings[idxFixedRecordingPlaying];
+        const recordingName = recordings[idxFixedRecordingPlaying] ?? "Pose";
 
         childrenPlaybackStatusbarSet(
             <div className="mrecord-statusbar-row mrecord-statusbar-row--loose">
@@ -783,14 +829,21 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         hideStatusBar();
         idxFixedRecordingPlayingSet(-1);
         functions.Cancel();
-    }, [idxFixedRecordingPlaying, idxFixedRecordingPlayingSet, functions]);
+        return true;
+    }, [recordings, idxFixedRecordingPlaying, idxFixedRecordingPlayingSet, functions, hideStatusBar]);
 
-    const hideStatusBar = useCallback(() => {
-        setTimeout(() => {
-            isPlaybackStatusbarVisibleSet(false);
-            showButtonPadWithDelay();
-        }, DELAYMS_STATUSBAR_BEFORE_HIDE)
-    }, []);
+    useEffect(() => {
+        movementRecorderFunctionProvider.setCancelPlaybackHandler(() => {
+            if (isRecordingPlaying || idxFixedRecordingPlaying !== -1) {
+                handlePlaybackCancel();
+                return true;
+            }
+            return false;
+        });
+        return () => {
+            movementRecorderFunctionProvider.setCancelPlaybackHandler(undefined);
+        };
+    }, [handlePlaybackCancel, isRecordingPlaying, idxFixedRecordingPlaying]);
 
     useEffect(() => {
 
@@ -968,7 +1021,8 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                             ? (
                                 <div className="joints-list">
                                     <button
-                                        onPointerDown={!isOneJointSelected ? selectAllJoints : deselectAllJoints}
+                                        type="button"
+                                        onClick={!isOneJointSelected ? selectAllJoints : deselectAllJoints}
                                         disabled={props.isRecording}
                                         className={`btn ${!isOneJointSelected ? "btn-primary" : "btn-tertiary"}`}
                                     >

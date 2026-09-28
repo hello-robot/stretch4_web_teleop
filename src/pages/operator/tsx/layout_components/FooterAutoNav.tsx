@@ -1,26 +1,24 @@
-import React, { Dispatch, useRef, SetStateAction, useState, useCallback, useEffect } from 'react';
-import ModalMobile from '../basic_components/ModalMobile';
-import { AutoNavFunctions } from "./AutoNav";
-import MagneticWrapper from '../static_components/MagneticWrapper';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ModeEditIcon from '@mui/icons-material/ModeEdit';
+import SearchIcon from '@mui/icons-material/Search';
+import StopCircleIcon from '@mui/icons-material/StopCircle';
+import { motion } from 'framer-motion';
+import "operator/css/FooterAutoNav.css";
+import React, { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
+import { Transform } from 'roslib';
 import {
     ROSPoint,
 } from 'shared/util';
-import { Transform } from 'roslib';
-import "operator/css/FooterAutoNav.css";
-import { motion } from 'framer-motion';
 import InputFluid from '../basic_components/InputFluid';
-import SearchIcon from '@mui/icons-material/Search';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ModalMobile from '../basic_components/ModalMobile';
+import MagneticWrapper from '../static_components/MagneticWrapper';
 import ScrollableList from '../static_components/ScrollableList';
-import DeleteIcon from '@mui/icons-material/Delete';
-import StopCircleIcon from '@mui/icons-material/StopCircle';
-import ModeEditIcon from '@mui/icons-material/ModeEdit';
-import FooterGlobal from './FooterGlobal';
-import { set } from 'firebase/database';
+import { AutoNavFunctions } from "./AutoNav";
 
-import StartNavIcon from '../../icons/StartNavIcon.svg';
-import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
 import AddLocationIcon from '../../icons/AddLocationIcon.svg';
+import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
+import StartNavIcon from '../../icons/StartNavIcon.svg';
 import { LocalStorageHandler } from '../storage_handler/LocalStorageHandler';
 
 /** Result from imperative AutoNav start/cancel (voice + UI share this path). */

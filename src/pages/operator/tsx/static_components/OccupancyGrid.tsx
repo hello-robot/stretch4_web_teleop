@@ -1,11 +1,11 @@
 // Adapted from ros2djs and nav2djs
 
-import React from "react";
 import createjs from "createjs-module";
+import React from "react";
+import { Pose, Quaternion, Transform, Vector3 } from "roslib";
 import { ROSOccupancyGrid, ROSPoint, ROSPose } from "shared/util";
-import { Pose, Vector3, Quaternion, Transform } from "roslib";
-import { MapFunctions } from "../layout_components/AutoNav";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
+import { MapFunctions } from "../layout_components/AutoNav";
 import hexToRgbArray from "../utils/hex-to-rgb-array";
 
 /** Arrow size in map coords. */

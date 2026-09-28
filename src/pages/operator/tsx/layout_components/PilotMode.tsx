@@ -8,7 +8,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { MovementRecorder } from "./MovementRecorder";
 import { SharedState } from "./CustomizableComponent";
 import { PilotControlsToggle } from "../static_components/PilotControlsToggle";
+import FlyingGripperPad from "../static_components/FlyingGripperPad";
 import "../../css/PilotMode.css";
+
+const PAD_SWAP_TRANSITION = { duration: 0.3, ease: "easeOut" } as const;
 
 interface PilotModeProps {
     cameraID: CameraViewId;
@@ -18,7 +21,7 @@ interface PilotModeProps {
     tabContent: ((active: boolean) => React.JSX.Element)[];
     activeMainGroupTab: number;
     setActiveMainGroupTab: (index: number) => void;
-    setVelocityScale: (speed: number) => void;
+    onVelocityScaleChange: (scale: number) => void;
     setActionMode: (mode: string) => void;
     setPilotControlsCurrent: (pilotControlsCurrent: string) => void;
     swipeableViewsIdxSet: (idx: number) => void;
@@ -27,6 +30,8 @@ interface PilotModeProps {
     onSceneSelectedChange: React.Dispatch<React.SetStateAction<string>>;
     globalRecord?: boolean;
     sharedState?: SharedState;
+    isFlyingGripper: boolean;
+    onExitFlyingGripper: () => void;
 }
 
 const PilotMode: React.FC<PilotModeProps> = ({
@@ -37,7 +42,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
     tabContent,
     activeMainGroupTab,
     setActiveMainGroupTab,
-    setVelocityScale,
+    onVelocityScaleChange,
     setActionMode,
     setPilotControlsCurrent,
     swipeableViewsIdxSet,
@@ -45,18 +50,21 @@ const PilotMode: React.FC<PilotModeProps> = ({
     sceneSelected,
     onSceneSelectedChange,
     sharedState,
+    isFlyingGripper,
+    onExitFlyingGripper,
 }) => {
     const [isRecording, isRecordingSet] = React.useState<boolean>(false);
-    const onActionSpeedChange = useCallback(
-        (newSpeed: number) => {
-            setVelocityScale(newSpeed);
-            FunctionProvider.velocityScale = newSpeed;
-        },
-        [setVelocityScale]
-    );
+
+    const wrapperClassName = [
+        "pilot-mode-wrapper",
+        isRecording ? "is-recording" : "",
+        isFlyingGripper ? "is-flying-gripper" : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
 
     return (
-        <div className={`pilot-mode-wrapper ${isRecording ? 'is-recording' : ''}`}>
+        <div className={wrapperClassName}>
             <div className="controls">
                 <div className="simple-camera-view-wrapper_XP">
                     <SimpleCameraView
@@ -104,15 +112,42 @@ const PilotMode: React.FC<PilotModeProps> = ({
                                 filter: { type: "tween", duration: 0.3, ease: "easeOut" }
                             }}
                         >
-                            <TabGroup
-                                tabLabels={["Controls", "Recordings"]}
-                                tabContent={tabContent}
-                                startIdx={activeMainGroupTab}
-                                onChange={(index: number) =>
-                                    setActiveMainGroupTab(index)
-                                }
-                                pill={false}
-                            />
+                            <AnimatePresence initial={false} mode="wait">
+                                {isFlyingGripper ? (
+                                    <motion.div
+                                        key="flying-gripper-pad"
+                                        className="pilot-mode-pad-slot"
+                                        initial={{ opacity: 0, y: 24 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 24 }}
+                                        transition={PAD_SWAP_TRANSITION}
+                                    >
+                                        <FlyingGripperPad
+                                            onClose={onExitFlyingGripper}
+                                            sharedState={sharedState}
+                                        />
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        key="pilot-pad"
+                                        className="pilot-mode-pad-slot"
+                                        initial={{ opacity: 0, y: 24 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 24 }}
+                                        transition={PAD_SWAP_TRANSITION}
+                                    >
+                                        <TabGroup
+                                            tabLabels={["Controls", "Recordings"]}
+                                            tabContent={tabContent}
+                                            startIdx={activeMainGroupTab}
+                                            onChange={(index: number) =>
+                                                setActiveMainGroupTab(index)
+                                            }
+                                            pill={false}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -123,11 +158,12 @@ const PilotMode: React.FC<PilotModeProps> = ({
                     setCameraVeilCallback={isCameraVeilVisibleSet}
                     isRecording={isRecording}
                     isRecordingSet={isRecordingSet}
+                    hideButton={isFlyingGripper}
                 />
 
                 <PilotControlsToggle
                     onChange={setPilotControlsCurrent}
-                    isCameraVeilVisible={isCameraVeilVisible}
+                    isCameraVeilVisible={isCameraVeilVisible || isFlyingGripper}
                     pilotControlsCurrent={
                         FunctionProvider.pilotControlsCurrent
                     }
@@ -138,7 +174,7 @@ const PilotMode: React.FC<PilotModeProps> = ({
                 setCameraID={setCameraID}
                 // Action Speed
                 actionSpeedCurrent={FunctionProvider.velocityScale}
-                onActionSpeedChange={onActionSpeedChange}
+                onActionSpeedChange={onVelocityScaleChange}
                 // Action Mode
                 actionModeCurrent={FunctionProvider.actionMode}
                 onActionModeChange={setActionMode}

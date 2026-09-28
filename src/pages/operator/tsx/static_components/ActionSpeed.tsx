@@ -10,6 +10,12 @@ import speedSlowIconWithoutText from "operator/icons/Speed_Slow_Without_Text.svg
 import speedMediumIconWithoutText from "operator/icons/Speed_Medium_Without_Text.svg";
 import speedFastIconWithoutText from "operator/icons/Speed_Fast_Without_Text.svg";
 
+import {
+    getLabelBySpeed,
+    getSpeedByLabel,
+    VELOCITY_SCALE,
+} from "../utils/action-speed-scale";
+
 /**Details of a velocity setting */
 type ActionSpeedDetails = {
     /**Name of the setting to display on the button */
@@ -41,23 +47,7 @@ type ActionSpeedProps = {
     setCameraVeilCallback: (enable: boolean) => void;
 };
 
-/**
- * The different velocity settings to display.
- * Scale: 0 -> 1.6
- */
-export const VELOCITY_SCALE: ActionSpeedDetails[] = [
-    { label: "slow", speed: 0.5 },
-    { label: "medium", speed: 1.0 },
-    { label: "fast", speed: 1.5 },
-];
-
-const getSpeedByLabel = (label: string): number | undefined => {
-    return VELOCITY_SCALE.find((item) => item.label === label)?.speed;
-};
-
-const getLabelBySpeed = (speed: number): string | undefined => {
-    return VELOCITY_SCALE.find((item) => item.speed === speed)?.label;
-};
+const VELOCITY_SCALE_UI: ActionSpeedDetails[] = VELOCITY_SCALE;
 
 const SPEED_ICONS: Record<string, string> = {
     slow: speedSlowIcon,
@@ -76,20 +66,20 @@ const getIconBySpeed = (speed: number): string => {
     return label ? SPEED_ICONS[label] : speedMediumIcon;
 };
 
-/**The speed the interface should initialize with */
-export const DEFAULT_VELOCITY_SCALE: number = VELOCITY_SCALE[1].speed;
-
 /**
  * Set of buttons so the user can control the scaling of the speed for all controls.
  * @param props see {@link SpeedControlProps}
  */
 export const ActionSpeed = (props: ActionSpeedProps) => {
     const [isModalOpen, setIsModalOpen] = React.useState<boolean>(false);
+    const speedLabel =
+        getLabelBySpeed(props.speed) ?? VELOCITY_SCALE_UI[1].label;
 
     return (
         <div className="action-speed">
             <ModalActionSpeed
                 isOpen={isModalOpen}
+                speedLabel={speedLabel}
                 handleClose={(newSpeedLabel: string) => {
                     setIsModalOpen(false);
                     props.setCameraVeilCallback(false);
@@ -120,6 +110,7 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
 
 interface ModalActionSpeedProps {
     isOpen: boolean;
+    speedLabel: string;
     /**
      * Function handles behavior modal close
      * @param newSpeedLabel the label for the newly selected speed
@@ -133,13 +124,16 @@ interface OptionItem {
 
 const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
     isOpen,
+    speedLabel,
     handleClose,
 }) => {
-    const [selectedSpeed, setSelectedSpeed] = useState<string>(
-        VELOCITY_SCALE[1].label
-    );
+    const [selectedSpeed, setSelectedSpeed] = useState<string>(speedLabel);
 
-    const options: OptionItem[] = VELOCITY_SCALE.map((item) => ({
+    React.useEffect(() => {
+        setSelectedSpeed(speedLabel);
+    }, [speedLabel, isOpen]);
+
+    const options: OptionItem[] = VELOCITY_SCALE_UI.map((item) => ({
         value: item.label,
     }));
 

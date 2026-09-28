@@ -10,11 +10,19 @@
     translate: -50% 0%;
     aspect-ratio: 9 / 16;
     pointer-events: none;
-    transition: opacity 0.2s ease-out;
+    /* visibility flips at the end of the fade-out and immediately on fade-in */
+    transition:
+        opacity 0.2s ease-out,
+        visibility 0.2s;
 }
 
+/* Invisible must also mean untappable: descendants set their own
+   `pointer-events: auto`, so `visibility` (not inherited pointer-events) is
+   what actually removes them from hit-testing while the flying gripper pad
+   or a modal sits in this area. */
 .pilot-controls-toggle.hidden {
     opacity: 0;
+    visibility: hidden;
 }
 
 /* Fills the video overlay so the toggle (corner) and mode tabs (center) can   be positioned independently without blocking the whole video. */

@@ -5,6 +5,7 @@ import {
     DriveCommand,
     CameraPerspectiveCommand,
     IncrementalMove,
+    SetTaskSpaceVelocityCommand,
     setRobotModeCommand,
     VelocityCommand,
     RobotPoseCommand,
@@ -23,6 +24,7 @@ import {
     ValidJoints,
     ROSPose,
     waitUntil,
+    ROSOdometry,
 } from "shared/util";
 export type robotMessageChannel = (message: cmd) => void;
 
@@ -71,6 +73,13 @@ export class RemoteRobot extends React.Component<{}, any> {
         linVelY: number,
         angVel: number
     ): VelocityCommand {
+        if (!this.sensors.getLeaseDriverHolding()) {
+            return {
+                stop: () => {},
+                affirm: () => {},
+            };
+        }
+
         let cmd: DriveCommand = {
             type: "driveBase",
             modifier: { linVelX: linVelX, linVelY: linVelY, angVel: angVel },
@@ -99,10 +108,48 @@ export class RemoteRobot extends React.Component<{}, any> {
         };
     }
 
+    setTaskSpaceVelocity(
+        linX: number,
+        linY: number,
+        linZ: number
+    ): VelocityCommand {
+        if (!this.sensors.getLeaseDriverHolding()) {
+            return {
+                stop: () => {},
+            };
+        }
+
+        const cmd: SetTaskSpaceVelocityCommand = {
+            type: "setTaskSpaceVelocity",
+            linX,
+            linY,
+            linZ,
+        };
+        this.robotChannel(cmd);
+
+        return {
+            stop: () => {
+                const stopEvent: SetTaskSpaceVelocityCommand = {
+                    type: "setTaskSpaceVelocity",
+                    linX: 0,
+                    linY: 0,
+                    linZ: 0,
+                };
+                this.robotChannel(stopEvent);
+            },
+        };
+    }
+
     setJointVelocity(
         jointName: ValidJoints,
         velocity: number
     ): VelocityCommand {
+        if (!this.sensors.getLeaseDriverHolding()) {
+            return {
+                stop: () => {},
+            };
+        }
+
         let cmd: SetJointVelocityCommand = {
             type: "setJointVelocity",
             jointName: jointName,
@@ -270,6 +317,9 @@ class RobotSensors extends React.Component {
     private mode: string | undefined = undefined;
     private isHomed: boolean | undefined = undefined;
     private runStopEnabled: boolean = false;
+    private odom: ROSOdometry | undefined = undefined;
+    private leaseHolder: string = "none";
+    private leaseDriverHolding: boolean = true;
     private functionProviderCallback?: (
         inJointLimits: ValidJointStateDict,
         inCollision: ValidJointStateDict
@@ -278,6 +328,7 @@ class RobotSensors extends React.Component {
     private modeFunctionProviderCallback?: (mode: string) => void;
     private isHomedFunctionProviderCallback?: (isHomed: boolean) => void;
     private runStopFunctionProviderCallback?: (enabled: boolean) => void;
+    private leaseStatusFunctionProviderCallback?: (holder: string, isDriverHolding: boolean) => void;
     private jointStateFunctionProviderCallback?: (robotPose: RobotPose) => void;
 
     constructor(props: {}) {
@@ -287,6 +338,7 @@ class RobotSensors extends React.Component {
         this.modeFunctionProviderCallback = () => { };
         this.isHomedFunctionProviderCallback = () => { };
         this.runStopFunctionProviderCallback = () => { };
+        this.leaseStatusFunctionProviderCallback = () => { };
         this.setFunctionProviderCallback =
             this.setFunctionProviderCallback.bind(this);
         this.setBatteryFunctionProviderCallback =
@@ -297,6 +349,8 @@ class RobotSensors extends React.Component {
             this.setIsHomedFunctionProviderCallback.bind(this);
         this.setRunStopFunctionProviderCallback =
             this.setRunStopFunctionProviderCallback.bind(this);
+        this.setLeaseStatusFunctionProviderCallback =
+            this.setLeaseStatusFunctionProviderCallback.bind(this);
         this.setJointStateFunctionProviderCallback =
             this.setJointStateFunctionProviderCallback.bind(this);
     }
@@ -419,6 +473,30 @@ class RobotSensors extends React.Component {
             this.runStopFunctionProviderCallback(this.runStopEnabled);
     }
 
+    setLeaseStatus(holder: string, isDriverHolding: boolean) {
+        this.leaseHolder = holder;
+        this.leaseDriverHolding = isDriverHolding;
+        if (this.leaseStatusFunctionProviderCallback)
+            this.leaseStatusFunctionProviderCallback(this.leaseHolder, this.leaseDriverHolding);
+    }
+
+    getLeaseHolder(): string {
+        return this.leaseHolder;
+    }
+
+    getLeaseDriverHolding(): boolean {
+        return this.leaseDriverHolding;
+    }
+
+    setOdom(odom: ROSOdometry) {
+        this.odom = odom;
+    }
+
+    /** Returns the latest odometry snapshot, or undefined if none has been received yet. */
+    getOdom(): ROSOdometry | undefined {
+        return this.odom;
+    }
+
     /**
      * Records a callback from the function provider. The callback is called
      * whenever the battery voltage changes.
@@ -457,6 +535,16 @@ class RobotSensors extends React.Component {
      */
     setRunStopFunctionProviderCallback(callback: (enabled: boolean) => void) {
         this.runStopFunctionProviderCallback = callback;
+    }
+
+    /**
+     * Records a callback from the function provider. The callback is called
+     * whenever the lease status changes.
+     *
+     * @param callback callback to function provider
+     */
+    setLeaseStatusFunctionProviderCallback(callback: (holder: string, isDriverHolding: boolean) => void) {
+        this.leaseStatusFunctionProviderCallback = callback;
     }
 
     /**

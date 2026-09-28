@@ -7,6 +7,11 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
+export FEATURE_VOICE_CONTROL_INTERFACE
+
 while getopts m:t:f opt; do
 	case $opt in
 	m)
@@ -28,13 +33,32 @@ logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 logzip="$logdir/stretch4_web_teleop_logs.zip"
 mkdir -p $logdir
+# Stable pointer at this run's timestamped $logdir (mirrors ROS's own
+# ~/.ros/log/latest convention) so tools started outside this script — e.g.
+# `terminator -g tools/terminator/config`'s watch-* panes, which have no
+# REDIRECT_LOGDIR of their own — tail the current run instead of a stale one.
+ln -sfn "$logdir" "$HOME/stretch_user/log/web_teleop/latest_run"
+
+echo ""
+echo "#############################################"
+echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
+echo "#############################################"
+echo ""
+
+# Voice JSONL logs and audio-snippet clips (when voice_input_recording is
+# enabled) are written under this run's own timestamped $logdir — see
+# voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
+# in a separate persistent directory across runs, so there is no pre-run disk
+# usage to report here.
+web_teleop_du=$(du -sh "$HOME/stretch_user/log/web_teleop" 2>/dev/null | awk '{print $1}')
+echo -e "${BLUE}web_teleop logs total size:${NC} ${web_teleop_du:-0} in $HOME/stretch_user/log/web_teleop (not auto-purged; purge old run folders manually if desired)"
 
 # Validate web teleop installation
 function validate_installation {
 	local cert_dir="$HOME/ament_ws/src/stretch4_web_teleop/certificates"
 	local env_file="$HOME/ament_ws/src/stretch4_web_teleop/.env"
 
-	echo -e "${BLUE}Validating web teleop installation...${NC}"
+	echo -e "Validating web teleop installation..."
 
 	# Check certificates folder exists
 	if [ ! -d "$cert_dir" ]; then
@@ -144,9 +168,19 @@ function print_interface_urls {
 	  }'
 }
 
+echo ""
 echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
+
+echo "Feature Flags:"
+while IFS='=' read -r var value; do
+	if [[ "$value" -eq 1 ]]; then
+		echo -e "  ${GREEN}$var=$value${NC}"
+	else
+		echo -e "  ${RED}$var=$value${NC}"
+	fi
+done < <(node "$REPO_DIR/feature-flags.js" --all)
 
 validate_installation
 if [ $? -ne 0 ]; then
@@ -161,7 +195,7 @@ fi
 
 # echo ""
 cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_web_server_and_robot_browser.sh -l $logdir $FIREBASE |& tee $logfile_node
+./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE |& tee -a $logfile_node
 if [ $? -ne 0 ]; then
 	echo_failure_help
 fi

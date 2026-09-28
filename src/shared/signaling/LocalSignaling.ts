@@ -1,4 +1,10 @@
 import { SignallingMessage } from "shared/util";
+import {
+    setOperatorInteractionSocket,
+    setOperatorVoiceInputRecording,
+    setOperatorVoiceSessionToken,
+    setOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
 import { BaseSignaling, SignalingProps } from "./Signaling";
 import io, { Socket } from "socket.io-client";
 
@@ -43,17 +49,42 @@ export class LocalSignaling extends BaseSignaling {
 
     public join_as_operator(): Promise<boolean> {
         return new Promise<boolean>((resolve) => {
-            this.socket.emit("join_as_operator", (response) => {
-                if (response.success) {
-                    this.role = "operator";
-                }
-                resolve(response.success);
-            });
+            this.socket.emit(
+                "join_as_operator",
+                (response: {
+                    success: boolean;
+                    voiceSessionToken?: string;
+                    voiceSvc?: boolean;
+                    voiceInputRecording?: boolean;
+                }) => {
+                    if (response.success) {
+                        this.role = "operator";
+                        // @flag voice_control_interface
+                        setOperatorVoiceSvc(Boolean(response.voiceSvc));
+                        setOperatorInteractionSocket(this.socket);
+                        if (response.voiceSessionToken) {
+                            setOperatorVoiceSessionToken(
+                                response.voiceSessionToken,
+                            );
+                        }
+                        // @flag voice_input_recording
+                        setOperatorVoiceInputRecording(
+                            Boolean(response.voiceInputRecording),
+                        );
+                    }
+                    resolve(response.success);
+                },
+            );
         });
     }
 
     public leave(): void {
         console.log(`Leaving. My role: ${this.role}.`);
+        setOperatorVoiceSessionToken(undefined);
+        // @flag voice_control_interface
+        setOperatorVoiceSvc(false);
+        setOperatorVoiceInputRecording(false);
+        setOperatorInteractionSocket(null);
         this.socket.emit("bye", this.role);
     }
 

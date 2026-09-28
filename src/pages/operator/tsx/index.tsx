@@ -14,12 +14,13 @@ import {
 import { RemoteRobot } from "shared/remoterobot";
 import { cmd } from "shared/commands";
 import { Operator } from "./Operator";
-import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
+import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
 import { FirebaseOptions } from "firebase/app";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
+import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
 
 import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
@@ -92,6 +93,7 @@ function resetOccupancyGrid() {
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
 export var buttonFunctionProvider = new ButtonFunctionProvider();
+export var flyingGripperFunctionProvider = new FlyingGripperFunctionProvider();
 
 export var runStopFunctionProvider = new RunStopFunctionProvider();
 export var batteryVoltageFunctionProvider =
@@ -218,6 +220,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "isRunStopped":
             remoteRobot.sensors.setRunStopState(message.enabled);
             break;
+        case "leaseStatus":
+            remoteRobot.sensors.setLeaseStatus(message.holder, message.isDriverHolding);
+            break;
         case "stretchTool":
             console.log("index stretchTool", message.value);
             stretchTool = getStretchTool(message.value);
@@ -267,6 +272,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "batteryVoltage":
             remoteRobot.sensors.setBatteryVoltage(message.message);
             break;
+        case "odom":
+            remoteRobot.sensors.setOdom(message.message);
+            break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
     }
@@ -315,6 +323,13 @@ function configureRemoteRobot() {
     );
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
         runStopFunctionProvider.updateRunStopState
+    );
+    remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
+        (holder, isDriverHolding) => {
+            if (!isDriverHolding) {
+                buttonFunctionProvider.stopCurrentAction(true);
+            }
+        }
     );
 }
 

@@ -14,8 +14,9 @@ import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
+    getPlaybackJointVelocities,
+    getPlaybackJointVelocity,
     getStretchTool,
-    JOINT_VELOCITIES,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
@@ -24,9 +25,7 @@ import {
     ROSPose,
     StretchTool,
     ValidJoints,
-    VideoProps,
-    getPlaybackJointVelocity,
-    getPlaybackJointVelocities,
+    VideoProps
 } from "shared/util";
 import {
     RobotPose,
@@ -71,6 +70,11 @@ export enum GoalStatus {
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
 
+// Pose-proximity arrival (primary completion when rosbridge action status/result fail).
+// Slightly above Nav2 xy_goal_tolerance (0.25m); streak avoids a single noisy TF sample.
+const MOVE_BASE_GOAL_XY_TOL_M = 0.35;
+const MOVE_BASE_GOAL_INSIDE_STREAK = 5;
+
 export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
@@ -95,10 +99,20 @@ export class Robot extends React.Component {
     private moveBaseStatusLastEmitted?: number;
     /** Count of terminal statuses when this goal session began (stale SUCCEEDED pile). */
     private moveBaseTerminalBaseline?: number;
+    /** Goal XY for pose-proximity arrival detection. */
+    private moveBaseGoalXY?: { x: number; y: number };
+    private moveBaseInsideTolStreak = 0;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
-    private cmdVelTopic?: Topic;
+    /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
+    private cmdVelNavTopic?: Topic;
+    /** Drive straight to the driver; used only while collision_monitor is not active. */
+    private cmdVelDirectTopic?: Topic;
+    private collisionMonitorStateService?: Service;
+    private collisionMonitorActive = false;
+    private collisionMonitorPollTimerID?: ReturnType<typeof setInterval>;
     private jointVelTopic?: Topic;
+    private eeCmdVelTopic?: Topic;
     private useCenterCameraService?: Service;
     private useLeftCameraService?: Service;
     private useRightCameraService?: Service;
@@ -163,6 +177,8 @@ export class Robot extends React.Component {
                 this.moveBaseStatusWatching = false;
                 this.moveBaseStatusSeenActive = false;
                 this.moveBaseTerminalBaseline = undefined;
+                this.moveBaseGoalXY = undefined;
+                this.moveBaseInsideTolStreak = 0;
             }
             props.moveBaseResultCallback(goalState);
         };
@@ -296,7 +312,6 @@ export class Robot extends React.Component {
 
     async onConnect() {
         console.log("onConnect");
-        const collisionMonitorActive = await this.isCollisionMonitorActive();
 
         this.subscribeToJointState();
         this.subscribeToJointLimits();
@@ -311,15 +326,17 @@ export class Robot extends React.Component {
         // unreliable; Nav2 /_action/status is the durable path for Stop UI.
         this.subscribeToActionResult(
             moveBaseActionName,
-            this.moveBaseResultCallback,
+            this.handleMoveBaseResult.bind(this),
             "Navigation executing!",
             "Navigation canceled!",
             "Navigation succeeded!",
             "Navigation failed!",
         );
 
-        this.createCmdVelTopic(collisionMonitorActive);
+        this.createCmdVelTopics();
+        this.startCollisionMonitorPoll();
         this.createJointVelTopic();
+        this.createEeCmdVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
         this.createUseRightCameraService();
@@ -339,6 +356,7 @@ export class Robot extends React.Component {
     }
 
     closeROSConnection() {
+        this.stopCollisionMonitorPoll();
         this.subscriptions.forEach((topic) => {
             topic.unsubscribe();
         });
@@ -791,12 +809,29 @@ export class Robot extends React.Component {
         });
     }
 
-    createCmdVelTopic(use_vel_nav: boolean = true) {
-        this.cmdVelTopic = new Topic({
+    createCmdVelTopics() {
+        this.cmdVelNavTopic = new Topic({
             ros: this.ros,
-            name: use_vel_nav ? "/cmd_vel_nav" : "/cmd_vel",
+            name: "/cmd_vel_nav",
             messageType: "geometry_msgs/Twist",
         });
+        this.cmdVelDirectTopic = new Topic({
+            ros: this.ros,
+            name: "/cmd_vel",
+            messageType: "geometry_msgs/Twist",
+        });
+        this.collisionMonitorStateService = new Service({
+            ros: this.ros,
+            name: "/collision_monitor/get_state",
+            serviceType: "lifecycle_msgs/srv/GetState",
+        });
+    }
+
+    /** Drive publisher for the current safety state. */
+    private get cmdVelTopic(): Topic | undefined {
+        return this.collisionMonitorActive
+            ? this.cmdVelNavTopic
+            : this.cmdVelDirectTopic;
     }
 
     createJointVelTopic() {
@@ -804,6 +839,14 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/joint_vel",
             messageType: "control_msgs/JointJog",
+        });
+    }
+
+    createEeCmdVelTopic() {
+        this.eeCmdVelTopic = new Topic({
+            ros: this.ros,
+            name: "/ee_cmd_vel",
+            messageType: "geometry_msgs/Twist",
         });
     }
 
@@ -934,7 +977,39 @@ export class Robot extends React.Component {
         this.createMapFrameTFClient();
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
+            this.maybeCompleteMoveBaseByProximity(transform);
         });
+    }
+
+    /**
+     * Primary AutoNav completion path: emit success when map→base_link stays
+     * within XY tolerance of the goal. Independent of rosbridge action status.
+     */
+    private maybeCompleteMoveBaseByProximity(transform: Transform) {
+        if (!this.moveBaseStatusWatching || !this.moveBaseGoalXY) {
+            return;
+        }
+        const dx = transform.translation.x - this.moveBaseGoalXY.x;
+        const dy = transform.translation.y - this.moveBaseGoalXY.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > MOVE_BASE_GOAL_XY_TOL_M) {
+            this.moveBaseInsideTolStreak = 0;
+            return;
+        }
+        this.moveBaseInsideTolStreak += 1;
+        if (this.moveBaseInsideTolStreak < MOVE_BASE_GOAL_INSIDE_STREAK) {
+            return;
+        }
+        console.log(
+            "Navigation succeeded via pose proximity:",
+            dist.toFixed(3),
+            "m",
+        );
+        this.moveBaseResultCallback({
+            state: "Navigation succeeded!",
+            alert_type: "success",
+        });
+        this.toggleBaseOnlyCollision(true);
     }
 
     setExpandedGripper(toggle: boolean) {
@@ -973,6 +1048,22 @@ export class Robot extends React.Component {
         );
     }
 
+    private handleMoveBaseResult(goalState: ActionState) {
+        if (goalState.state === "Navigation executing!") {
+            this.toggleBaseOnlyCollision(false);
+        } else if (
+            goalState.state === "Navigation succeeded!" ||
+            goalState.state === "Navigation canceled!" ||
+            goalState.state === "Navigation failed!"
+        ) {
+            console.log(`Navigation finished with state: ${goalState.state}. Restoring base-only collision.`);
+            this.toggleBaseOnlyCollision(true);
+        }
+
+        if (this.moveBaseResultCallback) {
+            this.moveBaseResultCallback(goalState);
+        }
+    }
 
     /**
      * In navigation mode, you can send position commands to the arm and
@@ -1077,6 +1168,25 @@ export class Robot extends React.Component {
         console.log("Publishing base velocity twist message");
         this.cmdVelTopic.publish(twist);
     };
+
+    async setTaskSpaceVelocity(linX: number, linY: number, linZ: number) {
+        await this.switchToVelocityMode();
+        this.stopExecution();
+        const twist = {
+            linear: {
+                x: linX,
+                y: linY,
+                z: linZ,
+            },
+            angular: {
+                x: 0,
+                y: 0,
+                z: 0,
+            },
+        };
+        if (!this.eeCmdVelTopic) throw "eeCmdVelTopic is undefined";
+        this.eeCmdVelTopic.publish(twist);
+    }
 
     async setJointVelocity(jointName: ValidJoints, velocity: number) {
         await this.switchToVelocityMode();
@@ -1516,6 +1626,11 @@ export class Robot extends React.Component {
         this.moveBaseStatusSeenActive = false;
         this.moveBaseStatusLastEmitted = undefined;
         this.moveBaseTerminalBaseline = undefined;
+        this.moveBaseGoalXY = {
+            x: pose.position.x,
+            y: pose.position.y,
+        };
+        this.moveBaseInsideTolStreak = 0;
 
         // Immediately notify operator that navigation has started executing
         this.moveBaseResultCallback({
@@ -1556,8 +1671,8 @@ export class Robot extends React.Component {
         );
     }
 
-    async executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        await this.switchToNavigationMode();
+    executeIncrementalMove(jointName: ValidJoints, increment: number) {
+        this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1626,6 +1741,8 @@ export class Robot extends React.Component {
             this.moveBaseStatusWatching = false;
             this.moveBaseStatusSeenActive = false;
             this.moveBaseTerminalBaseline = undefined;
+            this.moveBaseGoalXY = undefined;
+            this.moveBaseInsideTolStreak = 0;
         }
     }
 
@@ -1717,34 +1834,49 @@ export class Robot extends React.Component {
         return res;
     }
 
-    async isCollisionMonitorActive(timeoutMs: number = 3000): Promise<boolean> {
-        const startTime = Date.now();
+    /**
+     * collision_monitor is a lifecycle node. It exists in the graph as soon as
+     * Nav2 loads it, but it only forwards /cmd_vel_nav -> /cmd_vel once ACTIVE.
+     * If Nav2 bringup aborts (e.g. no map TF) it sits INACTIVE forever, so a
+     * "node exists" check is not enough.
+     */
+    startCollisionMonitorPoll(intervalMs: number = 2000) {
+        this.stopCollisionMonitorPoll();
+        const poll = () => this.queryCollisionMonitorActive();
+        poll();
+        this.collisionMonitorPollTimerID = setInterval(poll, intervalMs);
+    }
 
-        while (Date.now() - startTime < timeoutMs) {
-            const isActive = await new Promise<boolean>((resolve) => {
-                const rosAny = this.ros as any;
-                if (rosAny.getNodes !== undefined) {
-                    rosAny.getNodes(
-                        (nodes: string[]) => {
-                            resolve(nodes.some((node: string) => node.endsWith("collision_monitor")));
-                        },
-                        () => resolve(false)
-                    );
-                } else {
-                    resolve(false);
-                }
-            });
-
-            if (isActive) {
-                return true;
-            }
-
-            // Wait 500ms before checking again
-            await new Promise((resolve) => setTimeout(resolve, 500));
+    stopCollisionMonitorPoll() {
+        if (this.collisionMonitorPollTimerID !== undefined) {
+            clearInterval(this.collisionMonitorPollTimerID);
+            this.collisionMonitorPollTimerID = undefined;
         }
+    }
 
-        console.log("Timed out waiting for collision_monitor node. Defaulting to /cmd_vel.");
-        return false;
+    private queryCollisionMonitorActive() {
+        if (!this.collisionMonitorStateService) return;
+        // lifecycle_msgs/State: PRIMARY_STATE_ACTIVE = 3
+        const ACTIVE = 3;
+        this.collisionMonitorStateService.callService(
+            {},
+            (response: { current_state?: { id?: number } }) => {
+                this.setCollisionMonitorActive(
+                    response?.current_state?.id === ACTIVE
+                );
+            },
+            () => this.setCollisionMonitorActive(false)
+        );
+    }
+
+    private setCollisionMonitorActive(active: boolean) {
+        if (active === this.collisionMonitorActive) return;
+        this.collisionMonitorActive = active;
+        console.log(
+            active
+                ? "collision_monitor ACTIVE: Drive -> /cmd_vel_nav"
+                : "collision_monitor not active: Drive -> /cmd_vel (no obstacle stopping)"
+        );
     }
 
     /**
