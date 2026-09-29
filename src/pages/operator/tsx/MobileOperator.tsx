@@ -18,6 +18,7 @@ import {
 } from "shared/util";
 import {
     buttonFunctionProvider,
+    flyingGripperFunctionProvider,
     stretchTool,
     movementRecorderFunctionProvider,
     underMapFunctionProvider,
@@ -54,6 +55,7 @@ import GripperCamPIP from "./layout_components/GripperCamPIP";
 import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
 import Toasts, { useToasts } from "./layout_components/Toasts";
+import { useExclusiveModal } from "./react_hooks/useExclusiveModal";
 import type {
     ControlAutoNavAction,
     ControlAutoNavResult,
@@ -133,6 +135,11 @@ export const MobileOperator = (props: {
 
     // Main Menu (owned here so voice can open/close via Realtime tool)
     const [isMainMenuOpen, isMainMenuOpenSet] = useState(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(isMainMenuOpen, () => isMainMenuOpenSet(false));
+    useExclusiveModal(isModalLocationsMenuVisible, () =>
+        isModalLocationsMenuVisibleSet(false),
+    );
 
     /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
     const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
@@ -146,6 +153,35 @@ export const MobileOperator = (props: {
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
+
+    // Flying gripper: Pilot-only overlay where the gripper cam becomes the hero
+    // view. Session-only, never persisted.
+    const [isFlyingGripper, isFlyingGripperSet] = useState(false);
+    const setFlyingGripper = React.useCallback((flying: boolean) => {
+        // Never carry an in-flight press across a pad swap.
+        buttonFunctionProvider.disableActiveButton();
+        flyingGripperFunctionProvider.disableActiveButton();
+        isFlyingGripperSet(flying);
+    }, []);
+    const enterFlyingGripper = React.useCallback(
+        () => setFlyingGripper(true),
+        [setFlyingGripper],
+    );
+    const exitFlyingGripper = React.useCallback(
+        () => setFlyingGripper(false),
+        [setFlyingGripper],
+    );
+
+    // Leaving Pilot (scene or slide) always drops flying gripper so AutoNav
+    // never sits on top of it.
+    React.useEffect(() => {
+        if (
+            isFlyingGripper &&
+            (sceneSelected !== "pilot-mode" || swipeableViewsIdx !== 0)
+        ) {
+            setFlyingGripper(false);
+        }
+    }, [isFlyingGripper, sceneSelected, swipeableViewsIdx, setFlyingGripper]);
 
     const { toasts, toastsSet, addToast } = useToasts();
 
@@ -529,6 +565,8 @@ export const MobileOperator = (props: {
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
                             sharedState={sharedState}
+                            isFlyingGripper={isFlyingGripper}
+                            onExitFlyingGripper={exitFlyingGripper}
                         />
                         <GripperCamPIP
                             cameraID={CameraViewId.gripper}
@@ -539,6 +577,8 @@ export const MobileOperator = (props: {
                             isGripperCamLarge={isGripperCamLarge}
                             isGripperCamLargeSet={isGripperCamLargeSet}
                             homingBannerDismissed={homingBannerDismissed}
+                            isFlyingGripper={isFlyingGripper}
+                            onEnterFlyingGripper={enterFlyingGripper}
                         />
                     </div>
                     <div

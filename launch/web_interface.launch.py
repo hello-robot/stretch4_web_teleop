@@ -355,5 +355,19 @@ def generate_launch_description():
     ld.add_action(max_ee_speed_arg)
     ld.add_action(target_frame_arg)
     ld.add_action(safety_filter_node)
+    
+    # Task space controller node
+    task_space_controller_node = Node(
+        package="stretch_kinematics",
+        executable="task_space_controller",
+        name="task_space_controller",
+        output="screen",
+        parameters=[
+            {"target_frame": "tool_attachment_site_link"},
+            {"control_rate": 15.0},
+            {"watchdog_timeout": 0.4},
+        ],
+    )
+    ld.add_action(task_space_controller_node)
 
     return ld

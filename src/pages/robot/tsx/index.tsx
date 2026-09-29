@@ -308,6 +308,9 @@ function handleMessage(message: WebRTCMessage) {
         case "setJointVelocity":
             robot.setJointVelocity(message.jointName, message.velocity);
             break;
+        case "setTaskSpaceVelocity":
+            robot.setTaskSpaceVelocity(message.linear_X, message.linear_Y, message.linear_Z);
+            break;
         case "incrementalMove":
             robot.executeIncrementalMove(message.jointName, message.increment);
             break;

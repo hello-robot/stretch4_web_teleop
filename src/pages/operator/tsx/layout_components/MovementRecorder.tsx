@@ -6,6 +6,7 @@ import IconRecord from "operator/icons/Record.svg";
 import IconRecordPressed from "operator/icons/Record_Pressed.svg";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import ModalMobile from "../basic_components/ModalMobile";
+import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import Flex from "../basic_components/Flex";
 import { ButtonCancelPlayback } from '../static_components/ButtonCancelPlayback';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -172,6 +173,8 @@ interface MovementRecorderProps {
     setCameraVeilCallback?: (visible: boolean) => void;
     isRecording: boolean;
     isRecordingSet: React.Dispatch<React.SetStateAction<boolean>>;
+    /** Hide the corner button without unmounting (e.g. flying gripper owns that space). */
+    hideButton?: boolean;
 }
 
 export const MovementRecorder = (props: MovementRecorderProps) => {
@@ -538,6 +541,11 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         props.setCameraVeilCallback(false);
     };
 
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(isModalOpen, handleClose, {
+        restoreVeil: (visible) => props.setCameraVeilCallback?.(visible),
+    });
+
     const titleCalc = useCallback(() => {
         if (!showRecordingStartButton && !isNamingModalVisible) {
             return "Movement"
@@ -807,7 +815,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         props.setCameraVeilCallback?.(newModalState);
     }, [isModalOpen, props.setCameraVeilCallback]);
 
-    const isButtonVisible = !props.isCameraVeilVisible;
+    const isButtonVisible = !props.isCameraVeilVisible && !props.hideButton;
 
     // Determine if any recording
     // is currently playing (including this one)

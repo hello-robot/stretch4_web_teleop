@@ -99,8 +99,8 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
     }
 
     static velocitiesForAction(action: BaseMoveAction): {
-        linX: number;
-        linY: number;
+        linear_X: number;
+        linear_Y: number;
         angVel: number;
     } {
         const scale = FunctionProvider.velocityScale;
@@ -108,12 +108,12 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         const angVelMag = BASE_ANG * scale;
         switch (action) {
             case "rotate_left":
-                return { linX: 0, linY: 0, angVel: ROTATE_ACTION_SIGN.rotate_left * angVelMag };
+                return { linear_X: 0, linear_Y: 0, angVel: ROTATE_ACTION_SIGN.rotate_left * angVelMag };
             case "rotate_right":
-                return { linX: 0, linY: 0, angVel: ROTATE_ACTION_SIGN.rotate_right * angVelMag };
+                return { linear_X: 0, linear_Y: 0, angVel: ROTATE_ACTION_SIGN.rotate_right * angVelMag };
             default: {
                 const [ux, uy] = BASE_MOVE_UNIT_XY[action];
-                return { linX: ux * linVel, linY: uy * linVel, angVel: 0 };
+                return { linear_X: ux * linVel, linear_Y: uy * linVel, angVel: 0 };
             }
         }
     }
@@ -197,13 +197,13 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         // ── Distance/Rotation-based path ───────────────────────────────────────────────
         if (distance_m !== undefined || rotation_rad !== undefined) {
             const isRotation = action === "rotate_left" || action === "rotate_right";
-            const { linX, linY, angVel } = BaseMoveExecutor.velocitiesForAction(action);
+            const { linear_X, linear_Y, angVel } = BaseMoveExecutor.velocitiesForAction(action);
 
             // For rotation we use rotation_rad (radians); for translation we use distance_m (meters).
             const targetNative = isRotation ? (rotation_rad ?? 0) : distance_m!;
             const speed_mps = isRotation
                 ? Math.abs(angVel)
-                : Math.max(Math.abs(linX), Math.abs(linY));
+                : Math.max(Math.abs(linear_X), Math.abs(linear_Y));
             const estimatedMs = speed_mps > 0
                 ? Math.round((targetNative / speed_mps) * 1000)
                 : VOICE_DURATION_MS_DEFAULT;
@@ -242,7 +242,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
                 };
             }
 
-            const started = provider.timedBaseDrive(linX, linY, clampedMs, angVel);
+            const started = provider.timedBaseDrive(linear_X, linear_Y, clampedMs, angVel);
             if (!started) {
                 const result = BaseMoveExecutor.busyOrDisconnected("timedBaseDrive");
                 BaseMoveExecutor.emitVoiceMoveFeedback({
@@ -267,7 +267,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             });
             return {
                 ok: true,
-                detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, rotation_rad, mode, linX, linY, angVel),
+                detail: formatMoveOkDetail(action, speed, clampedMs, distance_m, rotation_rad, mode, linear_X, linear_Y, angVel),
             };
         }
 
@@ -300,8 +300,8 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             };
         }
 
-        const { linX, linY, angVel } = BaseMoveExecutor.velocitiesForAction(action);
-        const started = provider.timedBaseDrive(linX, linY, duration_ms, angVel);
+        const { linear_X, linear_Y, angVel } = BaseMoveExecutor.velocitiesForAction(action);
+        const started = provider.timedBaseDrive(linear_X, linear_Y, duration_ms, angVel);
         if (!started) {
             const result = BaseMoveExecutor.busyOrDisconnected("timedBaseDrive");
             BaseMoveExecutor.emitVoiceMoveFeedback({
@@ -323,7 +323,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         });
         return {
             ok: true,
-            detail: formatMoveOkDetail(action, speed, duration_ms, undefined, undefined, mode, linX, linY, angVel),
+            detail: formatMoveOkDetail(action, speed, duration_ms, undefined, undefined, mode, linear_X, linear_Y, angVel),
         };
     }
 }
@@ -337,8 +337,8 @@ function formatMoveOkDetail(
     distance_m: number | undefined,
     rotation_rad: number | undefined,
     mode: VoiceMoveExecutionMode,
-    linX: number,
-    linY: number,
+    linear_X: number,
+    linear_Y: number,
     angVel: number,
     button?: ButtonPadButton,
 ): string {
@@ -354,7 +354,7 @@ function formatMoveOkDetail(
                 : ` for ${duration_ms}ms`;
     let detail = `${action} at ${speed}${distanceStr}${via}`;
     if (mode === "direct") {
-        detail += ` (~linVelX=${linX.toFixed(5)}, linVelY=${linY.toFixed(5)}`;
+        detail += ` (~linVelX=${linear_X.toFixed(5)}, linVelY=${linear_Y.toFixed(5)}`;
         if (angVel !== 0) {
             detail += `, angVel=${angVel.toFixed(5)}`;
         }
