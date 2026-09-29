@@ -2,7 +2,6 @@
 // https://github.com/mui/material-ui/tree/v6.1.5/docs/data/material/getting-started/templates/sign-in
 
 import React, { useEffect, useState } from "react";
-import { isTablet, isBrowser } from "react-device-detect";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -16,7 +15,7 @@ export const ForgotPassword = (props: {
     handleClose: () => void;
     handleExecute: (email: string) => void;
 }) => {
-    return isTablet || isBrowser ? (
+    return (
         <Dialog
             open={props.open}
             onClose={props.handleClose}
@@ -55,7 +54,5 @@ export const ForgotPassword = (props: {
                 </Button>
             </DialogActions>
         </Dialog>
-    ) : (
-        <p>Not implemented</p>
     );
 };

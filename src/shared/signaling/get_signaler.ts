@@ -55,13 +55,19 @@ export function loginFirebaseSignalerAsRobot() {
         const app = initializeApp(config);
         let auth: Auth = getAuth(app);
         return new Promise<void>((resolve, reject) => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const user = urlParams.get('user') || process.env.roboUsername;
+            const pass = urlParams.get('pass') || process.env.roboPassword;
+
+            if (!user || !pass) {
+                console.error("Missing robot credentials (roboUsername/roboPassword)");
+                reject(new Error("Missing robot credentials"));
+                return;
+            }
+
             setPersistence(auth, inMemoryPersistence)
                 .then(() => {
-                    signInWithEmailAndPassword(
-                        auth,
-                        process.env.roboUsername,
-                        process.env.roboPassword,
-                    )
+                    signInWithEmailAndPassword(auth, user, pass)
                         .then((userCredential) => {
                             resolve();
                         })

@@ -3,7 +3,6 @@
 
 import "home/css/LoginView.css";
 import React, { useEffect, useState } from "react";
-import { isTablet, isBrowser } from "react-device-detect";
 import Box from "@mui/material/Box";
 import MuiCard from "@mui/material/Card";
 import Typography from "@mui/material/Typography";
@@ -150,7 +149,7 @@ export const LoginView = (props) => {
         return isValid;
     };
 
-    return isTablet || isBrowser ? (
+    return (
         <Box
             display="flex"
             justifyContent="center"
@@ -278,7 +277,5 @@ export const LoginView = (props) => {
                 }}
             />
         </Box>
-    ) : (
-        <p>Not implemented</p>
     );
 };

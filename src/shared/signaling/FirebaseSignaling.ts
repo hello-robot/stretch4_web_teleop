@@ -14,7 +14,7 @@ import {
 
 // TODO: use lodash isequal
 function isEqual(obj1, obj2) {
-    if (!isObject(obj1) && !isObject(obj2)) {
+    if (!isObject(obj1) || !isObject(obj2)) {
         return obj1 === obj2;
     }
     var props1 = Object.getOwnPropertyNames(obj1);
@@ -45,9 +45,14 @@ export class FirebaseSignaling extends BaseSignaling {
     private db: Database;
     private uid: string;
     private role: string;
+    private robot_name: string;
     private prevSignal;
     private room_uid: string;
     private is_joined: boolean;
+
+    private get robot_key(): string {
+        return (this.role === "robot" && this.robot_name) ? this.robot_name : this.uid;
+    }
 
     constructor(props: SignalingProps, config: FirebaseOptions) {
         super(props);
@@ -62,154 +67,309 @@ export class FirebaseSignaling extends BaseSignaling {
             if (this.role === "robot") {
                 resolve(this.uid);
             } else if (this.role === "operator") {
-                get(ref(this.db, "assignments/" + this.uid + "/robots")).then(
-                    (snapshot) => {
-                        let robots = snapshot.val();
-                        Object.entries(robots).forEach(
-                            ([robo_uid, is_active]) => {
-                                get(ref(this.db, "robots/" + robo_uid))
-                                    .then((snapshot2) => {
-                                        let robo_info = snapshot2.val();
-                                        if (robo_info["name"] === room_name) {
-                                            resolve(robo_uid);
-                                        }
-                                    })
-                                    .catch((error) => {
-                                        // We can ignore the robots the operator cannot access
-                                        // console.error(error.message, "Cannot access: ", "robots/" + robo_uid);
-                                    });
-                            },
-                        );
-                    },
-                );
+                get(ref(this.db, "uids/" + this.uid)).then((uidSnapshot) => {
+                    const alias = uidSnapshot.val() || this.uid;
+                    get(ref(this.db, "assignments/" + alias + "/robots")).then(
+                        (snapshot) => {
+                            let robots = snapshot.val();
+                            if (!robots) return;
+                            Object.entries(robots).forEach(
+                                ([robo_uid, is_active]) => {
+                                    get(ref(this.db, "robots/" + robo_uid))
+                                        .then((snapshot2) => {
+                                            let robo_info = snapshot2.val();
+                                            if (robo_info && (robo_info["name"] || robo_uid) === room_name) {
+                                                resolve(robo_info["uid"] || robo_uid);
+                                            }
+                                        })
+                                        .catch((error) => {
+                                            // We can ignore the robots the operator cannot access
+                                            // console.error(error.message, "Cannot access: ", "robots/" + robo_uid);
+                                        });
+                                },
+                            );
+                        },
+                    );
+                });
             }
         });
     }
 
     public configure(room_name: string): Promise<void> {
-        return new Promise<void>((resolve) => {
+        console.log("FirebaseSignaling: configure() called with room_name:", room_name);
+        return new Promise<void>((resolve, reject) => {
             // wait to be authenticated
             onAuthStateChanged(this.auth, (user) => {
+                console.log("FirebaseSignaling: onAuthStateChanged event triggered. User UID:", user ? user.uid : "null");
                 this.uid = user ? user.uid : undefined;
                 this._loginState = user ? "authenticated" : "not_authenticated";
 
                 if (this._loginState === "authenticated") {
-                    // get my role + set up listeners
-                    get(ref(this.db, "assignments/" + this.uid + "/role")).then(
-                        (snapshot) => {
-                            this.role = snapshot.val();
-                            console.log(`My role: ${this.role}`);
-                            if (!["robot", "operator"].includes(this.role)) {
-                                console.error("ERROR: invalid role");
-                                throw new Error("Invalid role");
-                            }
+                    if (this.initialRole === "robot") {
+                        this.role = "robot";
+                        const urlParams = new URLSearchParams(window.location.search);
+                        this.robot_name = urlParams.get('fleet_id') || process.env.HELLO_FLEET_ID;
+                        console.log(`FirebaseSignaling (Robot Mode Bypass): role set to robot, name to ${this.robot_name}`);
 
-                            this._get_room_uid(room_name).then((room_uid) => {
-                                this.room_uid = room_uid;
-                                let opposite_role =
-                                    this.role === "robot"
-                                        ? "operator"
-                                        : "robot";
-                                onValue(
-                                    ref(
-                                        this.db,
-                                        "rooms/" +
-                                            this.room_uid +
-                                            "/" +
-                                            opposite_role,
-                                    ),
-                                    (snapshot) => {
-                                        if (this.is_joined) {
-                                            // Filter out what's changed
-                                            let currSignal = snapshot.val();
-                                            let changes = {};
-                                            for (const key in currSignal) {
-                                                if (
-                                                    !this.prevSignal ||
-                                                    !(key in this.prevSignal) ||
-                                                    !isEqual(
-                                                        currSignal[key],
-                                                        this.prevSignal[key],
-                                                    )
-                                                ) {
-                                                    changes[key] =
-                                                        currSignal[key];
-                                                }
-                                            }
-                                            this.prevSignal = currSignal;
-
-                                            // Trigger callbacks based on what's changed
+                        this._get_room_uid(room_name).then((room_uid) => {
+                            this.room_uid = room_uid;
+                            let opposite_role = "operator";
+                            console.log("FirebaseSignaling: room_uid is:", this.room_uid, ". Listening to rooms/" + this.room_uid + "/" + opposite_role);
+                            onValue(
+                                ref(
+                                    this.db,
+                                    "rooms/" +
+                                        this.room_uid +
+                                        "/" +
+                                        opposite_role,
+                                ),
+                                (snapshot) => {
+                                    if (this.is_joined) {
+                                        // Filter out what's changed
+                                        let currSignal = snapshot.val();
+                                        let changes = {};
+                                        for (const key in currSignal) {
                                             if (
-                                                Object.keys(changes).includes(
-                                                    "candidate",
-                                                ) ||
-                                                Object.keys(changes).includes(
-                                                    "sessionDescription",
-                                                ) ||
-                                                Object.keys(changes).includes(
-                                                    "cameraInfo",
+                                                !this.prevSignal ||
+                                                !(key in this.prevSignal) ||
+                                                !isEqual(
+                                                    currSignal[key],
+                                                    this.prevSignal[key],
                                                 )
                                             ) {
-                                                if (
-                                                    Object.keys(
-                                                        changes,
-                                                    ).includes("active")
-                                                ) {
-                                                    delete changes["active"];
-                                                }
-                                                this.onSignal(changes);
+                                                changes[key] =
+                                                    currSignal[key];
                                             }
+                                        }
+                                        this.prevSignal = currSignal;
+
+                                        // Trigger callbacks based on what's changed
+                                        if (
+                                            Object.keys(changes).includes(
+                                                "candidate",
+                                            ) ||
+                                            Object.keys(changes).includes(
+                                                "sessionDescription",
+                                            ) ||
+                                            Object.keys(changes).includes(
+                                                "cameraInfo",
+                                            )
+                                        ) {
                                             if (
-                                                Object.keys(changes).includes(
-                                                    "active",
-                                                ) &&
-                                                !changes["active"]
+                                                Object.keys(
+                                                    changes,
+                                                ).includes("active")
                                             ) {
-                                                console.log("bye");
-                                                if (this.role === "robot") {
-                                                    update(
-                                                        ref(
-                                                            this.db,
-                                                            "robots/" +
-                                                                this.uid,
-                                                        ),
-                                                        {
-                                                            status: "online",
-                                                        },
-                                                    );
-                                                }
-                                                this.onGoodbye();
+                                                delete changes["active"];
                                             }
-                                            if (
-                                                this.role === "robot" &&
-                                                Object.keys(changes).includes(
-                                                    "active",
-                                                ) &&
-                                                changes["active"]
-                                            ) {
-                                                console.log(
-                                                    `Operator has joined the room. My role: ${this.role}.`,
-                                                );
+                                            this.onSignal(changes);
+                                        }
+                                        if (
+                                            Object.keys(changes).includes(
+                                                "active",
+                                            ) &&
+                                            !changes["active"]
+                                        ) {
+                                            console.log("bye");
+                                            if (this.role === "robot") {
                                                 update(
                                                     ref(
                                                         this.db,
-                                                        "robots/" + this.uid,
+                                                        "robots/" +
+                                                            this.robot_key,
                                                     ),
                                                     {
-                                                        status: "occupied",
+                                                        status: "online",
                                                     },
                                                 );
-                                                if (this.onRobotConnectionStart)
-                                                    this.onRobotConnectionStart();
+                                            }
+                                            this.onGoodbye();
+                                        }
+                                        if (
+                                            this.role === "robot" &&
+                                            Object.keys(changes).includes(
+                                                "active",
+                                            ) &&
+                                            changes["active"]
+                                        ) {
+                                            console.log(
+                                                `Operator has joined the room. My role: ${this.role}.`,
+                                            );
+                                            update(
+                                                ref(
+                                                    this.db,
+                                                    "robots/" + this.robot_key,
+                                                ),
+                                                {
+                                                    status: "occupied",
+                                                },
+                                            );
+                                            if (this.onRobotConnectionStart)
+                                                this.onRobotConnectionStart();
+                                        }
+                                    }
+                                },
+                            );
+
+                            resolve();
+                        });
+                        return;
+                    }
+
+                    console.log("FirebaseSignaling: authenticated. Querying uids/" + this.uid);
+                    get(ref(this.db, "uids/" + this.uid)).then((uidSnapshot) => {
+                        const alias = uidSnapshot.val() || this.uid;
+                        console.log("FirebaseSignaling: fetched alias:", alias, ". Querying assignments/" + alias);
+                        get(ref(this.db, "assignments/" + alias)).then(
+                            (snapshot) => {
+                                const assignment = snapshot.val() || {};
+                                console.log("FirebaseSignaling: fetched assignment:", assignment);
+                                this.role = assignment.role;
+                                this.robot_name = assignment.name;
+
+                                const continueConfigure = () => {
+                                    console.log(`My role: ${this.role}, My name: ${this.robot_name}`);
+                                    if (!["robot", "operator"].includes(this.role)) {
+                                        console.error("ERROR: invalid role");
+                                        throw new Error("Invalid role");
+                                    }
+
+                                    this._get_room_uid(room_name).then((room_uid) => {
+                                        this.room_uid = room_uid;
+                                        let opposite_role =
+                                            this.role === "robot"
+                                                ? "operator"
+                                                : "robot";
+                                        console.log("FirebaseSignaling: room_uid is:", this.room_uid, ". Listening to rooms/" + this.room_uid + "/" + opposite_role);
+                                        onValue(
+                                            ref(
+                                                this.db,
+                                                "rooms/" +
+                                                    this.room_uid +
+                                                    "/" +
+                                                    opposite_role,
+                                            ),
+                                            (snapshot) => {
+                                                if (this.is_joined) {
+                                                    // Filter out what's changed
+                                                    let currSignal = snapshot.val();
+                                                    let changes = {};
+                                                    for (const key in currSignal) {
+                                                        if (
+                                                            !this.prevSignal ||
+                                                            !(key in this.prevSignal) ||
+                                                            !isEqual(
+                                                                currSignal[key],
+                                                                this.prevSignal[key],
+                                                            )
+                                                        ) {
+                                                            changes[key] =
+                                                                currSignal[key];
+                                                        }
+                                                    }
+                                                    this.prevSignal = currSignal;
+
+                                                    // Trigger callbacks based on what's changed
+                                                    if (
+                                                        Object.keys(changes).includes(
+                                                            "candidate",
+                                                        ) ||
+                                                        Object.keys(changes).includes(
+                                                            "sessionDescription",
+                                                        ) ||
+                                                        Object.keys(changes).includes(
+                                                            "cameraInfo",
+                                                        )
+                                                    ) {
+                                                        if (
+                                                            Object.keys(
+                                                                changes,
+                                                            ).includes("active")
+                                                        ) {
+                                                            delete changes["active"];
+                                                        }
+                                                        this.onSignal(changes);
+                                                    }
+                                                    if (
+                                                        Object.keys(changes).includes(
+                                                            "active",
+                                                        ) &&
+                                                        !changes["active"]
+                                                    ) {
+                                                        console.log("bye");
+                                                        if (this.role === "robot") {
+                                                            update(
+                                                                ref(
+                                                                    this.db,
+                                                                    "robots/" +
+                                                                        this.robot_key,
+                                                                ),
+                                                                {
+                                                                    status: "online",
+                                                                },
+                                                            );
+                                                        }
+                                                        this.onGoodbye();
+                                                    }
+                                                    if (
+                                                        this.role === "robot" &&
+                                                        Object.keys(changes).includes(
+                                                            "active",
+                                                        ) &&
+                                                        changes["active"]
+                                                    ) {
+                                                        console.log(
+                                                            `Operator has joined the room. My role: ${this.role}.`,
+                                                        );
+                                                        update(
+                                                            ref(
+                                                                this.db,
+                                                                "robots/" + this.robot_key,
+                                                            ),
+                                                            {
+                                                                status: "occupied",
+                                                            },
+                                                        );
+                                                        if (this.onRobotConnectionStart)
+                                                            this.onRobotConnectionStart();
+                                                    }
+                                                }
+                                            },
+                                        );
+
+                                        resolve();
+                                    });
+                                };
+
+                                if (!this.role) {
+                                    get(ref(this.db, "robots")).then((robotsSnapshot) => {
+                                        const robots = robotsSnapshot.val() || {};
+                                        let found = false;
+                                        for (const [key, robo_info] of Object.entries(robots)) {
+                                            if (robo_info && robo_info["uid"] === this.uid) {
+                                                this.role = "robot";
+                                                this.robot_name = robo_info["name"] || key;
+                                                found = true;
+                                                break;
                                             }
                                         }
-                                    },
-                                );
-
-                                resolve();
-                            });
-                        },
-                    );
+                                        continueConfigure();
+                                    }).catch((err) => {
+                                        console.error("FirebaseSignaling: Error fetching robots list:", err);
+                                        reject(err);
+                                    });
+                                } else {
+                                    continueConfigure();
+                                }
+                            },
+                        ).catch((err) => {
+                            console.error("FirebaseSignaling: Error fetching assignment:", err);
+                            reject(err);
+                        });
+                    }).catch((err) => {
+                        console.error("FirebaseSignaling: Error fetching UID alias:", err);
+                        reject(err);
+                    });
                 }
             });
         });
@@ -239,7 +399,7 @@ export class FirebaseSignaling extends BaseSignaling {
                         },
                     ).then(() => {
                         this.is_joined = true;
-                        update(ref(this.db, "robots/" + this.uid), {
+                        update(ref(this.db, "robots/" + this.robot_key), {
                             status: "online",
                         });
                         resolve(true);
@@ -305,7 +465,7 @@ export class FirebaseSignaling extends BaseSignaling {
                 active: false,
             });
             if (this.role === "robot") {
-                update(ref(this.db, "robots/" + this.uid), {
+                update(ref(this.db, "robots/" + this.robot_key), {
                     status: "offline",
                 });
             }
@@ -314,9 +474,34 @@ export class FirebaseSignaling extends BaseSignaling {
 
     public send(signal: SignallingMessage): void {
         if (this.is_joined) {
+            let sanitizedSignal: any = {};
+            if (signal.sessionDescription) {
+                sanitizedSignal.sessionDescription =
+                    typeof signal.sessionDescription.toJSON === "function"
+                        ? signal.sessionDescription.toJSON()
+                        : {
+                              type: signal.sessionDescription.type,
+                              sdp: signal.sessionDescription.sdp,
+                          };
+            }
+            if (signal.candidate) {
+                sanitizedSignal.candidate =
+                    typeof signal.candidate.toJSON === "function"
+                        ? signal.candidate.toJSON()
+                        : {
+                              candidate: signal.candidate.candidate,
+                              sdpMid: signal.candidate.sdpMid,
+                              sdpMLineIndex: signal.candidate.sdpMLineIndex,
+                              usernameFragment: signal.candidate.usernameFragment,
+                          };
+            }
+            if (signal.cameraInfo) {
+                sanitizedSignal.cameraInfo = signal.cameraInfo;
+            }
+
             update(
                 ref(this.db, "rooms/" + this.room_uid + "/" + this.role),
-                signal,
+                sanitizedSignal,
             );
         }
     }

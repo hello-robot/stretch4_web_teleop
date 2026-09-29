@@ -21,7 +21,7 @@
         "eslint-config-react-app": "^7.0.1",
         "express": "^4.18.2",
         "file-loader": "^6.2.0",
-        "firebase": "^11.9.1",
+        "firebase": "^12.19.0",
         "framer-motion": "^12.16.0",
         "html-webpack-plugin": "^4.5.2",
         "jpeg-js": "^0.4.4",
