@@ -1,0 +1,201 @@
+.accessible-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    min-width: 0;
+    --legend-font-size: 14px;
+    --accessible-radio-option-padding: 12px;
+}
+
+.accessible-radio-group__legend {
+    /* Reset UA fieldset/legend positioning (WebKit/Blink use relative + negative top) */
+    display: block;
+    float: none;
+    width: 100%;
+    position: relative;
+    top: calc(var(--legend-font-size) / 2);
+    left: auto;
+    margin: 0;
+    font-size: var(--legend-font-size);
+    font-weight: 600;
+    color: hsl(184deg 60% 87%);
+    padding: 0;
+}
+
+.accessible-radio-group__options {
+    display: flex;
+    gap: 8px;
+    margin-top: var(--legend-font-size);
+    padding: 3px;
+    background: hsla(204deg 100% 5% / 100%);
+    border-radius: 13px;
+}
+
+.accessible-radio-group__options--vertical {
+    flex-direction: column;
+}
+
+.accessible-radio-group__options--horizontal {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 3px;
+    align-items: stretch;
+}
+
+.accessible-radio__option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: var(--accessible-radio-option-padding);
+    cursor: pointer;
+    border-radius: 10px;
+    transition: background-color 0.2s ease-in-out;
+    color: hsl(184deg 60% 87%);
+    font-size: var(--legend-font-size);
+    box-sizing: border-box;
+}
+
+.accessible-radio-group__options--horizontal .accessible-radio__option {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.accessible-radio__option:hover {
+    background: hsl(204deg 100% 50% / 50%);
+}
+
+.accessible-radio__option--selected {
+    background: hsl(204deg 50% 15%);
+}
+
+.accessible-radio-group:disabled .accessible-radio__option,
+.accessible-radio__option--disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.accessible-radio__option--ripple {
+    position: relative;
+    overflow: hidden;
+}
+
+.accessible-radio__indicator {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 25px;
+    height: 25px;
+}
+
+.accessible-radio-group .accessible-radio__control {
+    flex-shrink: 0;
+    margin: 0;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    cursor: pointer;
+    position: relative;
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: transparent;
+    outline: none;
+    box-shadow: none;
+    display: block;
+    line-height: 0;
+}
+
+.accessible-radio-group .accessible-radio__control::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 25px;
+    height: 25px;
+    border: 1px solid hsl(210deg 100% 50%);
+    background-color: hsl(204deg 51% 14%);
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+.accessible-radio-group .accessible-radio__control:checked::before {
+    background-color: hsl(204deg 51% 14%);
+    border-color: hsl(210deg 100% 50%);
+}
+
+.accessible-radio-group .accessible-radio__control:checked::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 19px;
+    height: 19px;
+    background-color: hsl(210deg 100% 50%);
+    border-radius: 50%;
+}
+
+.accessible-radio-group .accessible-radio__control:focus {
+    outline: none;
+}
+
+.accessible-radio-group .accessible-radio__control:focus-visible::before {
+    box-shadow: 0 0 0 2px hsl(190, 100%, 50%);
+}
+
+.accessible-radio-group:disabled .accessible-radio__control,
+.accessible-radio-group .accessible-radio__control:disabled {
+    cursor: not-allowed;
+}
+
+.accessible-radio__content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.accessible-radio__label {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.accessible-radio__description {
+    font-size: 14px;
+    opacity: 0.8;
+    line-height: 1.35;
+    margin: 0;
+}
+
+.accessible-radio__ripple {
+    position: absolute;
+    border-radius: 50%;
+    background-color: hsl(184deg 100% 50% / 10%);
+    transform: scale(0);
+    animation: accessible-radio-ripple 400ms ease-out forwards;
+    pointer-events: none;
+}
+
+@keyframes accessible-radio-ripple {
+    to {
+        transform: scale(2.5);
+        opacity: 0;
+    }
+}
+
+/* Voice command overlay: legend de-emphasis; panel chrome lives on parent wrapper */
+.accessible-radio-group.voice-move-execution-mode {
+    width: 100%;
+    margin: 0;
+    border: none;
+    background: transparent;
+}
+
+.accessible-radio-group.voice-move-execution-mode
+    .accessible-radio-group__legend {
+    opacity: 0.7;
+}

@@ -2,6 +2,7 @@ const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 const dotenv = require("dotenv");
+const { envVarName, loadFeatures } = require("./feature-flags");
 
 const pages = ["robot", "operator", "home"];
 
@@ -32,6 +33,11 @@ const envKeys = Object.keys(mergedEnv).reduce((prev, next) => {
 module.exports = (webpackEnv, argv) => {
     const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
     envKeys["process.env.storage"] = JSON.stringify(storageValue);
+    // Feature flags become boolean literals in the bundle, so `if (FEATURE_X)`
+    // guards fold away when the flag is off. See features.json.
+    Object.entries(loadFeatures()).forEach(([name, enabled]) => {
+        envKeys[`process.env.${envVarName(name)}`] = JSON.stringify(enabled);
+    });
     console.log(envKeys);
 
     return {

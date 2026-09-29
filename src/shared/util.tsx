@@ -1,4 +1,4 @@
-import { Transform, Message } from "roslib";
+import { Message, Transform } from "roslib";
 import { cmd } from "./commands";
 
 export type ValidJoints =
@@ -100,13 +100,14 @@ export type WebRTCMessage =
     | MapPoseMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
-
     | BatteryVoltageMessage
     | ModeMessage
     | IsHomedMessage
     | IsRunStoppedMessage
+    | LeaseStatusMessage
     | StretchToolMessage
     | ActionStateMessage
+    | SeedLocalizationStateMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -141,6 +142,12 @@ export interface IsRunStoppedMessage {
     enabled: boolean;
 }
 
+export interface LeaseStatusMessage {
+    type: "leaseStatus";
+    holder: string;
+    isDriverHolding: boolean;
+}
+
 export interface StretchToolMessage {
     type: "stretchTool";
     value: string;
@@ -155,6 +162,11 @@ export interface ActionState {
 
 export interface ActionStateMessage {
     type: string;
+    message: ActionState;
+}
+
+export interface SeedLocalizationStateMessage {
+    type: "seedLocalizationState";
     message: ActionState;
 }
 
@@ -175,6 +187,11 @@ export interface MapPoseMessage {
 export interface BatteryVoltageMessage {
     type: "batteryVoltage";
     message: number;
+}
+
+export interface OdomMessage {
+    type: "odom";
+    message: ROSOdometry;
 }
 
 export interface ROSPoint extends Message {
@@ -209,6 +226,22 @@ export interface ROSOccupancyGrid {
     data: number[];
 }
 
+export interface ROSOdometry extends Message {
+    header: string;
+    child_frame_id: string;
+    pose: {
+        pose: ROSPose;
+        covariance: number[];
+    };
+    twist: {
+        twist: {
+            linear: { x: number; y: number; z: number };
+            angular: { x: number; y: number; z: number };
+        };
+        covariance: number[];
+    };
+}
+
 export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
     arm_joint: [0.001, 0.518],
     wrist_roll_joint: [-2.95, 2.94],
@@ -232,6 +265,7 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     wrist_yaw_joint: 1.0,
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.3,
+    stretch_gripper_joint: 0.1
 };
 
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
@@ -246,6 +280,16 @@ export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.5,
 };
+
+const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
+
+export function getPlaybackJointVelocity(jointName: ValidJoints): number {
+    return (JOINT_VELOCITIES[jointName] || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
+}
+
+export function getPlaybackJointVelocities(jointNames: ValidJoints[]): number[] {
+    return jointNames.map(getPlaybackJointVelocity);
+}
 
 export const navigationProps = {
     width: 768, // 800,

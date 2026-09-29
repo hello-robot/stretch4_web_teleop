@@ -40,6 +40,35 @@ Once you're done with the interface, close the browser and run:
 
 **Note:** Only one browser can be connected to the interface at a time.
 
+## Feature flags
+
+Optional features are declared in [`features.json`](features.json), which is
+the single source of truth for each flag's name, default, and description:
+
+```json
+{
+    "<flag_name>": {
+        "enabled": false,
+        "description": "..."
+    }
+}
+```
+
+Edit `features.json` to change a flag's default. To override a flag for a
+single run without editing the file, set `FEATURE_<NAME>` in the environment
+(`<NAME>` is the flag name upper-cased), which accepts `1`/`0`, `true`/`false`,
+`yes`/`no` or `on`/`off`:
+
+```
+FEATURE_<NAME>=1 ./launch_interface.sh
+```
+
+Each flag is read at launch by `server.js`, which registers the routes it
+gates only when it is on, and by `webpack.config.js`, which substitutes it
+into the bundle as `process.env.FEATURE_<NAME>`. Changing it therefore takes
+effect on the next `./launch_interface.sh`. Grep for `@flag <flag_name>` to
+find every seam for a given flag.
+
 ## Using the Interface Remotely
 
 **WARNING: This is prototype code and there are security issues. Deploy this code at your own risk.**

@@ -28,6 +28,7 @@
 }
 
 .modal-overlay.exit {
+    pointer-events: none;
     animation: modal-fade-out 150ms var(--anim-timing-ease-out-silky) forwards;
 }
 

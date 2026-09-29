@@ -15,7 +15,7 @@ import {
 import { WebRTCConnection } from "shared/webrtcconnections";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
+import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
 import { StorageHandler } from "./storage_handler/StorageHandler";
@@ -45,6 +45,50 @@ export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
 export let loginHandler: LoginHandler;
 let room_name: string | null = null;
+
+/** True when all WebRTC occupancy-grid chunks have been reassembled. */
+export function isOccupancyGridComplete(
+    grid: ROSOccupancyGrid | undefined,
+): boolean {
+    if (!grid?.info) return false;
+    const expected = grid.info.width * grid.info.height;
+    return expected > 0 && grid.data.length >= expected;
+}
+
+export function isOccupancyGridReady(): boolean {
+    return isOccupancyGridComplete(occupancyGrid);
+}
+
+type OccupancyGridReadyListener = () => void;
+const occupancyGridReadyListeners = new Set<OccupancyGridReadyListener>();
+
+function notifyOccupancyGridReady() {
+    occupancyGridReadyListeners.forEach((listener) => {
+        try {
+            listener();
+        } catch (err) {
+            console.warn("occupancyGridReady listener failed:", err);
+        }
+    });
+}
+
+/** Subscribe to full map reassembly. Fires immediately if already ready. */
+export function subscribeOccupancyGridReady(
+    callback: OccupancyGridReadyListener,
+): () => void {
+    occupancyGridReadyListeners.add(callback);
+    if (isOccupancyGridReady()) {
+        callback();
+    }
+    return () => {
+        occupancyGridReadyListeners.delete(callback);
+    };
+}
+
+function resetOccupancyGrid() {
+    occupancyGrid = undefined;
+    occupancyGridReadyListeners.clear();
+}
 
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
@@ -184,6 +228,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "isRunStopped":
             remoteRobot.sensors.setRunStopState(message.enabled);
             break;
+        case "leaseStatus":
+            remoteRobot.sensors.setLeaseStatus(message.holder, message.isDriverHolding);
+            break;
         case "stretchTool":
             console.log("index stretchTool", message.value);
             stretchTool = getStretchTool(message.value);
@@ -195,6 +242,10 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
                 occupancyGrid.data = occupancyGrid.data.concat(
                     message.message.data
                 );
+            }
+            // Map has loaded successfully
+            if (isOccupancyGridComplete(occupancyGrid)) {
+                notifyOccupancyGridReady();
             }
             break;
         case "amclPose":
@@ -219,11 +270,18 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             console.log("playbackPosesState", message.message);
             movementRecorderFunctionProvider.setPlaybackPosesState(message.message);
             break;
+        case "seedLocalizationState":
+            console.log("seedLocalizationState", message.message);
+            mapFunctionProvider.setSeedLocalizationState(message.message);
+            break;
         case "relativePose":
             remoteRobot.setRelativePose(message.message);
             break;
         case "batteryVoltage":
             remoteRobot.sensors.setBatteryVoltage(message.message);
+            break;
+        case "odom":
+            remoteRobot.sensors.setOdom(message.message);
             break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
@@ -254,7 +312,7 @@ function configureRemoteRobot() {
     remoteRobot = new RemoteRobot({
         robotChannel: (message: cmd) => connection.sendData(message),
     });
-    occupancyGrid = undefined;
+    resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
@@ -273,6 +331,13 @@ function configureRemoteRobot() {
     );
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
         runStopFunctionProvider.updateRunStopState
+    );
+    remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
+        (holder, isDriverHolding) => {
+            if (!isDriverHolding) {
+                buttonFunctionProvider.stopCurrentAction(true);
+            }
+        }
     );
 }
 
