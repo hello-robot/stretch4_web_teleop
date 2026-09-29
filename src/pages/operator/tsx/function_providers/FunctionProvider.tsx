@@ -165,6 +165,23 @@ export abstract class FunctionProvider {
         }, 50);
     }
 
+    /** Heartbeat tool-frame twist to /ee_cmd_vel (watchdog is 0.4s). */
+    public continuousTaskSpaceMovement(
+        linear_X: number,
+        linear_Y: number,
+        linear_Z: number,
+    ) {
+        this.stopCurrentAction();
+        this.velocityExecutionHeartbeat = window.setInterval(() => {
+            this.activeVelocityAction =
+                FunctionProvider.remoteRobot?.setTaskSpaceVelocity(
+                    linear_X,
+                    linear_Y,
+                    linear_Z,
+                );
+        }, 50);
+    }
+
     /**
      * Move a joint continuously for durationMs then stop.
      * Uses the same timedVoiceMoveActive guard as timedBaseDrive so base and

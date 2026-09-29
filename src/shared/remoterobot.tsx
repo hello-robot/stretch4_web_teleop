@@ -5,6 +5,7 @@ import {
     DriveCommand,
     CameraPerspectiveCommand,
     IncrementalMove,
+    SetTaskSpaceVelocityCommand,
     setRobotModeCommand,
     VelocityCommand,
     RobotPoseCommand,
@@ -103,6 +104,38 @@ export class RemoteRobot extends React.Component<{}, any> {
                     },
                 };
                 this.robotChannel(affirmEvent);
+            },
+        };
+    }
+
+    setTaskSpaceVelocity(
+        linear_X: number,
+        linear_Y: number,
+        linear_Z: number
+    ): VelocityCommand {
+        if (!this.sensors.getLeaseDriverHolding()) {
+            return {
+                stop: () => {},
+            };
+        }
+
+        const cmd: SetTaskSpaceVelocityCommand = {
+            type: "setTaskSpaceVelocity",
+            linear_X,
+            linear_Y,
+            linear_Z,
+        };
+        this.robotChannel(cmd);
+
+        return {
+            stop: () => {
+                const stopEvent: SetTaskSpaceVelocityCommand = {
+                    type: "setTaskSpaceVelocity",
+                    linear_X: 0,
+                    linear_Y: 0,
+                    linear_Z: 0,
+                };
+                this.robotChannel(stopEvent);
             },
         };
     }

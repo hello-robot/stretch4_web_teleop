@@ -20,6 +20,7 @@ import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
 import { FirebaseOptions } from "firebase/app";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
+import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
 
 import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
@@ -92,6 +93,7 @@ function resetOccupancyGrid() {
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
 export var buttonFunctionProvider = new ButtonFunctionProvider();
+export var flyingGripperFunctionProvider = new FlyingGripperFunctionProvider();
 
 export var runStopFunctionProvider = new RunStopFunctionProvider();
 export var batteryVoltageFunctionProvider =
