@@ -48,9 +48,9 @@ export interface SetJointVelocityCommand {
 /** Tool-frame linear twist for stretch_kinematics task_space_controller (/ee_cmd_vel). */
 export interface SetTaskSpaceVelocityCommand {
     type: "setTaskSpaceVelocity";
-    linX: number;
-    linY: number;
-    linZ: number;
+    linear_X: number;
+    linear_Y: number;
+    linear_Z: number;
 }
 
 export interface IncrementalMove {

@@ -109,9 +109,9 @@ export class RemoteRobot extends React.Component<{}, any> {
     }
 
     setTaskSpaceVelocity(
-        linX: number,
-        linY: number,
-        linZ: number
+        linear_X: number,
+        linear_Y: number,
+        linear_Z: number
     ): VelocityCommand {
         if (!this.sensors.getLeaseDriverHolding()) {
             return {
@@ -121,9 +121,9 @@ export class RemoteRobot extends React.Component<{}, any> {
 
         const cmd: SetTaskSpaceVelocityCommand = {
             type: "setTaskSpaceVelocity",
-            linX,
-            linY,
-            linZ,
+            linear_X,
+            linear_Y,
+            linear_Z,
         };
         this.robotChannel(cmd);
 
@@ -131,9 +131,9 @@ export class RemoteRobot extends React.Component<{}, any> {
             stop: () => {
                 const stopEvent: SetTaskSpaceVelocityCommand = {
                     type: "setTaskSpaceVelocity",
-                    linX: 0,
-                    linY: 0,
-                    linZ: 0,
+                    linear_X: 0,
+                    linear_Y: 0,
+                    linear_Z: 0,
                 };
                 this.robotChannel(stopEvent);
             },
