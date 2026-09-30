@@ -326,14 +326,14 @@ def generate_launch_description():
 
     # velocity limiter
     max_ee_speed_arg = DeclareLaunchArgument(
-        'max_ee_speed',
-        default_value='0.2',  # m/s
-        description='Maximum allowed end-effector linear speed in m/s'
+        "max_ee_speed",
+        default_value="0.2",  # m/s
+        description="Maximum allowed end-effector linear speed in m/s",
     )
     target_frame_arg = DeclareLaunchArgument(
-        'target_frame',
-        default_value='tool_attachment_site_link',
-        description='End-effector target frame for velocity calculation'
+        "target_frame",
+        default_value="tool_attachment_site_link",
+        description="End-effector target frame for velocity calculation",
     )
 
     # When map_yaml is provided, navigation is active with collision_monitor listening
@@ -342,31 +342,37 @@ def generate_launch_description():
     # to /cmd_vel (stretch_driver).
     # NOTE: If navigation dynamic toggling at runtime is added in the future,
     # velocity_limiter's output topic would need to be reconfigurable dynamically.
-    safety_filter_output_cmd_vel = PythonExpression([
-        "'/cmd_vel_nav' if '", LaunchConfiguration('map_yaml'), "' != '' else '/cmd_vel'"
-    ])
+    safety_filter_output_cmd_vel = PythonExpression(
+        [
+            "'/cmd_vel_nav' if '",
+            LaunchConfiguration("map_yaml"),
+            "' != '' else '/cmd_vel'",
+        ]
+    )
 
     safety_filter_node = Node(
-        package='stretch_kinematics',
-        executable='velocity_limiter',
-        name='ee_velocity_safety_filter',
-        output='screen',
-        parameters=[{
-            'max_ee_speed': LaunchConfiguration('max_ee_speed'),
-            'target_frame': LaunchConfiguration('target_frame'),
-            'input_cmd_vel_topic': '/teleop/cmd_vel',
-            'output_cmd_vel_topic': safety_filter_output_cmd_vel,
-            'input_cmd_vel_nav_topic': '/cmd_vel_nav_raw',
-            'output_cmd_vel_nav_topic': '/cmd_vel_nav',
-            'input_joint_vel_topic': '/teleop/joint_vel',
-            'output_joint_vel_topic': '/joint_vel',
-            'joint_states_topic': '/joint_states',
-        }]
+        package="stretch_kinematics",
+        executable="velocity_limiter",
+        name="ee_velocity_safety_filter",
+        output="screen",
+        parameters=[
+            {
+                "max_ee_speed": LaunchConfiguration("max_ee_speed"),
+                "target_frame": LaunchConfiguration("target_frame"),
+                "input_cmd_vel_topic": "/teleop/cmd_vel",
+                "output_cmd_vel_topic": safety_filter_output_cmd_vel,
+                "input_cmd_vel_nav_topic": "/cmd_vel_nav_raw",
+                "output_cmd_vel_nav_topic": "/cmd_vel_nav",
+                "input_joint_vel_topic": "/teleop/joint_vel",
+                "output_joint_vel_topic": "/joint_vel",
+                "joint_states_topic": "/joint_states",
+            }
+        ],
     )
     ld.add_action(max_ee_speed_arg)
     ld.add_action(target_frame_arg)
     ld.add_action(safety_filter_node)
-    
+
     # Task space controller node
     # publish_base_and_arm_separately=False sends unified full-body 8-DOF JointJog
     # commands to /teleop/joint_vel. This ensures velocity_limiter scales both base
