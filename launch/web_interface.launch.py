@@ -336,7 +336,7 @@ def generate_launch_description():
     )
 
     safety_filter_node = Node(
-        package='stretch_core',
+        package='stretch_kinematics',
         executable='velocity_limiter',
         name='ee_velocity_safety_filter',
         output='screen',
@@ -344,8 +344,8 @@ def generate_launch_description():
             'max_ee_speed': LaunchConfiguration('max_ee_speed'),
             'target_frame': LaunchConfiguration('target_frame'),
             'input_cmd_vel_topic': '/teleop/cmd_vel',
-            'output_cmd_vel_topic': '/cmd_vel',
-            'input_cmd_vel_nav_topic': '/teleop/cmd_vel_nav',
+            'output_cmd_vel_topic': '/cmd_vel_nav',
+            'input_cmd_vel_nav_topic': '/cmd_vel_nav_raw',
             'output_cmd_vel_nav_topic': '/cmd_vel_nav',
             'input_joint_vel_topic': '/teleop/joint_vel',
             'output_joint_vel_topic': '/joint_vel',
@@ -366,6 +366,8 @@ def generate_launch_description():
             {"target_frame": "tool_attachment_site_link"},
             {"control_rate": 15.0},
             {"watchdog_timeout": 0.4},
+            {"cmd_vel_topic": "/teleop/cmd_vel"},
+            {"joint_vel_topic": "/teleop/joint_vel"},
         ],
     )
     ld.add_action(task_space_controller_node)

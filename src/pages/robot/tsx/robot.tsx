@@ -812,12 +812,12 @@ export class Robot extends React.Component {
     createCmdVelTopics() {
         this.cmdVelNavTopic = new Topic({
             ros: this.ros,
-            name: use_vel_nav ? "/teleop/cmd_vel_nav" : "/teleop/cmd_vel",
+            name: "/teleop/cmd_vel",
             messageType: "geometry_msgs/Twist",
         });
         this.cmdVelDirectTopic = new Topic({
             ros: this.ros,
-            name: "/cmd_vel",
+            name: "/teleop/cmd_vel",
             messageType: "geometry_msgs/Twist",
         });
         this.collisionMonitorStateService = new Service({
@@ -827,11 +827,9 @@ export class Robot extends React.Component {
         });
     }
 
-    /** Drive publisher for the current safety state. */
+    /** Drive publisher for base commands (filtered by velocity_limiter). */
     private get cmdVelTopic(): Topic | undefined {
-        return this.collisionMonitorActive
-            ? this.cmdVelNavTopic
-            : this.cmdVelDirectTopic;
+        return this.cmdVelNavTopic;
     }
 
     createJointVelTopic() {
