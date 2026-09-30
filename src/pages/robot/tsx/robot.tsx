@@ -244,7 +244,7 @@ export class Robot extends React.Component {
 
     async checkROSConnection(
         required_topics: string[] = [
-            "/gripper_camera/image_raw/cropped/compressed",
+            "/grasping_perception/annotated_image/compressed",
             "/navigation_camera/image_raw/rotated/compressed",
             // "/stretch/joint_states",
         ],

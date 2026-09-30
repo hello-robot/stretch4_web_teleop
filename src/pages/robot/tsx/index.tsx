@@ -69,7 +69,7 @@ robot.setOnRosConnectCallback(async () => {
     navigationStream.start();
 
     robot.subscribeToVideo({
-        topicName: "/gripper_camera/image_raw/cropped/compressed",
+        topicName: "/grasping_perception/annotated_image/compressed",
         callback: gripperStream.updateImage,
     });
     gripperStream.start();
