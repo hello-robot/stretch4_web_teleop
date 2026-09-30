@@ -424,7 +424,7 @@ def generate_launch_description():
                 "max_ee_speed": LaunchConfiguration("max_ee_speed"),
                 "target_frame": LaunchConfiguration("target_frame"),
                 "input_cmd_vel_topic": "/teleop/cmd_vel",
-                "output_cmd_vel_topic": downstream_base_topic,
+                "output_cmd_vel_topic": safety_filter_output_cmd_vel,
                 "input_cmd_vel_nav_topic": "/cmd_vel_nav_raw",
                 "output_cmd_vel_nav_topic": "/cmd_vel_nav",
                 "input_joint_vel_topic": "/teleop/joint_vel",
