@@ -84,7 +84,7 @@ class GraspingPerceptionNode(Node):
 
         # Feature toggle states
         self.processing_enabled = True
-        self.show_swept_volume = True
+        self.show_swept_volume = False
         self.show_depth_points = False
         self.show_reticle = True
         self.max_open = MAX_OPEN_PCT
