@@ -7,11 +7,13 @@ import {
     apertureTravel,
     delay,
     GRIPPER_INCREMENT_RANGE_FRACTION,
+    JointVelocityLimitsMessage,
     parseToolMetadata,
     RemoteStream,
     ROSOccupancyGrid,
     ToolMetadata,
     updateJointIncrements,
+    updateJointVelocities,
     waitUntil,
     WebRTCMessage
 } from "shared/util";
@@ -310,6 +312,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "odom":
             remoteRobot.sensors.setOdom(message.message);
             break;
+        case "jointVelocityLimits":
+            updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
+            break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
     }
@@ -341,6 +346,7 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+    remoteRobot.getJointVelocity("getJointVelocity");
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(

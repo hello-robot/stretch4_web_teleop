@@ -15,6 +15,7 @@ import {
     PlaybackPosesCommand,
     HomeTheRobotCommand,
     GetStretchTool,
+    GetJointVelocity,
     SetJointVelocityCommand,
     SeedLocalizationCommand,
 } from "shared/commands";
@@ -250,6 +251,13 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getStretchTool(type: "getStretchTool") {
         let cmd: GetStretchTool = {
+            type: type,
+        };
+        this.robotChannel(cmd);
+    }
+
+    getJointVelocity(type: "getJointVelocity") {
+        let cmd: GetJointVelocity = {
             type: type,
         };
         this.robotChannel(cmd);

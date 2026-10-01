@@ -121,6 +121,7 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | SeedLocalizationStateMessage
+    | JointVelocityLimitsMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -165,6 +166,11 @@ export interface StretchToolMessage {
     type: "stretchTool";
     value: string;
     toolMetadata?: ToolMetadata;
+}
+
+export interface JointVelocityLimitsMessage {
+    type: "jointVelocityLimits";
+    jointVelocities: Record<string, number>;
 }
 
 
@@ -269,6 +275,10 @@ export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
     head_pan_joint: [-3.95, 1.7],
 };
 
+/**
+ * Default fallback joint velocities.
+ * Primary joint velocity limits are populated dynamically at runtime from stretch4_urdf via ROS parameters.
+ */
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
@@ -291,9 +301,8 @@ export function updateJointVelocities(newVelocities: Record<string, number>) {
 }
 
 /**
- * Default fallback jog increments. The gripper's is replaced at runtime with a fraction of
- * the attached tool's aperture travel, since the right step depends on which tool is on the
- * robot - see setToolMetadata() on the operator, which is the side that reads these.
+ * Default fallback jog increments. The gripper's is refreshed at runtime from the driver's
+ * tool_info.urdf_range, since the right step depends on which tool is attached.
  */
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,
