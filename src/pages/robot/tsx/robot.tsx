@@ -704,18 +704,6 @@ export class Robot extends React.Component {
         if (this.jointVelocityLimitsCallback) {
             this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
         }
-        const jointVelocityLimitsParam = new Param({
-            ros: this.ros,
-            name: "/stretch_driver/joint_velocity_limits",
-        });
-        jointVelocityLimitsParam.get((val: Record<string, number>) => {
-            if (val && typeof val === "object") {
-                updateJointVelocities(val);
-                if (this.jointVelocityLimitsCallback) {
-                    this.jointVelocityLimitsCallback(val);
-                }
-            }
-        });
     }
 
     isToolActuated(): boolean {
