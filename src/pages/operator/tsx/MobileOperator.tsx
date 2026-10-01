@@ -12,10 +12,8 @@ import {
     flyingGripperFunctionProvider,
     homeTheRobotFunctionProvider,
     movementRecorderFunctionProvider,
-    toolMetadata,
-    underMapFunctionProvider
     subscribeToolMetadata,
-    underMapFunctionProvider,
+    underMapFunctionProvider
 } from ".";
 import {
     ButtonPadButton,
