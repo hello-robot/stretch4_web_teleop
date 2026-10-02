@@ -17,7 +17,10 @@ import {
 } from "shared/util";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
-import { movementRecorderFunctionProvider } from "../index";
+import {
+    flyingGripperFunctionProvider,
+    movementRecorderFunctionProvider,
+} from "../index";
 import {
     clampDurationMs,
     clampJointDistanceM,
@@ -293,6 +296,11 @@ export function executeStopMotionOnProvider(
         provider.activeVelocityAction !== undefined;
     provider.disableActiveButton();
 
+    const hadFlyingMotion =
+        flyingGripperFunctionProvider.timedVoiceMoveActive ||
+        flyingGripperFunctionProvider.activeVelocityAction !== undefined;
+    flyingGripperFunctionProvider.disableActiveButton();
+
     let hadTrajectoryMotion = false;
     try {
         hadTrajectoryMotion = movementRecorderFunctionProvider.cancelPlayback();
@@ -310,7 +318,11 @@ export function executeStopMotionOnProvider(
         }
     }
 
-    const hadMotion = hadVelocityMotion || hadTrajectoryMotion || hadAutoNav;
+    const hadMotion =
+        hadVelocityMotion ||
+        hadFlyingMotion ||
+        hadTrajectoryMotion ||
+        hadAutoNav;
     VoiceMoveExecutor.emitFeedback({ kind: "stop", hadMotion });
     return {
         ok: true,
