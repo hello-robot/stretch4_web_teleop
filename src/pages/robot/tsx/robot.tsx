@@ -104,8 +104,6 @@ export class Robot extends React.Component {
     private moveBaseInsideTolStreak = 0;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
-    /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
-    private cmdVelNavTopic?: Topic;
     /** Drive straight to the driver; used only while collision_monitor is not active. */
     private cmdVelDirectTopic?: Topic;
     private collisionMonitorStateService?: Service;
@@ -810,11 +808,6 @@ export class Robot extends React.Component {
     }
 
     createCmdVelTopics() {
-        this.cmdVelNavTopic = new Topic({
-            ros: this.ros,
-            name: "/teleop/cmd_vel",
-            messageType: "geometry_msgs/Twist",
-        });
         this.cmdVelDirectTopic = new Topic({
             ros: this.ros,
             name: "/teleop/cmd_vel",
@@ -829,7 +822,7 @@ export class Robot extends React.Component {
 
     /** Drive publisher for base commands (filtered by velocity_limiter). */
     private get cmdVelTopic(): Topic | undefined {
-        return this.cmdVelNavTopic;
+        return this.cmdVelDirectTopic;
     }
 
     createJointVelTopic() {
