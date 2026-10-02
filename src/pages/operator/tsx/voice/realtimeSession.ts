@@ -8,7 +8,13 @@ import {
     getOperatorVoiceInputRecording,
     getOperatorVoiceSessionToken,
 } from "shared/operatorVoiceSession";
+import {
+    FlyingGripperButton,
+} from "../function_providers/FlyingGripperFunctionProvider";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
+import { flyingGripperFunctionProvider } from "../index";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
+import { TASK_SPACE_LINEAR_VEL } from "shared/util";
 import {
     clearLastVoiceBaseMove,
     executeBaseMoveOnProvider,
@@ -38,10 +44,12 @@ import {
 } from "./micLevelGate";
 import {
     EXECUTE_BASE_MOVE,
+    EXECUTE_FLYING_GRIPPER_MOVE,
     EXECUTE_JOINT_MOVE,
     EXECUTE_MACRO,
     SWITCH_SCENE,
     SAVE_MAP_LOCATION,
+    SET_FLYING_GRIPPER_MODE,
     SET_SAVED_LOCATIONS_MODAL,
     SET_MAIN_MENU,
     CONTROL_AUTONAV,
@@ -49,6 +57,8 @@ import {
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    FLYING_GRIPPER_MODE_ACTIONS,
+    FLYING_GRIPPER_MOVE_ACTIONS,
     SAVED_LOCATIONS_MODAL_ACTIONS,
     MAIN_MENU_ACTIONS,
     AUTONAV_NAV_ACTIONS,
@@ -59,6 +69,9 @@ import {
     VOICE_CLIP_SILENCE_RMS,
     VOICE_CLIP_START_LOOKBACK_MS,
     type ExecuteToolResult,
+    type FlyingGripperModeAction,
+    type FlyingGripperMoveAction,
+    type SetFlyingGripperModeResult,
     type SavedLocationsModalAction,
     type SetSavedLocationsModalResult,
     type SavedPosesModalAction,
@@ -76,6 +89,7 @@ import {
     type VoiceToolName,
     VOICE_SCENE_NAMES,
     VOICE_SPEED_DEFAULT,
+    VOICE_SPEEDS,
     VOICE_DURATION_MS_DEFAULT,
     VOICE_TOOLS,
     VOICE_ASLEEP_TOOL_DEFER_MS,
@@ -320,14 +334,20 @@ function formatToolCallLog(
     } else if (
         fc.name === SET_SAVED_LOCATIONS_MODAL ||
         fc.name === SET_MAIN_MENU ||
-        fc.name === CONTROL_AUTONAV
+        fc.name === CONTROL_AUTONAV ||
+        fc.name === SET_FLYING_GRIPPER_MODE ||
+        fc.name === EXECUTE_FLYING_GRIPPER_MOVE
     ) {
         try {
             const parsed = JSON.parse(fc.arguments || "{}") as Record<
                 string,
                 unknown
             >;
-            argsSummary = JSON.stringify({ action: parsed.action });
+            argsSummary = JSON.stringify(
+                fc.name === EXECUTE_FLYING_GRIPPER_MOVE
+                    ? { action: parsed.action, duration_ms: parsed.duration_ms }
+                    : { action: parsed.action },
+            );
         } catch {
             //
         }
@@ -406,7 +426,9 @@ function parsedArgsCompleteForTool(
     if (
         nameVal === SET_SAVED_LOCATIONS_MODAL ||
         nameVal === SET_MAIN_MENU ||
-        nameVal === CONTROL_AUTONAV
+        nameVal === CONTROL_AUTONAV ||
+        nameVal === SET_FLYING_GRIPPER_MODE ||
+        nameVal === EXECUTE_FLYING_GRIPPER_MOVE
     ) {
         return typeof parsed.action === "string" && parsed.action.length > 0;
     }
@@ -474,7 +496,9 @@ function accumulateFunctionCalls(
                 nameVal === SET_SAVED_LOCATIONS_MODAL ||
                 nameVal === SET_MAIN_MENU ||
                 nameVal === CONTROL_AUTONAV ||
-                nameVal === LOAD_AUTONAV_LOCATION
+                nameVal === LOAD_AUTONAV_LOCATION ||
+                nameVal === SET_FLYING_GRIPPER_MODE ||
+                nameVal === EXECUTE_FLYING_GRIPPER_MOVE
             ) &&
             typeof argsRaw === "string"
         ) {
@@ -710,6 +734,15 @@ export type RealtimeVoiceConnectOptions = {
     onSetSavedPosesModalFeedback?: (result: SetSavedPosesModalResult) => void;
     onSavePoseFeedback?: (result: SavePoseResult) => void;
     onMoveToPoseFeedback?: (result: MoveToPoseResult) => void;
+    /** Open or close Flying Gripper mode on Pilot screen. */
+    onSetFlyingGripperMode?: (
+        action: FlyingGripperModeAction,
+    ) => SetFlyingGripperModeResult;
+    onSetFlyingGripperModeFeedback?: (
+        result: SetFlyingGripperModeResult,
+    ) => void;
+    /** Whether flying gripper mode overlay is currently active. */
+    isFlyingGripperActive?: () => boolean;
 };
 
 export type ActiveRealtimeVoiceSession = {
@@ -1429,6 +1462,150 @@ export async function connectOpenAIRealtimeVoice(
             const res = executeMoveToPose(fc.arguments);
             opts.onMoveToPoseFeedback?.(res);
             return res;
+        },
+        set_flying_gripper_mode: (_voiceProvider, fc) => {
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                rawArgs = {};
+            }
+            const action = rawArgs.action as FlyingGripperModeAction;
+            if (!FLYING_GRIPPER_MODE_ACTIONS.includes(action)) {
+                return {
+                    ok: false,
+                    detail: `Invalid action for set_flying_gripper_mode: "${String(rawArgs.action)}".`,
+                    ignored: true,
+                };
+            }
+            if (!opts.onSetFlyingGripperMode) {
+                return {
+                    ok: false,
+                    detail: "Flying gripper mode control unavailable.",
+                    ignored: true,
+                };
+            }
+            const res = opts.onSetFlyingGripperMode(action);
+            opts.onSetFlyingGripperModeFeedback?.(res);
+            return res;
+        },
+        execute_flying_gripper_move: (voiceProvider, fc) => {
+            const isActive = opts.isFlyingGripperActive?.() ?? false;
+            if (!isActive) {
+                return {
+                    ok: false,
+                    detail: "Flying gripper controls are only available in Flying Gripper mode.",
+                    ignored: true,
+                };
+            }
+            let rawArgs: Record<string, unknown>;
+            try {
+                rawArgs = JSON.parse(fc.arguments || "{}") as Record<
+                    string,
+                    unknown
+                >;
+            } catch {
+                rawArgs = {};
+            }
+            const action = rawArgs.action as FlyingGripperMoveAction;
+            if (!FLYING_GRIPPER_MOVE_ACTIONS.includes(action)) {
+                return {
+                    ok: false,
+                    detail: `Invalid action for execute_flying_gripper_move: "${String(rawArgs.action)}".`,
+                    ignored: true,
+                };
+            }
+
+            voiceProvider.disableActiveButton();
+            flyingGripperFunctionProvider.disableActiveButton();
+
+            const speed =
+                typeof rawArgs.speed === "string" &&
+                (VOICE_SPEEDS as readonly string[]).includes(rawArgs.speed)
+                    ? (rawArgs.speed as VoiceSpeed)
+                    : VOICE_SPEED_DEFAULT;
+
+            opts.onVoiceSpeedChange?.(speed);
+            opts.onVoicePressAndHoldRequired?.();
+
+            const speedMultiplier =
+                speed === "slow" ? 0.5 : speed === "fast" ? 1.5 : 1.0;
+
+            let distance_m: number | undefined;
+            if (
+                typeof rawArgs.distance_m === "number" &&
+                Number.isFinite(rawArgs.distance_m) &&
+                rawArgs.distance_m > 0
+            ) {
+                distance_m = Math.max(0.01, Math.min(1.0, rawArgs.distance_m));
+            }
+
+            let durationMs = 1000;
+            if (distance_m !== undefined) {
+                const vel =
+                    TASK_SPACE_LINEAR_VEL *
+                    (FunctionProvider.velocityScale || 1.0) *
+                    speedMultiplier;
+                durationMs = Math.max(
+                    100,
+                    Math.min(10000, Math.round((distance_m / vel) * 1000)),
+                );
+            } else if (
+                typeof rawArgs.duration_ms === "number" &&
+                Number.isFinite(rawArgs.duration_ms)
+            ) {
+                durationMs = Math.max(100, Math.min(10000, rawArgs.duration_ms));
+            }
+
+            const buttonMap: Record<FlyingGripperMoveAction, FlyingGripperButton> = {
+                forward: FlyingGripperButton.Forward,
+                backward: FlyingGripperButton.Backward,
+                left: FlyingGripperButton.Left,
+                right: FlyingGripperButton.Right,
+                up: FlyingGripperButton.Up,
+                down: FlyingGripperButton.Down,
+            };
+
+            const button = buttonMap[action];
+            const started = flyingGripperFunctionProvider.timedFlyingMove(
+                button,
+                durationMs,
+                speedMultiplier,
+            );
+            if (!started) {
+                opts.onVoiceMoveFeedback?.({
+                    kind: "rejected",
+                    reason: FunctionProvider.robotIsConnected()
+                        ? "busy"
+                        : "disconnected",
+                });
+                return {
+                    ok: false,
+                    detail: "Failed to execute flying gripper movement (robot not connected).",
+                };
+            }
+
+            opts.onVoiceMoveFeedback?.({
+                kind: "move_started",
+                action: `fly_${action}`,
+                speed,
+                duration_ms: durationMs,
+                distance_display:
+                    distance_m !== undefined
+                        ? `${distance_m % 1 === 0 ? distance_m : distance_m.toFixed(2)} m`
+                        : undefined,
+            });
+
+            return {
+                ok: true,
+                detail:
+                    distance_m !== undefined
+                        ? `Flying gripper moved ${action} ${distance_m}m at ${speed} speed (${durationMs}ms).`
+                        : `Flying gripper moved ${action} at ${speed} speed for ${durationMs}ms.`,
+            };
         },
     };
 
