@@ -86,6 +86,12 @@ const SAVE_POSE = "save_pose";
 /** Move robot to a previously saved pose by name. */
 const MOVE_TO_POSE = "move_to_pose";
 
+/** Execute translation in the camera/tool frame when flying gripper mode is active. */
+const EXECUTE_FLYING_GRIPPER_MOVE = "execute_flying_gripper_move";
+
+/** Open or close the flying gripper overlay on the Pilot screen. */
+const SET_FLYING_GRIPPER_MODE = "set_flying_gripper_mode";
+
 /** Names of available macros (matches voiceMacros.ts on the client). */
 const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
 
@@ -101,8 +107,21 @@ const MAIN_MENU_ACTIONS = ["open", "close"];
 /** Valid set_saved_poses_modal.action values. */
 const SAVED_POSES_MODAL_ACTIONS = ["open", "close"];
 
+/** Valid set_flying_gripper_mode.action values. */
+const FLYING_GRIPPER_MODE_ACTIONS = ["open", "close"];
+
 /** Valid control_autonav.action values. */
 const AUTONAV_NAV_ACTIONS = ["start", "cancel"];
+
+/** Valid actions for execute_flying_gripper_move. */
+const FLYING_GRIPPER_MOVE_ACTIONS = [
+    "forward",
+    "backward",
+    "left",
+    "right",
+    "up",
+    "down",
+];
 
 /** All voice Realtime tools registered in the session payload and executed on the client. */
 const VOICE_TOOLS = [
@@ -120,6 +139,8 @@ const VOICE_TOOLS = [
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    EXECUTE_FLYING_GRIPPER_MOVE,
+    SET_FLYING_GRIPPER_MODE,
 ];
 
 // ── Base move action enums ────────────────────────────────────────────────────
@@ -241,12 +262,16 @@ module.exports = {
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    EXECUTE_FLYING_GRIPPER_MOVE,
+    SET_FLYING_GRIPPER_MODE,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
     MAIN_MENU_ACTIONS,
     SAVED_POSES_MODAL_ACTIONS,
+    FLYING_GRIPPER_MODE_ACTIONS,
     AUTONAV_NAV_ACTIONS,
+    FLYING_GRIPPER_MOVE_ACTIONS,
 
     VOICE_TOOLS,
     BASE_TRANSLATE_ACTIONS,

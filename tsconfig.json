@@ -11,5 +11,7 @@
             "robot/*": ["src/pages/robot/*"],
             "ai-gateway/*": ["ai-gateway/*"]
         }
-    }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "build", "dist"]
 }

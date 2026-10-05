@@ -905,7 +905,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                     ? (
                         // Modal toggle
                         <button
-                            onPointerUp={handleToggleModal}
+                            onPointerDown={handleToggleModal}
                             className="mrecord-button"
                             tabIndex={isButtonVisible ? 0 : -1}
                             disabled={!isButtonVisible}
@@ -919,7 +919,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                     : (
                         // Button to stop recording
                         <button
-                            onPointerUp={handleStopRecording}
+                            onPointerDown={handleStopRecording}
                             className="mrecord-stop-button"
                             tabIndex={isButtonVisible ? 0 : -1}
                             disabled={!isButtonVisible}

@@ -31,12 +31,14 @@ import {
     VOICE_AUTO_SLEEP_POLL_MS,
     type ControlAutoNavAction,
     type ControlAutoNavResult,
+    type FlyingGripperModeAction,
     type LoadAutoNavLocationResult,
     type MainMenuAction,
     type MoveToPoseResult,
     type SavedLocationsModalAction,
     type SavedPosesModalAction,
     type SavePoseResult,
+    type SetFlyingGripperModeResult,
     type SetMainMenuResult,
     type SetSavedLocationsModalResult,
     type SetSavedPosesModalResult,
@@ -86,6 +88,10 @@ export type VoiceCommandAssistantProps = {
     onSetSavedPosesModal?: (
         action: SavedPosesModalAction,
     ) => SetSavedPosesModalResult;
+    onSetFlyingGripperMode?: (
+        action: FlyingGripperModeAction,
+    ) => SetFlyingGripperModeResult;
+    isFlyingGripperActive?: boolean;
     onControlAutoNav: (action: ControlAutoNavAction) => ControlAutoNavResult;
     onCancelAutoNavOnStop: () => ControlAutoNavResult;
     onGetAutoNavSavedPoseNames: () => string[] | null;
@@ -101,6 +107,8 @@ export const VoiceCommandAssistant = ({
     onSetSavedLocationsModal,
     onSetMainMenu,
     onSetSavedPosesModal,
+    onSetFlyingGripperMode,
+    isFlyingGripperActive,
     onControlAutoNav,
     onCancelAutoNavOnStop,
     onGetAutoNavSavedPoseNames,
@@ -217,6 +225,22 @@ export const VoiceCommandAssistant = ({
             return result;
         },
         [onSetMainMenu, addToast],
+    );
+
+    const isFlyingGripperActiveRef = useRef(isFlyingGripperActive ?? false);
+    useEffect(() => {
+        isFlyingGripperActiveRef.current = isFlyingGripperActive ?? false;
+    }, [isFlyingGripperActive]);
+
+    const handleSetFlyingGripperModeFeedback = useCallback(
+        (result: SetFlyingGripperModeResult) => {
+            if (result.ok) {
+                addToast("info", result.detail, undefined, "voice");
+            } else {
+                addToast("error", result.detail, undefined, "voice");
+            }
+        },
+        [addToast],
     );
 
     const handleSetSavedPosesModal = useCallback(
@@ -341,6 +365,9 @@ export const VoiceCommandAssistant = ({
                 onSetSavedPosesModal: handleSetSavedPosesModal,
                 onSavePoseFeedback: handleSavePoseFeedback,
                 onMoveToPoseFeedback: handleMoveToPoseFeedback,
+                onSetFlyingGripperMode,
+                onSetFlyingGripperModeFeedback: handleSetFlyingGripperModeFeedback,
+                isFlyingGripperActive: () => isFlyingGripperActiveRef.current,
                 onControlAutoNav: handleControlAutoNav,
                 onCancelAutoNavOnStop: handleCancelAutoNavOnStop,
                 onGetAutoNavSavedPoseNames,
