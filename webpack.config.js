@@ -3,32 +3,16 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 const dotenv = require("dotenv");
 const { envVarName, loadFeatures } = require("./feature-flags");
+const {
+    webpackPublicEnvDefinitions,
+} = require("./scripts/webpackPublicEnv");
 
 const pages = ["robot", "operator", "home"];
 
-// call dotenv and it will return an Object with a parsed key
+// Only explicitly public Firebase client configuration and the fleet identifier
+// may enter browser bundles. Robot credentials and every other .env value stay local.
 const env = dotenv.config().parsed || {};
-
-const defaultEnv = {
-    apiKey: undefined,
-    authDomain: undefined,
-    databaseURL: undefined,
-    projectId: undefined,
-    storageBucket: undefined,
-    messagingSenderId: undefined,
-    appId: undefined,
-    measurementId: undefined,
-    roboUsername: undefined,
-    roboPassword: undefined,
-};
-
-const mergedEnv = { ...defaultEnv, ...env };
-
-// reduce it to a nice object, the same as before
-const envKeys = Object.keys(mergedEnv).reduce((prev, next) => {
-    prev[`process.env.${next}`] = mergedEnv[next] !== undefined ? JSON.stringify(mergedEnv[next]) : "undefined";
-    return prev;
-}, {});
+const envKeys = webpackPublicEnvDefinitions(env);
 
 module.exports = (webpackEnv, argv) => {
     const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
@@ -38,7 +22,6 @@ module.exports = (webpackEnv, argv) => {
     Object.entries(loadFeatures()).forEach(([name, enabled]) => {
         envKeys[`process.env.${envVarName(name)}`] = JSON.stringify(enabled);
     });
-    console.log(envKeys);
 
     return {
         mode: argv && argv.mode ? argv.mode : "development",
@@ -48,8 +31,15 @@ module.exports = (webpackEnv, argv) => {
         }, {}),
         output: {
             filename: "[name]/bundle.js",
-            path: path.resolve(__dirname, "dist"),
+            path: path.resolve(
+                __dirname,
+                storageValue === "firebase" ? "dist-firebase" : "dist",
+            ),
             publicPath: "/",
+            // Dev watch and `build:firebase` share this folder. Without a
+            // clean, a later compile leaves the other mode's chunks behind
+            // and the entry waits forever for chunk ids that never load.
+            clean: true,
         },
         optimization: {
             splitChunks: {
@@ -110,6 +100,10 @@ module.exports = (webpackEnv, argv) => {
                 {
                     test: /\.(jpe?g|png|gif|svg)$/i,
                     use: "file-loader",
+                },
+                {
+                    test: /\.(woff2?|otf|ttf)$/i,
+                    type: "asset/resource",
                 },
             ],
         },

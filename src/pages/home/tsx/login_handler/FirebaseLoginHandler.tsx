@@ -3,15 +3,32 @@ import {
     Auth,
     browserLocalPersistence,
     browserSessionPersistence,
+    confirmPasswordReset,
     getAuth,
+    GoogleAuthProvider,
     onAuthStateChanged,
     sendPasswordResetEmail,
     setPersistence,
     signInWithEmailAndPassword,
+    signInWithPopup,
     signOut,
+    verifyPasswordResetCode,
 } from "firebase/auth";
-import { Database, get, getDatabase, onValue, ref, set } from "firebase/database";
-import { LoginHandler } from "./LoginHandler";
+import {
+    Database,
+    get,
+    getDatabase,
+    onValue,
+    ref,
+    set,
+    update,
+} from "firebase/database";
+import { aliasInitials } from "../gravatar";
+import { OperatorSeat } from "../robotModel";
+import { LoginHandler, RobotRooms } from "./LoginHandler";
+const {
+    reconcileAssignmentRecords,
+} = require("./robotAssignmentState");
 
 export class FirebaseLoginHandler extends LoginHandler {
     private auth: Auth;
@@ -56,7 +73,44 @@ export class FirebaseLoginHandler extends LoginHandler {
         return this._loginState;
     }
 
-    public listRooms(resultCallback) {
+    public getUserEmail(): string | undefined {
+        return this.auth.currentUser?.email ?? undefined;
+    }
+
+    public getUserUid(): string | undefined {
+        return this.uid;
+    }
+
+    public watchOperatorSeat(
+        robotAuthUid: string,
+        onSeat: (seat: OperatorSeat | null) => void,
+    ): () => void {
+        if (!robotAuthUid) {
+            onSeat(null);
+            return () => {};
+        }
+        const stopSeat = onValue(ref(this.db, `rooms/${robotAuthUid}/operator`), (snap) => {
+            const seat = snap.val();
+            if (!seat || seat.active !== true || !seat.uid) {
+                onSeat(null);
+                return;
+            }
+            const occupantUid = String(seat.uid);
+            const occupantAlias =
+                typeof seat.alias === "string" ? seat.alias : "";
+            onSeat({
+                uid: occupantUid,
+                initials: occupantAlias
+                    ? aliasInitials(occupantAlias)
+                    : undefined,
+            });
+        });
+        return stopSeat;
+    }
+
+    public listRooms(
+        resultCallback: (robots: RobotRooms) => void,
+    ): () => void {
         if (this.alias === undefined) {
             throw new Error(
                 "FirebaseLoginHandler.listRooms(): this.alias is null",
@@ -65,31 +119,88 @@ export class FirebaseLoginHandler extends LoginHandler {
 
         console.log("[listRooms] Resolved alias:", this.alias);
         console.log("[listRooms] Querying: assignments/" + this.alias + "/robots");
-        onValue(
+        const records: RobotRooms = {};
+        const robotStops = new Map<string, () => void>();
+        let currentAssignments: Record<string, unknown> = {};
+        const emitSnapshot = () => resultCallback({ ...records });
+        const stopAssignments = onValue(
             ref(this.db, "assignments/" + this.alias + "/robots"),
             (snapshot) => {
-                let robots = snapshot.val();
-                console.log("[listRooms] Assignments robots result:", robots);
-                if (!robots) {
+                const assignments = snapshot.val() || {};
+                currentAssignments = assignments;
+                console.log("[listRooms] Assignments robots result:", assignments);
+                const assignedIds = new Set(Object.keys(assignments));
+
+                for (const [robotId, stopRobot] of robotStops) {
+                    if (assignedIds.has(robotId)) continue;
+                    stopRobot();
+                    robotStops.delete(robotId);
+                    delete records[robotId];
+                }
+
+                const reconciled = reconcileAssignmentRecords(
+                    records,
+                    assignments,
+                );
+                Object.keys(records).forEach((robotId) => delete records[robotId]);
+                Object.assign(records, reconciled);
+                emitSnapshot();
+
+                if (assignedIds.size === 0) {
                     console.warn("[listRooms] No robots found under assignments/" + this.alias + "/robots");
                     return;
                 }
-                Object.entries(robots).forEach(([robo_uid, is_active]) => {
-                    console.log("[listRooms] Querying: robots/" + robo_uid);
-                    onValue(ref(this.db, "robots/" + robo_uid), (snapshot2) => {
-                        let robo_info = snapshot2.val() || { name: robo_uid, status: "offline" };
-                        console.log("[listRooms] Robot info for " + robo_uid + ":", robo_info);
-                        robo_info["is_active"] = is_active;
-                        resultCallback(robo_uid, robo_info);
-                    }, (err) => {
-                        console.error("[listRooms] Error reading robots/" + robo_uid + ":", err.message);
-                    });
-                });
+
+                for (const robotId of assignedIds) {
+                    if (robotStops.has(robotId)) continue;
+                    console.log("[listRooms] Querying: robots/" + robotId);
+                    const stopRobot = onValue(
+                        ref(this.db, "robots/" + robotId),
+                        (robotSnapshot) => {
+                            const robotInfo =
+                                robotSnapshot.val() || {
+                                    name: robotId,
+                                    status: "offline",
+                                };
+                            console.log(
+                                "[listRooms] Robot info for " + robotId + ":",
+                                robotInfo,
+                            );
+                            records[robotId] = {
+                                ...robotInfo,
+                                is_active: Boolean(currentAssignments[robotId]),
+                            };
+                            emitSnapshot();
+                        },
+                        (err) => {
+                            console.error(
+                                "[listRooms] Error reading robots/" + robotId + ":",
+                                err.message,
+                            );
+                            records[robotId] = {
+                                name: robotId,
+                                status: "offline",
+                                is_active: Boolean(currentAssignments[robotId]),
+                            };
+                            emitSnapshot();
+                        },
+                    );
+                    robotStops.set(robotId, stopRobot);
+                }
             },
             (err) => {
                 console.error("[listRooms] Error reading assignments/" + this.alias + "/robots:", err.message);
+                for (const stopRobot of robotStops.values()) stopRobot();
+                robotStops.clear();
+                Object.keys(records).forEach((robotId) => delete records[robotId]);
+                emitSnapshot();
             }
         );
+        return () => {
+            stopAssignments();
+            for (const stopRobot of robotStops.values()) stopRobot();
+            robotStops.clear();
+        };
     }
 
     public logout(): Promise<undefined> {
@@ -133,26 +244,68 @@ export class FirebaseLoginHandler extends LoginHandler {
         });
     }
 
+    public loginWithGoogle(remember_me: boolean): Promise<undefined> {
+        return setPersistence(
+            this.auth,
+            remember_me ? browserLocalPersistence : browserSessionPersistence,
+        ).then(() =>
+            signInWithPopup(this.auth, new GoogleAuthProvider()).then(
+                () => undefined,
+                (error) => {
+                    // Closing the popup is a cancel, not a failure.
+                    if (error?.code === "auth/popup-closed-by-user") {
+                        return undefined;
+                    }
+                    return Promise.reject(error);
+                },
+            ),
+        );
+    }
+
     public forgot_password(username: string): Promise<undefined> {
         // Tutorial here:
         // https://firebase.google.com/docs/auth/web/manage-users?hl=en#send_a_password_reset_email
 
-        return new Promise<undefined>((resolve, reject) => {
-            sendPasswordResetEmail(this.auth, username)
-                .then(() => {
-                    resolve(undefined);
-                })
-                .catch(reject);
-        });
+        // The link in the email is still Firebase's, until the project's
+        // password-reset template uses this origin as its action URL. The
+        // continue URL brings the user back here after they save.
+        return sendPasswordResetEmail(this.auth, username, {
+            url: window.location.origin + "/",
+            handleCodeInApp: false,
+        }).then(() => undefined);
     }
 
-    public requestRobotLaunch(robo_uid: string, mapId?: string): Promise<void> {
+    public verifyPasswordReset(code: string): Promise<string> {
+        return verifyPasswordResetCode(this.auth, code);
+    }
+
+    public completePasswordReset(code: string, password: string): Promise<void> {
+        return confirmPasswordReset(this.auth, code, password);
+    }
+
+    public requestRobotLaunch(robo_uid: string, mapId?: string | null): Promise<void> {
         if (!this.alias) return Promise.reject("User not logged in");
         return set(ref(this.db, "robots/" + robo_uid + "/control"), {
             action: "launch",
             map_id: mapId || null,
             requested_by: this.alias,
             requested_at: Date.now(),
+        });
+    }
+
+    public setRobotMap(robo_uid: string, mapId: string | null): Promise<void> {
+        if (!this.alias) return Promise.reject("User not logged in");
+        return set(ref(this.db, "robots/" + robo_uid + "/map_id"), mapId);
+    }
+
+    public setRobotConfig(
+        robo_uid: string,
+        flag: string,
+        enabled: boolean,
+    ): Promise<void> {
+        if (!this.alias) return Promise.reject("User not logged in");
+        return update(ref(this.db, "robots/" + robo_uid + "/config"), {
+            [flag]: enabled,
         });
     }
 
