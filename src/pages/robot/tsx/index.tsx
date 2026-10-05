@@ -2,6 +2,10 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
 import { Transform } from "roslib";
+import {
+    FEATURE_VOICE_CONTROL_INTERFACE,
+    FEATURE_VOICE_INPUT_RECORDING,
+} from "shared/featureFlags";
 import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
 import {
     ActionState,
@@ -23,6 +27,8 @@ import {
     ROSOdometry,
     ValidJointStateDict,
     ValidJointStateMessage,
+    VoiceCapabilityMessage,
+    VoiceTokenMessage,
     WebRTCMessage,
 } from "shared/util";
 import { StretchToolMessage } from "../../../shared/util";
@@ -175,6 +181,49 @@ function forwardStretchTool(value: string) {
         type: "stretchTool",
         value: value,
     } as StretchToolMessage);
+}
+
+// @flag voice_control_interface
+function forwardVoiceCapability() {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "voiceCapability",
+        enabled: FEATURE_VOICE_CONTROL_INTERFACE,
+        voiceInputRecording:
+            FEATURE_VOICE_CONTROL_INTERFACE && FEATURE_VOICE_INPUT_RECORDING,
+    } as VoiceCapabilityMessage);
+}
+
+/**
+ * Mint an OpenAI Realtime credential from the local server and relay it to
+ * the operator. The robot browser runs on the robot itself, so the server
+ * accepts this loopback request without an operator voice session token.
+ */
+// @flag voice_control_interface
+async function forwardVoiceToken() {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    const reply = (message: Omit<VoiceTokenMessage, "type">) =>
+        connection.sendData({ type: "voiceToken", ...message } as VoiceTokenMessage);
+
+    if (!FEATURE_VOICE_CONTROL_INTERFACE) {
+        reply({ error: "Voice control is not enabled on this robot" });
+        return;
+    }
+    try {
+        const r = await fetch("/openai-realtime/token", {
+            method: "GET",
+            credentials: "same-origin",
+        });
+        if (!r.ok) {
+            reply({ error: `Token endpoint HTTP ${r.status}: ${(await r.text()).slice(0, 200)}` });
+            return;
+        }
+        reply({ credential: (await r.json()) as Record<string, unknown> });
+    } catch (err) {
+        reply({ error: err instanceof Error ? err.message : String(err) });
+    }
 }
 
 function forwardJointStates(
@@ -366,6 +415,14 @@ function handleMessage(message: WebRTCMessage) {
                     "seedLocalizationState"
                 );
             });
+            break;
+        // @flag voice_control_interface
+        case "getVoiceCapability":
+            forwardVoiceCapability();
+            break;
+        // @flag voice_control_interface
+        case "requestVoiceToken":
+            void forwardVoiceToken();
             break;
     }
 }

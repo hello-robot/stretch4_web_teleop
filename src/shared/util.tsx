@@ -108,7 +108,27 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | SeedLocalizationStateMessage
+    | VoiceCapabilityMessage
+    | VoiceTokenMessage
     | cmd;
+
+/** Robot -> operator reply to getVoiceCapability. */
+export interface VoiceCapabilityMessage {
+    type: "voiceCapability";
+    enabled: boolean;
+    voiceInputRecording: boolean;
+}
+
+/**
+ * Robot -> operator reply to requestVoiceToken. `credential` is the raw
+ * OpenAI client_secrets response (short-lived); exactly one of
+ * `credential` / `error` is set.
+ */
+export interface VoiceTokenMessage {
+    type: "voiceToken";
+    credential?: Record<string, unknown>;
+    error?: string;
+}
 
 interface StopTrajectoryMessage {
     type: "stopTrajectory";

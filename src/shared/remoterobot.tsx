@@ -16,6 +16,8 @@ import {
     GetStretchTool,
     SetJointVelocityCommand,
     SeedLocalizationCommand,
+    GetVoiceCapabilityCommand,
+    RequestVoiceTokenCommand,
 } from "shared/commands";
 import {
     ValidJointStateDict,
@@ -271,6 +273,22 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
+        };
+        this.robotChannel(cmd);
+    }
+
+    // @flag voice_control_interface
+    getVoiceCapability() {
+        let cmd: GetVoiceCapabilityCommand = {
+            type: "getVoiceCapability",
+        };
+        this.robotChannel(cmd);
+    }
+
+    // @flag voice_control_interface
+    requestVoiceToken() {
+        let cmd: RequestVoiceTokenCommand = {
+            type: "requestVoiceToken",
         };
         this.robotChannel(cmd);
     }

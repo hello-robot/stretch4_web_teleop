@@ -2,6 +2,10 @@ import { FirebaseOptions } from "firebase/app";
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { cmd } from "shared/commands";
+import {
+    setOperatorVoiceInputRecording,
+    setOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
 import { RemoteRobot } from "shared/remoterobot";
 import {
     delay,
@@ -32,6 +36,10 @@ import { MovementRecorderFunctionProvider } from "./function_providers/MovementR
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
+import {
+    configureVoiceTokenRelay,
+    resolveVoiceToken,
+} from "./voice/voiceTokenRelay";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -121,6 +129,9 @@ loginHandler = createLoginHandler(() => {
 new Promise<void>(async (resolve) => {
     let currURL = new URL(window.location.href);
     room_name = currURL.searchParams.get("robot");
+    if (process.env.storage === "firebase" && !room_name) {
+        room_name = process.env.HELLO_FLEET_ID;
+    }
     if (
         process.env.storage === "firebase" &&
         !/^stretch-(re1|re2|se3|se4)-\d{4}$/.test(room_name)
@@ -283,6 +294,15 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "odom":
             remoteRobot.sensors.setOdom(message.message);
             break;
+        // @flag voice_control_interface
+        case "voiceCapability":
+            setOperatorVoiceSvc(message.enabled);
+            setOperatorVoiceInputRecording(message.voiceInputRecording);
+            break;
+        // @flag voice_control_interface
+        case "voiceToken":
+            resolveVoiceToken(message);
+            break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
     }
@@ -314,6 +334,9 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+    // @flag voice_control_interface
+    remoteRobot.getVoiceCapability();
+    configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(
@@ -429,6 +452,9 @@ function renderOperator(storageHandler: StorageHandler) {
 }
 
 function disconnectFromRobot() {
+    // @flag voice_control_interface
+    configureVoiceTokenRelay(null);
+    setOperatorVoiceSvc(false);
     connection.hangup();
     connection.stop();
 }
@@ -436,15 +462,9 @@ function disconnectFromRobot() {
 window.onbeforeunload = () => {
     connection.hangup();
     connection.stop();
-    if (loginHandler && room_name) {
-        loginHandler.requestRobotStop(room_name);
-    }
 };
 
 window.onunload = () => {
     connection.hangup();
     connection.stop();
-    if (loginHandler && room_name) {
-        loginHandler.requestRobotStop(room_name);
-    }
 };

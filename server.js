@@ -79,21 +79,21 @@ if (isVoiceControlEnabled) {
         );
     }
 
+    /**
+     * Validate the voice session token.
+     *
+     * Only the one operator holding the socket.io session may mint, except
+     * for the robot's own browser on loopback, which mints on behalf of a
+     * Firebase-hosted operator and relays the credential over the WebRTC
+     * data channel (see robot/tsx/index.tsx forwardVoiceToken).
+     */
     const validateVoiceSession = (req) =>
         voiceSessionAuth.validate(
             req.get("X-Voice-Session-Token"),
             oper_sock,
             io
-        );
+        ) || voiceSessionAuth.isLocalRobotRequest(req);
 
-    /**
-     * Validate the voice session token.
-     *
-     * Extra security measures are implemented to ensure that
-     * only one operator on the socket connection will be
-     * authorized to mint a voice session token, and use the
-     * OpenAI Realtime API.
-     */
     registerOpenAiRealtimeRoutes(app, {
         validateVoiceSession,
     });
@@ -118,7 +118,43 @@ function endOperatorClipSession() {
     setClipSession(null);
 }
 
-app.use("/", express.static(path.join(__dirname, "dist")));
+const distDir = path.join(__dirname, process.env.WEB_TELEOP_DIST || "dist");
+app.use("/", express.static(distDir));
+
+// Webpack watch rewrites dist/. Tell open home/operator tabs to reload.
+const reloadClients = new Set();
+app.get("/dev-reload", (req, res) => {
+    res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+    });
+    res.write("\n");
+    reloadClients.add(res);
+    req.on("close", () => reloadClients.delete(res));
+});
+
+let reloadTimer = null;
+function notifyReload() {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+        for (const client of reloadClients) {
+            client.write("data: reload\n\n");
+        }
+    }, 800);
+}
+
+function watchDist() {
+    if (!fs.existsSync(distDir)) {
+        setTimeout(watchDist, 500);
+        return;
+    }
+    fs.watch(distDir, { recursive: true }, (_event, filename) => {
+        if (!filename || String(filename).endsWith(".map")) return;
+        notifyReload();
+    });
+}
+watchDist();
 
 function updateRooms() {
     io.emit("update_rooms", {
