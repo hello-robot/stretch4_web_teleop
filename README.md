@@ -40,6 +40,63 @@ Once you're done with the interface, close the browser and run:
 
 **Note:** Only one browser can be connected to the interface at a time.
 
+## Firebase
+
+Hello Robot Cloud is built with Firebase providing a hosted dashboard, sign-in, and an organized space to view the Stretch robots in your fleet. Hello Robot Cloud allows you to access your Stretch anytime – no Tailscale or ngrok is needed.
+
+- [Working on the Firebase app](#working-on-the-firebase-app)
+- [How to Teleoperate Your Stretch from Hello Robot Cloud](#how-to-teleoperate-your-stretch-from-hello-robot-cloud)
+
+### Working on the Firebase app
+
+This mode serves the `home`, `operator`, and `robot` pages from Firebase Hosting and keeps robot state in the Realtime Database. The dashboard lists assigned robots, starts the interface on the robot, and opens the operator room. Signaling and the operator seat live in [`FirebaseSignaling.ts`](src/shared/signaling/FirebaseSignaling.ts). The onboard process that applies launch, stop, map, and config is [`scripts/stretch_firebase_daemon.js`](scripts/stretch_firebase_daemon.js).
+
+Only Firebase's public web-app configuration and fleet identifier are compiled into those pages. The robot email/password stays in the robot's gitignored `.env`; `start_robot_browser.js` injects it into the local headless browser context without putting it in a bundle, URL, or HTTP log.
+
+To change the dashboard, start in [`src/pages/home`](src/pages/home). To change how a session joins or who holds the operator seat, start in the signaling code. To change what a launch actually starts, start in the daemon and [`launch_interface_firebase.sh`](launch_interface_firebase.sh).
+
+#### Run and iterate locally
+
+`./launch_interface.sh` watches this checkout and rebuilds `dist-firebase/` on save when `.env` is filled in. Pass `-f` to force Firebase mode. A tab on the robot (`https://localhost` or `https://<robot-ip>`) reloads itself. The robot page (`/robot`) does not. Restart it with `pm2 restart start_robot_browser`.
+
+#### Publish a preview
+
+You don't have to launch the interface to publish this checkout:
+
+```
+npm run build:firebase-preview-channel
+```
+
+That builds `dist-firebase/` and runs `firebase hosting:channel:deploy` for this checkout. It does not update [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app). The channel is `branch-<name>` when the worktree is clean and `HEAD` matches `origin/<name>` (`/` `:` `_` `#` in the branch name become `-`). Otherwise it is `local-branch-<name>`.
+
+The preview URL looks like `https://stretch4-web-interface--<channel>-<hash>.web.app`. The hash is assigned the first time that channel is deployed and does not change. `/operator/?robot=` is the same host with that path. While the interface is running, a save uploads the same preview channel. The preview tab reloads a couple of seconds after the upload.
+
+### How to Teleoperate Your Stretch from Hello Robot Cloud
+
+1. On the robot, fill in `.env` so the daemon can log in:
+
+   - `apiKey`
+   - `authDomain`
+   - `databaseURL`
+   - `projectId`
+   - `storageBucket`
+   - `messagingSenderId`
+   - `appId`
+   - `measurementId`
+   - `roboUsername` (the robot's Firebase email)
+   - `roboPassword`
+   - `HELLO_FLEET_ID`
+
+   Then run `./firebase_console_config.sh --install`. After that completes, run `sudo reboot now`. Do this before you create an account. The daemon has to be installed and Stretch has to reboot first.
+2. Create an account at [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app).
+3. Ask for your Stretch to be added to that account. Send the robot's fleet ID. An administrator must bind the robot Auth uid in both `assignments/<robotAuthUid> = { role: "robot", name: "<fleetId>" }` and `robots/<fleetId>/uid = "<robotAuthUid>"`, then add the fleet ID under your `assignments/<alias>/robots`.
+4. Sign in. The robot should appear as standby. Choose its map and config, then press **Teleoperate**.
+5. The interface starts on the robot when you press **Teleoperate**. It does not start on its own after a reboot. The hosted site stays up across a reboot, and the onboard daemon returns the robot to standby.
+
+One person operates a robot at a time. A second user sees **Currently in Use** and cannot stop that session or take the seat. End teleoperation before someone else connects.
+
+Realtime Database access is default-deny. Run `npm run test:security` before changing [`database.rules.json`](database.rules.json). Hosting deploys do not publish database rules; follow the staged rules rollout in the Firebase storage-handler README. If a robot password was ever included in a previously published bundle, rotate it after the secure build is deployed.
+
 ## Feature flags
 
 Optional features are declared in [`features.json`](features.json), which is

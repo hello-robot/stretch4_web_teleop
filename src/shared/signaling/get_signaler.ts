@@ -10,6 +10,15 @@ import { FirebaseSignaling } from "./FirebaseSignaling";
 import { LocalSignaling } from "./LocalSignaling";
 import { SignalingProps } from "./Signaling";
 
+declare global {
+    interface Window {
+        __STRETCH_ROBOT_FIREBASE_AUTH__?: Readonly<{
+            username: string;
+            password: string;
+        }>;
+    }
+}
+
 /**
  * Creates a signaling handler based on the `storage` property in the process
  * environment.
@@ -37,8 +46,9 @@ export function createSignaler(props: SignalingProps) {
 
 /**
  * If using Firebase for signaling, this method logs the robot into its account.
- * This method is meant to be used by the robot browser. In addition to the
- * Firebase config, the `roboUsername` and `roboPassword` env vars must be set.
+ * The trusted local Playwright launcher injects credentials into this one page
+ * before any bundle code runs. Hosted or manually opened robot pages fail
+ * closed because they do not have that injected value.
  */
 export function loginFirebaseSignalerAsRobot() {
     if (process.env.storage === "firebase") {
@@ -54,20 +64,23 @@ export function loginFirebaseSignalerAsRobot() {
         };
         const app = initializeApp(config);
         let auth: Auth = getAuth(app);
-        return new Promise<void>((resolve, reject) => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const user = urlParams.get('user') || process.env.roboUsername;
-            const pass = urlParams.get('pass') || process.env.roboPassword;
+        const credentials = window.__STRETCH_ROBOT_FIREBASE_AUTH__;
+        delete window.__STRETCH_ROBOT_FIREBASE_AUTH__;
 
-            if (!user || !pass) {
-                console.error("Missing robot credentials (roboUsername/roboPassword)");
-                reject(new Error("Missing robot credentials"));
+        return new Promise<void>((resolve, reject) => {
+            if (!credentials?.username || !credentials.password) {
+                console.error("Missing trusted local robot authentication");
+                reject(new Error("Missing trusted local robot authentication"));
                 return;
             }
 
             setPersistence(auth, inMemoryPersistence)
                 .then(() => {
-                    signInWithEmailAndPassword(auth, user, pass)
+                    signInWithEmailAndPassword(
+                        auth,
+                        credentials.username,
+                        credentials.password,
+                    )
                         .then((userCredential) => {
                             resolve();
                         })

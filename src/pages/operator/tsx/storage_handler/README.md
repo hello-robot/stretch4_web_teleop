@@ -14,21 +14,19 @@ Firebase is a set of application development platforms and backend cloud computi
 
 1. Select the `Realtime Database` option under **Build** in the Firebase console for your project, then click **Create Database**. 
 2. Choose a location, select "Start in **locked mode**" in `Security Rules`, and click **Enable**. 
-3. Go to the **Rules** tab and configure your database rules to handle security and access control. 
+3. Keep the database locked until the checked-in `database.rules.json` has been tested and the identity records below have been provisioned.
 
-At a high level, your database rules should enforce the following security policies:
-- **Authentication:** Ensure that all database paths require users to be authenticated (`auth != null`).
-- **User Profiles:** Restrict users so they can only read and write their own personal profile data.
-- **Robots:** Allow robot states to be readable by authenticated users, but writable only by the robot itself, its assigned owners, or users explicitly granted access.
-- **Maps:** Enforce strict access controls on maps. Maps should only be read by their owner, users in an allowed list, users with explicit assignments, or operators currently controlling a robot that has access to the map. Map modifications should be restricted to the map's owner.
-- **Shared Data:** Global settings like layouts, operators, and rooms can generally be read by all authenticated users, but you may want to restrict write access to the specific operator or administrators.
+The checked-in rules are default-deny:
+- **Identities and assignments:** clients may read only their own alias and assignment. Provisioning writes are administrator-only.
+- **Robots:** assigned humans can read a robot and write validated launch/config/map requests. Only the canonical robot identity can write status/presence fields or consume control requests.
+- **Maps:** humans and robots can read only explicitly assigned, owned, or allowlisted maps. Map writes are administrator-only.
+- **Rooms and storage:** only assigned peers can read a room; signaling writes are bound to the authenticated uid and operator session. Operator data is private to its canonical alias.
 
 ### Setting up Authentication
 
 1. Select the `Authentication` option under **Build** in the Firebase console for your project, then click **Get Started**. 
-2. Click **Email/Password** and enable it. Do not enable passwordless sign-in. 
-3. Click **Add new Provider** and select **Anonymous**, then enable it and click **Save**. 
-4. Finally, add another provider, click **Google**, add a `Project public-facing name`, select a support email, and click **Save**. We will primarily be using `Google` for user authentication.
+2. Click **Email/Password** and enable it. Do not enable passwordless sign-in.
+3. Add the **Google** provider, set the project public-facing name and support email, then save it. Do not enable Anonymous authentication; no application flow uses it.
 
 ### Configuring `.env` and `.firebaserc`
 
@@ -51,6 +49,8 @@ roboPassword=your_secure_password
 HELLO_FLEET_ID=stretch-seX-XXXX
 ```
 
+`roboUsername` and `roboPassword` are robot-local secrets. Webpack allowlists only the public Firebase keys above and `HELLO_FLEET_ID`. The local Playwright launcher injects the robot account directly into the trusted robot browser context; never add these credentials to webpack definitions or URL parameters.
+
 Update the `.firebaserc` file in the root of the workspace to link the repository to your Firebase project:
 
 ```json
@@ -63,26 +63,39 @@ Update the `.firebaserc` file in the root of the workspace to link the repositor
 
 ## Deployment Steps
 
-To deploy the web app to Firebase Hosting, you will need the Firebase CLI.
+To deploy the web app to Firebase Hosting, install this repo's dependencies (`npm install`). That includes `firebase-tools`. You do not need a global Firebase CLI.
 
-1. **Install Firebase CLI:**
+1. **Log in:**
    ```bash
-   npm install -g firebase-tools
+   npm run firebase:login
    ```
-2. **Login to Firebase:**
+2. **Build the web app:**
+   `npm run build:firebase` writes the home, operator, and robot pages to `dist-firebase/`.
+3. **Deploy the live site** (remote `main` only; other checkouts go to a preview channel when the interface is running):
    ```bash
-   firebase login
+   ./node_modules/.bin/firebase deploy --only hosting
    ```
-3. **Build the Web App:**
-   Make sure you build the production bundle of the React app (which goes into the `dist/` folder).
+   That uploads `dist-firebase/` and does not change Realtime Database rules or Auth.
+
+### Realtime Database rules rollout
+
+Rules are intentionally separate from Hosting:
+
+1. Backfill and verify every robot identity:
+   - `assignments/<robotAuthUid>/role = "robot"`
+   - `assignments/<robotAuthUid>/name = "<fleetId>"`
+   - `robots/<fleetId>/uid = "<robotAuthUid>"`
+2. Ensure each human has `uids/<authUid> = "<alias>"` and only intended fleets/maps under `assignments/<alias>`.
+3. Ensure robot-readable maps are assigned under `assignments/<fleetId>/maps` or include `<fleetId>: true` in `allowed_users`.
+4. Roll this compatible signaling code out to every robot and the live Hosting channel; old preview clients do not include the session-bound seat metadata required by the new rules.
+5. Run `npm run test:security`.
+6. Validate in a staging project before explicitly publishing production rules:
    ```bash
-   npm run build
+   ./node_modules/.bin/firebase deploy --only database --dry-run
+   ./node_modules/.bin/firebase deploy --only database
    ```
-4. **Deploy:**
-   Once authenticated, and with your `.firebaserc` properly set up, you can deploy your application (Hosting and Auth configs defined in `firebase.json`):
-   ```bash
-   firebase deploy
-   ```
+
+Never deploy strict rules before identity backfill: signaling deliberately fails closed when the robot assignment and fleet binding are missing or disagree.
 
 ## Connecting a new robot to the project
 
@@ -114,5 +127,6 @@ When adding a new robot to your Firebase project, ensure you update the `.env` f
    
    HELLO_FLEET_ID=stretch-seX-XXXX
    ```
-3. In the Firebase Console, go to **Authentication** > **Users** and click **Add user**. Add the `roboUsername` and `roboPassword` corresponding to the values set in the `.env` file.
-4. Ensure that your Realtime Database rules are configured to grant this new robot write access to its corresponding `robots/$robot_id` path, as well as read access to any maps or layouts it is assigned to.
+4. In the Firebase Console, go to **Authentication** > **Users** and click **Add user**. Add the `roboUsername` and `roboPassword` corresponding to the values set in the `.env` file, then copy the generated Auth uid.
+5. Provision `assignments/<robotAuthUid>` with `{ "role": "robot", "name": "<fleetId>" }` and set `robots/<fleetId>/uid` to that same Auth uid.
+6. Add human access under `assignments/<alias>/robots/<fleetId>` and map access under the human alias and/or fleet ID before deploying the checked-in rules.

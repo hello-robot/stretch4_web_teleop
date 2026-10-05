@@ -1,0 +1,155 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "uids": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "assignments": {
+      "$identity": {
+        ".read": "auth != null && ($identity === auth.uid || (root.child('uids').child(auth.uid).exists() && $identity === root.child('uids').child(auth.uid).val()))",
+        ".write": false,
+        "maps": {
+          "$mapId": {
+            ".read": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').isString() && root.child('assignments').child($identity).child('robots').child(root.child('assignments').child(auth.uid).child('name').val()).val() === true"
+          }
+        }
+      }
+    },
+    "robots": {
+      "$fleetId": {
+        ".read": "auth != null && ((root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && data.child('uid').val() === auth.uid) || root.child('assignments').child(auth.uid).child('robots').child($fleetId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child($fleetId).val() === true))",
+        "uid": {
+          ".write": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && newData.val() === auth.uid && (!data.exists() || data.val() === auth.uid)",
+          ".validate": "newData.isString()"
+        },
+        "name": {
+          ".write": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid",
+          ".validate": "newData.isString() && newData.val() === $fleetId"
+        },
+        "status": {
+          ".write": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid",
+          ".validate": "newData.isString() && (newData.val() === 'offline' || newData.val() === 'standby' || newData.val() === 'launching' || newData.val() === 'online' || newData.val() === 'occupied')"
+        },
+        "last_updated": {
+          ".write": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid",
+          ".validate": "newData.isNumber()"
+        },
+        "branch": {
+          ".write": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid",
+          ".validate": "newData.isString()"
+        },
+        "map_id": {
+          ".write": "auth != null && (root.child('assignments').child(auth.uid).child('robots').child($fleetId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child($fleetId).val() === true))",
+          ".validate": "!newData.exists() || newData.isString()"
+        },
+        "config": {
+          "$flag": {
+            ".write": "auth != null && (root.child('assignments').child(auth.uid).child('robots').child($fleetId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child($fleetId).val() === true))",
+            ".validate": "newData.isBoolean()"
+          }
+        },
+        "control": {
+          ".write": "auth != null && (((root.child('assignments').child(auth.uid).child('robots').child($fleetId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child($fleetId).val() === true)) && !data.exists() && newData.exists() && (newData.child('requested_by').val() === auth.uid || (root.child('uids').child(auth.uid).exists() && newData.child('requested_by').val() === root.child('uids').child(auth.uid).val()))) || (root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid && !newData.exists()))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['action', 'requested_by', 'requested_at']) && (newData.child('action').val() === 'launch' || newData.child('action').val() === 'stop') && newData.child('requested_by').isString() && newData.child('requested_at').isNumber() && (!newData.child('map_id').exists() || newData.child('map_id').isString()))",
+          "action": {
+            ".validate": "newData.isString()"
+          },
+          "requested_by": {
+            ".validate": "newData.isString()"
+          },
+          "requested_at": {
+            ".validate": "newData.isNumber()"
+          },
+          "map_id": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "maps": {
+          "$mapId": {
+            ".write": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "maps": {
+      "$mapId": {
+        ".read": "auth != null && (root.child('assignments').child(auth.uid).child('maps').child($mapId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('maps').child($mapId).val() === true) || data.child('owner_uid').val() === auth.uid || data.child('allowed_users').child(auth.uid).val() === true || (root.child('uids').child(auth.uid).exists() && (data.child('owner_uid').val() === root.child('uids').child(auth.uid).val() || data.child('allowed_users').child(root.child('uids').child(auth.uid).val()).val() === true)) || (root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').isString() && (root.child('assignments').child(root.child('assignments').child(auth.uid).child('name').val()).child('maps').child($mapId).val() === true || data.child('owner_uid').val() === root.child('assignments').child(auth.uid).child('name').val() || data.child('allowed_users').child(root.child('assignments').child(auth.uid).child('name').val()).val() === true)))",
+        ".write": false
+      }
+    },
+    "rooms": {
+      "$robotUid": {
+        ".read": "auth != null && ((auth.uid === $robotUid && root.child('assignments').child($robotUid).child('role').val() === 'robot' && root.child('assignments').child($robotUid).child('name').isString()) || (root.child('assignments').child($robotUid).child('role').val() === 'robot' && root.child('assignments').child($robotUid).child('name').isString() && (root.child('assignments').child(auth.uid).child('robots').child(root.child('assignments').child($robotUid).child('name').val()).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child(root.child('assignments').child($robotUid).child('name').val()).val() === true))))",
+        "robot": {
+          ".write": "auth != null && auth.uid === $robotUid && root.child('assignments').child($robotUid).child('role').val() === 'robot' && root.child('assignments').child($robotUid).child('name').isString() && root.child('robots').child(root.child('assignments').child($robotUid).child('name').val()).child('uid').val() === auth.uid",
+          ".validate": "!newData.exists() || (newData.child('active').isBoolean() && (newData.child('active').val() === false || newData.child('uid').val() === auth.uid))",
+          "active": {
+            ".validate": "newData.isBoolean()"
+          },
+          "uid": {
+            ".validate": "newData.isString()"
+          },
+          "candidate": {
+            ".validate": true
+          },
+          "sessionDescription": {
+            ".validate": true
+          },
+          "cameraInfo": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "operator": {
+          ".write": "auth != null && ((auth.uid === $robotUid && root.child('assignments').child($robotUid).child('role').val() === 'robot' && newData.child('active').val() === false) || ((root.child('assignments').child($robotUid).child('role').val() === 'robot' && root.child('assignments').child($robotUid).child('name').isString() && (root.child('assignments').child(auth.uid).child('robots').child(root.child('assignments').child($robotUid).child('name').val()).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child(root.child('assignments').child($robotUid).child('name').val()).val() === true))) && ((newData.child('active').val() === true && newData.child('uid').val() === auth.uid && ((!root.child('uids').child(auth.uid).exists() && newData.child('alias').val() === auth.uid) || (root.child('uids').child(auth.uid).exists() && newData.child('alias').val() === root.child('uids').child(auth.uid).val())) && newData.child('sessionId').isString() && (data.child('active').val() !== true || (data.child('uid').val() === auth.uid && data.child('sessionId').val() === newData.child('sessionId').val()))) || (newData.child('active').val() === false && data.child('uid').val() === auth.uid && data.child('sessionId').val() === newData.child('sessionId').val() && newData.child('uid').val() === auth.uid && ((!root.child('uids').child(auth.uid).exists() && newData.child('alias').val() === auth.uid) || (root.child('uids').child(auth.uid).exists() && newData.child('alias').val() === root.child('uids').child(auth.uid).val()))))))",
+          ".validate": "!newData.exists() || (newData.child('active').isBoolean() && (newData.child('active').val() === false || (newData.child('uid').isString() && newData.child('alias').isString() && newData.child('sessionId').isString())))",
+          "active": {
+            ".validate": "newData.isBoolean()"
+          },
+          "uid": {
+            ".validate": "newData.isString()"
+          },
+          "alias": {
+            ".validate": "newData.isString()"
+          },
+          "sessionId": {
+            ".validate": "newData.isString()"
+          },
+          "candidate": {
+            ".validate": true
+          },
+          "sessionDescription": {
+            ".validate": true
+          },
+          "cameraInfo": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "operators": {
+      "$operatorId": {
+        ".read": "auth != null && ((!root.child('uids').child(auth.uid).exists() && $operatorId === auth.uid) || (root.child('uids').child(auth.uid).exists() && $operatorId === root.child('uids').child(auth.uid).val()))",
+        ".write": "auth != null && ((!root.child('uids').child(auth.uid).exists() && $operatorId === auth.uid) || (root.child('uids').child(auth.uid).exists() && $operatorId === root.child('uids').child(auth.uid).val()))"
+      }
+    }
+  }
+}
