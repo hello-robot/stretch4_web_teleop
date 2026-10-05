@@ -1,7 +1,7 @@
 import "home/css/LoginView.css";
 import googleMark from "home/public/icons/google-g.png";
 import Snackbar from "@mui/material/Snackbar";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { authErrorMessage } from "../authError";
 import { loginHandler } from "../index";
 import { ForgotPassword } from "./ForgotPassword";
@@ -15,6 +15,50 @@ export const LoginView = () => {
     const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
     const [open, setOpen] = useState(false);
     const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
+    const [playReel, playReelSet] = useState(() => {
+        const desktop = window.matchMedia("(min-width: 960px)").matches;
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        return desktop && !reduced;
+    });
+    const [reelUrl, reelUrlSet] = useState<string | undefined>();
+    const reelRef = useRef<HTMLVideoElement>(null);
+    const reelUrlRef = useRef<string | undefined>();
+
+    useEffect(() => {
+        const desktop = window.matchMedia("(min-width: 960px)");
+        const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        let cancelled = false;
+        const sync = () => {
+            const play = desktop.matches && !motion.matches;
+            playReelSet(play);
+            if (!play) {
+                reelRef.current?.pause();
+                return;
+            }
+            const start = (url: string) => {
+                if (cancelled || !desktop.matches || motion.matches) return;
+                reelUrlRef.current = url;
+                reelUrlSet(url);
+                const video = reelRef.current;
+                if (!video) return;
+                if (video.src !== url) video.src = url;
+                video.play().catch(() => undefined);
+            };
+            if (reelUrlRef.current) {
+                start(reelUrlRef.current);
+                return;
+            }
+            import("home/public/video/hrobo-rgb.mp4").then((mod) => start(mod.default));
+        };
+        sync();
+        desktop.addEventListener("change", sync);
+        motion.addEventListener("change", sync);
+        return () => {
+            cancelled = true;
+            desktop.removeEventListener("change", sync);
+            motion.removeEventListener("change", sync);
+        };
+    }, []);
 
     const handleForgotPassword = (email: string) => {
         loginHandler
@@ -78,108 +122,125 @@ export const LoginView = () => {
     const canSignIn = /\S+@\S+\.\S+/.test(emailValue) && passwordValue.length >= 6;
 
     return (
-        <div className="lv-page">
-            <header className="lv-header">
-                <h1 className="lv-wordmark">hello robot</h1>
-                <div className="lv-wordmark__sub">CLOUD</div>
-            </header>
-            <section className="lv-card">
-                <form className="lv-form" onSubmit={handleSubmit} noValidate>
-                    <div className="lv-field-block">
-                        <label className="lv-label" htmlFor="email">
-                            Email
-                        </label>
-                        <input
-                            className={`lv-field${emailError ? " lv-field--error" : ""}`}
-                            id="email"
-                            type="email"
-                            name="email"
-                            placeholder="your@email.com"
-                            autoComplete="email"
-                            autoFocus
-                            required
-                            aria-invalid={emailError}
-                            value={emailValue}
-                            onChange={(event) => setEmailValue(event.target.value)}
-                        />
-                        {emailErrorMessage && (
-                            <p className="lv-field-error">{emailErrorMessage}</p>
-                        )}
-                    </div>
-                    <div className="lv-field-block">
-                        <div className="lv-label-row">
-                            <label className="lv-label" htmlFor="password">
-                                Password
-                            </label>
-                            <button
-                                type="button"
-                                className="lv-forgot"
-                                onClick={() => setOpen(true)}
-                            >
-                                Forgot your password?
-                            </button>
-                        </div>
-                        <input
-                            className={`lv-field${passwordError ? " lv-field--error" : ""}`}
-                            id="password"
-                            type="password"
-                            name="password"
-                            placeholder="••••••••••••"
-                            autoComplete="current-password"
-                            required
-                            aria-invalid={passwordError}
-                            value={passwordValue}
-                            onChange={(event) => setPasswordValue(event.target.value)}
-                        />
-                        {passwordErrorMessage && (
-                            <p className="lv-field-error">{passwordErrorMessage}</p>
-                        )}
-                    </div>
-                    <label className="lv-remember">
-                        <input type="checkbox" name="remember" value="remember" defaultChecked />
-                        Remember me
-                    </label>
-                    <ForgotPassword
-                        open={open}
-                        handleClose={() => setOpen(false)}
-                        handleExecute={handleForgotPassword}
+        <div className="lv-shell">
+            <div className="lv-stage" aria-hidden="true">
+                {reelUrl && (
+                    <video
+                        ref={reelRef}
+                        className="lv-stage__video"
+                        src={reelUrl}
+                        autoPlay={playReel}
+                        muted
+                        loop
+                        playsInline
                     />
+                )}
+                <div className="lv-stage__hue" />
+                <div className="lv-stage__veil" />
+            </div>
+            <div className="lv-page">
+                <header className="lv-header">
+                    <h1 className="lv-wordmark">hello robot</h1>
+                    <div className="lv-wordmark__sub">CLOUD</div>
+                </header>
+                <section className="lv-card">
+                    <form className="lv-form" onSubmit={handleSubmit} noValidate>
+                        <div className="lv-field-block">
+                            <label className="lv-label" htmlFor="email">
+                                Email
+                            </label>
+                            <input
+                                className={`lv-field${emailError ? " lv-field--error" : ""}`}
+                                id="email"
+                                type="email"
+                                name="email"
+                                placeholder="your@email.com"
+                                autoComplete="email"
+                                autoFocus
+                                required
+                                aria-invalid={emailError}
+                                value={emailValue}
+                                onChange={(event) => setEmailValue(event.target.value)}
+                            />
+                            {emailErrorMessage && (
+                                <p className="lv-field-error">{emailErrorMessage}</p>
+                            )}
+                        </div>
+                        <div className="lv-field-block">
+                            <div className="lv-label-row">
+                                <label className="lv-label" htmlFor="password">
+                                    Password
+                                </label>
+                                <button
+                                    type="button"
+                                    className="lv-forgot"
+                                    onClick={() => setOpen(true)}
+                                >
+                                    Forgot your password?
+                                </button>
+                            </div>
+                            <input
+                                className={`lv-field${passwordError ? " lv-field--error" : ""}`}
+                                id="password"
+                                type="password"
+                                name="password"
+                                placeholder="••••••••••••"
+                                autoComplete="current-password"
+                                required
+                                aria-invalid={passwordError}
+                                value={passwordValue}
+                                onChange={(event) => setPasswordValue(event.target.value)}
+                            />
+                            {passwordErrorMessage && (
+                                <p className="lv-field-error">{passwordErrorMessage}</p>
+                            )}
+                        </div>
+                        <label className="lv-remember">
+                            <input type="checkbox" name="remember" value="remember" defaultChecked />
+                            Remember me
+                        </label>
+                        <ForgotPassword
+                            open={open}
+                            handleClose={() => setOpen(false)}
+                            handleExecute={handleForgotPassword}
+                        />
+                        <button
+                            type="submit"
+                            className={`lv-button ${canSignIn ? "lv-button--primary" : "lv-button--ghost"}`}
+                            disabled={!canSignIn}
+                        >
+                            Sign in
+                        </button>
+                    </form>
+                    <div className="lv-or">or</div>
                     <button
-                        type="submit"
-                        className={`lv-button ${canSignIn ? "lv-button--primary" : "lv-button--ghost"}`}
-                        disabled={!canSignIn}
+                        type="button"
+                        className="lv-button lv-button--primary"
+                        onClick={handleGoogleSignIn}
                     >
-                        Sign in
+                        <img className="lv-google__icon" src={googleMark} alt="" />
+                        Continue with Google
                     </button>
-                </form>
-                <div className="lv-or">or</div>
-                <button
-                    type="button"
-                    className="lv-button lv-button--primary"
-                    onClick={handleGoogleSignIn}
-                >
-                    <img className="lv-google__icon" src={googleMark} alt="" />
-                    Continue with Google
-                </button>
-            </section>
-            <Snackbar
-                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-                open={toast !== null}
-                onClose={() => setToast(null)}
-                autoHideDuration={4000}
-                message={toast?.message ?? ""}
-                ContentProps={{
-                    sx: {
-                        background: toast?.error ? "#b3261e" : "#0b1014",
-                        color: "#fff",
-                        borderRadius: "10px",
-                        fontFamily: "Rubik, sans-serif",
-                        fontWeight: 500,
-                        fontSize: "14px",
-                        boxShadow: "none",
-                    },
-                }}
-            />
+                </section>
+                <Snackbar
+                    anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+                    open={toast !== null}
+                    onClose={() => setToast(null)}
+                    autoHideDuration={4000}
+                    message={toast?.message ?? ""}
+                    ContentProps={{
+                        sx: {
+                            background: toast?.error ? "#b3261e" : "#0b1014",
+                            color: "#fff",
+                            borderRadius: "10px",
+                            fontFamily: "Rubik, sans-serif",
+                            fontWeight: 500,
+                            fontSize: "14px",
+                            boxShadow: "none",
+                        },
+                    }}
+                />
+            </div>
         </div>
     );
 };
