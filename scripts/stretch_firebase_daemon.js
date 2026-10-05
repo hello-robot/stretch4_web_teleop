@@ -12,6 +12,12 @@ const path = require('path');
 const { execFile, exec } = require('child_process');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
+const { envVarName, loadFeatures } = require('../feature-flags');
+const {
+    spawnProcessGroup,
+    terminateProcessGroup,
+} = require('./launchProcessGroup');
+
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
 const {
@@ -55,30 +61,140 @@ const auth = getAuth(app);
 const db = getDatabase(app);
 
 let currentStatus = 'offline';
+let currentBranch = null;
 let isProcessingCommand = false;
+let launchingSince = 0;
+let reconcileTimer = null;
+let launchChild = null;
+let abortRequested = false;
+let stopInFlight = false;
+let launchEpoch = 0;
 const repoRoot = path.join(__dirname, '..');
 
 const fs = require('fs');
 
+function readGitBranch() {
+    return new Promise((resolve) => {
+        exec('git rev-parse --abbrev-ref HEAD', { cwd: repoRoot }, (error, stdout) => {
+            resolve(error ? null : stdout.trim() || null);
+        });
+    });
+}
+
+async function refreshBranch() {
+    currentBranch = await readGitBranch();
+    return currentBranch;
+}
+
+/** RTDB update deletes a key whose value is null, so omit branch until git answers. */
+function branchField() {
+    return currentBranch ? { branch: currentBranch } : {};
+}
+
+function publishBranch() {
+    if (!auth.currentUser || !currentBranch) return;
+    update(ref(db, `robots/${fleetId}`), { branch: currentBranch })
+        .catch((err) => console.error('[DAEMON] Error updating branch:', err.message));
+}
+
 function setStatus(status) {
     if (!auth.currentUser) return;
     currentStatus = status;
+    if (status === 'launching') launchingSince = Date.now();
     const uid = auth.currentUser.uid;
     console.log(`[DAEMON] Setting status for ${uid} (${fleetId}) to: ${status}`);
     update(ref(db, `robots/${fleetId}`), {
         status: status,
         name: fleetId,
         uid: uid,
-        last_updated: Date.now()
+        last_updated: Date.now(),
+        ...branchField(),
     }).catch((err) => console.error('[DAEMON] Error updating status:', err.message));
 }
 
-function checkInterfaceRunning() {
+/**
+ * Per-robot feature-flag overrides chosen on the dashboard, stored at
+ * robots/<fleetId>/config/<flag>. Only flags declared in features.json are
+ * honoured; anything else is ignored so a stray key cannot inject env vars.
+ *
+ * @returns {Promise<Record<string, string>>} FEATURE_* env entries ("1"/"0")
+ */
+async function readFeatureEnv() {
+    let overrides = {};
+    try {
+        const snap = await get(ref(db, `robots/${fleetId}/config`));
+        overrides = snap.exists() ? snap.val() || {} : {};
+    } catch (err) {
+        console.warn('[DAEMON] Could not read robot config, using features.json defaults:', err.message);
+    }
+    const defaults = loadFeatures();
+    return Object.fromEntries(
+        Object.entries(defaults).map(([flag, enabled]) => [
+            envVarName(flag),
+            (flag in overrides ? Boolean(overrides[flag]) : enabled) ? '1' : '0',
+        ])
+    );
+}
+
+async function readSavedMapId() {
+    try {
+        const snap = await get(ref(db, `robots/${fleetId}/map_id`));
+        return snap.exists() ? snap.val() : null;
+    } catch (err) {
+        console.warn('[DAEMON] Could not read saved map_id:', err.message);
+        return null;
+    }
+}
+
+function pgrepRunning(pattern) {
     return new Promise((resolve) => {
-        exec("pgrep -f '[w]eb_interface.launch.py'", (error, stdout) => {
+        execFile('pgrep', ['-f', pattern], (error, stdout) => {
             resolve(!error && stdout.trim().length > 0);
         });
     });
+}
+
+function checkInterfaceRunning() {
+    return pgrepRunning('[w]eb_interface.launch.py');
+}
+
+function screenSessionExists(name) {
+    return new Promise((resolve) => {
+        execFile('screen', ['-ls'], (error, stdout) => {
+            resolve(!error && stdout.includes(name));
+        });
+    });
+}
+
+/** True while the daemon, the launch script, ROS, or the web interface is up. */
+async function launchInProgress() {
+    if (isProcessingCommand || launchChild) return true;
+    const [script, iface, screenUp] = await Promise.all([
+        pgrepRunning('[l]aunch_interface_firebase.sh'),
+        checkInterfaceRunning(),
+        screenSessionExists('web_teleop_ros'),
+    ]);
+    return script || iface || screenUp;
+}
+
+/** Don't leave the dashboard on Starting after the stack exits or never comes up. */
+const LAUNCH_GRACE_MS = 20000;
+const LAUNCH_ONLINE_TIMEOUT_MS = 90000;
+
+async function reconcileInterfaceStatus() {
+    if (!['launching', 'online', 'occupied'].includes(currentStatus)) return;
+    const inProgress = await launchInProgress();
+    if (!inProgress) {
+        if (currentStatus === 'launching' && Date.now() - launchingSince < LAUNCH_GRACE_MS) return;
+        console.warn('[DAEMON] Teleop interface is not running. Setting standby.');
+        setStatus('standby');
+        return;
+    }
+    const iface = await checkInterfaceRunning();
+    if (currentStatus === 'launching' && iface && launchingSince && Date.now() - launchingSince > LAUNCH_ONLINE_TIMEOUT_MS) {
+        console.warn('[DAEMON] Interface is up, but status is still launching. Setting online.');
+        setStatus('online');
+    }
 }
 
 async function ensureMapLocal(mapId, requestedBy) {
@@ -103,25 +219,19 @@ async function ensureMapLocal(mapId, requestedBy) {
 
         if (mapSnap.exists() && requestedBy) {
             const mapData = mapSnap.val();
-            let alias = requestedBy;
-            try {
-                const uidSnap = await get(ref(db, `uids/${requestedBy}`));
-                if (uidSnap.exists()) alias = uidSnap.val();
-            } catch (e) {}
-
-            const isOwner = mapData.owner_uid === requestedBy || mapData.owner_uid === alias;
+            const alias = requestedBy;
+            const isOwner = mapData.owner_uid === alias;
             const isAllowed = mapData.allowed_users &&
-                (mapData.allowed_users[requestedBy] || mapData.allowed_users[alias] || mapData.allowed_users[fleetId]);
+                (mapData.allowed_users[alias] || mapData.allowed_users[fleetId]);
 
             let isAssigned = false;
             try {
                 const assignSnap1 = await get(ref(db, `assignments/${alias}/maps/${mapId}`));
-                const assignSnap2 = await get(ref(db, `assignments/${requestedBy}/maps/${mapId}`));
-                isAssigned = assignSnap1.exists() || assignSnap2.exists();
+                isAssigned = assignSnap1.exists();
             } catch (e) {}
 
             if (!isOwner && !isAllowed && !isAssigned) {
-                console.warn(`[DAEMON] Security Alert: User '${requestedBy}' (${alias}) is not authorized for map '${mapId}'.`);
+                console.warn(`[DAEMON] Security Alert: User '${alias}' is not authorized for map '${mapId}'.`);
                 return null;
             }
         }
@@ -153,7 +263,12 @@ async function ensureMapLocal(mapId, requestedBy) {
         return targetYaml;
     } catch (err) {
         console.error(`[DAEMON] Failed to fetch map '${mapId}':`, err.message);
-        return foundLocalYaml;
+        if (foundLocalYaml) {
+            console.warn(`[DAEMON] Using the copy already on disk: ${foundLocalYaml}`);
+            return foundLocalYaml;
+        }
+        console.warn(`[DAEMON] Launch will continue without map '${mapId}'.`);
+        return null;
     }
 }
 
@@ -164,53 +279,125 @@ async function handleLaunchCommand(requestedBy, mapId) {
     }
 
     isProcessingCommand = true;
-    console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}, map: ${mapId || 'none'}`);
-    setStatus('launching');
+    const epoch = ++launchEpoch;
+    try {
+        await refreshBranch();
+        const effectiveMapId = mapId || (await readSavedMapId());
+        console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}, map: ${effectiveMapId || 'none'}`);
+        setStatus('launching');
 
-    let mapArg = '';
-    if (mapId) {
-        const localMapYaml = await ensureMapLocal(mapId, requestedBy);
-        if (localMapYaml) {
-            mapArg = `-m "${localMapYaml}"`;
+        const launchArgs = [];
+        if (effectiveMapId) {
+            const localMapYaml = await ensureMapLocal(effectiveMapId, requestedBy);
+            if (localMapYaml) {
+                launchArgs.push('-m', localMapYaml);
+            }
         }
-    }
 
-    const launchScript = path.join(repoRoot, 'launch_interface_firebase.sh');
-    const cmdStr = mapArg ? `bash -l -c "${launchScript} ${mapArg}"` : `bash -l -c "${launchScript}"`;
+        const featureEnv = await readFeatureEnv();
+        console.log('[DAEMON] Launching with feature flags:', featureEnv);
 
-    exec(cmdStr, { cwd: repoRoot }, (error, stdout, stderr) => {
-        isProcessingCommand = false;
-        if (error) {
-            console.error('[DAEMON] Failed to launch interface:', error.message);
-            console.error(stderr);
-            setStatus('standby');
-        } else {
+        if (epoch !== launchEpoch || abortRequested || stopInFlight) {
+            console.log('[DAEMON] Launch aborted before the interface script started.');
+            return;
+        }
+
+        const launchScript = path.join(repoRoot, 'launch_interface_firebase.sh');
+        const child = spawnProcessGroup(
+            launchScript,
+            launchArgs,
+            {
+                cwd: repoRoot,
+                env: { ...process.env, ...featureEnv },
+                stdio: ['ignore', 'ignore', 'pipe'],
+            },
+        );
+        launchChild = child;
+        let stderr = '';
+        child.stderr.on('data', (chunk) => {
+            stderr = (stderr + chunk.toString()).slice(-10000);
+        });
+
+        let finished = false;
+        const finish = (error) => {
+            if (finished) return;
+            finished = true;
+            if (launchChild === child) launchChild = null;
+            if (abortRequested || stopInFlight) return;
+            isProcessingCommand = false;
+            if (error) {
+                console.error('[DAEMON] Failed to launch interface:', error.message);
+                if (stderr) console.error(stderr);
+                setStatus('standby');
+                return;
+            }
             console.log('[DAEMON] launch_interface_firebase.sh succeeded.');
             // Status will be transitioned to 'online' by robot browser joining room
+        };
+        child.once('error', finish);
+        child.once('close', (code, signal) => {
+            const error = code === 0
+                ? null
+                : new Error(`launch script exited with code ${code ?? 'null'} signal ${signal ?? 'none'}`);
+            finish(error);
+        });
+    } catch (error) {
+        if (!abortRequested && !stopInFlight) {
+            console.error('[DAEMON] Failed to prepare interface launch:', error.message);
+            setStatus('standby');
         }
+    } finally {
+        if (!launchChild && !stopInFlight) {
+            isProcessingCommand = false;
+        }
+    }
+}
+
+function clearOperatorSeat() {
+    const uid = auth.currentUser && auth.currentUser.uid;
+    if (!uid) return Promise.resolve();
+    return set(ref(db, `rooms/${uid}/operator`), { active: false }).catch((err) =>
+        console.error('[DAEMON] Error clearing operator seat:', err.message),
+    );
+}
+
+function runStopScript() {
+    const stopScript = path.join(repoRoot, 'stop_interface.sh');
+    return new Promise((resolve) => {
+        execFile(stopScript, [], { cwd: repoRoot }, (error, stdout, stderr) => {
+            if (error) {
+                console.error('[DAEMON] Error running stop_interface.sh:', error.message);
+                if (stderr) console.error(stderr);
+            } else {
+                console.log('[DAEMON] stop_interface.sh succeeded.');
+            }
+            resolve();
+        });
     });
 }
 
-function handleStopCommand(requestedBy) {
-    if (isProcessingCommand) {
-        console.log('[DAEMON] Already processing a command, ignoring stop request.');
-        return;
-    }
-
-    isProcessingCommand = true;
+async function handleStopCommand(requestedBy) {
     console.log(`[DAEMON] Received STOP command from user: ${requestedBy}`);
+    launchEpoch += 1;
+    if (stopInFlight) return;
+    stopInFlight = true;
+    abortRequested = true;
+    isProcessingCommand = true;
 
-    const stopScript = path.join(repoRoot, 'stop_interface.sh');
-
-    execFile(stopScript, [], { cwd: repoRoot }, (error, stdout, stderr) => {
-        isProcessingCommand = false;
-        if (error) {
-            console.error('[DAEMON] Error running stop_interface.sh:', error.message);
-        } else {
-            console.log('[DAEMON] stop_interface.sh succeeded.');
+    try {
+        const child = launchChild;
+        if (child) {
+            await terminateProcessGroup(child);
+            if (launchChild === child) launchChild = null;
         }
+        await clearOperatorSeat();
+        await runStopScript();
+    } finally {
+        stopInFlight = false;
+        abortRequested = false;
+        isProcessingCommand = false;
         setStatus('standby');
-    });
+    }
 }
 
 async function initDaemon() {
@@ -219,6 +406,8 @@ async function initDaemon() {
         const userCredential = await signInWithEmailAndPassword(auth, roboUsername, roboPassword);
         const uid = userCredential.user.uid;
         console.log(`[DAEMON] Logged in successfully. Robot UID: ${uid}`);
+        console.log(`[DAEMON] Repo branch: ${(await refreshBranch()) || 'unknown'}`);
+        publishBranch();
 
         // Set up presence monitoring via .info/connected
         const connectedRef = ref(db, '.info/connected');
@@ -265,10 +454,16 @@ async function initDaemon() {
                     set(controlRef, null);
                 });
             } else if (action === 'stop') {
-                handleStopCommand(requested_by);
+                handleStopCommand(requested_by).catch((error) => {
+                    console.error('[DAEMON] Stop command failed:', error.message);
+                });
                 set(controlRef, null);
             }
         });
+
+        if (!reconcileTimer) {
+            reconcileTimer = setInterval(reconcileInterfaceStatus, 15000);
+        }
 
     } catch (err) {
         console.error('[DAEMON] Initialization error:', err.message);
