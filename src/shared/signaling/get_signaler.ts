@@ -9,6 +9,7 @@ import {
 import { FirebaseSignaling } from "./FirebaseSignaling";
 import { LocalSignaling } from "./LocalSignaling";
 import { SignalingProps } from "./Signaling";
+import { TeleopSignalingCoordinator } from "./TeleopSignalingCoordinator";
 
 declare global {
     interface Window {
@@ -38,6 +39,12 @@ export function createSignaler(props: SignalingProps) {
                 appId: process.env.appId,
                 measurementId: process.env.measurementId,
             };
+            if (
+                props.role === "robot" &&
+                process.env.dual_signaling === true
+            ) {
+                return new TeleopSignalingCoordinator(props, config);
+            }
             return new FirebaseSignaling(props, config);
         default:
             return new LocalSignaling(props);

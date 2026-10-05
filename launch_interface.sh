@@ -40,6 +40,10 @@ if [ -z "$FIREBASE" ] && [ -f "$ENV_FILE" ]; then
 		FIREBASE="-f"
 	fi
 fi
+if [ -z "$WEB_TELEOP_BUILD_MODE" ] && [ -f "$ENV_FILE" ]; then
+	WEB_TELEOP_BUILD_MODE="$(env_val WEB_TELEOP_BUILD_MODE)"
+fi
+export WEB_TELEOP_BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
 
 timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
 logdir="$HOME/stretch_user/log/web_teleop/$timestamp"

@@ -47,6 +47,7 @@
     },
     "scripts": {
         "localstorage": "webpack --mode development --progress --env storage='localstorage'",
+        "build:localstorage": "webpack --mode production --progress --env storage='localstorage'",
         "styleguide": "styleguidist server",
         "firebase": "webpack --mode development --progress --env storage='firebase'",
         "build:firebase": "webpack --mode production --progress --env storage='firebase'",

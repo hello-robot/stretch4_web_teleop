@@ -16,7 +16,12 @@ const envKeys = webpackPublicEnvDefinitions(env);
 
 module.exports = (webpackEnv, argv) => {
     const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
+    const dualMode = webpackEnv?.dual === true || webpackEnv?.dual === "true";
+    const isProduction = argv && argv.mode === "production";
     envKeys["process.env.storage"] = JSON.stringify(storageValue);
+    envKeys["process.env.dual_signaling"] = JSON.stringify(
+        storageValue === "firebase" && dualMode,
+    );
     // Feature flags become boolean literals in the bundle, so `if (FEATURE_X)`
     // guards fold away when the flag is off. See features.json.
     Object.entries(loadFeatures()).forEach(([name, enabled]) => {
@@ -35,11 +40,14 @@ module.exports = (webpackEnv, argv) => {
                 __dirname,
                 storageValue === "firebase" ? "dist-firebase" : "dist",
             ),
-            publicPath: "/",
-            // Dev watch and `build:firebase` share this folder. Without a
-            // clean, a later compile leaves the other mode's chunks behind
-            // and the entry waits forever for chunk ids that never load.
-            clean: true,
+            publicPath:
+                storageValue === "localstorage" && dualMode
+                    ? "/local/"
+                    : "/",
+            // Incremental watch builds reuse cached HTML/assets. Cleaning on
+            // every rebuild can remove those cached files without re-emitting
+            // them, leaving the local server with 404s.
+            clean: isProduction,
         },
         optimization: {
             splitChunks: {
@@ -98,7 +106,7 @@ module.exports = (webpackEnv, argv) => {
                     use: ["style-loader", "css-loader"],
                 },
                 {
-                    test: /\.(jpe?g|png|gif|svg)$/i,
+                    test: /\.(jpe?g|png|gif|svg|mp4)$/i,
                     use: "file-loader",
                 },
                 {
@@ -125,6 +133,6 @@ module.exports = (webpackEnv, argv) => {
                 zlib: false,
             },
         },
-        watch: argv && argv.mode === "production" ? false : true,
+        watch: !isProduction,
     };
 };

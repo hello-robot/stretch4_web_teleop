@@ -46,22 +46,52 @@ echo "flags={$flags}" &>>$REDIRECT_LOGFILE
 
 # Local and Firebase builds stay in separate folders so one launch cannot
 # serve the other mode's bundle. Firebase Hosting publishes dist-firebase.
-if [ "$STORAGE" = "firebase" ]; then
-	export WEB_TELEOP_DIST="dist-firebase"
-	echo "Firebase signaling; serving the UI locally so saves rebuild the app."
-	echo "Start hosting autodeploy..."
-	cd ~/ament_ws/src/stretch4_web_teleop && pm2 start -s scripts/firebase_hosting_autodeploy.js --name="firebase_hosting_autodeploy" &>>$REDIRECT_LOGFILE
-else
-	export WEB_TELEOP_DIST="dist"
+BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
+if [[ "$BUILD_MODE" != "development" && "$BUILD_MODE" != "production" ]]; then
+	echo "WEB_TELEOP_BUILD_MODE must be development or production."
+	exit 1
 fi
 
-echo "Run webpack..."
-export NODE_EXTRA_CA_CERTS="$HOME/ament_ws/src/stretch4_web_teleop/certificates/rootCA.pem"
-cd ~/ament_ws/src/stretch4_web_teleop && pm2 start -s npm --name="stretch4_web_teleop" -- run $STORAGE &>>$REDIRECT_LOGFILE
+export NODE_EXTRA_CA_CERTS="$REPO_DIR/certificates/rootCA.pem"
+if [ "$STORAGE" = "firebase" ]; then
+	export WEB_TELEOP_DIST="dist-firebase"
+	export WEB_TELEOP_DUAL=1
+	echo "Dual teleop: Tailscale uses local signaling; Hosting uses Firebase."
+	if [ "$BUILD_MODE" = "development" ]; then
+		echo "Start hosting preview autodeploy..."
+		cd "$REPO_DIR" && pm2 start -s scripts/firebase_hosting_autodeploy.js --name="firebase_hosting_autodeploy" &>>$REDIRECT_LOGFILE
+		echo "Start local and Firebase webpack watchers..."
+		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_local" -- run localstorage -- --env dual=true &>>$REDIRECT_LOGFILE
+		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_firebase" -- run firebase -- --env dual=true &>>$REDIRECT_LOGFILE
+	else
+		echo "Build local and Firebase production bundles..."
+		cd "$REPO_DIR" && npm run build:localstorage -- --env dual=true &>>$REDIRECT_LOGFILE
+		cd "$REPO_DIR" && npm run build:firebase -- --env dual=true &>>$REDIRECT_LOGFILE
+	fi
+	node "$REPO_DIR/scripts/waitForBundles.js" \
+		dist/operator/index.html \
+		dist-firebase/index.html \
+		dist-firebase/operator/index.html \
+		dist-firebase/robot/index.html
+else
+	export WEB_TELEOP_DIST="dist"
+	export WEB_TELEOP_DUAL=0
+	if [ "$BUILD_MODE" = "development" ]; then
+		echo "Start local webpack watcher..."
+		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop" -- run localstorage &>>$REDIRECT_LOGFILE
+	else
+		echo "Build local production bundle..."
+		cd "$REPO_DIR" && npm run build:localstorage &>>$REDIRECT_LOGFILE
+	fi
+	node "$REPO_DIR/scripts/waitForBundles.js" \
+		dist/index.html \
+		dist/operator/index.html \
+		dist/robot/index.html
+fi
 
 echo "Start local server..."
-cd ~/ament_ws/src/stretch4_web_teleop && pm2 start -s server.js &>>$REDIRECT_LOGFILE
+cd "$REPO_DIR" && pm2 start -s server.js &>>$REDIRECT_LOGFILE
 
 echo "Start robot browser..."
-cd ~/ament_ws/src/stretch4_web_teleop && pm2 start -s start_robot_browser.js &>>$REDIRECT_LOGFILE
+cd "$REPO_DIR" && pm2 start -s start_robot_browser.js &>>$REDIRECT_LOGFILE
 ifconfig | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/https:\/\/\2\/operator/p' &>>$REDIRECT_LOGFILE

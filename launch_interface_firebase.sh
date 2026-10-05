@@ -29,6 +29,10 @@ export PATH="$HOME/.local/bin:$PATH"
 . /etc/hello-robot/hello-robot.conf
 export HELLO_FLEET_ID
 export HELLO_FLEET_PATH=$HOME/stretch_user
+if [ -z "$WEB_TELEOP_BUILD_MODE" ] && [ -f "$HOME/ament_ws/src/stretch4_web_teleop/.env" ]; then
+	WEB_TELEOP_BUILD_MODE=$(grep -m1 '^WEB_TELEOP_BUILD_MODE=' "$HOME/ament_ws/src/stretch4_web_teleop/.env" | cut -d= -f2-)
+fi
+export WEB_TELEOP_BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
 source /opt/ros/jazzy/setup.bash &>/dev/null || true
 source ~/ament_ws/install/setup.bash &>/dev/null || true
 

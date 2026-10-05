@@ -55,21 +55,23 @@ As you may know, the `src/pages/operator` directory is where you can find the co
 
 #### Publish a preview
 
-You can checkout a `git` branch as you would normally and make changes. If you are only interested in seeing the changes that you made teleop-side `src/pages/operator` then your development workflow hasn't changed. You just need to make sure this is running:
+You can checkout a `git` branch as you would normally and make changes. On a Firebase-configured robot, this command runs both the local and Firebase webpack watchers:
 
 ```
 ./launch_interface.sh
 ```
 
-And access your robot via Tailscale at `https://<tailscale.ip.address>/operator`. You should see your changes reflected in the browser.
+The no-login local operator stays at `https://<tailscale.ip.address>/operator/`. The Firebase build is published to this checkout's Preview Channel. Both URLs connect to the same robot browser and share one operator seat, so opening one blocks the other until teleoperation ends.
 
-However, if you want to see changes in both the teleop app and in Hello Robot cloud, then you will need to publish `src/pages/home` to a Firebase Preview Channel:
+To publish a one-off production build to the Preview Channel without launching teleop:
 
 ```
 npm run build:firebase-preview-channel
 ```
 
-The Preview Channel's URL will have this format `https://stretch4-web-interface--<channel>-<hash>.web.app`. The hash is assigned the first time that channel is deployed. While the interface is running, a save uploads the same preview channel. The preview tab reloads a couple of seconds after the upload.
+The Preview Channel's URL will have this format `https://stretch4-web-interface--<channel>-<hash>.web.app`. The hash is assigned the first time that channel is deployed. While the development interface is running, a save uploads the same preview channel. The local tab reloads from webpack and the preview tab reloads after its deploy.
+
+For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`. Launch then creates one-shot local and Firebase bundles instead of starting webpack watchers. Live Firebase Hosting remains an explicit clean-`main` deployment.
 
 ### How to Teleoperate Your Stretch from Hello Robot Cloud
 
