@@ -566,20 +566,6 @@
     to { --hr-countdown: 0%; }
 }
 
-.hr-button__mark {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--hr-accent-strong);
-    color: #fff;
-    font-size: 8px;
-    line-height: 1;
-    letter-spacing: 0;
-}
-
 @keyframes hr-ellipsis {
     0% { content: ""; }
     25% { content: "."; }
@@ -759,7 +745,7 @@
     height: 48px;
     border-radius: 4px;
     background: #1b2a36;
-    object-fit: contain;
+    object-fit: cover;
 }
 
 .hr-sheet__thumb--empty {
@@ -784,4 +770,26 @@
     font-size: 12.5px;
     color: var(--hr-text-check);
     opacity: 0.75;
+}
+
+@media (min-width: 768px) {
+    .hr-sheet {
+        padding-top: 24px;
+    }
+
+    .hr-sheet__grip {
+        display: none;
+    }
+
+    /* Beat MUI dialog paper width/margin (two-class variants). */
+    .MuiDialog-root.hr-sheet-dialog .MuiPaper-root.MuiDialog-paper.hr-sheet-dialog__paper {
+        background: var(--hr-card-bg-dim);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid var(--hr-card-border);
+        border-radius: 14px;
+        width: min(520px, calc(100vw - 48px));
+        max-width: min(520px, calc(100vw - 48px));
+        margin: 24px;
+    }
 }
