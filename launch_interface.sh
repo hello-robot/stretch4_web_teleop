@@ -27,6 +27,20 @@ while getopts m:t:f opt; do
 	esac
 done
 
+# Firebase keys in .env mean this robot joins through Firebase. The same
+# launch still serves https://<this-robot>/operator and the Hosting dashboard.
+ENV_FILE="$REPO_DIR/.env"
+env_val() {
+	grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-
+}
+if [ -z "$FIREBASE" ] && [ -f "$ENV_FILE" ]; then
+	if [ -n "$(env_val apiKey)" ] && [ -n "$(env_val databaseURL)" ] &&
+		[ -n "$(env_val roboUsername)" ] && [ -n "$(env_val roboPassword)" ] &&
+		[ -n "$(env_val HELLO_FLEET_ID)" ]; then
+		FIREBASE="-f"
+	fi
+fi
+
 timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
 logdir="$HOME/stretch_user/log/web_teleop/$timestamp"
 logfile_ros="$logdir/start_ros2.txt"
@@ -207,7 +221,14 @@ echo "#############################################"
 echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
 echo "Visit the appropriate URL(s) below to see web teleop:"
 if [ "$FIREBASE" = "-f" ]; then
-	echo "https://web.hello-robot.com/"
+	if [ -f "$REPO_DIR/.firebaserc" ]; then
+		PROJECT_ID=$(grep -o '"default": "[^"]*' "$REPO_DIR/.firebaserc" | cut -d'"' -f4)
+		if [ -n "$PROJECT_ID" ]; then
+			echo "Dashboard: https://${PROJECT_ID}.web.app/"
+		fi
+	fi
+	echo "Localhost: https://localhost/operator"
+	print_interface_urls
 else
 	echo "Localhost: https://localhost/operator"
 	print_interface_urls

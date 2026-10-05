@@ -91,20 +91,17 @@ if [ "$DEPLOY" = true ]; then
 	echo -e "Resolved Firebase Hosted URL:  ${GREEN}https://${HOSTED_URL}${NC}"
 	echo ""
 
+	node scripts/requireLiveHosting.js
+
 	# 2. Compile Production Assets
 	echo -e "${BLUE}Building production assets...${NC}"
-	npm run build
+	npm run build:firebase
 	echo -e "${GREEN}✓ Production build complete${NC}"
 	echo ""
 
 	# 3. Deploy Static Files to Firebase Hosting
 	echo -e "${BLUE}Deploying to Firebase...${NC}"
-	if ! command -v firebase &>/dev/null; then
-		echo -e "${YELLOW}Warning: Global 'firebase' CLI not found. Trying local npx firebase...${NC}"
-		npx firebase deploy --only hosting
-	else
-		firebase deploy --only hosting
-	fi
+	./node_modules/.bin/firebase deploy --only hosting
 	echo -e "${GREEN}✓ Deployment successful!${NC}"
 	echo ""
 

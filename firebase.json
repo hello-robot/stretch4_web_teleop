@@ -1,10 +1,25 @@
 {
+  "database": {
+    "rules": "database.rules.json"
+  },
   "hosting": {
-    "public": "dist",
+    "predeploy": ["node scripts/requireLiveHosting.js"],
+    "public": "dist-firebase",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
     ]
   },
   "auth": {
@@ -15,5 +30,14 @@
         "supportEmail": "annagarverick@hello-robot.com"
       }
     }
+  },
+  "emulators": {
+    "database": {
+      "port": 9000
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
   }
 }

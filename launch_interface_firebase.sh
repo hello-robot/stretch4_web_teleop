@@ -55,7 +55,7 @@ LAUNCH_LOGFILE="$logdir/web_interface_launch.txt"
 screen -dm -S "web_teleop_ros" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
 sleep 8
 
-# 4. Start the robot browser (pointing to Firebase)
+# 4. Start webpack watch, the local HTTPS server, and the robot browser
 echo "Start robot browser..."
 cd "$HOME/ament_ws/src/stretch4_web_teleop"
 ./start_web_server_and_robot_browser.sh -l $logdir -f |& tee $logfile_node
