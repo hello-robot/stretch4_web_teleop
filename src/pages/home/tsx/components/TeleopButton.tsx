@@ -103,14 +103,18 @@ export const TeleopButton = ({
                     LOGS
                 </span>
             </div>
-            {controlFor(shown, seat?.initials, formatElapsed(elapsedSec), onLaunch, stop)}
+            {controlFor(
+                shown,
+                formatElapsed(elapsedSec),
+                onLaunch,
+                stop,
+            )}
         </div>
     );
 };
 
 const controlFor = (
     treatment: Treatment,
-    initials: string | undefined,
     elapsed: string,
     onLaunch: () => void,
     onStop: () => void,
@@ -191,9 +195,6 @@ const controlFor = (
                 aria-label="Currently in Use"
             >
                 <span className="hr-button__face">
-                    <span className="hr-button__mark" aria-hidden="true">
-                        {initials || ""}
-                    </span>
                     Currently in Use
                 </span>
             </div>
