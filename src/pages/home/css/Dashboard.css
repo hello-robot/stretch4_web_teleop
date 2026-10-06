@@ -15,6 +15,19 @@
     display: flex;
     flex-direction: column;
     padding-left: 4px;
+    opacity: 0;
+}
+
+.hr-header--in {
+    opacity: 1;
+    animation: hr-header-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hr-header-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
 }
 
 .hr-header__top {
@@ -55,6 +68,13 @@
     justify-content: center;
     width: 100%;
     padding: 48px 0;
+    animation: hr-spinner-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hr-spinner-in {
+    from {
+        opacity: 0;
+    }
 }
 
 .hr-robots__loading .loader {
@@ -170,6 +190,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .hr-header--in,
+    .hr-robots__loading,
     .hr-card--reveal {
         animation: none;
     }
