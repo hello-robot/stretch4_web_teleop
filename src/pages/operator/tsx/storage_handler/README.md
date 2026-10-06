@@ -7,16 +7,17 @@ Firebase is a set of application development platforms and backend cloud computi
 ### Creating a Firebase Project
 
 1. Sign into [Firebase](https://firebase.google.com/) with your Google account.
-2. Open the Firebase [console](https://console.firebase.google.com/) and create a new project. The project will default to using the no-cost [Spark plan](https://firebase.google.com/pricing?hl=en&authuser=1).
-3. Add a web app to your Firebase project. You shouldn't need to worry about installing the Firebase SDK because it is already in the `package.json` dependencies for this repo. This will generate a configuration for your web app.
+1. Open the Firebase [console](https://console.firebase.google.com/) and create a new project. The project will default to using the no-cost [Spark plan](https://firebase.google.com/pricing?hl=en&authuser=1).
+1. Add a web app to your Firebase project. You shouldn't need to worry about installing the Firebase SDK because it is already in the `package.json` dependencies for this repo. This will generate a configuration for your web app.
 
 ### Setting up the Realtime Database
 
-1. Select the `Realtime Database` option under **Build** in the Firebase console for your project, then click **Create Database**. 
-2. Choose a location, select "Start in **locked mode**" in `Security Rules`, and click **Enable**. 
-3. Keep the database locked until the checked-in `database.rules.json` has been tested and the identity records below have been provisioned.
+1. Select the `Realtime Database` option under **Build** in the Firebase console for your project, then click **Create Database**.
+1. Choose a location, select "Start in **locked mode**" in `Security Rules`, and click **Enable**.
+1. Keep the database locked until the checked-in `database.rules.json` has been tested and the identity records below have been provisioned.
 
 The checked-in rules are default-deny:
+
 - **Identities and assignments:** clients may read only their own alias and assignment. Provisioning writes are administrator-only.
 - **Robots:** assigned humans can read a robot and write validated launch/config/map requests. Only the canonical robot identity can write status/presence fields or consume control requests.
 - **Maps:** humans and robots can read only explicitly assigned, owned, or allowlisted maps. Map writes are administrator-only.
@@ -24,9 +25,9 @@ The checked-in rules are default-deny:
 
 ### Setting up Authentication
 
-1. Select the `Authentication` option under **Build** in the Firebase console for your project, then click **Get Started**. 
-2. Click **Email/Password** and enable it. Do not enable passwordless sign-in.
-3. Add the **Google** provider, set the project public-facing name and support email, then save it. Do not enable Anonymous authentication; no application flow uses it.
+1. Select the `Authentication` option under **Build** in the Firebase console for your project, then click **Get Started**.
+1. Click **Email/Password** and enable it. Do not enable passwordless sign-in.
+1. Add the **Google** provider, set the project public-facing name and support email, then save it. Do not enable Anonymous authentication; no application flow uses it.
 
 ### Configuring `.env` and `.firebaserc`
 
@@ -69,9 +70,9 @@ To deploy the web app to Firebase Hosting, install this repo's dependencies (`np
    ```bash
    npm run firebase:login
    ```
-2. **Build the web app:**
+1. **Build the web app:**
    `npm run build:firebase` writes the home, operator, and robot pages to `dist-firebase/`.
-3. **Deploy the live site** (remote `main` only; other checkouts go to a preview channel when the interface is running):
+1. **Deploy the live site** (remote `main` only; other checkouts go to a preview channel when the interface is running):
    ```bash
    ./node_modules/.bin/firebase deploy --only hosting
    ```
@@ -85,11 +86,11 @@ Rules are intentionally separate from Hosting:
    - `assignments/<robotAuthUid>/role = "robot"`
    - `assignments/<robotAuthUid>/name = "<fleetId>"`
    - `robots/<fleetId>/uid = "<robotAuthUid>"`
-2. Ensure each human has `uids/<authUid> = "<alias>"` and only intended fleets/maps under `assignments/<alias>`.
-3. Ensure robot-readable maps are assigned under `assignments/<fleetId>/maps` or include `<fleetId>: true` in `allowed_users`.
-4. Roll this compatible signaling code out to every robot and the live Hosting channel; old preview clients do not include the session-bound seat metadata required by the new rules.
-5. Run `npm run test:security`.
-6. Validate in a staging project before explicitly publishing production rules:
+1. Ensure each human has `uids/<authUid> = "<alias>"` and only intended fleets/maps under `assignments/<alias>`.
+1. Ensure robot-readable maps are assigned under `assignments/<fleetId>/maps` or include `<fleetId>: true` in `allowed_users`.
+1. Roll this compatible signaling code out to every robot and the live Hosting channel; old preview clients do not include the session-bound seat metadata required by the new rules.
+1. Run `npm run test:security`.
+1. Validate in a staging project before explicitly publishing production rules:
    ```bash
    ./node_modules/.bin/firebase deploy --only database --dry-run
    ./node_modules/.bin/firebase deploy --only database
@@ -102,7 +103,7 @@ Never deploy strict rules before identity backfill: signaling deliberately fails
 When adding a new robot to your Firebase project, ensure you update the `.env` file with the robot's specific credentials and fleet ID, and authorize it in Firebase.
 
 1. Open the `.env` and `.firebaserc` files in the root directory.
-2. Update the `.firebaserc` to link the new robot to your specific Firebase project ID:
+1. Update the `.firebaserc` to link the new robot to your specific Firebase project ID:
    ```json
    {
      "projects": {
@@ -110,7 +111,7 @@ When adding a new robot to your Firebase project, ensure you update the `.env` f
      }
    }
    ```
-3. Update the `.env` file with the robot user credentials and fleet ID so the robot can authenticate and be identified in the Realtime Database:
+1. Update the `.env` file with the robot user credentials and fleet ID so the robot can authenticate and be identified in the Realtime Database:
    ```env
    # firebase config
    apiKey=YOUR_API_KEY
@@ -124,9 +125,9 @@ When adding a new robot to your Firebase project, ensure you update the `.env` f
    # user
    roboUsername=snXXXX@hello-robot.com
    roboPassword=your_secure_password
-   
+
    HELLO_FLEET_ID=stretch-seX-XXXX
    ```
-4. In the Firebase Console, go to **Authentication** > **Users** and click **Add user**. Add the `roboUsername` and `roboPassword` corresponding to the values set in the `.env` file, then copy the generated Auth uid.
-5. Provision `assignments/<robotAuthUid>` with `{ "role": "robot", "name": "<fleetId>" }` and set `robots/<fleetId>/uid` to that same Auth uid.
-6. Add human access under `assignments/<alias>/robots/<fleetId>` and map access under the human alias and/or fleet ID before deploying the checked-in rules.
+1. In the Firebase Console, go to **Authentication** > **Users** and click **Add user**. Add the `roboUsername` and `roboPassword` corresponding to the values set in the `.env` file, then copy the generated Auth uid.
+1. Provision `assignments/<robotAuthUid>` with `{ "role": "robot", "name": "<fleetId>" }` and set `robots/<fleetId>/uid` to that same Auth uid.
+1. Add human access under `assignments/<alias>/robots/<fleetId>` and map access under the human alias and/or fleet ID before deploying the checked-in rules.

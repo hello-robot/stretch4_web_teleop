@@ -109,10 +109,14 @@ For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`
    ```
 
    A reboot is not required.
-2. Create an account at [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app).
-3. Ask for your Stretch to be added to that account. Send the robot's fleet ID. An administrator must bind the robot Auth uid in both `assignments/<robotAuthUid> = { role: "robot", name: "<fleetId>" }` and `robots/<fleetId>/uid = "<robotAuthUid>"`, then add the fleet ID under your `assignments/<alias>/robots`.
-4. Sign in. The robot should appear as standby. Choose its map and config, then press **Teleoperate**.
-5. The interface starts on the robot when you press **Teleoperate**. It does not start on its own after a reboot. The hosted site stays up across a reboot, and the onboard daemon returns the robot to standby.
+
+1. Create an account at [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app).
+
+1. Ask for your Stretch to be added to that account. Send the robot's fleet ID. An administrator must bind the robot Auth uid in both `assignments/<robotAuthUid> = { role: "robot", name: "<fleetId>" }` and `robots/<fleetId>/uid = "<robotAuthUid>"`, then add the fleet ID under your `assignments/<alias>/robots`.
+
+1. Sign in. The robot should appear as standby. Choose its map and config, then press **Teleoperate**.
+
+1. The interface starts on the robot when you press **Teleoperate**. It does not start on its own after a reboot. The hosted site stays up across a reboot, and the onboard daemon returns the robot to standby.
 
 One person operates a robot at a time. A second user sees **Currently in Use** and cannot stop that session or take the seat. End teleoperation before someone else connects.
 
