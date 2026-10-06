@@ -24,9 +24,14 @@ export const LoginView = () => {
         const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         return desktop && !reduced;
     });
-    const [reelUrl, reelUrlSet] = useState<string | undefined>();
-    const reelRef = useRef<HTMLVideoElement>(null);
-    const reelUrlRef = useRef<string | undefined>();
+    const [lowUrl, lowUrlSet] = useState<string | undefined>();
+    const [highUrl, highUrlSet] = useState<string | undefined>();
+    const [highReady, highReadySet] = useState(false);
+    const lowRef = useRef<HTMLVideoElement>(null);
+    const highRef = useRef<HTMLVideoElement>(null);
+    const lowUrlRef = useRef<string | undefined>();
+    const highUrlRef = useRef<string | undefined>();
+    const highShownRef = useRef(false);
     const signingInRef = useRef(false);
     const signInDelayRef = useRef<number | undefined>(undefined);
 
@@ -38,23 +43,38 @@ export const LoginView = () => {
             const play = desktop.matches && !motion.matches;
             playReelSet(play);
             if (!play) {
-                reelRef.current?.pause();
+                lowRef.current?.pause();
+                highRef.current?.pause();
                 return;
             }
-            const start = (url: string) => {
+            const start = (low: string, high: string | undefined) => {
                 if (cancelled || !desktop.matches || motion.matches) return;
-                reelUrlRef.current = url;
-                reelUrlSet(url);
-                const video = reelRef.current;
-                if (!video) return;
-                if (video.src !== url) video.src = url;
-                video.play().catch(() => undefined);
+                lowUrlRef.current = low;
+                lowUrlSet(low);
+                const lowVideo = lowRef.current;
+                if (lowVideo) {
+                    if (lowVideo.src !== low) lowVideo.src = low;
+                    if (!highShownRef.current) lowVideo.play().catch(() => undefined);
+                }
+                if (!high) return;
+                highUrlRef.current = high;
+                highUrlSet(high);
+                if (highShownRef.current) highRef.current?.play().catch(() => undefined);
             };
-            if (reelUrlRef.current) {
-                start(reelUrlRef.current);
+            if (lowUrlRef.current) {
+                start(lowUrlRef.current, highUrlRef.current);
                 return;
             }
-            import("home/public/video/hrobo-rgb.mp4").then((mod) => start(mod.default));
+            import("home/public/video/hrobo-rgb-low.mp4").then((mod) => {
+                if (cancelled) return;
+                lowUrlRef.current = mod.default;
+                start(mod.default, highUrlRef.current);
+            });
+            import("home/public/video/hrobo-rgb.mp4").then((mod) => {
+                if (cancelled) return;
+                highUrlRef.current = mod.default;
+                if (lowUrlRef.current) start(lowUrlRef.current, mod.default);
+            });
         };
         sync();
         desktop.addEventListener("change", sync);
@@ -67,6 +87,37 @@ export const LoginView = () => {
     }, []);
 
     useEffect(() => () => window.clearTimeout(signInDelayRef.current), []);
+
+    const revealHigh = () => {
+        const high = highRef.current;
+        const low = lowRef.current;
+        if (!high || highShownRef.current) return;
+        highShownRef.current = true;
+        if (low) {
+            try {
+                high.currentTime = low.currentTime;
+            } catch {
+                // A seek can reject before metadata is ready; playback still starts.
+            }
+        }
+        high.play().then(
+            () => highReadySet(true),
+            () => {
+                highShownRef.current = false;
+            },
+        );
+    };
+
+    const onHighError = () => {
+        highShownRef.current = false;
+        highReadySet(false);
+        lowRef.current?.play().catch(() => undefined);
+    };
+
+    const onHighFadeEnd = (event: React.TransitionEvent<HTMLVideoElement>) => {
+        if (event.propertyName !== "opacity" || !highShownRef.current) return;
+        lowRef.current?.pause();
+    };
 
     const handleForgotPassword = (email: string) => {
         loginHandler
@@ -136,15 +187,29 @@ export const LoginView = () => {
     return (
         <div className="lv-shell">
             <div className="lv-stage" aria-hidden="true">
-                {reelUrl && (
+                {lowUrl && (
                     <video
-                        ref={reelRef}
+                        ref={lowRef}
                         className="lv-stage__video"
-                        src={reelUrl}
+                        src={lowUrl}
                         autoPlay={playReel}
                         muted
                         loop
                         playsInline
+                    />
+                )}
+                {highUrl && (
+                    <video
+                        ref={highRef}
+                        className={`lv-stage__video lv-stage__video--high${highReady ? " lv-stage__video--ready" : ""}`}
+                        src={highUrl}
+                        preload="auto"
+                        muted
+                        loop
+                        playsInline
+                        onCanPlay={revealHigh}
+                        onError={onHighError}
+                        onTransitionEnd={onHighFadeEnd}
                     />
                 )}
                 <div className="lv-stage__hue" />

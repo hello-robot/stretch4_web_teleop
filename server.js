@@ -133,15 +133,21 @@ teleopLease?.ready.catch((error) => {
     console.error("Firebase teleop lease login failed:", error.message);
 });
 
+function cacheHashedVideo(res, filePath) {
+    if (filePath.endsWith(".mp4")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+}
+
 if (dualMode) {
     app.use(
         "/operator/",
         express.static(path.join(localDistDir, "operator")),
     );
-    app.use("/local/", express.static(localDistDir));
-    app.use("/", express.static(firebaseDistDir));
+    app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }));
+    app.use("/", express.static(firebaseDistDir, { setHeaders: cacheHashedVideo }));
 } else {
-    app.use("/", express.static(distDir));
+    app.use("/", express.static(distDir, { setHeaders: cacheHashedVideo }));
 }
 
 // Webpack watch rewrites dist/. Tell open home/operator tabs to reload.
