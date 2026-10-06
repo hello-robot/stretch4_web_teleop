@@ -17,11 +17,7 @@ export abstract class LoginHandler {
 
     public abstract logout(): Promise<undefined>;
 
-    public abstract login(
-        username: string,
-        password: string,
-        remember_me: boolean,
-    ): Promise<undefined>;
+    public abstract login(username: string, password: string): Promise<undefined>;
 
     public abstract forgot_password(username: string): Promise<undefined>;
 
@@ -39,7 +35,7 @@ export abstract class LoginHandler {
     }
 
     /** Google popup sign-in. Email/password handlers that lack it reject. */
-    public loginWithGoogle(remember_me: boolean): Promise<undefined> {
+    public loginWithGoogle(): Promise<undefined> {
         return Promise.reject(
             Error("LoginHandler.loginWithGoogle() is not implemented"),
         );

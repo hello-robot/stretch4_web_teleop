@@ -131,14 +131,7 @@ export const LoginView = () => {
     };
 
     const handleGoogleSignIn = () => {
-        const remember = Boolean(
-            (
-                document.querySelector(
-                    'input[name="remember"]',
-                ) as HTMLInputElement | null
-            )?.checked,
-        );
-        loginHandler.loginWithGoogle(remember).catch((error) => {
+        loginHandler.loginWithGoogle().catch((error) => {
             setToast({ message: authErrorMessage(error), error: true });
         });
     };
@@ -152,12 +145,11 @@ export const LoginView = () => {
         const data = new FormData(event.currentTarget);
         const email = data.get("email") as string;
         const password = data.get("password") as string;
-        const remember = Boolean(data.get("remember"));
 
         signingInRef.current = true;
         signingInSet(true);
         signInDelayRef.current = window.setTimeout(() => {
-            loginHandler.login(email, password, remember).catch((error) => {
+            loginHandler.login(email, password).catch((error) => {
                 signingInRef.current = false;
                 signingInSet(false);
                 setToast({ message: authErrorMessage(error), error: true });
@@ -272,10 +264,6 @@ export const LoginView = () => {
                                 <p className="lv-field-error">{passwordErrorMessage}</p>
                             )}
                         </div>
-                        <label className="lv-remember">
-                            <input type="checkbox" name="remember" value="remember" defaultChecked />
-                            Remember me
-                        </label>
                         <ForgotPassword
                             open={open}
                             handleClose={() => setOpen(false)}

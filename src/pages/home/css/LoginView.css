@@ -138,22 +138,6 @@
     text-decoration: underline;
 }
 
-.lv-remember {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--hr-text-check);
-    font-family: var(--hr-font-body);
-    font-size: 13.5px;
-}
-
-.lv-remember input {
-    accent-color: var(--hr-button);
-    width: 15px;
-    height: 15px;
-    margin: 0;
-}
-
 .lv-button {
     box-sizing: border-box;
     display: flex;

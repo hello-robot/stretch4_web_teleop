@@ -2,7 +2,6 @@ import { FirebaseOptions, initializeApp } from "firebase/app";
 import {
     Auth,
     browserLocalPersistence,
-    browserSessionPersistence,
     confirmPasswordReset,
     getAuth,
     GoogleAuthProvider,
@@ -216,23 +215,14 @@ export class FirebaseLoginHandler extends LoginHandler {
         });
     }
 
-    public login(
-        username: string,
-        password: string,
-        remember_me: boolean,
-    ): Promise<undefined> {
+    public login(username: string, password: string): Promise<undefined> {
         // Tutorial here:
         // https://firebase.google.com/docs/auth/web/start?hl=en#sign_in_existing_users
         // Auth State Persistence tutorial here:
         // https://firebase.google.com/docs/auth/web/auth-state-persistence
 
         return new Promise<undefined>((resolve, reject) => {
-            setPersistence(
-                this.auth,
-                remember_me
-                    ? browserLocalPersistence
-                    : browserSessionPersistence,
-            )
+            setPersistence(this.auth, browserLocalPersistence)
                 .then(() => {
                     signInWithEmailAndPassword(this.auth, username, password)
                         .then((userCredential) => {
@@ -244,11 +234,8 @@ export class FirebaseLoginHandler extends LoginHandler {
         });
     }
 
-    public loginWithGoogle(remember_me: boolean): Promise<undefined> {
-        return setPersistence(
-            this.auth,
-            remember_me ? browserLocalPersistence : browserSessionPersistence,
-        ).then(() =>
+    public loginWithGoogle(): Promise<undefined> {
+        return setPersistence(this.auth, browserLocalPersistence).then(() =>
             signInWithPopup(this.auth, new GoogleAuthProvider()).then(
                 () => undefined,
                 (error) => {

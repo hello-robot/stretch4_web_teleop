@@ -45,11 +45,7 @@ export class LocalLoginHandler extends LoginHandler {
         });
     }
 
-    public login(
-        username: string,
-        password: string,
-        remember_me: boolean,
-    ): Promise<undefined> {
+    public login(username: string, password: string): Promise<undefined> {
         return new Promise<undefined>((resolve, reject) => {
             this._loginState = "authenticated";
             this.onReadyCallback();
@@ -57,7 +53,7 @@ export class LocalLoginHandler extends LoginHandler {
         });
     }
 
-    public loginWithGoogle(remember_me: boolean): Promise<undefined> {
+    public loginWithGoogle(): Promise<undefined> {
         return Promise.reject(
             Error("LocalLoginHandler.loginWithGoogle() is not implemented"),
         );
