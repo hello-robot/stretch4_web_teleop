@@ -36,7 +36,7 @@ export const ForgotPassword = (props: {
                 required
                 id="reset-email"
                 name="email"
-                placeholder="your@email.com"
+                placeholder="jsmith@hello-robot.com"
                 type="email"
                 autoComplete="email"
             />

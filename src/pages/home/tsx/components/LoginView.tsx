@@ -6,6 +6,9 @@ import { authErrorMessage } from "../authError";
 import { loginHandler } from "../index";
 import { ForgotPassword } from "./ForgotPassword";
 
+/** Sign-in spinner stays up at least this long before the login request starts. */
+const SIGN_IN_DELAY_MS = 500;
+
 export const LoginView = () => {
     const [emailValue, setEmailValue] = useState("");
     const [passwordValue, setPasswordValue] = useState("");
@@ -15,6 +18,7 @@ export const LoginView = () => {
     const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
     const [open, setOpen] = useState(false);
     const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
+    const [signingIn, signingInSet] = useState(false);
     const [playReel, playReelSet] = useState(() => {
         const desktop = window.matchMedia("(min-width: 960px)").matches;
         const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -23,6 +27,8 @@ export const LoginView = () => {
     const [reelUrl, reelUrlSet] = useState<string | undefined>();
     const reelRef = useRef<HTMLVideoElement>(null);
     const reelUrlRef = useRef<string | undefined>();
+    const signingInRef = useRef(false);
+    const signInDelayRef = useRef<number | undefined>(undefined);
 
     useEffect(() => {
         const desktop = window.matchMedia("(min-width: 960px)");
@@ -60,6 +66,8 @@ export const LoginView = () => {
         };
     }, []);
 
+    useEffect(() => () => window.clearTimeout(signInDelayRef.current), []);
+
     const handleForgotPassword = (email: string) => {
         loginHandler
             .forgot_password(email)
@@ -86,20 +94,24 @@ export const LoginView = () => {
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!validateInputs()) {
+        if (signingInRef.current || !validateInputs()) {
             return;
         }
 
         const data = new FormData(event.currentTarget);
-        loginHandler
-            .login(
-                data.get("email") as string,
-                data.get("password") as string,
-                Boolean(data.get("remember")),
-            )
-            .catch((error) => {
+        const email = data.get("email") as string;
+        const password = data.get("password") as string;
+        const remember = Boolean(data.get("remember"));
+
+        signingInRef.current = true;
+        signingInSet(true);
+        signInDelayRef.current = window.setTimeout(() => {
+            loginHandler.login(email, password, remember).catch((error) => {
+                signingInRef.current = false;
+                signingInSet(false);
                 setToast({ message: authErrorMessage(error), error: true });
             });
+        }, SIGN_IN_DELAY_MS);
     };
 
     const validateInputs = () => {
@@ -154,7 +166,7 @@ export const LoginView = () => {
                                 id="email"
                                 type="email"
                                 name="email"
-                                placeholder="your@email.com"
+                                placeholder="jsmith@hello-robot.com"
                                 autoComplete="email"
                                 autoFocus
                                 required
@@ -207,9 +219,14 @@ export const LoginView = () => {
                         <button
                             type="submit"
                             className={`lv-button ${canSignIn ? "lv-button--primary" : "lv-button--ghost"}`}
-                            disabled={!canSignIn}
+                            disabled={!canSignIn || signingIn}
+                            aria-busy={signingIn}
                         >
-                            Sign in
+                            {signingIn ? (
+                                <span className="lv-button__spinner" role="status" aria-label="Signing in" />
+                            ) : (
+                                "Sign in"
+                            )}
                         </button>
                     </form>
                     <div className="lv-or">or</div>
