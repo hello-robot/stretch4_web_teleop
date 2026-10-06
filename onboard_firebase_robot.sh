@@ -44,7 +44,8 @@ fi
 # Sign in with the robot account from .env and print the Auth uid.
 # roboPassword stays in this process and is not printed.
 echo "Signing in as the robot account from .env..."
-bind_info="$(node <<'EOF'
+bind_info="$(
+	node <<'EOF'
 const path = require("path");
 require("dotenv").config({ path: path.join(process.cwd(), ".env") });
 const { initializeApp } = require("firebase/app");
