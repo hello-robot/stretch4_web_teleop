@@ -1,5 +1,6 @@
 #!/bin/bash
 # Onboard this robot onto Hello Robot Cloud (Firebase).
+# Safe to run again if it is interrupted. Steps that already finished are skipped.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -14,16 +15,26 @@ if [ -z "$release" ]; then
 	exit 1
 fi
 
-# Switch to the branch and grab the latest.
-echo "Checking out ${release}..."
-git checkout "$release"
-git pull
+# Switch to the branch and grab the latest. Checkout is a no-op when already there.
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$current_branch" = "$release" ]; then
+	echo "Already on ${release}."
+else
+	echo "Checking out ${release}..."
+	git checkout "$release"
+fi
+git pull --ff-only
 
-# Install dependencies used by the daemon and the Firebase CLI.
-echo "Installing npm dependencies..."
-npm install --legacy-peer-deps
+# Finish a partial install. A completed node_modules is left as it is.
+if [ -x "$FIREBASE" ] && [ -d node_modules/firebase ] && [ -d node_modules/dotenv ]; then
+	echo "npm dependencies already installed."
+else
+	echo "Installing npm dependencies..."
+	npm install --legacy-peer-deps
+fi
 
-# The database bind uses the admin CLI. The robot's own login cannot write it.
+# For the remainder of the script, you will need to be an
+# Admin or Owner of the Firebase web app.
 if ! "$FIREBASE" login:list 2>/dev/null | grep -q "Logged in as "; then
 	echo "Firebase CLI is not logged in."
 	echo "Open the URL below on your computer, then paste the code into this terminal."
@@ -97,24 +108,81 @@ if [ -z "$uid" ] || [ -z "$fleet_id" ] || [ -z "$project_id" ] || [ -z "$instanc
 fi
 
 # Bind the robot login so the daemon is allowed to write robots/<fleetId>.
-echo "Binding ${fleet_id} to Auth uid ${uid}..."
-"$FIREBASE" database:set "/assignments/${uid}" \
-	--data "{\"role\":\"robot\",\"name\":\"${fleet_id}\"}" \
-	--project "$project_id" \
-	--instance "$instance" \
-	--force
-"$FIREBASE" database:update "/robots/${fleet_id}" \
-	--data "{\"uid\":\"${uid}\"}" \
-	--project "$project_id" \
-	--instance "$instance" \
-	--force
+# Writing the same role, name, and uid again is skipped.
+binding_changed=0
+existing_assignment="$("$FIREBASE" database:get "/assignments/${uid}" \
+	--project "$project_id" --instance "$instance")"
+if node -e '
+	const existing = process.argv[1];
+	const fleet = process.argv[2];
+	if (!existing || existing.trim() === "null") process.exit(1);
+	let data;
+	try { data = JSON.parse(existing); } catch (e) { process.exit(1); }
+	process.exit(data && data.role === "robot" && data.name === fleet ? 0 : 1);
+' "$existing_assignment" "$fleet_id"; then
+	echo "Assignment for ${uid} already names ${fleet_id}."
+else
+	echo "Binding ${fleet_id} to Auth uid ${uid}..."
+	"$FIREBASE" database:set "/assignments/${uid}" \
+		--data "{\"role\":\"robot\",\"name\":\"${fleet_id}\"}" \
+		--project "$project_id" \
+		--instance "$instance" \
+		--force
+	binding_changed=1
+fi
 
-# Install the daemon, then restart it so it picks up the new binding.
-echo "Installing the daemon service..."
-./firebase_console_config.sh --install
+existing_uid="$("$FIREBASE" database:get "/robots/${fleet_id}/uid" \
+	--project "$project_id" --instance "$instance")"
+if node -e '
+	const existing = process.argv[1];
+	const uid = process.argv[2];
+	if (!existing || existing.trim() === "null") process.exit(1);
+	let value;
+	try { value = JSON.parse(existing); } catch (e) { process.exit(1); }
+	process.exit(value === uid ? 0 : 1);
+' "$existing_uid" "$uid"; then
+	echo "robots/${fleet_id}/uid already matches."
+else
+	echo "Setting robots/${fleet_id}/uid..."
+	"$FIREBASE" database:update "/robots/${fleet_id}" \
+		--data "{\"uid\":\"${uid}\"}" \
+		--project "$project_id" \
+		--instance "$instance" \
+		--force
+	binding_changed=1
+fi
 
-echo "Restarting the daemon..."
-sudo systemctl restart stretch-web-teleop-daemon.service
+# Install the unit file only when it is missing. Restart only when this
+# process is not already publishing standby, so a second run does not
+# drop a working robot offline.
+service="stretch-web-teleop-daemon.service"
+unit="/etc/systemd/system/${service}"
+if [ ! -f "$unit" ] || ! systemctl is-enabled --quiet "$service"; then
+	echo "Installing the daemon service..."
+	./firebase_console_config.sh --install
+else
+	echo "Daemon service is already installed."
+fi
+
+needs_restart=0
+if ! systemctl is-active --quiet "$service"; then
+	needs_restart=1
+else
+	since="$(systemctl show -p ActiveEnterTimestamp --value "$service")"
+	logs="$(journalctl -u "$service" --since "$since" --no-pager || true)"
+	if echo "$logs" | grep -q "PERMISSION_DENIED\|permission_denied"; then
+		needs_restart=1
+	elif ! echo "$logs" | grep -q "to: standby"; then
+		needs_restart=1
+	fi
+fi
+
+if [ "$needs_restart" -eq 1 ] || [ "$binding_changed" -eq 1 ]; then
+	echo "Restarting the daemon..."
+	sudo systemctl restart "$service"
+else
+	echo "Daemon is already running with this binding. Not restarting."
+fi
 
 echo "Daemon status:"
 systemctl status stretch-web-teleop-daemon.service --no-pager

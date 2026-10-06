@@ -77,6 +77,7 @@ For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`
 
 1. On the robot, fill in `.env` so the daemon can log in:
 
+   - `release` (the git branch this robot tracks, such as `main`, `feature/foo-bar-baz`, etc.)
    - `apiKey`
    - `authDomain`
    - `databaseURL`
@@ -96,9 +97,11 @@ For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`
    ./onboard_firebase_robot.sh
    ```
 
-   A reboot is not required. The script does not grant a person access to the robot.
+   If the script stops partway, run it again. Steps that already finished are skipped, including a second npm install, a second service install, and a restart of a daemon that is already publishing standby.
 
-1. Create an account at [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app).
+   Note: To onboard your Stretch to an instance of Hello Robot Cloud, you will need to be an **Owner**, **Editor**, or **Firebase Admin** of this Firebase web app.
+
+1. Create an account at [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app)
 
 1. Ask for your Stretch to be added to that account. Send the robot's fleet ID. An administrator must bind the robot Auth uid in both `assignments/<robotAuthUid> = { role: "robot", name: "<fleetId>" }` and `robots/<fleetId>/uid = "<robotAuthUid>"`, then add the fleet ID under your `assignments/<alias>/robots`.
 
