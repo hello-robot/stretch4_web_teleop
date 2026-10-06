@@ -91,13 +91,11 @@ For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`
    - `HELLO_FLEET_ID`
    - `release` (the git branch this robot tracks, such as `feature/firebase-sandbox` or `main`)
 
-   Then, from the repository root, run the onboard script. It checks out the `release` branch from `.env`, installs dependencies, binds this robot's login, and restarts the daemon:
+   Then, from the repository root, run the onboard script. It checks out the `release` branch from `.env`, installs dependencies, binds this robot's login, adds the fleet to the email you confirm, and restarts the daemon:
 
    ```bash
    ./onboard_firebase_robot.sh
    ```
-
-   If the script stops partway, run it again. Steps that already finished are skipped, including a second npm install, a second service install, and a restart of a daemon that is already publishing standby.
 
    Note: To onboard your Stretch to an instance of Hello Robot Cloud, you will need to be an **Owner**, **Editor**, or **Firebase Admin** of this Firebase web app.
 

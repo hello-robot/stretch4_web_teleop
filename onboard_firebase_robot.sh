@@ -15,6 +15,38 @@ if [ -z "$release" ]; then
 	exit 1
 fi
 
+fleet_id="$(sed -n 's/^HELLO_FLEET_ID=//p' .env | head -n 1 | tr -d '\r"')"
+if [ -z "$fleet_id" ]; then
+	echo "ERROR: HELLO_FLEET_ID is not defined in .env" >&2
+	exit 1
+fi
+
+# Ask who should see this robot, then confirm before any other work.
+# The first prompt is "Enter your email address:". After n, ask for an
+# address to assign to this fleet.
+prompt_operator_email() {
+	local email_prompt="Enter your email address: "
+	while true; do
+		read -r -p "$email_prompt" operator_email
+		if [ -z "$operator_email" ]; then
+			continue
+		fi
+		while true; do
+			read -r -p "Assign ${fleet_id} to ${operator_email}? y / n " answer
+			case "$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')" in
+			y | yes) return 0 ;;
+			n | no)
+				email_prompt="Provide an email address to assign to ${fleet_id}: "
+				break
+				;;
+			*) ;;
+			esac
+		done
+	done
+}
+
+prompt_operator_email
+
 # Switch to the branch and grab the latest. Checkout is a no-op when already there.
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 if [ "$current_branch" = "$release" ]; then
@@ -106,6 +138,78 @@ instance="$(echo "$bind_info" | sed -n '4p')"
 if [ -z "$uid" ] || [ -z "$fleet_id" ] || [ -z "$project_id" ] || [ -z "$instance" ]; then
 	echo "ERROR: could not resolve the robot uid from .env" >&2
 	exit 1
+fi
+
+# The dashboard lists a robot under assignments/<alias>/robots/<fleetId>.
+# alias is uids/<auth uid>, or the Auth uid when that entry is missing.
+while true; do
+	auth_export="$(mktemp)"
+	trap 'rm -f "$auth_export"' EXIT
+	"$FIREBASE" auth:export "$auth_export" --format=json --project "$project_id" >/dev/null
+	if operator_auth_uid="$(
+		node -e '
+			const fs = require("fs");
+			const email = process.argv[1].toLowerCase();
+			const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+			const user = (data.users || []).find(
+				(entry) => (entry.email || "").toLowerCase() === email,
+			);
+			if (!user || !user.localId) process.exit(1);
+			process.stdout.write(user.localId);
+		' "$operator_email" "$auth_export"
+	)"; then
+		found_operator=1
+	else
+		found_operator=0
+		operator_auth_uid=""
+	fi
+	rm -f "$auth_export"
+	trap - EXIT
+	if [ "$found_operator" -eq 1 ] && [ -n "$operator_auth_uid" ]; then
+		break
+	fi
+	echo "No Cloud account uses ${operator_email}. Create one at https://stretch4-web-interface.web.app, then enter the email again."
+	prompt_operator_email
+done
+
+alias_raw="$("$FIREBASE" database:get "/uids/${operator_auth_uid}" \
+	--project "$project_id" --instance "$instance")"
+operator_alias="$(
+	node -e '
+		const raw = process.argv[1];
+		const uid = process.argv[2];
+		if (!raw || raw.trim() === "null") {
+			process.stdout.write(uid);
+			process.exit(0);
+		}
+		let value;
+		try {
+			value = JSON.parse(raw);
+		} catch (e) {
+			process.stdout.write(uid);
+			process.exit(0);
+		}
+		process.stdout.write(typeof value === "string" && value ? value : uid);
+	' "$alias_raw" "$operator_auth_uid"
+)"
+
+existing_operator_robot="$("$FIREBASE" database:get "/assignments/${operator_alias}/robots/${fleet_id}" \
+	--project "$project_id" --instance "$instance")"
+if node -e '
+	const existing = process.argv[1];
+	if (!existing || existing.trim() === "null") process.exit(1);
+	let value;
+	try { value = JSON.parse(existing); } catch (e) { process.exit(1); }
+	process.exit(value === true ? 0 : 1);
+' "$existing_operator_robot"; then
+	echo "${fleet_id} is already assigned to ${operator_email}."
+else
+	echo "Assigning ${fleet_id} to ${operator_email}..."
+	"$FIREBASE" database:update "/assignments/${operator_alias}/robots" \
+		--data "{\"${fleet_id}\":true}" \
+		--project "$project_id" \
+		--instance "$instance" \
+		--force
 fi
 
 # Bind the robot login so the daemon is allowed to write robots/<fleetId>.
