@@ -88,27 +88,15 @@ For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`
    - `roboUsername` (the robot's Firebase email)
    - `roboPassword`
    - `HELLO_FLEET_ID`
+   - `release` (the git branch this robot tracks, such as `feature/firebase-sandbox` or `main`)
 
-   Then update the checkout and install the daemon from the repository root:
+   Then, from the repository root, run the onboard script. It checks out the `release` branch from `.env`, installs dependencies, binds this robot's login, and restarts the daemon:
 
    ```bash
-   # Switch to main and download the latest changes.
-   git checkout main && git pull
-
-   # Install the Node packages used by the daemon and web interface.
-   npm install --legacy-peer-deps
-
-   # Install or update the daemon\'s systemd service.
-   ./firebase_console_config.sh --install
-
-   # Restart the daemon so an existing process loads the latest code.
-   sudo systemctl restart stretch-web-teleop-daemon.service
-
-   # Confirm that the daemon started without errors.
-   systemctl status stretch-web-teleop-daemon.service --no-pager
+   ./onboard_firebase_robot.sh
    ```
 
-   A reboot is not required.
+   A reboot is not required. The script does not grant a person access to the robot.
 
 1. Create an account at [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app).
 
