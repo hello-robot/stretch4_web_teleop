@@ -296,6 +296,21 @@ export class FirebaseLoginHandler extends LoginHandler {
         });
     }
 
+    public watchLaunchLog(fleetId: string, onLog: (text: string) => void): () => void {
+        if (!this.db || !fleetId) {
+            onLog("");
+            return () => {};
+        }
+        return onValue(
+            ref(this.db, "launch_logs/" + fleetId),
+            (snapshot) => {
+                const value = snapshot.val();
+                onLog(typeof value === "string" ? value : "");
+            },
+            () => onLog(""),
+        );
+    }
+
     public getUserMaps(robotUid: string, callback: (maps: any) => void): void {
         console.log(`[getUserMaps] Called for robotUid: ${robotUid}, alias: ${this.alias}`);
         if (!this.db) {
