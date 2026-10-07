@@ -173,6 +173,8 @@ interface MovementRecorderProps {
     setCameraVeilCallback?: (visible: boolean) => void;
     isRecording: boolean;
     isRecordingSet: React.Dispatch<React.SetStateAction<boolean>>;
+    /** Hide the corner button without unmounting (e.g. flying gripper owns that space). */
+    hideButton?: boolean;
 }
 
 export const MovementRecorder = (props: MovementRecorderProps) => {
@@ -813,7 +815,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         props.setCameraVeilCallback?.(newModalState);
     }, [isModalOpen, props.setCameraVeilCallback]);
 
-    const isButtonVisible = !props.isCameraVeilVisible;
+    const isButtonVisible = !props.isCameraVeilVisible && !props.hideButton;
 
     // Determine if any recording
     // is currently playing (including this one)
@@ -903,7 +905,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                     ? (
                         // Modal toggle
                         <button
-                            onPointerUp={handleToggleModal}
+                            onPointerDown={handleToggleModal}
                             className="mrecord-button"
                             tabIndex={isButtonVisible ? 0 : -1}
                             disabled={!isButtonVisible}
@@ -917,7 +919,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
                     : (
                         // Button to stop recording
                         <button
-                            onPointerUp={handleStopRecording}
+                            onPointerDown={handleStopRecording}
                             className="mrecord-stop-button"
                             tabIndex={isButtonVisible ? 0 : -1}
                             disabled={!isButtonVisible}

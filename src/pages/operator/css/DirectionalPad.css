@@ -5,11 +5,12 @@
     /* This defines the size of ButtonPad */
     --size: 17vh;
 
+    /* Surface tokens are shared with FlyingGripperPad via :root --pad-* (index.css) */
     /* This defines the width of ButtonPad's borders */
-    --border-width: 4px;
+    --border-width: var(--pad-border-width);
 
     /* This defines the style of ButtonPad's borders */
-    --border-style: ridge;
+    --border-style: var(--pad-border-style);
 
     /* Size of the icon */
     --size-icon: calc(var(--size) * 0.25);
@@ -21,13 +22,11 @@
     --width-turn-button: calc(var(--size) / 2);
     --height-turn-button: var(--size);
 
-    /* Border-color's opacity */
-    --border-color-opacity: 75%;
     /* This is the border-color */
-    --border-color: hsl(0deg 0% 100% / var(--border-color-opacity));
+    --border-color: var(--pad-border-color);
 
     /* This provides the "glow" effect around the edges of the buttons*/
-    --box-shadow: 0px 0px calc(var(--size) / 10) 0px hsl(204deg 100% 98% / 30%);
+    --box-shadow: 0px 0px calc(var(--size) / 10) 0px var(--pad-glow-color);
 }
 
 /* START More fine-grained control for buttonpad positioning */
@@ -129,7 +128,7 @@
 
 /* START <button> active */
 .button-wrapper div.button-cardinal.active {
-    box-shadow: 0px 0px 10px 0px hsl(204deg 100% 50%);
+    box-shadow: var(--pad-active-glow);
 }
 
 .button-wrapper div.button-cardinal.active,
@@ -204,7 +203,7 @@
 .button-turn-wrapper.collision img,
 button.limit img,
 button.collision img {
-    filter: saturate(0) brightness(3) !important;
+    filter: var(--pad-icon-filter-idle) !important;
     z-index: 11 !important;
     position: relative !important;
     opacity: 1 !important;
@@ -259,7 +258,7 @@ button.collision img {
     padding: 0px;
     height: var(--size-icon);
     width: var(--size-icon);
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
     background-color: transparent;
     box-shadow: none;
@@ -276,7 +275,7 @@ button.collision img {
 }
 
 .button-wrapper.active button.button-chevron {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .button-wrapper.east button.button-chevron {
@@ -311,7 +310,7 @@ button.collision img {
     position: absolute;
     transform: translate(-50%, -50%);
     padding: 0px;
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
     background-color: transparent;
     box-shadow: none;
@@ -323,7 +322,7 @@ button.collision img {
 
 /* Emulated :active */
 .button-wrapper.active button.button-arm-gripper {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .button-wrapper button.button-arm-gripper img {
@@ -370,7 +369,7 @@ button.Arm.\+.Gripper.button-turn img {
     position: absolute;
     transform: translate(-50%, -50%);
     padding: 0px;
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
     background-color: transparent;
     box-shadow: none;
@@ -382,7 +381,7 @@ button.Arm.\+.Gripper.button-turn img {
 
 /* Emulated :active */
 .button-wrapper.active button.button-wrist {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .button-wrapper button.button-wrist img {
@@ -441,7 +440,7 @@ button.Arm.\+.Gripper.button-turn img {
     padding: 0px;
     cursor: pointer;
     box-shadow: inset var(--box-shadow);
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
 }
 
@@ -451,8 +450,8 @@ button.Arm.\+.Gripper.button-turn img {
 
 .base-movement-controls .rbutton-pad .button-turn-wrapper.active {
     mix-blend-mode: screen;
-    border: 1px solid hsla(204, 100%, 50%, 1);
-    filter: saturate(1) brightness(1);
+    border: var(--pad-active-border);
+    filter: var(--pad-icon-filter-active);
 }
 
 .base-movement-controls .rbutton-pad .button-turn-wrapper.rotate-left {
@@ -485,7 +484,7 @@ button.Arm.\+.Gripper.button-turn img {
     background-color: transparent;
     box-shadow: none;
     outline: none;
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
 }
 .base-movement-controls
@@ -502,7 +501,7 @@ button.Arm.\+.Gripper.button-turn img {
     .rbutton-pad
     .button-turn-wrapper.active
     button.button-turn {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .base-movement-controls

@@ -259,7 +259,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             <div className="scene-menu-button-container">
                 <button
                     className="scene-menu-button"
-                    onPointerUp={() => isMainMenuOpenSet(true)}
+                    onPointerDown={() => isMainMenuOpenSet(true)}
                 >
                     {/* @flag voice_control_interface */}
                     {voiceSvc ? (
