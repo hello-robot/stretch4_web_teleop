@@ -69,18 +69,6 @@ export abstract class LoginHandler {
 
     public getUserMaps(robotUid: string, callback: (maps: any) => void): void {}
 
-    /**
-     * Watch `launch_logs/<fleetId>` while a launch is in manual mode.
-     * Calls with the current tail, including "". Returns an unsubscribe.
-     */
-    public watchLaunchLog(
-        _fleetId: string,
-        onLog: (text: string) => void,
-    ): () => void {
-        onLog("");
-        return () => {};
-    }
-
     public requestRobotStop(robo_uid: string): Promise<void> {
         return Promise.resolve();
     }

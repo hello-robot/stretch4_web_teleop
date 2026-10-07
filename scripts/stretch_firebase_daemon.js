@@ -71,71 +71,6 @@ let stopInFlight = false;
 let launchEpoch = 0;
 const repoRoot = path.join(__dirname, '..');
 
-/** Tail kept in RTDB. Rules reject anything longer. */
-const LAUNCH_LOG_MAX_CHARS = 32 * 1024;
-const LAUNCH_LOG_FLUSH_MS = 250;
-let launchLog = '';
-let launchLogPartial = '';
-let launchLogTimer = null;
-
-function resetLaunchLogBuffer() {
-    launchLog = '';
-    launchLogPartial = '';
-    if (launchLogTimer) {
-        clearTimeout(launchLogTimer);
-        launchLogTimer = null;
-    }
-}
-
-function publishLaunchLog(text) {
-    if (!auth.currentUser) return Promise.resolve();
-    return set(ref(db, `launch_logs/${fleetId}`), text).catch((err) => {
-        console.error('[DAEMON] Error updating launch log:', err.message);
-    });
-}
-
-function clearLaunchLog() {
-    resetLaunchLogBuffer();
-    return publishLaunchLog('');
-}
-
-function flushLaunchLogSoon() {
-    if (launchLogTimer) return;
-    launchLogTimer = setTimeout(() => {
-        launchLogTimer = null;
-        const visible = launchLogPartial
-            ? (launchLog + launchLogPartial).slice(-LAUNCH_LOG_MAX_CHARS)
-            : launchLog;
-        publishLaunchLog(visible);
-    }, LAUNCH_LOG_FLUSH_MS);
-}
-
-/** Line-buffer child output and publish the tail a few times a second. */
-function noteLaunchOutput(chunk) {
-    launchLogPartial += chunk.toString();
-    if (launchLogPartial.length > LAUNCH_LOG_MAX_CHARS) {
-        launchLogPartial = launchLogPartial.slice(-LAUNCH_LOG_MAX_CHARS);
-    }
-    const lines = launchLogPartial.split('\n');
-    launchLogPartial = lines.pop() ?? '';
-    if (lines.length) {
-        launchLog = (launchLog + lines.join('\n') + '\n').slice(-LAUNCH_LOG_MAX_CHARS);
-    }
-    flushLaunchLogSoon();
-}
-
-function flushLaunchLogNow() {
-    if (launchLogTimer) {
-        clearTimeout(launchLogTimer);
-        launchLogTimer = null;
-    }
-    if (launchLogPartial) {
-        launchLog = (launchLog + launchLogPartial).slice(-LAUNCH_LOG_MAX_CHARS);
-        launchLogPartial = '';
-    }
-    return publishLaunchLog(launchLog);
-}
-
 const fs = require('fs');
 
 function readGitBranch() {
@@ -349,8 +284,6 @@ async function handleLaunchCommand(requestedBy, mapId) {
         await refreshBranch();
         const effectiveMapId = mapId || (await readSavedMapId());
         console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}, map: ${effectiveMapId || 'none'}`);
-        await clearLaunchLog();
-        noteLaunchOutput(`[DAEMON] Launch requested by ${requestedBy}, map: ${effectiveMapId || 'none'}\n`);
         setStatus('launching');
 
         const launchArgs = [];
@@ -363,7 +296,6 @@ async function handleLaunchCommand(requestedBy, mapId) {
 
         const featureEnv = await readFeatureEnv();
         console.log('[DAEMON] Launching with feature flags:', featureEnv);
-        noteLaunchOutput(`[DAEMON] Launching with feature flags: ${JSON.stringify(featureEnv)}\n`);
 
         if (epoch !== launchEpoch || abortRequested || stopInFlight) {
             console.log('[DAEMON] Launch aborted before the interface script started.');
@@ -371,21 +303,18 @@ async function handleLaunchCommand(requestedBy, mapId) {
         }
 
         const launchScript = path.join(repoRoot, 'launch_interface_firebase.sh');
-        noteLaunchOutput(`[DAEMON] Starting ${path.basename(launchScript)}\n`);
         const child = spawnProcessGroup(
             launchScript,
             launchArgs,
             {
                 cwd: repoRoot,
                 env: { ...process.env, ...featureEnv },
-                stdio: ['ignore', 'pipe', 'pipe'],
+                stdio: ['ignore', 'ignore', 'pipe'],
             },
         );
         launchChild = child;
         let stderr = '';
-        child.stdout.on('data', (chunk) => noteLaunchOutput(chunk));
         child.stderr.on('data', (chunk) => {
-            noteLaunchOutput(chunk);
             stderr = (stderr + chunk.toString()).slice(-10000);
         });
 
@@ -399,14 +328,10 @@ async function handleLaunchCommand(requestedBy, mapId) {
             if (error) {
                 console.error('[DAEMON] Failed to launch interface:', error.message);
                 if (stderr) console.error(stderr);
-                noteLaunchOutput(`[DAEMON] Failed to launch interface: ${error.message}\n`);
-                flushLaunchLogNow();
                 setStatus('standby');
                 return;
             }
             console.log('[DAEMON] launch_interface_firebase.sh succeeded.');
-            noteLaunchOutput('[DAEMON] launch_interface_firebase.sh succeeded.\n');
-            flushLaunchLogNow();
             // Status will be transitioned to 'online' by robot browser joining room
         };
         child.once('error', finish);
@@ -419,8 +344,6 @@ async function handleLaunchCommand(requestedBy, mapId) {
     } catch (error) {
         if (!abortRequested && !stopInFlight) {
             console.error('[DAEMON] Failed to prepare interface launch:', error.message);
-            noteLaunchOutput(`[DAEMON] Failed to prepare interface launch: ${error.message}\n`);
-            flushLaunchLogNow();
             setStatus('standby');
         }
     } finally {
@@ -473,7 +396,6 @@ async function handleStopCommand(requestedBy) {
         stopInFlight = false;
         abortRequested = false;
         isProcessingCommand = false;
-        await clearLaunchLog();
         setStatus('standby');
     }
 }

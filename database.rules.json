@@ -81,13 +81,6 @@
         }
       }
     },
-    "launch_logs": {
-      "$fleetId": {
-        ".read": "auth != null && (root.child('assignments').child(auth.uid).child('robots').child($fleetId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child($fleetId).val() === true) || (root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid))",
-        ".write": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid",
-        ".validate": "newData.isString() && newData.val().length <= 32768"
-      }
-    },
     "maps": {
       "$mapId": {
         ".read": "auth != null && (root.child('assignments').child(auth.uid).child('maps').child($mapId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('maps').child($mapId).val() === true) || data.child('owner_uid').val() === auth.uid || data.child('allowed_users').child(auth.uid).val() === true || (root.child('uids').child(auth.uid).exists() && (data.child('owner_uid').val() === root.child('uids').child(auth.uid).val() || data.child('allowed_users').child(root.child('uids').child(auth.uid).val()).val() === true)) || (root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').isString() && (root.child('assignments').child(root.child('assignments').child(auth.uid).child('name').val()).child('maps').child($mapId).val() === true || data.child('owner_uid').val() === root.child('assignments').child(auth.uid).child('name').val() || data.child('allowed_users').child(root.child('assignments').child(auth.uid).child('name').val()).val() === true)))",

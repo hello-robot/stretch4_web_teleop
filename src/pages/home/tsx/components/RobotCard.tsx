@@ -3,9 +3,7 @@ import mapMarkerIcon from "home/public/icons/map-marker.svg";
 import pencilOffline from "home/public/icons/pencil-offline.svg";
 import pencilOnline from "home/public/icons/pencil-online.svg";
 import { BorderBeam } from "border-beam";
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import React, { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useEffect, useState } from "react";
 import { loginHandler } from "../index";
 import {
     CardTone,
@@ -24,7 +22,6 @@ import { ConfigChecklist } from "./ConfigChecklist";
 import { ConfigSheet } from "./ConfigSheet";
 import { MapPickerSheet } from "./MapPickerSheet";
 import { StatusPill } from "./StatusPill";
-import { LaunchLogPanel } from "./LaunchLogPanel";
 import { TeleopButton } from "./TeleopButton";
 
 const PENCIL: Record<CardTone, string> = { lit: pencilOnline, dim: pencilOffline };
@@ -92,11 +89,6 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
     const [mapSheetOpen, mapSheetOpenSet] = useState(false);
     const [configSheetOpen, configSheetOpenSet] = useState(false);
     const [seat, seatSet] = useState<OperatorSeat | null>(null);
-    const [logsOpen, logsOpenSet] = useState(false);
-    const [manualLaunch, manualLaunchSet] = useState(false);
-    const [slotHeight, slotHeightSet] = useState<number | null>(null);
-    const cardRef = useRef<HTMLElement>(null);
-    const dialogRef = useRef<HTMLElement>(null);
 
     useEffect(() => {
         if (!robot.uid) {
@@ -122,108 +114,49 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
         configSheetOpenSet(false);
     }, [settingsLocked]);
 
-    useEffect(() => {
-        if (status === "standby" || status === "offline") {
-            manualLaunchSet(false);
-            logsOpenSet(false);
-        }
-    }, [status]);
-
-    useEffect(() => {
-        if (!logsOpen) return;
-        const onKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") logsOpenSet(false);
-        };
-        window.addEventListener("keydown", onKey);
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        dialogRef.current?.focus();
-        return () => {
-            window.removeEventListener("keydown", onKey);
-            document.body.style.overflow = previousOverflow;
-        };
-    }, [logsOpen]);
-
-    const openLogs = () => {
-        const height = cardRef.current?.getBoundingClientRect().height;
-        if (height) slotHeightSet(height);
-        manualLaunchSet(true);
-        logsOpenSet(true);
-    };
-
     const report = (what: string) => (err: unknown) =>
         onError(`${what} failed: ${err instanceof Error ? err.message : String(err)}`);
 
     const cardClass = [
         "hr-card",
         `hr-card--${tone}`,
+        "hr-card--reveal",
         pulsed && !reduceMotion ? "hr-card--beam" : "",
         glow === "breathe" ? "hr-card--breathe" : "",
     ].filter(Boolean).join(" ");
-    const rowsLayoutId = reduceMotion ? undefined : `hr-card-rows-${uid}`;
 
-    const card = (expanded: boolean) => (
-        <motion.article
-            ref={expanded ? dialogRef : cardRef}
-            layout={!reduceMotion}
-            layoutId={reduceMotion ? undefined : `hr-card-${uid}`}
-            className={[cardClass, expanded ? "hr-card--logs" : "hr-card--reveal"].join(" ")}
-            style={expanded ? undefined : { animationDelay: `${revealIndex * REVEAL_STAGGER_MS}ms` }}
-            role={expanded ? "dialog" : undefined}
-            aria-modal={expanded ? true : undefined}
-            aria-label={expanded ? `${robotDisplayId(name)} launch logs` : undefined}
-            tabIndex={expanded ? -1 : undefined}
-            transition={reduceMotion ? { duration: 0 } : { layout: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } }}
+    const card = (
+        <article
+            className={cardClass}
+            style={{ animationDelay: `${revealIndex * REVEAL_STAGGER_MS}ms` }}
         >
             <header className="hr-card__head">
                 <span className="hr-card__id">{robotDisplayId(name)}</span>
                 <StatusPill status={status} />
             </header>
 
-            {expanded && (
-                <div className="hr-card__compact">
-                    <div className="hr-card__compact-map">
-                        <img alt="" className="hr-card__compact-icon" src={mapMarkerIcon} />
-                        <span>{mapName}</span>
-                    </div>
+            <div className="hr-card__body">
+                <div className="hr-card__rows">
+                    <EditableRow
+                        icon={mapMarkerIcon}
+                        label={mapName}
+                        tone={tone}
+                        editLabel="Change map"
+                        locked={settingsLocked}
+                        onEdit={() => mapSheetOpenSet(true)}
+                    />
                     <div className="hr-card__config">
-                        <span className="hr-card__compact-label">
-                            <img alt="" className="hr-card__compact-icon" src={configIcon} />
-                            Config
-                        </span>
+                        <EditableRow
+                            icon={configIcon}
+                            label="Config"
+                            tone={tone}
+                            editLabel="Edit config"
+                            locked={settingsLocked}
+                            onEdit={() => configSheetOpenSet(true)}
+                        />
                         <ConfigChecklist robot={robot} tone={tone} />
                     </div>
                 </div>
-            )}
-
-            <div className="hr-card__body">
-                {expanded ? (
-                    <motion.div layoutId={rowsLayoutId} className="hr-launch-log-slot">
-                        <LaunchLogPanel fleetId={uid} />
-                    </motion.div>
-                ) : (
-                    <motion.div layoutId={rowsLayoutId} className="hr-card__rows">
-                        <EditableRow
-                            icon={mapMarkerIcon}
-                            label={mapName}
-                            tone={tone}
-                            editLabel="Change map"
-                            locked={settingsLocked}
-                            onEdit={() => mapSheetOpenSet(true)}
-                        />
-                        <div className="hr-card__config">
-                            <EditableRow
-                                icon={configIcon}
-                                label="Config"
-                                tone={tone}
-                                editLabel="Edit config"
-                                locked={settingsLocked}
-                                onEdit={() => configSheetOpenSet(true)}
-                            />
-                            <ConfigChecklist robot={robot} tone={tone} />
-                        </div>
-                    </motion.div>
-                )}
 
                 <div className="hr-card__actions">
                     <TeleopButton
@@ -231,9 +164,6 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
                         seat={seat}
                         beat={beat}
                         beatUntil={beatUntil}
-                        manualLaunch={manualLaunch}
-                        logsOpen={expanded}
-                        onOpenLogs={openLogs}
                         operatorHref={`/operator/?robot=${encodeURIComponent(name)}`}
                         onLaunch={() =>
                             loginHandler
@@ -254,77 +184,42 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
                 </div>
             </div>
 
-            {!expanded && (
-                <>
-                    <MapPickerSheet
-                        open={mapSheetOpen}
-                        maps={maps}
-                        selectedMapId={robot.map_id ?? null}
-                        onClose={() => mapSheetOpenSet(false)}
-                        onSelect={(mapId) => {
-                            mapSheetOpenSet(false);
-                            loginHandler.setRobotMap(uid, mapId).catch(report("Saving map"));
-                        }}
-                    />
-                    <ConfigSheet
-                        open={configSheetOpen}
-                        robot={robot}
-                        onClose={() => configSheetOpenSet(false)}
-                        onToggle={(flag, enabled) =>
-                            loginHandler.setRobotConfig(uid, flag, enabled).catch(report("Saving config"))
-                        }
-                    />
-                </>
-            )}
-        </motion.article>
+            <MapPickerSheet
+                open={mapSheetOpen}
+                maps={maps}
+                selectedMapId={robot.map_id ?? null}
+                onClose={() => mapSheetOpenSet(false)}
+                onSelect={(mapId) => {
+                    mapSheetOpenSet(false);
+                    loginHandler.setRobotMap(uid, mapId).catch(report("Saving map"));
+                }}
+            />
+            <ConfigSheet
+                open={configSheetOpen}
+                robot={robot}
+                onClose={() => configSheetOpenSet(false)}
+                onToggle={(flag, enabled) =>
+                    loginHandler.setRobotConfig(uid, flag, enabled).catch(report("Saving config"))
+                }
+            />
+        </article>
     );
 
     return (
-        <LayoutGroup id={`hr-robot-${uid}`}>
-            <BorderBeam
-                className="hr-card-beam"
-                size={glow === "inner" ? "pulse-inner" : "pulse-outside"}
-                colorVariant="ocean"
-                theme="dark"
-                borderRadius={7}
-                staticColors
-                hueRange={0}
-                strength={glow === "inner" ? 0.4 : 0.7}
-                glowSize={glow === "inner" ? 0.55 : 1}
-                active={pulsed && !reduceMotion && !logsOpen}
-                css={BRAND_BLUE_BEAM}
-            >
-                {logsOpen ? (
-                    <div
-                        className="hr-card-slot"
-                        style={slotHeight ? { height: slotHeight } : undefined}
-                        aria-hidden
-                    />
-                ) : (
-                    card(false)
-                )}
-            </BorderBeam>
-            {logsOpen && createPortal(
-                <>
-                    <AnimatePresence>
-                        <motion.button
-                            key="launch-log-overlay"
-                            type="button"
-                            className="hr-log-overlay"
-                            aria-label="Close logs"
-                            onClick={() => logsOpenSet(false)}
-                            initial={reduceMotion ? false : { opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
-                        />
-                    </AnimatePresence>
-                    <div className="hr-log-stage">
-                        {card(true)}
-                    </div>
-                </>,
-                document.body,
-            )}
-        </LayoutGroup>
+        <BorderBeam
+            className="hr-card-beam"
+            size={glow === "inner" ? "pulse-inner" : "pulse-outside"}
+            colorVariant="ocean"
+            theme="dark"
+            borderRadius={7}
+            staticColors
+            hueRange={0}
+            strength={glow === "inner" ? 0.4 : 0.7}
+            glowSize={glow === "inner" ? 0.55 : 1}
+            active={pulsed && !reduceMotion}
+            css={BRAND_BLUE_BEAM}
+        >
+            {card}
+        </BorderBeam>
     );
 };
