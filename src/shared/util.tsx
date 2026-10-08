@@ -100,6 +100,7 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | SeedLocalizationStateMessage
+    | JointVelocityLimitsMessage
     | cmd;
 
 interface StopTrajectoryMessage {
@@ -144,6 +145,11 @@ export interface StretchToolMessage {
     type: "stretchTool";
     value: string;
     toolMetadata?: ToolMetadata;
+}
+
+export interface JointVelocityLimitsMessage {
+    type: "jointVelocityLimits";
+    jointVelocities: Record<string, number>;
 }
 
 
@@ -235,19 +241,11 @@ export interface ROSOdometry extends Message {
     };
 }
 
-export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
-    arm_joint: [0.001, 0.518],
-    wrist_roll_joint: [-2.95, 2.94],
-    wrist_pitch_joint: [-1.57, 0.57],
-    wrist_yaw_joint: [-1.37, 4.41],
-    lift_joint: [0.001, 1.1],
-    translate_mobile_base: [-30.0, 30.0],
-    rotate_mobile_base: [-3.14, 3.14],
-    gripper_joint: [-0.37, 0.17],
-    head_tilt_joint: [-1.6, 0.3],
-    head_pan_joint: [-3.95, 1.7],
-};
 
+/**
+ * Default fallback joint velocities.
+ * Primary joint velocity limits are populated dynamically at runtime from stretch4_urdf via ROS parameters.
+ */
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
@@ -263,7 +261,18 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
 export const TASK_SPACE_LINEAR_VEL = 0.04;
+export function updateJointVelocities(newVelocities: Record<string, number>) {
+    for (const [key, val] of Object.entries(newVelocities)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_VELOCITIES as Record<string, number>)[key] = val;
+        }
+    }
+}
 
+/**
+ * Default fallback jog increments. The gripper's is refreshed at runtime from the driver's
+ * tool_info.urdf_range, since the right step depends on which tool is attached.
+ */
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,
     head_pan_joint: 0.1,
@@ -276,6 +285,24 @@ export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.5,
 };
+
+export function updateJointIncrements(newIncrements: Record<string, number>) {
+    for (const [key, val] of Object.entries(newIncrements)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_INCREMENTS as Record<string, number>)[key] = val;
+        }
+    }
+}
+
+/**
+ * Republish period for continuous joint velocity commands, in ms. The JointJog `duration` must
+ * match it: the driver multiplies rate by duration to get each command's displacement, so a
+ * mismatch scales the realised joint speed by the ratio between them.
+ */
+export const JOINT_VELOCITY_HEARTBEAT_MS = 50;
+
+/** Fraction of a tool's full travel that one jog click should cover. */
+export const GRIPPER_INCREMENT_RANGE_FRACTION = 0.1;
 
 const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
 

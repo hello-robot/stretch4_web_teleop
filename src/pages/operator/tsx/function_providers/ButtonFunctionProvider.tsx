@@ -275,23 +275,19 @@ export class ButtonFunctionProvider extends FunctionProvider {
         )
             ? -1
             : 1;
-        const velocity =
-            multiplier *
-            (JOINT_VELOCITIES[jointName] ?? 0.1) *
-            FunctionProvider.velocityScale;
-
-        if (velocity === undefined) {
+        const jointVelocity = JOINT_VELOCITIES[jointName];
+        if (jointVelocity === undefined) {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Velocity for joint ${jointName} is undefined!`);
         }
+        const velocity =
+            multiplier * jointVelocity * FunctionProvider.velocityScale;
 
-        const increment =
-            multiplier *
-            (JOINT_INCREMENTS[jointName] ?? 0.1) *
-            FunctionProvider.velocityScale;
-
-        if (increment === undefined) {
+        const jointIncrement = JOINT_INCREMENTS[jointName];
+        if (jointIncrement === undefined) {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Increment for joint ${jointName} is undefined!`);
         }
+        const increment =
+            multiplier * jointIncrement * FunctionProvider.velocityScale;
 
         switch (FunctionProvider.actionMode) {
             case ActionModeType.StepActions:

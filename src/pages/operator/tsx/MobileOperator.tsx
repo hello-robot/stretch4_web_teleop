@@ -12,8 +12,6 @@ import {
     flyingGripperFunctionProvider,
     homeTheRobotFunctionProvider,
     movementRecorderFunctionProvider,
-    toolMetadata,
-    underMapFunctionProvider
     subscribeToolMetadata,
     underMapFunctionProvider,
 } from ".";
@@ -24,6 +22,7 @@ import {
 } from "./function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
 import { ButtonPad } from "./layout_components/ButtonPad";
+import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
 import { SharedState } from "./layout_components/CustomizableComponent";
 import PilotMode from "./layout_components/PilotMode";
 import { StorageHandler } from "./storage_handler/StorageHandler";
