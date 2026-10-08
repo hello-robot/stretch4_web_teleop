@@ -66,7 +66,7 @@ The no-login local operator stays at `https://<tailscale.ip.address>/operator/`.
 To publish a one-off production build to the Preview Channel without launching teleop:
 
 ```
-npm run build:firebase-preview-channel
+npm run deploy:firebase-preview-channel
 ```
 
 The Preview Channel's URL will have this format `https://stretch4-web-interface--<channel>-<hash>.web.app`. The hash is assigned the first time that channel is deployed. While the development interface is running, a save uploads the same preview channel. The local tab reloads from webpack and the preview tab reloads after its deploy.
