@@ -16,13 +16,14 @@ from launch.actions import (
     IncludeLaunchDescription,
     OpaqueFunction,
 )
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.launch_context import LaunchContext
 from launch.launch_description_sources import (
     FrontendLaunchDescriptionSource,
     PythonLaunchDescriptionSource,
 )
 from launch.substitutions import (
+    EnvironmentVariable,
     FindExecutable,
     LaunchConfiguration,
     NotEqualsSubstitution,
@@ -164,6 +165,7 @@ def generate_launch_description():
         ]
     )
 
+    # TF2 web republisher (streams TF frames to the web client)
     tf2_web_republisher_node = Node(
         package="tf2_web_republisher",
         executable="tf2_web_republisher_node",
@@ -175,9 +177,6 @@ def generate_launch_description():
     stretch_driver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([core_package, "launch", "stretch_driver.launch.py"])
-        ),
-        condition=UnlessCondition(
-            NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
         ),
         # TODO: The tablet_placement code should change the mode, not the launch file
         launch_arguments={
@@ -263,6 +262,7 @@ def generate_launch_description():
         )
         ld.add_action(configure_video_streams_node)
 
+    # Nav2 stack if a map_yaml is provided
     navigation_bringup_launch = GroupAction(
         condition=IfCondition(
             NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
@@ -278,6 +278,7 @@ def generate_launch_description():
                 launch_arguments={
                     "use_sim_time": "false",
                     "autostart": "true",
+                    "launch_driver": "false",
                     "map": LaunchConfiguration("map_yaml"),
                     "use_rviz": "false",
                     "action_timeout": "30.0",
@@ -287,6 +288,7 @@ def generate_launch_description():
     )
     ld.add_action(navigation_bringup_launch)
 
+    # Reset AMCL global localization (ros2 service call)
     ld.add_action(
         ExecuteProcess(
             cmd=[
@@ -299,8 +301,47 @@ def generate_launch_description():
                 ]
             ],
             shell=True,
+            condition=IfCondition(
+                NotEqualsSubstitution(LaunchConfiguration("map_yaml"), "")
+            ),
         ),
     )
+
+    # Map-less collision avoidance
+    standalone_collision_monitor_launch = GroupAction(
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    LaunchConfiguration("map_yaml"),
+                    "' == '' and '",
+                    EnvironmentVariable(
+                        "FEATURE_LOCAL_COLLISION_AVOIDANCE", default_value="0"
+                    ),
+                    "'.lower() in ('1', 'true', 'yes', 'on')",
+                ]
+            )
+        ),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution(
+                        [
+                            stretch_navigation_path,
+                            "launch",
+                            "collision_monitor.launch.py",
+                        ]
+                    )
+                ),
+                launch_arguments={
+                    "launch_driver": "false",
+                    "use_rviz": "false",
+                    "tool_preset": "auto",
+                }.items(),
+            ),
+        ],
+    )
+    ld.add_action(standalone_collision_monitor_launch)
 
     # ArUco Tag Perception Launch (Run for all cameras; suppress auxiliary RViz)
     aruco_perception_launch = IncludeLaunchDescription(
@@ -315,7 +356,7 @@ def generate_launch_description():
     )
     ld.add_action(aruco_perception_launch)
 
-    # localization with aruco tag node
+    # Localization with aruco tag node
     aruco_localization_node = Node(
         package="stretch_nav2",
         executable="aruco_tag_localization.py",
