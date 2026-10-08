@@ -42,12 +42,16 @@ const {
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    EXECUTE_FLYING_GRIPPER_MOVE,
+    SET_FLYING_GRIPPER_MODE,
     VOICE_MACRO_NAMES,
     VOICE_SCENE_NAMES,
     SAVED_LOCATIONS_MODAL_ACTIONS,
     MAIN_MENU_ACTIONS,
     SAVED_POSES_MODAL_ACTIONS,
+    FLYING_GRIPPER_MODE_ACTIONS,
     AUTONAV_NAV_ACTIONS,
+    FLYING_GRIPPER_MOVE_ACTIONS,
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_SLEEP_PHRASE_DISPLAY,
     VOICE_WAKE_PHRASE_ALT_DISPLAY,
@@ -201,6 +205,17 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user wants to open or close the Saved Poses / Movement Recorder modal, call tool \`${SET_SAVED_POSES_MODAL}\` with \`action\`. Phrases: "open saved poses", "show saved poses", "open pose recorder", "close saved poses".`,
                 `When the user wants to save or bookmark the current pose, call tool \`${SAVE_POSE}\` with \`name\`. Phrases: "save pose as stow", "save pose as look down", "save this pose as grab cup". \`name\` must be the pose name only.`,
                 `When the user wants to move the robot to a saved pose, call tool \`${MOVE_TO_POSE}\` with \`name\`. Phrases: "move to pose stow", "go to pose look down", "play pose stow", "move to pose grab cup". \`name\` must be the pose name only.`,
+
+                // ── Flying Gripper Mode & Motions ──────────────────────────────────────────────────────────
+                `When the user wants to open or close the Flying Gripper screen/overlay on the pilot screen, call tool \`${SET_FLYING_GRIPPER_MODE}\` with \`action\`.`,
+                `\`action="open"\`: Phrases: "open flying gripper mode", "open flying gripper", "enter flying gripper mode", "show flying gripper".`,
+                `\`action="close"\`: Phrases: "close flying gripper mode", "close flying gripper", "exit flying gripper mode", "hide flying gripper".`,
+                `CRITICAL DISAMBIGUATION: "open flying gripper mode" / "close flying gripper mode" → \`${SET_FLYING_GRIPPER_MODE}\`. Do NOT confuse with opening or closing the gripper fingers to grasp or drop ("open gripper" / "close gripper" → \`${EXECUTE_JOINT_MOVE}\` with \`gripper_open\` / \`gripper_close\`).`,
+                `Flying gripper translations translate the gripper along camera/tool-frame axes. Use tool \`${EXECUTE_FLYING_GRIPPER_MOVE}\` ONLY when the user's command starts with the word "fly", e.g. "fly forwards", "fly forward", "fly backwards", "fly back", "fly left", "fly right", "fly up", "fly down".`,
+                `\`action\` for \`${EXECUTE_FLYING_GRIPPER_MOVE}\` must be one of { \`forward\` | \`backward\` | \`left\` | \`right\` | \`up\` | \`down\` }.`,
+                `For flying gripper translations, "fly forwards" / "fly forward" → \`action="forward"\`, "fly backwards" / "fly back" → \`action="backward"\`, "fly left" → \`action="left"\`, "fly right" → \`action="right"\`, "fly up" → \`action="up"\`, "fly down" → \`action="down"\`.`,
+                `Flying gripper translations support speed (slow, medium, fast) and distance (in meters or centimeters, e.g. "fly forward 10cm" → distance_m=0.1, "fly up 0.2m" → distance_m=0.2) or duration (e.g. "fly down for 2 seconds" → duration_ms=2000). Default is 1000ms at medium speed if neither distance nor duration is given.`,
+                `For roll, pitch, and yaw wrist adjustments, use direct wrist commands with \`${EXECUTE_JOINT_MOVE}\`: "roll left" / "roll right" → wrist_roll_left / wrist_roll_right; "tilt up" / "tilt down" → wrist_pitch_up / wrist_pitch_down; "turn left" / "turn right" → wrist_yaw_in / wrist_yaw_out. (Note: these currently operate in robot joint coordinates and may later be mapped to the camera frame).`,
             ].join(" "),
             tools: [
                 {
@@ -496,6 +511,65 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                         },
                         required: ["name"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: EXECUTE_FLYING_GRIPPER_MOVE,
+                    description:
+                        "Executes camera/tool-frame translation in flying gripper mode: forward, backward, left, right, up, down. Only use when user says 'fly ...'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: FLYING_GRIPPER_MOVE_ACTIONS,
+                                description:
+                                    "Tool/camera-frame translation direction: forward, backward, left, right, up, down.",
+                            },
+                            speed: {
+                                type: "string",
+                                enum: VOICE_SPEEDS,
+                                description: "Movement speed preset.",
+                                default: VOICE_SPEED_DEFAULT,
+                            },
+                            duration_ms: {
+                                type: "integer",
+                                description:
+                                    "Duration of movement in milliseconds (default 1000ms). Omit if distance_m is specified.",
+                                minimum: 100,
+                                maximum: 10000,
+                                default: 1000,
+                            },
+                            distance_m: {
+                                type: "number",
+                                description:
+                                    `Distance to travel in meters in camera/tool frame (${VOICE_DISTANCE_M_MIN} to 1.0 m). Omit if duration_ms is specified.`,
+                                minimum: VOICE_DISTANCE_M_MIN,
+                                maximum: 1.0,
+                            },
+                        },
+                        required: ["action"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: SET_FLYING_GRIPPER_MODE,
+                    description:
+                        "Open or close the Flying Gripper overlay on the Pilot screen. Use for requests like 'open flying gripper mode' or 'close flying gripper mode'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: FLYING_GRIPPER_MODE_ACTIONS,
+                                description:
+                                    "Whether to open or close the flying gripper overlay.",
+                            },
+                        },
+                        required: ["action"],
                         additionalProperties: false,
                     },
                 },

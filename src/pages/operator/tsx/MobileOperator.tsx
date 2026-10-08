@@ -59,9 +59,11 @@ import { useExclusiveModal } from "./react_hooks/useExclusiveModal";
 import type {
     ControlAutoNavAction,
     ControlAutoNavResult,
+    FlyingGripperModeAction,
     LoadAutoNavLocationResult,
     MainMenuAction,
     SavedLocationsModalAction,
+    SetFlyingGripperModeResult,
     SetMainMenuResult,
     SetSavedLocationsModalResult,
 } from "./voice/constants";
@@ -170,6 +172,29 @@ export const MobileOperator = (props: {
     const exitFlyingGripper = React.useCallback(
         () => setFlyingGripper(false),
         [setFlyingGripper],
+    );
+
+    const handleSetFlyingGripperMode = React.useCallback(
+        (action: FlyingGripperModeAction): SetFlyingGripperModeResult => {
+            if (action === "open") {
+                if (sceneSelectedRef.current !== "pilot-mode" || swipeableViewsIdx !== 0) {
+                    swipeableViewsIdxSet(0);
+                    setSceneSelected("pilot-mode");
+                }
+                setFlyingGripper(true);
+                return {
+                    ok: true,
+                    detail: "Opened Flying Gripper mode.",
+                };
+            } else {
+                setFlyingGripper(false);
+                return {
+                    ok: true,
+                    detail: "Closed Flying Gripper mode.",
+                };
+            }
+        },
+        [setFlyingGripper, swipeableViewsIdx],
     );
 
     // Leaving Pilot (scene or slide) always drops flying gripper so AutoNav
@@ -483,6 +508,8 @@ export const MobileOperator = (props: {
                         onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
                         onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
                         onLoadAutoNavLocation={handleLoadAutoNavLocation}
+                        onSetFlyingGripperMode={handleSetFlyingGripperMode}
+                        isFlyingGripperActive={isFlyingGripper}
                     />
                 </React.Suspense>
             ) : null}
