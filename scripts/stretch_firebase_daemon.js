@@ -349,6 +349,7 @@ async function handleLaunchCommand(requestedBy, mapId) {
         await refreshBranch();
         const effectiveMapId = mapId || (await readSavedMapId());
         console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}, map: ${effectiveMapId || 'none'}`);
+        await clearOperatorSeat();
         await clearLaunchLog();
         noteLaunchOutput(`[DAEMON] Launch requested by ${requestedBy}, map: ${effectiveMapId || 'none'}\n`);
         setStatus('launching');
@@ -433,7 +434,12 @@ async function handleLaunchCommand(requestedBy, mapId) {
 function clearOperatorSeat() {
     const uid = auth.currentUser && auth.currentUser.uid;
     if (!uid) return Promise.resolve();
-    return set(ref(db, `rooms/${uid}/operator`), { active: false }).catch((err) =>
+    // transport firebase and no sessionId: rules allow the robot to clear a
+    // firebase seat without taking a local lease.
+    return set(ref(db, `rooms/${uid}/operator`), {
+        active: false,
+        transport: "firebase",
+    }).catch((err) =>
         console.error('[DAEMON] Error clearing operator seat:', err.message),
     );
 }

@@ -198,6 +198,10 @@ export class WebRTCConnection extends React.Component {
         return this.signaler.join_as_operator();
     }
 
+    operatorJoinBlocked() {
+        return this.signaler.operatorJoinBlocked();
+    }
+
     addTrack(track: MediaStreamTrack, stream: MediaStream, streamName: string) {
         this.cameraInfo[stream.id] = streamName;
         if (!this.peerConnection) throw "pc is undefined";

@@ -16,6 +16,7 @@ import {
     waitUntil,
     WebRTCMessage
 } from "shared/util";
+import { OPERATOR_SEAT_STALE_MS } from "shared/signaling/operatorSeat";
 import { WebRTCConnection } from "shared/webrtcconnections";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
@@ -150,6 +151,7 @@ new Promise<void>(async (resolve) => {
     }
 
     let connected = false;
+    let occupiedSince: number | undefined;
     while (!connected) {
         connection.hangup();
 
@@ -157,9 +159,19 @@ new Promise<void>(async (resolve) => {
         let joinedRobotRoom = await connection.addOperatorToRobotRoom();
         if (!joinedRobotRoom) {
             console.log("Operator failed to join robot room");
+            if (connection.operatorJoinBlocked()) {
+                occupiedSince ??= Date.now();
+                if (Date.now() - occupiedSince > OPERATOR_SEAT_STALE_MS) {
+                    showOperatorSeatMessage("Someone else is operating");
+                    return;
+                }
+            } else {
+                occupiedSince = undefined;
+            }
             await delay(500);
             continue;
         }
+        occupiedSince = undefined;
 
         // Wait for WebRTC connection to resolve, timeout after 10 seconds
         let isResolved = await waitUntil(
@@ -391,6 +403,14 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
         default:
             return new LocalStorageHandler(storageHandlerReadyCallback);
     }
+}
+
+function showOperatorSeatMessage(message: string) {
+    const text = document.querySelector(".loading-text");
+    const paragraph = text?.querySelector("p");
+    if (paragraph) paragraph.textContent = message;
+    if (text) text.setAttribute("aria-hidden", "false");
+    document.querySelector(".loader")?.remove();
 }
 
 /**

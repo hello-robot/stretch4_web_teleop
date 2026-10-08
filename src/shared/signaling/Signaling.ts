@@ -41,4 +41,9 @@ export abstract class BaseSignaling {
      * Send offer and meta info to peer
      */
     public abstract send(signal: SignallingMessage): void;
+
+    /** True after a firebase join loses to a live operator seat. */
+    public operatorJoinBlocked(): boolean {
+        return false;
+    }
 }

@@ -1,4 +1,8 @@
 import { SignallingMessage } from "shared/util";
+import {
+    firebaseSeatHeldByOther,
+    OPERATOR_SEAT_HEARTBEAT_MS,
+} from "./operatorSeat";
 import { BaseSignaling, SignalingProps } from "./Signaling";
 import { initializeApp, FirebaseOptions } from "firebase/app";
 import { getAuth, onAuthStateChanged, Auth } from "firebase/auth";
@@ -54,6 +58,9 @@ export class FirebaseSignaling extends BaseSignaling {
     private is_joined: boolean;
     /** One browser tab. A second tab or preview channel gets a different id and is rejected. */
     private sessionId = crypto.randomUUID();
+    private seatBlocked = false;
+    private leaveEpoch = 0;
+    private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
     private get robot_key(): string {
         return (this.role === "robot" && this.robot_name) ? this.robot_name : this.uid;
@@ -101,6 +108,8 @@ export class FirebaseSignaling extends BaseSignaling {
                 update(ref(this.db, "robots/" + this.robot_key), {
                     status: "online",
                 });
+            } else {
+                this.leave();
             }
             this.onGoodbye();
             return;
@@ -274,6 +283,7 @@ export class FirebaseSignaling extends BaseSignaling {
                                                                 ? "Operator seat replaced by another session"
                                                                 : "Operator seat cleared",
                                                         );
+                                                        this.stopSeatHeartbeat();
                                                         onDisconnect(
                                                             ref(
                                                                 this.db,
@@ -283,6 +293,7 @@ export class FirebaseSignaling extends BaseSignaling {
                                                             ),
                                                         ).cancel();
                                                         this.is_joined = false;
+                                                        this.leaveEpoch += 1;
                                                         this.onGoodbye();
                                                     }
                                                 },
@@ -353,19 +364,58 @@ export class FirebaseSignaling extends BaseSignaling {
         });
     }
 
+    public operatorJoinBlocked(): boolean {
+        return this.seatBlocked;
+    }
+
+    private operatorRelease() {
+        return {
+            active: false,
+            transport: "firebase",
+            uid: this.uid,
+            alias: this.alias || this.uid,
+            sessionId: this.sessionId,
+            claimedAt: Date.now(),
+        };
+    }
+
+    private stopSeatHeartbeat() {
+        if (this.heartbeatTimer !== undefined) {
+            clearInterval(this.heartbeatTimer);
+            this.heartbeatTimer = undefined;
+        }
+    }
+
+    private startSeatHeartbeat() {
+        this.stopSeatHeartbeat();
+        this.heartbeatTimer = setInterval(() => {
+            if (!this.is_joined || this.role !== "operator" || !this.room_uid) {
+                return;
+            }
+            update(ref(this.db, "rooms/" + this.room_uid + "/operator"), {
+                claimedAt: Date.now(),
+            });
+        }, OPERATOR_SEAT_HEARTBEAT_MS);
+    }
+
     /**
-     * One operator for this robot, across every Hosting channel. A live seat
-     * (including one with no sessionId, from an older client) is left alone.
-     * onDisconnect still clears it when that tab actually drops.
+     * One live operator for this robot. The same account can replace its own
+     * firebase seat, and a firebase seat with no fresh claimedAt can be taken
+     * by anyone assigned to the robot. An active local seat stays exclusive.
      */
     private async claimOperatorSeat(): Promise<boolean> {
         const slotRef = ref(this.db, "rooms/" + this.room_uid + "/operator");
         const result = await runTransaction(slotRef, (current) => {
-            const heldByOther =
-                !!current &&
-                current.active === true &&
-                current.sessionId !== this.sessionId;
-            if (heldByOther) return;
+            if (
+                firebaseSeatHeldByOther(
+                    current,
+                    this.uid,
+                    this.sessionId,
+                    Date.now(),
+                )
+            ) {
+                return;
+            }
             return {
                 active: true,
                 transport: "firebase",
@@ -376,22 +426,20 @@ export class FirebaseSignaling extends BaseSignaling {
             };
         });
         if (!result.committed) {
+            this.seatBlocked = true;
             console.log("Another operator is already active");
             return false;
         }
-        onDisconnect(slotRef).set({
-            active: false,
-            transport: "firebase",
-            uid: this.uid,
-            alias: this.alias || this.uid,
-            sessionId: this.sessionId,
-            claimedAt: Date.now(),
-        });
+        this.seatBlocked = false;
+        onDisconnect(slotRef).set(this.operatorRelease());
+        this.leaveEpoch += 1;
         this.is_joined = true;
+        this.startSeatHeartbeat();
         return true;
     }
 
     public join_as_operator(): Promise<boolean> {
+        this.seatBlocked = false;
         return new Promise<boolean>((resolve) => {
             get(ref(this.db, "rooms/" + this.room_uid + "/robot/active"))
                 .then((snapshot) => {
@@ -400,7 +448,9 @@ export class FirebaseSignaling extends BaseSignaling {
                         resolve(false);
                         return;
                     }
-                    return this.claimOperatorSeat().then(resolve);
+                    return this.claimOperatorSeat().then((claimed) => {
+                        resolve(claimed);
+                    });
                 })
                 .catch((err) => {
                     console.error("FirebaseSignaling: operator join failed", err);
@@ -414,25 +464,33 @@ export class FirebaseSignaling extends BaseSignaling {
             return;
         }
         this.is_joined = false;
+        this.stopSeatHeartbeat();
+        const epoch = ++this.leaveEpoch;
         console.log(`Leaving. My role: ${this.role}.`);
         const slotRef = ref(
             this.db,
             "rooms/" + this.room_uid + "/" + this.role,
         );
-        onDisconnect(slotRef).cancel();
-        set(
-            slotRef,
+        const sessionId = this.sessionId;
+        const release =
             this.role === "operator"
-                ? {
-                      active: false,
-                      transport: "firebase",
-                      uid: this.uid,
-                      alias: this.alias || this.uid,
-                      sessionId: this.sessionId,
-                      claimedAt: Date.now(),
-                  }
-                : { active: false },
-        );
+                ? this.operatorRelease()
+                : { active: false };
+        // Keep onDisconnect armed until the release lands. A tab close often
+        // dies before this write finishes; the queued disconnect still clears us.
+        runTransaction(slotRef, (current) => {
+            if (this.leaveEpoch !== epoch || this.is_joined) return;
+            if (this.role === "operator") {
+                if (!current || current.sessionId !== sessionId) return;
+            }
+            return release;
+        }).then((result) => {
+            if (result.committed && this.leaveEpoch === epoch && !this.is_joined) {
+                onDisconnect(slotRef).cancel();
+            }
+        }).catch((err) => {
+            console.error("FirebaseSignaling: leave failed", err);
+        });
         if (this.role === "robot") {
             update(ref(this.db, "robots/" + this.robot_key), {
                 status: "offline",
