@@ -64,6 +64,9 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FEATURE_LOCAL_COLLISION_AVOIDANCE="$(node "$REPO_DIR/feature-flags.js" local_collision_avoidance)" || exit 1
 export FEATURE_LOCAL_COLLISION_AVOIDANCE
 
+FEATURE_EE_VELOCITY_LIMITER="$(node "$REPO_DIR/feature-flags.js" ee_velocity_limiter)" || exit 1
+export FEATURE_EE_VELOCITY_LIMITER
+
 LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
 echo "Start ROS2..."
 echo "ROS2 launch output: $LAUNCH_LOGFILE"

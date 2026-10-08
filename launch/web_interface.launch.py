@@ -31,6 +31,8 @@ from launch.substitutions import (
     PythonExpression,
 )
 
+INCLUDED = ("1", "true", "yes", "on")
+
 
 def symlinks_to_has_head_cams():
     usb_device_seen = {
@@ -318,7 +320,7 @@ def generate_launch_description():
                     EnvironmentVariable(
                         "FEATURE_LOCAL_COLLISION_AVOIDANCE", default_value="0"
                     ),
-                    "'.lower() in ('1', 'true', 'yes', 'on')",
+                    f"'.lower() in {INCLUDED}",
                 ]
             )
         ),
@@ -365,7 +367,14 @@ def generate_launch_description():
     )
     ld.add_action(aruco_localization_node)
 
-    # velocity limiter
+    # Velocity limiter
+    use_ee_velocity_limiter_arg = DeclareLaunchArgument(
+        "use_ee_velocity_limiter",
+        default_value=EnvironmentVariable(
+            "FEATURE_EE_VELOCITY_LIMITER", default_value="1"
+        ),
+        description="Route motion through the end-effector velocity limiter",
+    )
     max_ee_speed_arg = DeclareLaunchArgument(
         "max_ee_speed",
         default_value="0.2",  # m/s
@@ -376,18 +385,22 @@ def generate_launch_description():
         default_value="tool_attachment_site_link",
         description="End-effector target frame for velocity calculation",
     )
+    ld.add_action(use_ee_velocity_limiter_arg)
+    ld.add_action(max_ee_speed_arg)
+    ld.add_action(target_frame_arg)
 
     # When map_yaml is provided, navigation is active with collision_monitor listening
-    # on /cmd_vel_nav. In this case, velocity_limiter routes base moves to /cmd_vel_nav.
-    # When map_yaml is empty, navigation is inactive and velocity_limiter routes directly
-    # to /cmd_vel (stretch_driver).
-    # NOTE: If navigation dynamic toggling at runtime is added in the future,
-    # velocity_limiter's output topic would need to be reconfigurable dynamically.
-    safety_filter_output_cmd_vel = PythonExpression(
+    # on /cmd_vel_nav. In addition, when map_yaml is empty, standalone_collision_monitor_launch
+    # runs if FEATURE_LOCAL_COLLISION_AVOIDANCE is enabled, which also listens on /cmd_vel_nav.
+    # In both cases, downstream base motion must target /cmd_vel_nav so obstacle stopping is enforced.
+    # Otherwise, base motion targets /cmd_vel (stretch_driver direct).
+    downstream_base_topic = PythonExpression(
         [
-            "'/cmd_vel_nav' if '",
+            "'/cmd_vel_nav' if ('",
             LaunchConfiguration("map_yaml"),
-            "' != '' else '/cmd_vel'",
+            "' != '' or '",
+            EnvironmentVariable("FEATURE_LOCAL_COLLISION_AVOIDANCE", default_value="0"),
+            f"'.lower() in {INCLUDED}) else '/cmd_vel'",
         ]
     )
 
@@ -396,12 +409,21 @@ def generate_launch_description():
         executable="velocity_limiter",
         name="ee_velocity_safety_filter",
         output="screen",
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    LaunchConfiguration("use_ee_velocity_limiter"),
+                    f"'.lower() in {INCLUDED}",
+                ]
+            )
+        ),
         parameters=[
             {
                 "max_ee_speed": LaunchConfiguration("max_ee_speed"),
                 "target_frame": LaunchConfiguration("target_frame"),
                 "input_cmd_vel_topic": "/teleop/cmd_vel",
-                "output_cmd_vel_topic": safety_filter_output_cmd_vel,
+                "output_cmd_vel_topic": downstream_base_topic,
                 "input_cmd_vel_nav_topic": "/cmd_vel_nav_raw",
                 "output_cmd_vel_nav_topic": "/cmd_vel_nav",
                 "input_joint_vel_topic": "/teleop/joint_vel",
@@ -410,15 +432,28 @@ def generate_launch_description():
             }
         ],
     )
-    ld.add_action(max_ee_speed_arg)
-    ld.add_action(target_frame_arg)
     ld.add_action(safety_filter_node)
 
-    # Task space controller node
-    # publish_base_and_arm_separately=False sends unified full-body 8-DOF JointJog
-    # commands to /teleop/joint_vel. This ensures velocity_limiter scales both base
-    # rotation and wrist yaw with the identical scalar gain, preventing yaw drift
-    # during low-speed Cartesian tool movements.
+    # Task space controller node (converts /ee_cmd_vel into base and arm commands)
+    # When velocity limiter is enabled, commands route through /teleop/* topics.
+    # When disabled, commands route directly to downstream base topic and /joint_vel.
+    tsc_cmd_vel_topic = PythonExpression(
+        [
+            "'/teleop/cmd_vel' if '",
+            LaunchConfiguration("use_ee_velocity_limiter"),
+            f"'.lower() in {INCLUDED} else '",
+            downstream_base_topic,
+            "'",
+        ]
+    )
+    tsc_joint_vel_topic = PythonExpression(
+        [
+            "'/teleop/joint_vel' if '",
+            LaunchConfiguration("use_ee_velocity_limiter"),
+            f"'.lower() in {INCLUDED} else '/joint_vel'",
+        ]
+    )
+
     task_space_controller_node = Node(
         package="stretch_kinematics",
         executable="task_space_controller",
@@ -428,9 +463,8 @@ def generate_launch_description():
             {"target_frame": "tool_attachment_site_link"},
             {"control_rate": 15.0},
             {"watchdog_timeout": 0.4},
-            {"publish_base_and_arm_separately": False},
-            {"cmd_vel_topic": "/teleop/cmd_vel"},
-            {"joint_vel_topic": "/teleop/joint_vel"},
+            {"cmd_vel_topic": tsc_cmd_vel_topic},
+            {"joint_vel_topic": tsc_joint_vel_topic},
         ],
     )
     ld.add_action(task_space_controller_node)

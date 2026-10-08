@@ -10,5 +10,9 @@
     "local_collision_avoidance": {
         "enabled": true,
         "description": "Toggles collision monitoring when the interface is launched without a map. Ignored when a map is loaded."
+    },
+    "ee_velocity_limiter": {
+        "enabled": true,
+        "description": "Enforces spatial Cartesian velocity limits on the end-effector by filtering teleop and task space controller velocity commands."
     }
 }
