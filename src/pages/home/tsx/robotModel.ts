@@ -30,6 +30,7 @@ export type MapIndex = Record<string, MapRecord>;
 export interface OperatorSeat {
     uid: string;
     initials?: string;
+    email?: string;
 }
 
 export const holdsOperatorSeat = (

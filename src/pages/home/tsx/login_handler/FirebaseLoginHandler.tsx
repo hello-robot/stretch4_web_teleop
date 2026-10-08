@@ -102,6 +102,10 @@ export class FirebaseLoginHandler extends LoginHandler {
                 initials: occupantAlias
                     ? aliasInitials(occupantAlias)
                     : undefined,
+                email:
+                    typeof seat.email === "string" && seat.email.length > 0
+                        ? seat.email
+                        : undefined,
             });
         });
         return stopSeat;

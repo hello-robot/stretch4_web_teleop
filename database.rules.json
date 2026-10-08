@@ -140,6 +140,9 @@
           "claimedAt": {
             ".validate": "newData.isNumber()"
           },
+          "email": {
+            ".validate": "newData.isString()"
+          },
           "candidate": {
             ".validate": true
           },

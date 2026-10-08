@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { markOperatorTakeover } from "shared/signaling/operatorSeat";
+import { gravatarUrl } from "../gravatar";
 import { loginHandler } from "../index";
 import {
     holdsOperatorSeat,
@@ -59,6 +60,48 @@ const treatmentFor = (
     if (status === "occupied" && !(seat && visitorKnown)) return "pending";
     if (status === "online" || status === "occupied") return "end";
     return "offline";
+};
+
+const OccupantFace = ({ email }: { email?: string }) => {
+    const [photo, photoSet] = useState<string | null>(null);
+    const [photoReady, photoReadySet] = useState(false);
+
+    useEffect(() => {
+        photoSet(null);
+        photoReadySet(false);
+        if (!email) return;
+        let cancelled = false;
+        gravatarUrl(email, 44).then((url) => {
+            if (!cancelled) photoSet(url);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [email]);
+
+    return (
+        <span className="hr-button__face hr-button__occupant">
+            {photo ? (
+                <img
+                    className="hr-button__occupant-photo"
+                    alt=""
+                    src={photo}
+                    hidden={!photoReady}
+                    onLoad={() => photoReadySet(true)}
+                    onError={() => {
+                        photoSet(null);
+                        photoReadySet(false);
+                    }}
+                />
+            ) : null}
+            <span className="hr-button__occupant-copy">
+                <span className="hr-button__occupant-label">Currently in Use</span>
+                {email && !photoReady ? (
+                    <span className="hr-button__occupant-email">{email}</span>
+                ) : null}
+            </span>
+        </span>
+    );
 };
 
 const formatElapsed = (totalSeconds: number): string => {
@@ -190,6 +233,7 @@ export const TeleopButton = ({
                     window.location.assign(operatorHref);
                 },
                 launchReady,
+                seat?.email,
             )}
         </div>
     );
@@ -203,6 +247,7 @@ const controlFor = (
     onEnter: () => void,
     onTakeover: () => void,
     launchReady: boolean,
+    occupantEmail?: string,
 ) => {
     if (treatment === "standby") {
         return (
@@ -305,15 +350,16 @@ const controlFor = (
         );
     }
     if (treatment === "in-use") {
+        const label = occupantEmail
+            ? `Currently in Use, ${occupantEmail}`
+            : "Currently in Use";
         return (
             <div
-                className="hr-button hr-button--dim hr-button--progress"
+                className="hr-button hr-button--dim hr-button--progress hr-button--in-use"
                 role="status"
-                aria-label="Currently in Use"
+                aria-label={label}
             >
-                <span className="hr-button__face">
-                    Currently in Use
-                </span>
+                <OccupantFace email={occupantEmail} />
             </div>
         );
     }

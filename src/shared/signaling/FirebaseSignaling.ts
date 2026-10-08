@@ -433,6 +433,7 @@ export class FirebaseSignaling extends BaseSignaling {
             ) {
                 return;
             }
+            const email = this.auth.currentUser?.email || undefined;
             return {
                 active: true,
                 transport: "firebase",
@@ -440,6 +441,7 @@ export class FirebaseSignaling extends BaseSignaling {
                 alias: this.alias || this.uid || null,
                 sessionId: this.sessionId,
                 claimedAt: Date.now(),
+                ...(email ? { email } : {}),
             };
         });
         if (!result.committed) {

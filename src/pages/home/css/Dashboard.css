@@ -527,6 +527,47 @@
     gap: 6px;
 }
 
+.hr-button--in-use {
+    height: 37px;
+    overflow: hidden;
+    padding: 4px 10px;
+}
+
+.hr-button__occupant {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.hr-button__occupant-photo {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+}
+
+.hr-button__occupant-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    line-height: 1.05;
+}
+
+.hr-button__occupant-label {
+    white-space: nowrap;
+}
+
+.hr-button__occupant-email {
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.1;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity: 0.8;
+}
+
 .hr-teleop__logs {
     display: flex;
     justify-content: flex-end;
