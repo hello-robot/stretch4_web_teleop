@@ -96,7 +96,7 @@ const OccupantFace = ({ email }: { email?: string }) => {
             ) : null}
             <span className="hr-button__occupant-copy">
                 <span className="hr-button__occupant-label">Currently in Use</span>
-                {email && !photoReady ? (
+                {email ? (
                     <span className="hr-button__occupant-email">{email}</span>
                 ) : null}
             </span>

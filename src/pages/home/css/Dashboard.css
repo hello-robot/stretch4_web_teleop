@@ -528,9 +528,13 @@
 }
 
 .hr-button--in-use {
-    height: 37px;
+    /* Taller than the 37px controls so the email fits under the label.
+       The negative margin gives that extra height back to the gap above,
+       so the card itself stays the same height. */
+    height: 49px;
+    margin-top: -12px;
     overflow: hidden;
-    padding: 4px 10px;
+    padding: 6px 12px;
 }
 
 .hr-button__occupant {
