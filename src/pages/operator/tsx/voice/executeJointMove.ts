@@ -54,7 +54,7 @@ type JointActionMeta = {
  * Velocity magnitudes come from `JOINT_VELOCITIES` in shared/util.tsx:
  *   lift_joint: 0.04 m/s  |  arm_joint: 0.04 m/s
  *   wrist_roll_joint: 0.1 rad/s  |  wrist_pitch_joint: 0.1 rad/s  |  wrist_yaw_joint: 0.4 rad/s
- *   stretch_gripper_joint: not in JOINT_VELOCITIES → falls back to GRIPPER_FALLBACK_VEL
+ *   gripper_joint: from the driver's joint_velocity.gripper; GRIPPER_FALLBACK_VEL if unset
  */
 const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     // Lift (m) — ArmLower is in negativeButtonPadFunctions
@@ -73,15 +73,15 @@ const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     wrist_yaw_in: { jointName: "wrist_yaw_joint", sign: 1, unit: "rad" },
     wrist_yaw_out: { jointName: "wrist_yaw_joint", sign: -1, unit: "rad" },
     // Gripper (duration-only) — GripperClose is in negativeButtonPadFunctions
-    gripper_open: { jointName: "stretch_gripper_joint", sign: 1, unit: "duration" },
-    gripper_close: { jointName: "stretch_gripper_joint", sign: -1, unit: "duration" },
+    gripper_open: { jointName: "gripper_joint", sign: 1, unit: "duration" },
+    gripper_close: { jointName: "gripper_joint", sign: -1, unit: "duration" },
 };
 
 // ── Validation sets ───────────────────────────────────────────────────────────
 
 const VALID_JOINT_ACTIONS = new Set<string>(JOINT_MOVE_ACTIONS);
 
-/** stretch_gripper_joint is not in JOINT_VELOCITIES; use this fallback. */
+/** Velocity used when JOINT_VELOCITIES has no entry for the joint. */
 const GRIPPER_FALLBACK_VEL = 0.1;
 
 // ── Concrete executor class ───────────────────────────────────────────────────

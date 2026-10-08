@@ -4,7 +4,6 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import chevronIcon from "operator/icons/Chevron.svg";
 import gripperOpenIcon from "operator/icons/GripperOpen.svg";
 import gripperCloseIcon from "operator/icons/GripperClose.svg";
-import { StretchTool } from "shared/util";
 import { flyingGripperFunctionProvider } from "operator/tsx/index";
 import {
     FlyingGripperButton,
@@ -183,10 +182,9 @@ const FlyingGripperPad: React.FC<FlyingGripperPadProps> = ({
     sharedState,
 }) => {
     const robotIsHomed = sharedState?.robotIsHomed ?? true;
-    const stretchTool = sharedState?.stretchTool;
     const motionDisabled = !robotIsHomed;
     const gripperDisabled =
-        motionDisabled || stretchTool !== StretchTool.DW4;
+        motionDisabled || sharedState?.toolMetadata?.isActuated === false;
 
     return (
         <div

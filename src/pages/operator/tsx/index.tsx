@@ -300,6 +300,7 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             break;
         case "odom":
             remoteRobot.sensors.setOdom(message.message);
+            break;
         case "jointVelocityLimits":
             updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
             break;

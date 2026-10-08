@@ -35,7 +35,7 @@ const TRANSLATION: Record<
     [FlyingGripperButton.GripperClose]: undefined,
 };
 
-const GRIPPER_JOINT = "stretch_gripper_joint" as const;
+const GRIPPER_JOINT = "gripper_joint" as const;
 
 /**
  * Flying-gripper pad: six tool-frame translations plus gripper open/close.
