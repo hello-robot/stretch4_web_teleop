@@ -16,7 +16,10 @@ import {
     waitUntil,
     WebRTCMessage
 } from "shared/util";
-import { OPERATOR_SEAT_STALE_MS } from "shared/signaling/operatorSeat";
+import {
+    consumeOperatorTakeover,
+    OPERATOR_SEAT_STALE_MS,
+} from "shared/signaling/operatorSeat";
 import { WebRTCConnection } from "shared/webrtcconnections";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
@@ -55,6 +58,7 @@ export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
 export let loginHandler: LoginHandler;
 let room_name: string | null = null;
+let yieldedToOtherTab = false;
 
 /** True when all WebRTC occupancy-grid chunks have been reassembled. */
 export function isOccupancyGridComplete(
@@ -123,6 +127,13 @@ connection = new WebRTCConnection({
     onTrackAdded: handleRemoteTrackAdded,
     onMessageChannelOpen: configureRemoteRobot,
     onConnectionEnd: disconnectFromRobot,
+    onOperatorDisplaced: () => {
+        yieldedToOtherTab = true;
+        showOperatorSeatNotice(
+            "This account is already operating from another tab.",
+        );
+        connection.hangup();
+    },
 });
 
 loginHandler = createLoginHandler(() => {
@@ -150,19 +161,37 @@ new Promise<void>(async (resolve) => {
         return;
     }
 
+    if (consumeOperatorTakeover()) connection.requestOperatorTakeover();
+
     let connected = false;
     let occupiedSince: number | undefined;
+    let waitingOnSameAccount = false;
     while (!connected) {
-        connection.hangup();
+        if (!waitingOnSameAccount) connection.hangup();
 
         // Attempt to join robot room
         let joinedRobotRoom = await connection.addOperatorToRobotRoom();
         if (!joinedRobotRoom) {
+            const block = connection.operatorJoinBlock();
+            if (block === "same-account") {
+                if (!waitingOnSameAccount) {
+                    console.log("Operator seat is in use in another tab");
+                    showOperatorSeatNotice(
+                        "Your account is teleoperating this robot from another browser tab.",
+                    );
+                }
+                waitingOnSameAccount = true;
+                await delay(2000);
+                continue;
+            }
+            waitingOnSameAccount = false;
             console.log("Operator failed to join robot room");
-            if (connection.operatorJoinBlocked()) {
+            if (block === "other") {
                 occupiedSince ??= Date.now();
                 if (Date.now() - occupiedSince > OPERATOR_SEAT_STALE_MS) {
-                    showOperatorSeatMessage("Someone else is operating");
+                    showOperatorSeatNotice(
+                        "Another account is teleoperating this robot.",
+                    );
                     return;
                 }
             } else {
@@ -171,6 +200,7 @@ new Promise<void>(async (resolve) => {
             await delay(500);
             continue;
         }
+        waitingOnSameAccount = false;
         occupiedSince = undefined;
 
         // Wait for WebRTC connection to resolve, timeout after 10 seconds
@@ -405,12 +435,35 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
     }
 }
 
-function showOperatorSeatMessage(message: string) {
-    const text = document.querySelector(".loading-text");
-    const paragraph = text?.querySelector("p");
-    if (paragraph) paragraph.textContent = message;
-    if (text) text.setAttribute("aria-hidden", "false");
+function showOperatorSeatNotice(detail: string) {
+    document.querySelector(".loader-background")?.remove();
     document.querySelector(".loader")?.remove();
+    document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+    const host = document.getElementById("root");
+    if (!host) return;
+    host.replaceChildren();
+
+    const kicker = document.createElement("p");
+    kicker.className = "op-seat-notice__kicker";
+    kicker.textContent = "hello robot";
+
+    const body = document.createElement("p");
+    body.className = "op-seat-notice__detail";
+    body.textContent = detail;
+
+    const back = document.createElement("a");
+    back.className = "op-seat-notice__button";
+    back.href = "/";
+    back.textContent = "←  Home";
+
+    const card = document.createElement("div");
+    card.className = "op-seat-notice__card";
+    card.append(kicker, body, back);
+
+    const notice = document.createElement("div");
+    notice.className = "op-seat-notice";
+    notice.append(card);
+    host.append(notice);
 }
 
 /**
@@ -434,6 +487,12 @@ function initConnectionStateCheck() {
     loaderText.appendChild(text);
 
     setInterval(async () => {
+        if (yieldedToOtherTab) {
+            document.querySelector(".loader-background")?.remove();
+            document.querySelector(".loader")?.remove();
+            document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+            return;
+        }
         let connected = await connection.isConnected();
         if (!connected && !window.document.body.contains(loader)) {
             window.document.body.appendChild(loaderText);

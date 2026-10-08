@@ -3,6 +3,7 @@ import { SignallingMessage } from "shared/util";
 export interface SignalingProps {
     onSignal: (SignallingMessage) => void;
     onGoodbye?: () => void;
+    onOperatorDisplaced?: () => void;
     onRobotConnectionStart?: () => void;
     role?: string;
 }
@@ -10,12 +11,14 @@ export interface SignalingProps {
 export abstract class BaseSignaling {
     public onSignal: (SignallingMessage) => void;
     public onGoodbye?: () => void;
+    public onOperatorDisplaced?: () => void;
     public onRobotConnectionStart?: () => void;
     public initialRole?: string;
 
     constructor(props: SignalingProps) {
         this.onSignal = props.onSignal;
         this.onGoodbye = props.onGoodbye;
+        this.onOperatorDisplaced = props.onOperatorDisplaced;
         this.onRobotConnectionStart = props.onRobotConnectionStart;
         this.initialRole = props.role;
     }
@@ -46,4 +49,12 @@ export abstract class BaseSignaling {
     public operatorJoinBlocked(): boolean {
         return false;
     }
+
+    /** Same-account means another tab of this user holds a fresh seat. */
+    public operatorJoinBlock(): "same-account" | "other" | null {
+        return null;
+    }
+
+    /** Allow this page to replace a fresh seat held by the same account. */
+    public requestOperatorTakeover(): void {}
 }

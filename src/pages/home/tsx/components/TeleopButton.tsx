@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { markOperatorTakeover } from "shared/signaling/operatorSeat";
 import { loginHandler } from "../index";
 import {
     holdsOperatorSeat,
@@ -15,7 +16,10 @@ type Treatment =
     | "pending"
     | "ending"
     | "end"
+    | "takeover"
     | "in-use";
+
+const launchOwnerKey = (operatorHref: string) => `hr-launch-owner:${operatorHref}`;
 
 const treatmentFor = (
     status: RobotStatus,
@@ -24,6 +28,7 @@ const treatmentFor = (
     heldByMe: boolean,
     beat: boolean,
     manualLaunch: boolean,
+    launchedHere: boolean,
 ): Treatment => {
     if (
         manualLaunch &&
@@ -32,6 +37,19 @@ const treatmentFor = (
             (status === "occupied" && heldByMe))
     ) {
         return "manual";
+    }
+    if (!launchedHere) {
+        if ((status === "online" || status === "occupied") && seat && !heldByMe) {
+            return "in-use";
+        }
+        if (status === "occupied" && !(seat && visitorKnown)) return "pending";
+        if (
+            status === "launching" ||
+            beat ||
+            ((status === "online" || status === "occupied") && heldByMe)
+        ) {
+            return "takeover";
+        }
     }
     if (status === "offline") return "offline";
     if (status === "standby") return "standby";
@@ -76,14 +94,23 @@ export const TeleopButton = ({
     onLaunch,
     onStop,
 }: TeleopButtonProps) => {
+    const ownerKey = launchOwnerKey(operatorHref);
+    const [launchedHere, launchedHereSet] = useState(
+        () => sessionStorage.getItem(ownerKey) === "1",
+    );
     useEffect(() => {
-        if (manualLaunch) return;
+        if (status !== "standby" && status !== "offline") return;
+        sessionStorage.removeItem(ownerKey);
+        launchedHereSet(false);
+    }, [ownerKey, status]);
+    useEffect(() => {
+        if (!launchedHere || manualLaunch) return;
         if (status !== "online" || beatUntil <= Date.now()) return;
         const timer = window.setTimeout(() => {
             window.location.assign(operatorHref);
-        }, beatUntil - Date.now());
+        }, Math.max(0, beatUntil - Date.now()));
         return () => window.clearTimeout(timer);
-    }, [beatUntil, manualLaunch, operatorHref, status]);
+    }, [beatUntil, launchedHere, manualLaunch, operatorHref, status]);
 
     const visitorUid = loginHandler.getUserUid();
     const heldByMe = holdsOperatorSeat(seat, visitorUid);
@@ -94,6 +121,7 @@ export const TeleopButton = ({
         heldByMe,
         beat,
         manualLaunch,
+        launchedHere,
     );
     const [elapsedSec, elapsedSecSet] = useState(0);
     const [ending, endingSet] = useState(false);
@@ -150,9 +178,17 @@ export const TeleopButton = ({
             {controlFor(
                 shown,
                 formatElapsed(elapsedSec),
-                onLaunch,
+                () => {
+                    sessionStorage.setItem(ownerKey, "1");
+                    launchedHereSet(true);
+                    onLaunch();
+                },
                 stop,
                 () => window.location.assign(operatorHref),
+                () => {
+                    markOperatorTakeover();
+                    window.location.assign(operatorHref);
+                },
                 launchReady,
             )}
         </div>
@@ -165,6 +201,7 @@ const controlFor = (
     onLaunch: () => void,
     onStop: () => void,
     onEnter: () => void,
+    onTakeover: () => void,
     launchReady: boolean,
 ) => {
     if (treatment === "standby") {
@@ -247,6 +284,13 @@ const controlFor = (
                         <span className="hr-button__ellipsis" aria-hidden="true" />
                     </span>
                 </span>
+            </button>
+        );
+    }
+    if (treatment === "takeover") {
+        return (
+            <button className="hr-button hr-button--primary" type="button" onClick={onTakeover}>
+                Launch
             </button>
         );
     }

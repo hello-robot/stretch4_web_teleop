@@ -1,7 +1,9 @@
 import { SignallingMessage } from "shared/util";
 import {
+    firebaseSeatBlock,
     firebaseSeatHeldByOther,
     OPERATOR_SEAT_HEARTBEAT_MS,
+    OperatorSeatBlock,
 } from "./operatorSeat";
 import { BaseSignaling, SignalingProps } from "./Signaling";
 import { initializeApp, FirebaseOptions } from "firebase/app";
@@ -58,7 +60,9 @@ export class FirebaseSignaling extends BaseSignaling {
     private is_joined: boolean;
     /** One browser tab. A second tab or preview channel gets a different id and is rejected. */
     private sessionId = crypto.randomUUID();
-    private seatBlocked = false;
+    private seatBlock: OperatorSeatBlock | null = null;
+    /** Set when this tab explicitly chose Launch to replace its other session. */
+    private takeover = false;
     private leaveEpoch = 0;
     private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -294,7 +298,11 @@ export class FirebaseSignaling extends BaseSignaling {
                                                         ).cancel();
                                                         this.is_joined = false;
                                                         this.leaveEpoch += 1;
-                                                        this.onGoodbye();
+                                                        if (displaced && this.onOperatorDisplaced) {
+                                                            this.onOperatorDisplaced();
+                                                        } else {
+                                                            this.onGoodbye();
+                                                        }
                                                     }
                                                 },
                                             );
@@ -365,7 +373,15 @@ export class FirebaseSignaling extends BaseSignaling {
     }
 
     public operatorJoinBlocked(): boolean {
-        return this.seatBlocked;
+        return this.seatBlock !== null;
+    }
+
+    public operatorJoinBlock(): OperatorSeatBlock | null {
+        return this.seatBlock;
+    }
+
+    public requestOperatorTakeover(): void {
+        this.takeover = true;
     }
 
     private operatorRelease() {
@@ -399,9 +415,9 @@ export class FirebaseSignaling extends BaseSignaling {
     }
 
     /**
-     * One live operator for this robot. The same account can replace its own
-     * firebase seat, and a firebase seat with no fresh claimedAt can be taken
-     * by anyone assigned to the robot. An active local seat stays exclusive.
+     * One live operator for this robot. A fresh firebase seat stays exclusive
+     * even for the same account. A missing or stale claimedAt can be taken by
+     * anyone assigned to the robot. An active local seat stays exclusive.
      */
     private async claimOperatorSeat(): Promise<boolean> {
         const slotRef = ref(this.db, "rooms/" + this.room_uid + "/operator");
@@ -412,6 +428,7 @@ export class FirebaseSignaling extends BaseSignaling {
                     this.uid,
                     this.sessionId,
                     Date.now(),
+                    this.takeover,
                 )
             ) {
                 return;
@@ -426,11 +443,20 @@ export class FirebaseSignaling extends BaseSignaling {
             };
         });
         if (!result.committed) {
-            this.seatBlocked = true;
-            console.log("Another operator is already active");
+            const block = firebaseSeatBlock(
+                result.snapshot.val(),
+                this.uid,
+                this.sessionId,
+                Date.now(),
+                this.takeover,
+            );
+            this.seatBlock = block ?? "other";
+            if (this.seatBlock !== "same-account") {
+                console.log("Another operator is already active");
+            }
             return false;
         }
-        this.seatBlocked = false;
+        this.seatBlock = null;
         onDisconnect(slotRef).set(this.operatorRelease());
         this.leaveEpoch += 1;
         this.is_joined = true;
@@ -439,7 +465,7 @@ export class FirebaseSignaling extends BaseSignaling {
     }
 
     public join_as_operator(): Promise<boolean> {
-        this.seatBlocked = false;
+        this.seatBlock = null;
         return new Promise<boolean>((resolve) => {
             get(ref(this.db, "rooms/" + this.room_uid + "/robot/active"))
                 .then((snapshot) => {
