@@ -391,20 +391,6 @@ def generate_launch_description():
         ]
     )
 
-    # When map_yaml is provided, navigation is active with collision_monitor listening
-    # on /cmd_vel_nav. In this case, velocity_limiter routes base moves to /cmd_vel_nav.
-    # When map_yaml is empty, navigation is inactive and velocity_limiter routes directly
-    # to /cmd_vel (stretch_driver).
-    # NOTE: If navigation dynamic toggling at runtime is added in the future,
-    # velocity_limiter's output topic would need to be reconfigurable dynamically.
-    safety_filter_output_cmd_vel = PythonExpression(
-        [
-            "'/cmd_vel_nav' if '",
-            LaunchConfiguration("map_yaml"),
-            "' != '' else '/cmd_vel'",
-        ]
-    )
-
     safety_filter_node = Node(
         package="stretch_kinematics",
         executable="velocity_limiter",
@@ -424,7 +410,7 @@ def generate_launch_description():
                 "max_ee_speed": LaunchConfiguration("max_ee_speed"),
                 "target_frame": LaunchConfiguration("target_frame"),
                 "input_cmd_vel_topic": "/teleop/cmd_vel",
-                "output_cmd_vel_topic": safety_filter_output_cmd_vel,
+                "output_cmd_vel_topic": downstream_base_topic,
                 "input_cmd_vel_nav_topic": "/cmd_vel_nav_raw",
                 "output_cmd_vel_nav_topic": "/cmd_vel_nav",
                 "input_joint_vel_topic": "/teleop/joint_vel",
@@ -469,9 +455,8 @@ def generate_launch_description():
             {"target_frame": "tool_attachment_site_link"},
             {"control_rate": 15.0},
             {"watchdog_timeout": 0.4},
-            {"publish_base_and_arm_separately": False},
-            {"cmd_vel_topic": "/teleop/cmd_vel"},
-            {"joint_vel_topic": "/teleop/joint_vel"},
+            {"cmd_vel_topic": tsc_cmd_vel_topic},
+            {"joint_vel_topic": tsc_joint_vel_topic},
         ],
     )
     ld.add_action(task_space_controller_node)
