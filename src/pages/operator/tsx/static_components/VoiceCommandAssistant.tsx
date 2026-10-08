@@ -22,6 +22,7 @@ import {
 } from "../voice/voiceStatusStore";
 import { registerVoiceMicRecover } from "../voice/voiceMicRecoverBridge";
 import { emitVoiceAssistantLog } from "../voice/voiceInteractionEmitter";
+import { requestVoiceTokenViaRobot } from "../voice/voiceTokenRelay";
 import { getOperatorVoiceSessionToken } from "shared/operatorVoiceSession";
 import {
     isVoiceToolLogLine,
@@ -57,8 +58,11 @@ const SCENE_TOAST_LABELS: Record<VoiceSceneName, string> = {
     autonav: "Switching to AutoNav",
 };
 
-/** Explicit check to make sure operator is using
- * LAN/ngrok (LocalStorage + socket.io) and not cloud (Firebase) */
+/**
+ * Firebase (cloud) operators have no socket.io voice session token; the robot
+ * browser mints OpenAI credentials and relays them over the data channel.
+ * LAN/ngrok (LocalStorage + socket.io) operators mint from the server directly.
+ */
 const isFirebaseStorage = process.env.storage === "firebase";
 
 /** Product default; "direct" remains available for future user preferences. */
@@ -113,19 +117,18 @@ export const VoiceCommandAssistant = ({
     const [phase, phaseSet] = useState<
         "idle" | "connecting" | "live" | "error"
     >("idle");
-    const [voiceSessionReady, voiceSessionReadySet] = useState(() =>
-        Boolean(getOperatorVoiceSessionToken()),
+    const [voiceSessionReady, voiceSessionReadySet] = useState(
+        () => isFirebaseStorage || Boolean(getOperatorVoiceSessionToken()),
     );
     const [robotOk, robotOkSet] = useState(() =>
         FunctionProvider.robotIsConnected(),
     );
 
     useEffect(() => {
-        if (isFirebaseStorage) {
-            return;
-        }
         const id = window.setInterval(() => {
-            voiceSessionReadySet(Boolean(getOperatorVoiceSessionToken()));
+            voiceSessionReadySet(
+                isFirebaseStorage || Boolean(getOperatorVoiceSessionToken()),
+            );
             robotOkSet(FunctionProvider.robotIsConnected());
         }, 500);
         return () => window.clearInterval(id);
@@ -330,6 +333,9 @@ export const VoiceCommandAssistant = ({
             phaseSet("connecting");
             const s = await connectOpenAIRealtimeVoice({
                 voiceProvider: buttonFunctionProvider,
+                mintCredential: isFirebaseStorage
+                    ? requestVoiceTokenViaRobot
+                    : undefined,
                 voiceMoveExecutionMode: VOICE_MOVE_EXECUTION_MODE,
                 onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
@@ -422,8 +428,7 @@ export const VoiceCommandAssistant = ({
         handleLoadAutoNavLocation,
     ]);
 
-    const canConnectVoice =
-        !isFirebaseStorage && robotOk && voiceSessionReady;
+    const canConnectVoice = robotOk && voiceSessionReady;
 
     useEffect(() => {
         if (

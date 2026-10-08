@@ -3,36 +3,51 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 const dotenv = require("dotenv");
 const { envVarName, loadFeatures } = require("./feature-flags");
+const {
+    webpackPublicEnvDefinitions,
+} = require("./scripts/webpackPublicEnv");
 
 const pages = ["robot", "operator", "home"];
 
-// call dotenv and it will return an Object with a parsed key
-const env = dotenv.config().parsed;
+// Only explicitly public Firebase client configuration and the fleet identifier
+// may enter browser bundles. Robot credentials and every other .env value stay local.
+const env = dotenv.config().parsed || {};
+const envKeys = webpackPublicEnvDefinitions(env);
 
-// reduce it to a nice object, the same as before
-const envKeys = Object.keys(env).reduce((prev, next) => {
-    prev[`process.env.${next}`] = JSON.stringify(env[next]);
-    return prev;
-}, {});
-
-module.exports = (env) => {
-    envKeys["process.env.storage"] = JSON.stringify(env.storage);
+module.exports = (webpackEnv, argv) => {
+    const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
+    const dualMode = webpackEnv?.dual === true || webpackEnv?.dual === "true";
+    const isProduction = argv && argv.mode === "production";
+    envKeys["process.env.storage"] = JSON.stringify(storageValue);
+    envKeys["process.env.dual_signaling"] = JSON.stringify(
+        storageValue === "firebase" && dualMode,
+    );
     // Feature flags become boolean literals in the bundle, so `if (FEATURE_X)`
     // guards fold away when the flag is off. See features.json.
     Object.entries(loadFeatures()).forEach(([name, enabled]) => {
         envKeys[`process.env.${envVarName(name)}`] = JSON.stringify(enabled);
     });
-    console.log(envKeys);
 
     return {
-        mode: "development",
+        mode: argv && argv.mode ? argv.mode : "development",
         entry: pages.reduce((config, page) => {
             config[page] = `./src/pages/${page}/tsx/index.tsx`;
             return config;
         }, {}),
         output: {
             filename: "[name]/bundle.js",
-            path: path.resolve(__dirname, "dist"),
+            path: path.resolve(
+                __dirname,
+                storageValue === "firebase" ? "dist-firebase" : "dist",
+            ),
+            publicPath:
+                storageValue === "localstorage" && dualMode
+                    ? "/local/"
+                    : "/",
+            // Incremental watch builds reuse cached HTML/assets. Cleaning on
+            // every rebuild can remove those cached files without re-emitting
+            // them, leaving the local server with 404s.
+            clean: isProduction,
         },
         optimization: {
             splitChunks: {
@@ -47,10 +62,8 @@ module.exports = (env) => {
             // https://github.com/webpack/changelog-v5/issues/10
             new webpack.ProvidePlugin({
                 Buffer: ["buffer", "Buffer"],
+                process: "process/browser.js",
             }),
-            // new webpack.ProvidePlugin({
-            //   process: 'process/browser',
-            // }),
             new webpack.DefinePlugin(envKeys),
         ].concat(
             pages.map(
@@ -93,8 +106,12 @@ module.exports = (env) => {
                     use: ["style-loader", "css-loader"],
                 },
                 {
-                    test: /\.(jpe?g|png|gif|svg)$/i,
+                    test: /\.(jpe?g|png|gif|svg|mp4)$/i,
                     use: "file-loader",
+                },
+                {
+                    test: /\.(woff2?|otf|ttf)$/i,
+                    type: "asset/resource",
                 },
             ],
         },
@@ -116,6 +133,6 @@ module.exports = (env) => {
                 zlib: false,
             },
         },
-        watch: true,
+        watch: !isProduction,
     };
 };

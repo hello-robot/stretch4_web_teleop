@@ -32,6 +32,7 @@ import {
     rosJointStatetoRobotPose,
     ValidJointStateDict
 } from "../../../shared/util";
+const { createRosReconnectGuard } = require("./rosReconnectGuard");
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
 export var rosConnected = false;
@@ -79,6 +80,7 @@ export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
     private rosReconnectTimerID?: ReturnType<typeof setTimeout>;
+    private rosReconnectGuard = createRosReconnectGuard();
     private onRosConnectCallback?: () => Promise<void>;
     private jointLimits: { [key in ValidJoints]?: [number, number] } = {};
     private diagnosticJointLimits: { [key in ValidJoints]?: [boolean, boolean] } = {};
@@ -227,19 +229,32 @@ export class Robot extends React.Component {
 
         this.ros.on("close", () => {
             console.log("Connection to ROS has been closed.");
+            if (!this.rosReconnectGuard.shouldReconnectAfterClose()) {
+                console.log("Ignoring close requested by ROS reconnect.");
+                return;
+            }
             this.reconnect();
         });
     }
 
     async reconnect(interval_ms: number = 1000) {
-        if (!this.rosReconnectTimerID) {
-            this.rosReconnectTimerID = setTimeout(() => {
-                console.log("Reconnecting to ROS...");
-                this.ros.close();
-                this.ros.connect(this.rosURL);
-                this.rosReconnectTimerID = undefined;
-            }, interval_ms);
+        if (this.rosReconnectTimerID) {
+            return;
         }
+        this.rosReconnectTimerID = setTimeout(() => {
+            // Clear before close/connect. Those events call reconnect()
+            // synchronously, and a still-set timer id would drop the next try.
+            this.rosReconnectTimerID = undefined;
+            console.log("Reconnecting to ROS...");
+            try {
+                this.rosReconnectGuard.beginIntentionalClose();
+                this.ros.close();
+            } catch (error) {
+                this.rosReconnectGuard.cancelIntentionalClose();
+                console.log("Error closing ROS socket:", error);
+            }
+            this.ros.connect(this.rosURL);
+        }, interval_ms);
     }
 
     async checkROSConnection(

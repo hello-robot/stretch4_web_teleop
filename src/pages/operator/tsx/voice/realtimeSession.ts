@@ -551,10 +551,11 @@ function mintTokenErrorMessage(status: number, body: string): string {
     return `Token endpoint HTTP ${status}: ${body.slice(0, 400)}`;
 }
 
-async function mintEphemeralCredential(
+/** Local signaling path: same-origin mint authorized by the socket.io voice session. */
+async function fetchCredentialFromServer(
     tokenUrl: string,
     voiceSessionToken: string,
-): Promise<{ key: string; raw: Record<string, unknown> }> {
+): Promise<Record<string, unknown>> {
     const r = await fetch(tokenUrl, {
         method: "GET",
         credentials: "same-origin",
@@ -564,13 +565,16 @@ async function mintEphemeralCredential(
         const t = await r.text();
         throw new Error(mintTokenErrorMessage(r.status, t));
     }
-    const raw = (await r.json()) as Record<string, unknown>;
+    return (await r.json()) as Record<string, unknown>;
+}
+
+function ephemeralKeyFromCredential(raw: Record<string, unknown>): string {
     const key = extractEphemeralKey(raw);
     if (!key) {
         console.warn("[Realtime] Unexpected token payload keys", Object.keys(raw));
         throw new Error("Token response missing ephemeral key (checked value, client_secret.value, …)");
     }
-    return { key, raw };
+    return key;
 }
 
 /** Send tool result to Realtime without requesting a spoken response. */
@@ -646,6 +650,12 @@ export type RealtimeVoiceConnectOptions = {
     tokenUrl?: string;
     /** Override socket.io voice session token (tests); default from operatorVoiceSession */
     voiceSessionToken?: string;
+    /**
+     * Alternative credential source returning the raw OpenAI client_secrets
+     * payload. When set, tokenUrl / voiceSessionToken are ignored (Firebase:
+     * the robot browser mints and relays over the WebRTC data channel).
+     */
+    mintCredential?: () => Promise<Record<string, unknown>>;
     voiceProvider: ButtonFunctionProvider;
     onStatus?: (s: string) => void;
     onLog?: (s: string, meta?: VoiceLogMeta) => void;
@@ -737,21 +747,23 @@ export type { VoiceListeningState } from "./voiceWakeSleep";
 export async function connectOpenAIRealtimeVoice(
     opts: RealtimeVoiceConnectOptions,
 ): Promise<ActiveRealtimeVoiceSession> {
-    const tokenUrl = opts.tokenUrl ?? "/openai-realtime/token";
-    const voiceSessionToken =
-        opts.voiceSessionToken ?? getOperatorVoiceSessionToken();
-    if (!voiceSessionToken) {
-        throw new Error(
-            "No operator voice session — join the robot room first",
-        );
+    let mintCredential = opts.mintCredential;
+    if (!mintCredential) {
+        const tokenUrl = opts.tokenUrl ?? "/openai-realtime/token";
+        const voiceSessionToken =
+            opts.voiceSessionToken ?? getOperatorVoiceSessionToken();
+        if (!voiceSessionToken) {
+            throw new Error(
+                "No operator voice session — join the robot room first",
+            );
+        }
+        mintCredential = () =>
+            fetchCredentialFromServer(tokenUrl, voiceSessionToken);
     }
 
     opts.onStatus?.("Fetching token…");
 
-    const { key: ephemeralKey } = await mintEphemeralCredential(
-        tokenUrl,
-        voiceSessionToken,
-    );
+    const ephemeralKey = ephemeralKeyFromCredential(await mintCredential());
 
     const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],

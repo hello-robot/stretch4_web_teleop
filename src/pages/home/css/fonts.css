@@ -1,0 +1,16 @@
+/* Rubik is a variable font; one file covers weights 300-900 (latin subset). */
+@font-face {
+    font-family: "Rubik";
+    font-style: normal;
+    font-weight: 300 900;
+    font-display: swap;
+    src: url("../public/fonts/Rubik-latin.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "PP Supply Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../public/fonts/PPSupplyMono-Regular.otf") format("opentype");
+}

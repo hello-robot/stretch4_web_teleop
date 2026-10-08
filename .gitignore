@@ -38,6 +38,7 @@ mkcert*
 
 # Build output
 dist/*
+dist-firebase/*
 
 # Outcomes
 outcomes/*
@@ -48,8 +49,13 @@ outcomes/*
 # Specialized URDFs
 urdf/*.urdf
 
+# Firebase
+.firebase/
+firebase-debug.log*
+database-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.runtimeconfig.json
+
 # Cursor
 .cursor/*
-
-# Misc
-.DS_Store

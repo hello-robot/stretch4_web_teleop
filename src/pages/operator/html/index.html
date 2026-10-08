@@ -12,6 +12,31 @@
     <link rel="icon" href="./app-icon-180.png" type="image/png">
     <link rel="shortcut icon" href="./app-icon-192x192.png" type="image/png">
 
+    <script>
+        // Reload this tab when a new operator bundle is served.
+        // Firebase Hosting has no local EventSource, so poll the bundle ETag.
+        // Local webpack watch pushes a reload over /dev-reload instead.
+        (function () {
+            var host = location.hostname;
+            if (host.endsWith(".web.app") || host.endsWith(".firebaseapp.com")) {
+                var seen = null;
+                setInterval(function () {
+                    fetch("/operator/bundle.js", { method: "HEAD", cache: "no-store" })
+                        .then(function (res) {
+                            var tag = res.headers.get("etag");
+                            if (!tag) return;
+                            // First response records the current bundle; a later change reloads.
+                            if (seen && seen !== tag) location.reload();
+                            seen = tag;
+                        })
+                        .catch(function () {});
+                }, 2000);
+                return;
+            }
+            var source = new EventSource("/dev-reload");
+            source.onmessage = function () { location.reload(); };
+        })();
+    </script>
 </head>
 
 <body>

@@ -300,3 +300,70 @@ input:focus {
 .btn-sm {
     padding: 8px 14px;
 }
+
+/* Seat notice. Colors match the dashboard (home/css/index.css). */
+.op-seat-notice {
+    box-sizing: border-box;
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+    background: #101519;
+    color: #d5e8f4;
+    font-family:
+        "Rubik",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.op-seat-notice__card {
+    box-sizing: border-box;
+    width: min(320px, 100%);
+    padding: 28px 22px 22px;
+    border-radius: 16px;
+    text-align: center;
+}
+
+.op-seat-notice__kicker {
+    margin: 0 0 16px;
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -0.2%;
+    color: #a4d1ee;
+}
+
+.op-seat-notice__detail {
+    margin: 12px 0 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #747b7f;
+}
+
+.op-seat-notice__button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 100%;
+    height: 37px;
+    margin-top: 22px;
+    border-radius: 10px;
+    background: #007acc;
+    color: #fff;
+    font-weight: 500;
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.op-seat-notice__button:hover {
+    filter: brightness(1.1);
+}
+
+.op-seat-notice__button:focus-visible {
+    outline: 2px solid #66c2ff;
+    outline-offset: 3px;
+}

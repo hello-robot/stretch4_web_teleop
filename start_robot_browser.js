@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 const { firefox } = require("playwright");
 const chalk = require("chalk");
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const logId = "start_robot_browser.js";
 
 // You may want to change this to test that the
@@ -8,6 +10,22 @@ const logId = "start_robot_browser.js";
 let robotHostname = "localhost"; // or NGROK_URL
 if (process.argv.length > 2) {
     robotHostname = process.argv[2];
+}
+
+const fleetId = process.env.HELLO_FLEET_ID || "unknown";
+const roboUser = process.env.roboUsername || "";
+const roboPass = process.env.roboPassword || "";
+const isFirebaseMode = process.env.WEB_TELEOP_DIST === "dist-firebase";
+const urlParams = `?fleet_id=${encodeURIComponent(fleetId)}`;
+
+if (
+    isFirebaseMode &&
+    !["localhost", "127.0.0.1", "::1", "[::1]"].includes(robotHostname)
+) {
+    throw new Error("Firebase robot credentials may only be injected on loopback");
+}
+if (isFirebaseMode && (!roboUser || !roboPass)) {
+    throw new Error("Missing robot Firebase credentials");
 }
 
 const listenConsole = async (page) => {
@@ -75,13 +93,28 @@ const listenConsole = async (page) => {
     });
 
     const context = await browser.newContext({ ignoreHTTPSErrors: true }); // avoid ERR_CERT_COMMON_NAME_INVALID
+    // The robot account is available only inside this trusted local Playwright
+    // context. It never enters webpack definitions, URLs, or HTTP logs.
+    if (isFirebaseMode) {
+        await context.addInitScript(
+            ({ username, password }) => {
+                Object.defineProperty(window, "__STRETCH_ROBOT_FIREBASE_AUTH__", {
+                    value: Object.freeze({ username, password }),
+                    configurable: true,
+                    enumerable: false,
+                    writable: false,
+                });
+            },
+            { username: roboUser, password: roboPass },
+        );
+    }
 
     const page = await context.newPage();
     await listenConsole(page);
 
     while (try_again) {
         try {
-            await page.goto(`https://${robotHostname}/robot`);
+            await page.goto(`https://${robotHostname}/robot${urlParams}`);
             console.log(logId + ": finished loading");
             try_again = false;
         } catch (e) {

@@ -1,27 +1,18 @@
-// This component comes from the template at:
-// https://github.com/mui/material-ui/tree/v6.1.5/docs/data/material/getting-started/templates/sign-in
-
-import React, { useEffect, useState } from "react";
-import { isTablet, isBrowser } from "react-device-detect";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
-import DialogActions from "@mui/material/DialogActions";
-import OutlinedInput from "@mui/material/OutlinedInput";
-import Button from "@mui/material/Button";
+import React from "react";
 
 export const ForgotPassword = (props: {
     open: boolean;
     handleClose: () => void;
     handleExecute: (email: string) => void;
 }) => {
-    return isTablet || isBrowser ? (
+    return (
         <Dialog
             open={props.open}
             onClose={props.handleClose}
             PaperProps={{
                 component: "form",
+                className: "lv-dialog",
                 onSubmit: (event: React.FormEvent<HTMLFormElement>) => {
                     event.preventDefault();
                     const data = new FormData(event.currentTarget);
@@ -31,31 +22,36 @@ export const ForgotPassword = (props: {
                 },
             }}
         >
-            <DialogTitle>Reset password</DialogTitle>
-            <DialogContent>
-                <DialogContentText>
-                    Enter your account&apos;s email address, and we&apos;ll send
-                    you a link to reset your password.
-                </DialogContentText>
-                <OutlinedInput
-                    autoFocus
-                    required
-                    margin="dense"
-                    id="email"
-                    name="email"
-                    placeholder="Email address"
-                    type="email"
-                    fullWidth
-                />
-            </DialogContent>
-            <DialogActions sx={{ pb: 3, px: 3 }}>
-                <Button onClick={props.handleClose}>Cancel</Button>
-                <Button variant="contained" type="submit">
+            <h2 className="lv-dialog__title">Reset password</h2>
+            <p className="lv-dialog__body">
+                Enter your account&apos;s email address, and we&apos;ll send you a
+                link to reset your password.
+            </p>
+            <label className="lv-label" htmlFor="reset-email">
+                Email
+            </label>
+            <input
+                className="lv-field"
+                autoFocus
+                required
+                id="reset-email"
+                name="email"
+                placeholder="jsmith@hello-robot.com"
+                type="email"
+                autoComplete="email"
+            />
+            <div className="lv-dialog__actions">
+                <button
+                    type="button"
+                    className="lv-button lv-button--ghost"
+                    onClick={props.handleClose}
+                >
+                    Cancel
+                </button>
+                <button type="submit" className="lv-button lv-button--primary">
                     Continue
-                </Button>
-            </DialogActions>
+                </button>
+            </div>
         </Dialog>
-    ) : (
-        <p>Not implemented</p>
     );
 };

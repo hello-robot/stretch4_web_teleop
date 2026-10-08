@@ -40,6 +40,77 @@ Once you're done with the interface, close the browser and run:
 
 **Note:** Only one browser can be connected to the interface at a time.
 
+## Firebase
+
+Hello Robot Cloud is built with Firebase providing a hosted dashboard, sign-in, fleet management, and direct teleoperation of Stretch. You can remotely teleoperate your Stretch anytime – no Tailscale or ngrok is needed.
+
+- [Working on the Firebase app](#working-on-the-firebase-app)
+- [How to Teleoperate Your Stretch from Hello Robot Cloud](#how-to-teleoperate-your-stretch-from-hello-robot-cloud)
+
+### Working on the Firebase app
+
+#### Run and iterate locally
+
+As you may know, the `src/pages/operator` directory is where you can find the codebase for the teleop web app. The `src/pages/home` directory contains the codebase for Hello Robot Cloud.
+
+#### Publish a preview
+
+You can checkout a `git` branch as you would normally and make changes. On a Firebase-configured robot, this command runs both the local and Firebase webpack watchers:
+
+```
+./launch_interface.sh
+```
+
+The no-login local operator stays at `https://<tailscale.ip.address>/operator/`. The Firebase build is published to this checkout's Preview Channel. Both URLs connect to the same robot browser and share one operator seat, so opening one blocks the other until teleoperation ends.
+
+To publish a one-off production build to the Preview Channel without launching teleop:
+
+```
+npm run deploy:firebase-preview-channel
+```
+
+The Preview Channel's URL will have this format `https://stretch4-web-interface--<channel>-<hash>.web.app`. The hash is assigned the first time that channel is deployed. While the development interface is running, a save uploads the same preview channel. The local tab reloads from webpack and the preview tab reloads after its deploy.
+
+For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`. Launch then creates one-shot local and Firebase bundles instead of starting webpack watchers. Live Firebase Hosting remains an explicit clean-`main` deployment.
+
+### How to Teleoperate Your Stretch from Hello Robot Cloud
+
+1. On the robot, fill in `.env` so the daemon can log in:
+
+   - `release` (the git branch this robot tracks, such as `main`, `feature/foo-bar-baz`, etc.)
+   - `apiKey`
+   - `authDomain`
+   - `databaseURL`
+   - `projectId`
+   - `storageBucket`
+   - `messagingSenderId`
+   - `appId`
+   - `measurementId`
+   - `roboUsername` (the robot's Firebase email)
+   - `roboPassword`
+   - `HELLO_FLEET_ID`
+   - `release` (the git branch this robot tracks, such as `feature/firebase-sandbox` or `main`)
+
+   Then, from the repository root, run the onboard script. It checks out the `release` branch from `.env`, installs dependencies, binds this robot's login, adds the fleet to the email you confirm, and restarts the daemon:
+
+   ```bash
+   ./onboard_firebase_robot.sh
+   ```
+
+   Note: To onboard your Stretch to an instance of Hello Robot Cloud, you will need to be an **Owner**, **Editor**, or **Firebase Admin** of this Firebase web app.
+
+1. Create an account at [https://stretch4-web-interface.web.app](https://stretch4-web-interface.web.app)
+
+1. Ask for your Stretch to be added to that account. Send the robot's fleet ID. An administrator must bind the robot Auth uid in both `assignments/<robotAuthUid> = { role: "robot", name: "<fleetId>" }` and `robots/<fleetId>/uid = "<robotAuthUid>"`, then add the fleet ID under your `assignments/<alias>/robots`.
+
+1. Sign in. The robot should appear as standby. Choose its map and config, then press **Teleoperate**.
+
+1. The interface starts on the robot when you press **Teleoperate**. It does not start on its own after a reboot. The hosted site stays up across a reboot, and the onboard daemon returns the robot to standby.
+
+One person operates a robot at a time. A second user sees **Currently in Use** and cannot stop that session or take the seat. End teleoperation before someone else connects.
+
+Realtime Database access is default-deny. Run `npm run test:security` before changing [`database.rules.json`](database.rules.json). Hosting deploys do not publish database rules; follow the staged rules rollout in the Firebase storage-handler README. If a robot password was ever included in a previously published bundle, rotate it after the secure build is deployed.
+
 ## Feature flags
 
 Optional features are declared in [`features.json`](features.json), which is
