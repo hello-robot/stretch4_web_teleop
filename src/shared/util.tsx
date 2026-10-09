@@ -254,6 +254,7 @@ export const SPEED_PROFILES: SpeedProfile[] = ["slow", "medium", "fast"];
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
+    gripper_joint: 0.1,
     arm_joint: 0.04,
     lift_joint: 0.04,
     wrist_roll_joint: 0.5,
@@ -324,14 +325,46 @@ export const GRIPPER_INCREMENT_RANGE_FRACTION = 0.1;
 
 const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
 
+/**
+ * Returns the target velocity limit for a joint during pose playback.
+ *
+ * Resolves joint name aliases (such as tool-specific gripper and telescoping arm links)
+ * to ensure correct velocity limits are applied.
+ *
+ * @param jointName The joint identifier to look up.
+ * @returns The playback joint velocity limit in m/s or rad/s.
+ */
 export function getPlaybackJointVelocity(jointName: ValidJoints): number {
+    let resolvedJoint: ValidJoints = jointName;
+    if (jointName === "stretch_gripper_joint" || (jointName as string) === "gripper_aperture") {
+        resolvedJoint = "gripper_joint";
+    } else if (
+        jointName === "wrist_extension" ||
+        jointName === "arm_l0_joint" ||
+        jointName === "arm_l1_joint" ||
+        jointName === "arm_l2_joint" ||
+        jointName === "arm_l3_joint" ||
+        jointName === "arm_l4_joint"
+    ) {
+        resolvedJoint = "arm_joint";
+    }
+
     const velocity =
-        PROFILE_JOINT_VELOCITIES.medium[jointName] ?? JOINT_VELOCITIES[jointName];
+        PROFILE_JOINT_VELOCITIES.medium[resolvedJoint] ??
+        JOINT_VELOCITIES[resolvedJoint] ??
+        PROFILE_JOINT_VELOCITIES.medium[jointName] ??
+        JOINT_VELOCITIES[jointName];
     return (velocity || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
 }
 
+/**
+ * Maps a list of joint names to their corresponding playback velocities.
+ *
+ * @param jointNames Array of joint names.
+ * @returns Array of playback velocities in the same order as jointNames.
+ */
 export function getPlaybackJointVelocities(jointNames: ValidJoints[]): number[] {
-    return jointNames.map(getPlaybackJointVelocity);
+    return jointNames.map((name) => getPlaybackJointVelocity(name));
 }
 
 export const navigationProps = {

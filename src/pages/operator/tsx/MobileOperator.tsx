@@ -328,7 +328,7 @@ export const MobileOperator = (props: {
         [],
     );
 
-    const alertTimeoutDuration = 5000; // milliseconds
+    const alertTimeoutDuration = 100; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
