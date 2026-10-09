@@ -11,6 +11,7 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
+    JointVelocityLimits,
     JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
@@ -176,7 +177,7 @@ function forwardStretchTool(value: string) {
     } as StretchToolMessage);
 }
 
-function forwardJointVelocityLimits(limits: Record<string, number>) {
+function forwardJointVelocityLimits(limits: JointVelocityLimits) {
     if (!connection) throw "WebRTC connection undefined!";
 
     connection.sendData({

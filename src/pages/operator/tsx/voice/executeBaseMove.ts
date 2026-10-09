@@ -1,4 +1,3 @@
-import { JOINT_VELOCITIES } from "shared/util";
 import {
     ButtonPadButton,
     type ButtonFunctionProvider,
@@ -56,9 +55,6 @@ const VOICE_ACTION_TO_BUTTON: Record<BaseMoveAction, ButtonPadButton> = {
     rotate_right: ButtonPadButton.BaseRotateRight,
 };
 
-const BASE_LIN = JOINT_VELOCITIES.translate_mobile_base ?? 0.1;
-const BASE_ANG = JOINT_VELOCITIES.rotate_mobile_base ?? 0.1;
-
 // ── Concrete executor class ───────────────────────────────────────────────────
 
 class BaseMoveExecutor extends VoiceMoveExecutor {
@@ -103,9 +99,8 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         linear_Y: number;
         angVel: number;
     } {
-        const scale = FunctionProvider.velocityScale;
-        const linVel = BASE_LIN * scale;
-        const angVelMag = BASE_ANG * scale;
+        const linVel = FunctionProvider.jointVelocity("translate_mobile_base") ?? 0.1;
+        const angVelMag = FunctionProvider.jointVelocity("rotate_mobile_base") ?? 0.1;
         switch (action) {
             case "rotate_left":
                 return { linear_X: 0, linear_Y: 0, angVel: ROTATE_ACTION_SIGN.rotate_left * angVelMag };

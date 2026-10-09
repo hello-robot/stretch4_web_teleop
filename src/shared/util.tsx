@@ -147,9 +147,12 @@ export interface StretchToolMessage {
     toolMetadata?: ToolMetadata;
 }
 
+/** Per-profile joint velocities, keyed by joint name. */
+export type JointVelocityLimits = Partial<Record<SpeedProfile, Record<string, number>>>;
+
 export interface JointVelocityLimitsMessage {
     type: "jointVelocityLimits";
-    jointVelocities: Record<string, number>;
+    jointVelocities: JointVelocityLimits;
 }
 
 
@@ -242,10 +245,12 @@ export interface ROSOdometry extends Message {
 }
 
 
-/**
- * Default fallback joint velocities.
- * Primary joint velocity limits are populated dynamically at runtime from stretch4_urdf via ROS parameters.
- */
+/** Speed setting, matching the driver's slow / default / fast motion profiles. */
+export type SpeedProfile = "slow" | "medium" | "fast";
+
+export const SPEED_PROFILES: SpeedProfile[] = ["slow", "medium", "fast"];
+
+/** Joint velocities at a velocity scale of 1, in m/s or rad/s. */
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
@@ -256,15 +261,28 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     wrist_yaw_joint: 1.0,
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.3,
-    gripper_joint: 0.1,
+};
+
+/**
+ * Joint velocities per speed profile, in URDF units/s, used instead of JOINT_VELOCITIES and the
+ * velocity scale. Holds the gripper, whose units depend on the attached tool; populated at runtime
+ * from the driver's joint_velocity.{slow,fast}.gripper and joint_velocity.gripper params.
+ */
+export const PROFILE_JOINT_VELOCITIES: Record<SpeedProfile, { [key in ValidJoints]?: number }> = {
+    slow: { gripper_joint: 0.075 },
+    medium: { gripper_joint: 0.125 },
+    fast: { gripper_joint: 0.2 },
 };
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
 export const TASK_SPACE_LINEAR_VEL = 0.04;
-export function updateJointVelocities(newVelocities: Record<string, number>) {
-    for (const [key, val] of Object.entries(newVelocities)) {
-        if (typeof val === "number" && val > 0) {
-            (JOINT_VELOCITIES as Record<string, number>)[key] = val;
+
+export function updateJointVelocities(newVelocities: JointVelocityLimits) {
+    for (const profile of SPEED_PROFILES) {
+        for (const [key, val] of Object.entries(newVelocities[profile] ?? {})) {
+            if (typeof val === "number" && val > 0) {
+                (PROFILE_JOINT_VELOCITIES[profile] as Record<string, number>)[key] = val;
+            }
         }
     }
 }
@@ -307,7 +325,9 @@ export const GRIPPER_INCREMENT_RANGE_FRACTION = 0.1;
 const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
 
 export function getPlaybackJointVelocity(jointName: ValidJoints): number {
-    return (JOINT_VELOCITIES[jointName] || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
+    const velocity =
+        PROFILE_JOINT_VELOCITIES.medium[jointName] ?? JOINT_VELOCITIES[jointName];
+    return (velocity || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
 }
 
 export function getPlaybackJointVelocities(jointNames: ValidJoints[]): number[] {

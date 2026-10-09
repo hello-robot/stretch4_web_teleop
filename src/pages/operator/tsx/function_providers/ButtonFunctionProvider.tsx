@@ -1,6 +1,5 @@
 import {
     JOINT_INCREMENTS,
-    JOINT_VELOCITIES,
     ValidJoints,
     ValidJointStateDict,
 } from "shared/util";
@@ -275,12 +274,11 @@ export class ButtonFunctionProvider extends FunctionProvider {
         )
             ? -1
             : 1;
-        const jointVelocity = JOINT_VELOCITIES[jointName];
+        const jointVelocity = FunctionProvider.jointVelocity(jointName);
         if (jointVelocity === undefined) {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Velocity for joint ${jointName} is undefined!`);
         }
-        const velocity =
-            multiplier * jointVelocity * FunctionProvider.velocityScale;
+        const velocity = multiplier * jointVelocity;
 
         const jointIncrement = JOINT_INCREMENTS[jointName];
         if (jointIncrement === undefined) {

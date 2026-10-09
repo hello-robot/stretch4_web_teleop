@@ -11,10 +11,7 @@
  *   - Distance and duration coercion for joint moves
  *   - executeStopMotionOnProvider (stops all motion)
  */
-import {
-    JOINT_VELOCITIES,
-    type ValidJoints,
-} from "shared/util";
+import { type ValidJoints } from "shared/util";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import {
@@ -51,10 +48,9 @@ type JointActionMeta = {
  * Signs verified against `negativeButtonPadFunctions` in ButtonFunctionProvider.tsx:
  *   ArmLower, ArmRetract, GripperClose, WristRollLeft, WristPitchUp, WristRotateOut → negative.
  *
- * Velocity magnitudes come from `JOINT_VELOCITIES` in shared/util.tsx:
- *   lift_joint: 0.04 m/s  |  arm_joint: 0.04 m/s
- *   wrist_roll_joint: 0.1 rad/s  |  wrist_pitch_joint: 0.1 rad/s  |  wrist_yaw_joint: 0.4 rad/s
- *   gripper_joint: from the driver's joint_velocity.gripper; GRIPPER_FALLBACK_VEL if unset
+ * Velocity magnitudes come from `FunctionProvider.jointVelocity()`: `JOINT_VELOCITIES` in
+ * shared/util.tsx times the velocity scale, or for gripper_joint the driver's
+ * joint_velocity.* param for the current speed profile; GRIPPER_FALLBACK_VEL if unset.
  */
 const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     // Lift (m) — ArmLower is in negativeButtonPadFunctions
@@ -81,7 +77,7 @@ const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
 
 const VALID_JOINT_ACTIONS = new Set<string>(JOINT_MOVE_ACTIONS);
 
-/** Velocity used when JOINT_VELOCITIES has no entry for the joint. */
+/** Velocity used when the current speed profile has no entry for the joint. */
 const GRIPPER_FALLBACK_VEL = 0.1;
 
 // ── Concrete executor class ───────────────────────────────────────────────────
@@ -153,8 +149,8 @@ class JointMoveExecutor extends VoiceMoveExecutor {
     }
 
     static velocityForAction(meta: JointActionMeta): number {
-        const jointVel = JOINT_VELOCITIES[meta.jointName] ?? GRIPPER_FALLBACK_VEL;
-        return meta.sign * jointVel * FunctionProvider.velocityScale;
+        const jointVel = FunctionProvider.jointVelocity(meta.jointName) ?? GRIPPER_FALLBACK_VEL;
+        return meta.sign * jointVel;
     }
 
     static execute(

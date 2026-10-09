@@ -22,6 +22,9 @@ import {
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
+    JointVelocityLimits,
+    SPEED_PROFILES,
+    SpeedProfile,
     updateJointVelocities,
     updateJointIncrements,
     JOINT_VELOCITY_HEARTBEAT_MS,
@@ -155,7 +158,7 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-    private jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
+    private jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam?: Param;
     private toolIsActuatedParam?: Param;
@@ -165,7 +168,7 @@ export class Robot extends React.Component {
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
-    private jointVelocityLimits: Record<string, number> = {};
+    private jointVelocityLimits: JointVelocityLimits = {};
 
     constructor(props: {
         jointStateCallback: (
@@ -184,7 +187,7 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-        jointVelocityLimitsCallback: (limits: Record<string, number>) => void;
+        jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -626,30 +629,32 @@ export class Robot extends React.Component {
             name: "/stretch_driver:mode"
         });
 
-        // Real driver's per-joint velocity limits, from /stretch_driver:joint_velocity.* params
-        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
-            lift_joint: "lift",
-            arm_joint: "arm",
-            wrist_yaw_joint: "wrist_yaw",
-            wrist_pitch_joint: "wrist_pitch",
-            wrist_roll_joint: "wrist_roll",
-            gripper_joint: "gripper",
-            translate_mobile_base: "omnibase.linear",
-            rotate_mobile_base: "omnibase.angular",
+        // Gripper velocity for each speed profile; its units depend on the attached tool
+        const JOINT_VELOCITY_PARAM_PREFIXES: Record<SpeedProfile, string> = {
+            slow: "joint_velocity.slow",
+            medium: "joint_velocity",
+            fast: "joint_velocity.fast",
         };
-        for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
-            new Param({
-                ros: this.ros,
-                name: `/stretch_driver:joint_velocity.${paramKey}`,
-            }).get((value: number) => {
-                if (typeof value === "number" && value > 0) {
-                    this.jointVelocityLimits[rosJointName] = value;
-                    updateJointVelocities({ [rosJointName]: value });
-                    if (this.jointVelocityLimitsCallback) {
-                        this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
+            gripper_joint: "gripper",
+        };
+        for (const profile of SPEED_PROFILES) {
+            const prefix = JOINT_VELOCITY_PARAM_PREFIXES[profile];
+            for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
+                new Param({
+                    ros: this.ros,
+                    name: `/stretch_driver:${prefix}.${paramKey}`,
+                }).get((value: number) => {
+                    if (typeof value === "number" && value > 0) {
+                        this.jointVelocityLimits[profile] = {
+                            ...this.jointVelocityLimits[profile],
+                            [rosJointName]: value,
+                        };
+                        updateJointVelocities({ [profile]: { [rosJointName]: value } });
+                        this.getJointVelocityLimits();
                     }
-                }
-            });
+                });
+            }
         }
     }
 
