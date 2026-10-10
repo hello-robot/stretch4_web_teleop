@@ -1,6 +1,8 @@
 /**  Some generic utils for working with Action Speed / Velocity */
 
-export type ActionSpeedLabel = "slow" | "medium" | "fast";
+import type { SpeedProfile } from "shared/util";
+
+export type ActionSpeedLabel = SpeedProfile;
 
 export type ActionSpeedPreset = {
     label: ActionSpeedLabel;
@@ -19,7 +21,7 @@ export function getSpeedByLabel(label: string): number | undefined {
     return VELOCITY_SCALE.find((item) => item.label === label)?.speed;
 }
 
-export function getLabelBySpeed(speed: number): string | undefined {
+export function getLabelBySpeed(speed: number): ActionSpeedLabel | undefined {
     return VELOCITY_SCALE.find((item) => item.speed === speed)?.label;
 }
 

@@ -1,12 +1,20 @@
 import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
-import { JOINT_VELOCITY_HEARTBEAT_MS, RobotPose, ValidJoints } from "shared/util";
+import {
+    JOINT_VELOCITIES,
+    JOINT_VELOCITY_HEARTBEAT_MS,
+    PROFILE_JOINT_VELOCITIES,
+    RobotPose,
+    SpeedProfile,
+    ValidJoints,
+} from "shared/util";
 import { PilotButtonPads } from "../static_components/PilotControlsToggle";
 import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
+import { getLabelBySpeed } from "../utils/action-speed-scale";
 import { clampTimedMoveMs } from "../utils/timed-move";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
 
@@ -56,6 +64,23 @@ export abstract class FunctionProvider {
     /** Latest cached map pose, if the remote robot is connected. */
     static getMapPose(): Transform | undefined {
         return FunctionProvider.remoteRobot?.getMapPose();
+    }
+
+    /** Speed profile for the current velocity scale. */
+    static get speedProfile(): SpeedProfile {
+        return getLabelBySpeed(this.velocityScale) ?? "medium";
+    }
+
+    /**
+     * Velocity of a joint at the current speed setting, in URDF units/s: the joint's
+     * PROFILE_JOINT_VELOCITIES entry if it has one, otherwise JOINT_VELOCITIES times the velocity
+     * scale. Undefined if the joint has neither.
+     */
+    static jointVelocity(jointName: ValidJoints): number | undefined {
+        const profileVelocity = PROFILE_JOINT_VELOCITIES[this.speedProfile][jointName];
+        if (profileVelocity !== undefined) return profileVelocity;
+        const velocity = JOINT_VELOCITIES[jointName];
+        return velocity === undefined ? undefined : velocity * this.velocityScale;
     }
 
     /**
