@@ -7,6 +7,8 @@ Provides modular computer vision primitives and rendering routines for:
 2. Compliant fingertip swept volume manifold rendering and mask computation.
 3. RGB-D surface point depth heatmaps (JET colormap).
 4. Spatial evaluation masks and grasp readiness classification.
+5. Artificial horizon line overlay aligned with wrist roll and pitch.
+6. Schematic robot state telemetry icon in viewport corner.
 """
 
 from typing import Any
@@ -17,25 +19,33 @@ import numpy as np
 # ==============================================================================
 # PERCEPTION & THRESHOLD CONSTANTS
 # ==============================================================================
-N_POINTS_MIN_YELLOW: int = 100
-N_POINTS_MIN_GREEN: int = 1000
-Z_NEAR_M: float = 0.20
-WINDOW_HALF_WIDTH_M: float = 0.02
-RETICLE_RADIUS_M: float = 0.005
-GRASP_Z_MAX_DEFAULT: float = 0.259
-DEFAULT_TCP_Z: float = 0.216
+COLOR_BLACK: tuple[int, int, int] = (0, 0, 0)
+COLOR_GREEN: tuple[int, int, int] = (0, 255, 0)
+COLOR_MANIFOLD: tuple[int, int, int] = (128, 128, 128)
+COLOR_ORANGE: tuple[int, int, int] = (0, 140, 255)
+COLOR_RED: tuple[int, int, int] = (0, 0, 255)
+COLOR_WHITE: tuple[int, int, int] = (255, 255, 255)
+COLOR_WIREFRAME: tuple[int, int, int] = (180, 180, 180)
+COLOR_YELLOW: tuple[int, int, int] = (0, 255, 255)
 
+DEFAULT_ARM_LIMITS: tuple[float, float] = (0.0, 0.52)
+DEFAULT_ICON_SCALE: float = 1.0
+DEFAULT_KEEPOUT_SLICE_DEG: float = 30.0
+DEFAULT_LIFT_LIMITS: tuple[float, float] = (0.0, 1.2)
+DEFAULT_PITCH_LIMITS: tuple[float, float] = (-1.135, 4.276)
+DEFAULT_ROLL_LIMITS: tuple[float, float] = (-4.276, 1.135)
+DEFAULT_TCP_Z: float = 0.216
+DEFAULT_YAW_LIMITS: tuple[float, float] = (-1.135, 4.276)
+
+GRASP_Z_MAX_DEFAULT: float = 0.259
+N_POINTS_MIN_GREEN: int = 1000
+N_POINTS_MIN_YELLOW: int = 100
+RETICLE_RADIUS_M: float = 0.005
+STATE_GREEN: int = 2
 STATE_RED: int = 0
 STATE_YELLOW: int = 1
-STATE_GREEN: int = 2
-
-# Color definitions (BGR)
-COLOR_RED: tuple[int, int, int] = (0, 0, 255)
-COLOR_YELLOW: tuple[int, int, int] = (0, 255, 255)
-COLOR_GREEN: tuple[int, int, int] = (0, 255, 0)
-COLOR_BLACK: tuple[int, int, int] = (0, 0, 0)
-COLOR_MANIFOLD: tuple[int, int, int] = (128, 128, 128)
-COLOR_WIREFRAME: tuple[int, int, int] = (180, 180, 180)
+WINDOW_HALF_WIDTH_M: float = 0.02
+Z_NEAR_M: float = 0.20
 
 
 def get_reticle_color(state: int) -> tuple[int, int, int]:
@@ -53,6 +63,60 @@ def get_reticle_color(state: int) -> tuple[int, int, int]:
     if state == STATE_YELLOW:
         return COLOR_YELLOW
     return COLOR_RED
+
+
+def compute_limit_danger_factor(
+    val: float,
+    val_min: float,
+    val_max: float,
+    zone_pct: float = 0.10,
+) -> float:
+    """
+    Compute a normalized factor [0.0, 1.0] representing proximity to range limits.
+
+    Returns 0.0 in the middle safe zone, transitioning linearly from 0.0 to 1.0
+    in the first and last zone_pct of the range of motion.
+
+    Args:
+        val: Current scalar joint position.
+        val_min: Minimum joint limit boundary.
+        val_max: Maximum joint limit boundary.
+        zone_pct: Fraction of total range on each end considered warning zone.
+
+    Returns:
+        Normalized danger factor from 0.0 (safe zone) to 1.0 (at or beyond limit).
+    """
+    if val_max <= val_min:
+        return 0.0
+    norm = float(np.clip((val - val_min) / (val_max - val_min), 0.0, 1.0))
+    if norm < zone_pct:
+        return float(np.clip((zone_pct - norm) / zone_pct, 0.0, 1.0))
+    if norm > (1.0 - zone_pct):
+        return float(np.clip((norm - (1.0 - zone_pct)) / zone_pct, 0.0, 1.0))
+    return 0.0
+
+
+def interpolate_bgr(
+    color_a: tuple[int, int, int],
+    color_b: tuple[int, int, int],
+    t: float,
+) -> tuple[int, int, int]:
+    """
+    Linearly interpolate between two BGR color tuples.
+
+    Args:
+        color_a: Starting BGR color tuple corresponding to t = 0.0.
+        color_b: Target BGR color tuple corresponding to t = 1.0.
+        t: Transition interpolation factor clamped to [0.0, 1.0].
+
+    Returns:
+        Interpolated BGR color tuple with integer components.
+    """
+    factor = float(np.clip(t, 0.0, 1.0))
+    b = int(round((1.0 - factor) * color_a[0] + factor * color_b[0]))
+    g = int(round((1.0 - factor) * color_a[1] + factor * color_b[1]))
+    r = int(round((1.0 - factor) * color_a[2] + factor * color_b[2]))
+    return (b, g, r)
 
 
 def compute_reticle_pixel_radius(
@@ -461,3 +525,337 @@ def render_depth_heatmap_overlay(
     highlight_overlay[graspable_mask] = jet_color_map[graspable_mask]
 
     return cv2.addWeighted(highlight_overlay, alpha, vis_frame, 1.0 - alpha, 0)
+
+
+def draw_horizon_line_overlay(
+    vis_frame: np.ndarray,
+    grasp_center_2d: tuple[float, float],
+    pitch_pos: float,
+    roll_pos: float,
+    fy: float,
+    horizon_color: tuple[int, int, int] = COLOR_WHITE,
+) -> np.ndarray:
+    """
+    Draw an artificial horizon line overlay tilted by wrist roll and shifted by pitch.
+
+    Args:
+        vis_frame: Target BGR image array.
+        grasp_center_2d: Projected TCP coordinates (u, v) in pixels.
+        pitch_pos: Wrist pitch joint angle in radians.
+        roll_pos: Wrist roll joint angle in radians.
+        fy: Focal length in pixels along the camera Y-axis.
+        horizon_color: BGR color tuple for the horizon line.
+
+    Returns:
+        The annotated BGR image array.
+    """
+    vis_h, vis_w = vis_frame.shape[:2]
+    u_vis = int(round(grasp_center_2d[0]))
+    v_vis = int(round(grasp_center_2d[1]))
+
+    scale_x = vis_w / 640.0
+    scale_y = vis_h / 400.0
+
+    # Vertical pitch offset (focal length * tan(pitch))
+    delta_v = -fy * np.tan(pitch_pos)
+
+    # Center of horizon line relative to reticle
+    u_h = u_vis + delta_v * np.sin(roll_pos)
+    v_h = v_vis + delta_v * np.cos(roll_pos)
+
+    # Unit vector along the horizon line
+    ux = np.cos(roll_pos)
+    uy = -np.sin(roll_pos)
+
+    # Unit vector perpendicular to horizon line pointing toward the ground
+    px = np.sin(roll_pos)
+    py = np.cos(roll_pos)
+
+    # Spread wings out in center so they never overlap with the reticle
+    gap = int(round(40 * scale_x))
+    wing_len = int(round(25 * scale_x))
+    end_tick_len = int(round(6 * scale_x))
+
+    # Thinner horizon line (1px foreground, 2px outline)
+    h_interior_thickness = max(2, int(round(1 * scale_x)))
+    h_outline_thickness = h_interior_thickness + max(2, int(round(1 * scale_x)))
+
+    # Evaluate vertical extent of horizon geometry relative to v_h
+    y_rel_samples: list[float] = []
+    for sign in (-1, 1):
+        for s in (sign * gap, sign * (gap + wing_len)):
+            y_rel_samples.append(float(s * uy))
+        p_end_y = sign * (gap + wing_len) * uy
+        y_rel_samples.append(float(p_end_y + end_tick_len * py))
+
+    min_y_rel = min(y_rel_samples)
+    max_y_rel = max(y_rel_samples)
+
+    top_margin = max(4, int(round(8 * scale_y)))
+    bottom_margin = vis_h - max(4, int(round(8 * scale_y)))
+
+    # If the horizon line is off the top or bottom of the screen, stay pressed against
+    # the respective edge and render with alpha 0.5
+    alpha = 1.0
+    if v_h + min_y_rel < top_margin:
+        v_h = top_margin - min_y_rel
+        alpha = 0.5
+    elif v_h + max_y_rel > bottom_margin:
+        v_h = bottom_margin - max_y_rel
+        alpha = 0.5
+
+    # Clamp u_h so wings stay on screen horizontally
+    max_wing_dx = (gap + wing_len) * abs(ux) + end_tick_len
+    u_h = float(np.clip(u_h, max_wing_dx + 8, vis_w - max_wing_dx - 8))
+
+    draw_target = vis_frame if alpha >= 1.0 else vis_frame.copy()
+
+    for sign in (-1, 1):
+        p_start = (
+            int(round(u_h + sign * gap * ux)),
+            int(round(v_h + sign * gap * uy)),
+        )
+        p_end = (
+            int(round(u_h + sign * (gap + wing_len) * ux)),
+            int(round(v_h + sign * (gap + wing_len) * uy)),
+        )
+        # Outer tip downward tick (pointing toward ground)
+        p_tip = (
+            int(round(p_end[0] + end_tick_len * px)),
+            int(round(p_end[1] + end_tick_len * py)),
+        )
+
+        # Black outline underlay
+        cv2.line(
+            draw_target, p_start, p_end, COLOR_BLACK, h_outline_thickness, cv2.LINE_AA
+        )
+        cv2.line(
+            draw_target, p_end, p_tip, COLOR_BLACK, h_outline_thickness, cv2.LINE_AA
+        )
+
+        # Foreground
+        cv2.line(
+            draw_target,
+            p_start,
+            p_end,
+            horizon_color,
+            h_interior_thickness,
+            cv2.LINE_AA,
+        )
+        cv2.line(
+            draw_target,
+            p_end,
+            p_tip,
+            horizon_color,
+            h_interior_thickness,
+            cv2.LINE_AA,
+        )
+
+    if alpha < 1.0:
+        cv2.addWeighted(draw_target, alpha, vis_frame, 1.0 - alpha, 0, vis_frame)
+
+    return vis_frame
+
+
+def draw_robot_icon_overlay(
+    vis_frame: np.ndarray,
+    arm_pos: float,
+    yaw_pos: float,
+    arm_lim: tuple[float, float] = DEFAULT_ARM_LIMITS,
+    yaw_lim: tuple[float, float] = DEFAULT_YAW_LIMITS,
+    is_in_collision: bool = False,
+    icon_color: tuple[int, int, int] = COLOR_MANIFOLD,
+    scale: float = DEFAULT_ICON_SCALE,
+    keepout_slice_deg: float = DEFAULT_KEEPOUT_SLICE_DEG,
+) -> np.ndarray:
+    """
+    Draw a schematic robot state icon showing base, arm extension, and wrist yaw.
+
+    Args:
+        vis_frame: Target BGR image array.
+        arm_pos: Current arm extension position in meters.
+        yaw_pos: Current wrist yaw position in radians.
+        arm_lim: Minimum and maximum extension boundaries in meters for the arm.
+        yaw_lim: Minimum and maximum angle boundaries in radians for wrist yaw.
+        is_in_collision: Flag indicating whether robot is in self-collision.
+        icon_color: Base BGR color tuple for the robot base and track.
+        scale: Sizing gain factor preserving aspect ratio.
+        keepout_slice_deg: Angular width of the unreachable workspace slice in degrees.
+
+    Returns:
+        The annotated BGR image array.
+    """
+    gain = scale
+    base_radius = int(round(20 * gain))
+    min_arm_len = int(round(20 * gain))
+    max_arm_len = int(round(75 * gain))
+    end_len = int(round(30 * gain))
+    fingertip_radius = max(2, int(round(4 * gain)))
+    line_thickness = max(1, int(round(3 * gain)))
+    outline_px = max(1, int(round(2 * gain)))
+    border_thickness = line_thickness + 2 * outline_px
+    margin = max(10, int(round(25 * gain)))
+
+    h, w = vis_frame.shape[:2]
+
+    cx = w - margin - base_radius
+    cy = h - margin - base_radius
+
+    # Dynamic arm extension meter calculation (20px empty to 75px full)
+    if arm_lim[1] > arm_lim[0]:
+        arm_norm = float(
+            np.clip((arm_pos - arm_lim[0]) / (arm_lim[1] - arm_lim[0]), 0.0, 1.0)
+        )
+    else:
+        arm_norm = 0.0
+    current_arm_len = min_arm_len + arm_norm * (max_arm_len - min_arm_len)
+
+    arm_shaded_end_y = int(round(cy - current_arm_len))
+    arm_full_end_y = int(round(cy - max_arm_len))
+
+    # Color transitions near limits
+    t_arm = compute_limit_danger_factor(arm_pos, arm_lim[0], arm_lim[1], zone_pct=0.10)
+    arm_fill_color = interpolate_bgr((0, 200, 0), COLOR_RED, t_arm)
+
+    t_yaw = compute_limit_danger_factor(yaw_pos, yaw_lim[0], yaw_lim[1], zone_pct=0.10)
+    gripper_base_color = COLOR_ORANGE if is_in_collision else (0, 200, 0)
+    gripper_color = interpolate_bgr(gripper_base_color, COLOR_RED, t_yaw)
+
+    base_color = icon_color
+
+    # Gripper line rotates with yaw and attaches to the tip of the shaded arm section
+    gripper_angle = -np.pi / 2.0 - yaw_pos
+    gripper_end_x = int(round(cx + end_len * np.cos(gripper_angle)))
+    gripper_end_y = int(round(arm_shaded_end_y + end_len * np.sin(gripper_angle)))
+
+    # 1. Semi-transparent fill for track
+    alpha = 0.5
+    overlay = np.zeros_like(vis_frame)
+    cv2.line(
+        overlay,
+        (cx, cy),
+        (cx, arm_full_end_y),
+        icon_color,
+        line_thickness,
+        cv2.LINE_AA,
+    )
+    mask = (overlay > 0).any(axis=-1)
+    vis_frame[mask] = cv2.addWeighted(overlay, alpha, vis_frame, 1.0 - alpha, 0.0)[mask]
+
+    # 2. Base circle
+    cv2.circle(
+        vis_frame, (cx, cy), base_radius, COLOR_BLACK, border_thickness, cv2.LINE_AA
+    )
+    cv2.circle(
+        vis_frame, (cx, cy), base_radius, base_color, line_thickness, cv2.LINE_AA
+    )
+
+    # 3. Gripper workspace: 330-degree reachable workspace sweep fill (grey)
+    half_slice = keepout_slice_deg / 2.0
+    sweep_fill = (100, 100, 100)
+    sweep_overlay = np.zeros_like(vis_frame)
+    cv2.ellipse(
+        sweep_overlay,
+        (cx, arm_shaded_end_y),
+        (end_len, end_len),
+        0,
+        half_slice,
+        360.0 - half_slice,
+        sweep_fill,
+        -1,
+    )
+    sweep_mask = (sweep_overlay > 0).any(axis=-1)
+    sweep_alpha = 0.35
+    vis_frame[sweep_mask] = cv2.addWeighted(
+        sweep_overlay,
+        sweep_alpha,
+        vis_frame,
+        1.0 - sweep_alpha,
+        0.0,
+    )[sweep_mask]
+
+    # Radial stop lines bounding the keep-out wedge
+    edge_color = COLOR_BLACK
+    rad_top = np.radians(-half_slice)
+    rad_bot = np.radians(half_slice)
+    r_top_x = int(round(cx + end_len * np.cos(rad_top)))
+    r_top_y = int(round(arm_shaded_end_y + end_len * np.sin(rad_top)))
+    r_bot_x = int(round(cx + end_len * np.cos(rad_bot)))
+    r_bot_y = int(round(arm_shaded_end_y + end_len * np.sin(rad_bot)))
+    cv2.line(
+        vis_frame,
+        (cx, arm_shaded_end_y),
+        (r_top_x, r_top_y),
+        edge_color,
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.line(
+        vis_frame,
+        (cx, arm_shaded_end_y),
+        (r_bot_x, r_bot_y),
+        edge_color,
+        1,
+        cv2.LINE_AA,
+    )
+
+    # Outer sweep arc
+    cv2.ellipse(
+        vis_frame,
+        (cx, arm_shaded_end_y),
+        (end_len, end_len),
+        0,
+        half_slice,
+        360.0 - half_slice,
+        edge_color,
+        1,
+        cv2.LINE_AA,
+    )
+
+    # 4. Arm bar render
+    cv2.line(
+        vis_frame,
+        (cx, cy),
+        (cx, arm_shaded_end_y),
+        COLOR_BLACK,
+        border_thickness,
+        cv2.LINE_AA,
+    )
+    cv2.line(
+        vis_frame,
+        (cx, cy),
+        (cx, arm_shaded_end_y),
+        arm_fill_color,
+        line_thickness,
+        cv2.LINE_AA,
+    )
+
+    # 5. Gripper bar render
+    cv2.line(
+        vis_frame,
+        (cx, arm_shaded_end_y),
+        (gripper_end_x, gripper_end_y),
+        COLOR_BLACK,
+        border_thickness,
+        cv2.LINE_AA,
+    )
+    cv2.line(
+        vis_frame,
+        (cx, arm_shaded_end_y),
+        (gripper_end_x, gripper_end_y),
+        gripper_color,
+        line_thickness,
+        cv2.LINE_AA,
+    )
+
+    # 6. Fingertip circle
+    cv2.circle(
+        vis_frame,
+        (gripper_end_x, gripper_end_y),
+        fingertip_radius,
+        COLOR_BLACK,
+        -1,
+        cv2.LINE_AA,
+    )
+
+    return vis_frame
