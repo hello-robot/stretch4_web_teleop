@@ -15,6 +15,7 @@ import {
     PlaybackPosesCommand,
     HomeTheRobotCommand,
     GetStretchTool,
+    GetJointVelocity,
     SetJointVelocityCommand,
     SeedLocalizationCommand,
 } from "shared/commands";
@@ -250,6 +251,13 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getStretchTool(type: "getStretchTool") {
         let cmd: GetStretchTool = {
+            type: type,
+        };
+        this.robotChannel(cmd);
+    }
+
+    getJointVelocity(type: "getJointVelocity") {
+        let cmd: GetJointVelocity = {
             type: type,
         };
         this.robotChannel(cmd);
@@ -577,7 +585,7 @@ class RobotSensors extends React.Component {
             filteredPose["wrist_yaw_joint"] = this.robotPose["wrist_yaw_joint"];
         }
         if (gripper) {
-            filteredPose["stretch_gripper_joint"] = this.robotPose["stretch_gripper_joint"];
+            filteredPose["gripper_joint"] = this.robotPose["gripper_joint"];
         }
         return filteredPose;
     }

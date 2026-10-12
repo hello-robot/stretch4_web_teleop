@@ -11,13 +11,13 @@
  *   - Distance and duration coercion for joint moves
  *   - executeStopMotionOnProvider (stops all motion)
  */
-import {
-    JOINT_VELOCITIES,
-    type ValidJoints,
-} from "shared/util";
+import { type ValidJoints } from "shared/util";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
-import { movementRecorderFunctionProvider } from "../index";
+import {
+    flyingGripperFunctionProvider,
+    movementRecorderFunctionProvider,
+} from "../index";
 import {
     clampDurationMs,
     clampJointDistanceM,
@@ -48,10 +48,9 @@ type JointActionMeta = {
  * Signs verified against `negativeButtonPadFunctions` in ButtonFunctionProvider.tsx:
  *   ArmLower, ArmRetract, GripperClose, WristRollLeft, WristPitchUp, WristRotateOut → negative.
  *
- * Velocity magnitudes come from `JOINT_VELOCITIES` in shared/util.tsx:
- *   lift_joint: 0.04 m/s  |  arm_joint: 0.04 m/s
- *   wrist_roll_joint: 0.1 rad/s  |  wrist_pitch_joint: 0.1 rad/s  |  wrist_yaw_joint: 0.4 rad/s
- *   stretch_gripper_joint: not in JOINT_VELOCITIES → falls back to GRIPPER_FALLBACK_VEL
+ * Velocity magnitudes come from `FunctionProvider.jointVelocity()`: `JOINT_VELOCITIES` in
+ * shared/util.tsx times the velocity scale, or for gripper_joint the driver's
+ * joint_velocity.* param for the current speed profile; GRIPPER_FALLBACK_VEL if unset.
  */
 const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     // Lift (m) — ArmLower is in negativeButtonPadFunctions
@@ -70,15 +69,15 @@ const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     wrist_yaw_in: { jointName: "wrist_yaw_joint", sign: 1, unit: "rad" },
     wrist_yaw_out: { jointName: "wrist_yaw_joint", sign: -1, unit: "rad" },
     // Gripper (duration-only) — GripperClose is in negativeButtonPadFunctions
-    gripper_open: { jointName: "stretch_gripper_joint", sign: 1, unit: "duration" },
-    gripper_close: { jointName: "stretch_gripper_joint", sign: -1, unit: "duration" },
+    gripper_open: { jointName: "gripper_joint", sign: 1, unit: "duration" },
+    gripper_close: { jointName: "gripper_joint", sign: -1, unit: "duration" },
 };
 
 // ── Validation sets ───────────────────────────────────────────────────────────
 
 const VALID_JOINT_ACTIONS = new Set<string>(JOINT_MOVE_ACTIONS);
 
-/** stretch_gripper_joint is not in JOINT_VELOCITIES; use this fallback. */
+/** Velocity used when the current speed profile has no entry for the joint. */
 const GRIPPER_FALLBACK_VEL = 0.1;
 
 // ── Concrete executor class ───────────────────────────────────────────────────
@@ -150,8 +149,8 @@ class JointMoveExecutor extends VoiceMoveExecutor {
     }
 
     static velocityForAction(meta: JointActionMeta): number {
-        const jointVel = JOINT_VELOCITIES[meta.jointName] ?? GRIPPER_FALLBACK_VEL;
-        return meta.sign * jointVel * FunctionProvider.velocityScale;
+        const jointVel = FunctionProvider.jointVelocity(meta.jointName) ?? GRIPPER_FALLBACK_VEL;
+        return meta.sign * jointVel;
     }
 
     static execute(
@@ -293,6 +292,11 @@ export function executeStopMotionOnProvider(
         provider.activeVelocityAction !== undefined;
     provider.disableActiveButton();
 
+    const hadFlyingMotion =
+        flyingGripperFunctionProvider.timedVoiceMoveActive ||
+        flyingGripperFunctionProvider.activeVelocityAction !== undefined;
+    flyingGripperFunctionProvider.disableActiveButton();
+
     let hadTrajectoryMotion = false;
     try {
         hadTrajectoryMotion = movementRecorderFunctionProvider.cancelPlayback();
@@ -310,7 +314,11 @@ export function executeStopMotionOnProvider(
         }
     }
 
-    const hadMotion = hadVelocityMotion || hadTrajectoryMotion || hadAutoNav;
+    const hadMotion =
+        hadVelocityMotion ||
+        hadFlyingMotion ||
+        hadTrajectoryMotion ||
+        hadAutoNav;
     VoiceMoveExecutor.emitFeedback({ kind: "stop", hadMotion });
     return {
         ok: true,
