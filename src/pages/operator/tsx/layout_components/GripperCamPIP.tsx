@@ -63,7 +63,11 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
                         layout
                         transition={FRAME_LAYOUT_TRANSITION}
                         className="gripper-cam-frame"
-                        style={{ borderRadius: FRAME_BORDER_RADIUS_PX }}
+                        style={{
+                            borderRadius: isFlyingGripper
+                                ? 0
+                                : FRAME_BORDER_RADIUS_PX,
+                        }}
                         onPointerDown={
                             canEnterFlyingGripper ? onEnterFlyingGripper : undefined
                         }
