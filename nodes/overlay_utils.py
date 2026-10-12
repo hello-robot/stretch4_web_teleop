@@ -36,6 +36,9 @@ DEFAULT_PITCH_LIMITS: tuple[float, float] = (-1.135, 4.276)
 DEFAULT_ROLL_LIMITS: tuple[float, float] = (-4.276, 1.135)
 DEFAULT_TCP_Z: float = 0.216
 DEFAULT_YAW_LIMITS: tuple[float, float] = (-1.135, 4.276)
+DEPTH_HEATMAP_ALPHA: float = 0.5
+DEPTH_HEATMAP_FAR_OFFSET_M: float = 0.3
+DEPTH_HEATMAP_Z_MIN_BOUND_M: float = 0.10
 
 GRASP_Z_MAX_DEFAULT: float = 0.259
 N_POINTS_MIN_GREEN: int = 1000
@@ -525,6 +528,87 @@ def render_depth_heatmap_overlay(
     highlight_overlay[graspable_mask] = jet_color_map[graspable_mask]
 
     return cv2.addWeighted(highlight_overlay, alpha, vis_frame, 1.0 - alpha, 0)
+
+
+def apply_gripper_cam_depth_overlay(
+    image_bgr: np.ndarray,
+    depth_img: np.ndarray,
+    z_thresh1: float = GRASP_Z_MAX_DEFAULT,
+) -> np.ndarray:
+    """
+    Overlay JET colormap with linear alpha fade onto entire image according to depth rules.
+
+    The near zone (depth <= z_thresh1) applies JET colormap saturated at red for depth <= z_min_bound.
+    The transition zone (z_thresh1 < depth <= z_thresh2) applies fixed JET(0) color with linearly
+    decreasing alpha from base alpha (0.5) down to 0.0 at z_thresh2.
+    The far zone (depth > z_thresh2 or invalid) leaves base image pixels unmodified.
+
+    Args:
+        image_bgr: Source BGR image array of shape (H, W, 3) and uint8 dtype.
+        depth_img: Source depth array of shape (H, W) in millimeters or meters.
+        z_thresh1: Near zone upper depth boundary in meters (e.g. grasp center or fingertip extent).
+
+    Returns:
+        Blended BGR image array containing the depth heatmap overlay.
+    """
+    alpha = DEPTH_HEATMAP_ALPHA
+    far_offset = DEPTH_HEATMAP_FAR_OFFSET_M
+    z_min_bound = DEPTH_HEATMAP_Z_MIN_BOUND_M
+    z_thresh2 = z_thresh1 + far_offset
+
+    if depth_img is None or depth_img.size == 0 or image_bgr is None or image_bgr.size == 0:
+        return image_bgr
+
+    vis_h, vis_w = image_bgr.shape[:2]
+
+    # Convert depth to meters
+    if depth_img.shape[:2] != (vis_h, vis_w):
+        depth_resized = cv2.resize(
+            depth_img, (vis_w, vis_h), interpolation=cv2.INTER_NEAREST
+        )
+    else:
+        depth_resized = depth_img
+
+    if depth_resized.dtype == np.uint16 or np.nanmax(depth_resized) > 50.0:
+        depth_m = depth_resized.astype(np.float32) / 1000.0
+    else:
+        depth_m = depth_resized.astype(np.float32)
+
+    # Masks for valid depth ranges
+    valid_mask = depth_m > 0.01
+    near_mask = valid_mask & (depth_m <= z_thresh1)
+    trans_mask = valid_mask & (depth_m > z_thresh1) & (depth_m <= z_thresh2)
+
+    if not np.any(near_mask) and not np.any(trans_mask):
+        return image_bgr
+
+    out_frame = image_bgr.astype(np.float32)
+
+    # 1. Process Near Zone: JET colormap with red saturation
+    if np.any(near_mask):
+        norm_depth = np.clip(
+            (depth_m - z_min_bound) / max(z_thresh1 - z_min_bound, 0.001),
+            0.0,
+            1.0,
+        )
+        # Inverse depth mapping: 255 at z_min_bound (red), 0 at z_thresh1 (jet(0) / dark blue)
+        depth_u8 = np.clip((1.0 - norm_depth) * 255.0, 0, 255).astype(np.uint8)
+        jet_bgr = cv2.applyColorMap(depth_u8, cv2.COLORMAP_JET).astype(np.float32)
+
+        out_frame[near_mask] = (1.0 - alpha) * out_frame[near_mask] + alpha * jet_bgr[near_mask]
+
+    # 2. Process Transition Zone: jet(0) with linearly decreasing alpha
+    if np.any(trans_mask):
+        depth_trans = depth_m[trans_mask]
+        alpha_ratio = 1.0 - (depth_trans - z_thresh1) / max(z_thresh2 - z_thresh1, 0.001)
+        alpha_trans = np.clip(alpha * alpha_ratio, 0.0, alpha)[:, np.newaxis]
+
+        orig_pixels = out_frame[trans_mask]
+        color_target = np.array([128.0, 0.0, 0.0], dtype=np.float32)[np.newaxis, :]  # JET(0) BGR
+
+        out_frame[trans_mask] = (1.0 - alpha_trans) * orig_pixels + alpha_trans * color_target
+
+    return np.clip(out_frame, 0, 255).astype(np.uint8)
 
 
 def draw_horizon_line_overlay(

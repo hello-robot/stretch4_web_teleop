@@ -63,6 +63,7 @@ from overlay_utils import (
     STATE_YELLOW,
     WINDOW_HALF_WIDTH_M,
     Z_NEAR_M,
+    apply_gripper_cam_depth_overlay,
     compute_reticle_pixel_radius,
     compute_reticle_window_mask,
     compute_swept_volume_mask,
@@ -128,7 +129,7 @@ class GraspingPerceptionNode(Node):
         # Feature toggle states
         self.processing_enabled: bool = True
         self.show_swept_volume: bool = False
-        self.show_depth_points: bool = False
+        self.show_depth_points: bool = True
         self.show_reticle: bool = True
         self.show_horizon: bool = True
         self.show_robot_icon: bool = True
@@ -190,6 +191,13 @@ class GraspingPerceptionNode(Node):
             sensor_qos,
             callback_group=cb_group,
         )
+        self.sub_depth_raw = self.create_subscription(
+            Image,
+            "/cameras_gripper/stereo/image_raw",
+            self._depth_cb,
+            sensor_qos,
+            callback_group=cb_group,
+        )
         self.sub_camera_info = self.create_subscription(
             CameraInfo,
             "/cameras_gripper/right/camera_info",
@@ -243,6 +251,11 @@ class GraspingPerceptionNode(Node):
             self._toggle_robot_icon_cb,
         )
         # Compatibility aliases under /grasping_visualization
+        self.srv_toggle_depth_vis = self.create_service(
+            Trigger,
+            "/grasping_visualization/toggle_depth_heatmap",
+            self._toggle_depth_heatmap_cb,
+        )
         self.srv_toggle_horizon_vis = self.create_service(
             Trigger,
             "/grasping_visualization/toggle_horizon",
@@ -583,12 +596,12 @@ class GraspingPerceptionNode(Node):
         with self.image_lock:
             self.latest_rgb_msg = msg
 
-    def _depth_cb(self, msg: CompressedImage) -> None:
+    def _depth_cb(self, msg: CompressedImage | Image) -> None:
         """
-        Decode and cache incoming stereo compressed depth frame.
+        Decode and cache incoming stereo compressed or raw depth frame.
 
         Args:
-            msg: CompressedImage ROS message containing depth data.
+            msg: CompressedImage or Image ROS message containing depth data.
 
         Returns:
             None.
@@ -794,11 +807,11 @@ class GraspingPerceptionNode(Node):
         self.num_window_pts = num_pts
         self.num_near_window_pts = num_near
 
-    def _draw_swept_volume_overlay(
+    def _draw_depth_heatmap_overlay(
         self, vis_frame: np.ndarray, depth_img: np.ndarray | None
     ) -> np.ndarray:
         """
-        Render swept volume manifold and depth heatmap overlays onto the frame.
+        Render the gripper camera depth heatmap overlay onto the frame if enabled.
 
         Args:
             vis_frame: Input BGR image array.
@@ -807,35 +820,32 @@ class GraspingPerceptionNode(Node):
         Returns:
             Annotated BGR image array.
         """
-        vis_h, vis_w = vis_frame.shape[:2]
-        self._update_reticle_depth_window(depth_img, vis_w, vis_h)
+        if not self.show_depth_points or depth_img is None or depth_img.size == 0:
+            return vis_frame
 
-        combined_mask_2d = np.zeros((vis_h, vis_w), dtype=np.uint8)
+        z_thresh1 = getattr(self, "grasp_z_max", GRASP_Z_MAX_DEFAULT)
+        return apply_gripper_cam_depth_overlay(
+            image_bgr=vis_frame,
+            depth_img=depth_img,
+            z_thresh1=z_thresh1,
+        )
 
-        if self.swept_volume_data:
-            rendered_frame, combined_mask_2d = render_swept_volume_manifold(
+    def _draw_swept_volume_overlay(self, vis_frame: np.ndarray) -> np.ndarray:
+        """
+        Render compliant fingertip swept volume manifold overlay if enabled.
+
+        Args:
+            vis_frame: Input BGR image array.
+
+        Returns:
+            Annotated BGR image array.
+        """
+        if self.swept_volume_data and self.show_swept_volume:
+            rendered_frame, _ = render_swept_volume_manifold(
                 vis_frame=vis_frame,
                 swept_volume_data=self.swept_volume_data,
             )
-            if self.show_swept_volume:
-                vis_frame = rendered_frame
-
-        if depth_img is not None and depth_img.size > 0 and self.show_depth_points:
-            if np.any(combined_mask_2d > 0):
-                valid_mask = combined_mask_2d > 0
-            else:
-                valid_mask = self._get_reticle_window_mask(vis_w, vis_h)
-
-            z_max = getattr(self, "grasp_z_max", GRASP_Z_MAX_DEFAULT)
-            vis_frame = render_depth_heatmap_overlay(
-                vis_frame=vis_frame,
-                depth_img=depth_img,
-                valid_mask=valid_mask,
-                z_max=z_max,
-                z_min_bound=0.10,
-                alpha=0.50,
-            )
-
+            return rendered_frame
         return vis_frame
 
     def _draw_reticle_overlay(self, vis_frame: np.ndarray) -> np.ndarray:
@@ -959,10 +969,23 @@ class GraspingPerceptionNode(Node):
         if image_bgr is None or image_bgr.size == 0:
             return
 
-        # Process frame and draw overlays
-        vis_frame = self._draw_swept_volume_overlay(image_bgr.copy(), depth_img)
+        vis_h, vis_w = image_bgr.shape[:2]
+        self._update_reticle_depth_window(depth_img, vis_w, vis_h)
+
+        # Process frame and draw overlays in strict layer order:
+        # 1. Depth heatmap overlay (underneath reticle, horizon line, and robot icon)
+        vis_frame = self._draw_depth_heatmap_overlay(image_bgr.copy(), depth_img)
+
+        # 2. Compliant fingertip swept volume manifold overlay
+        vis_frame = self._draw_swept_volume_overlay(vis_frame)
+
+        # 3. Reticle crosshair overlay
         vis_frame = self._draw_reticle_overlay(vis_frame)
+
+        # 4. Artificial horizon line overlay
         vis_frame = self._draw_horizon_overlay(vis_frame)
+
+        # 5. Robot state schematic icon overlay
         vis_frame = self._draw_robot_icon_overlay(vis_frame)
 
         # Publish reticle enum state
