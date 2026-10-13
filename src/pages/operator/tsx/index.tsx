@@ -1,5 +1,4 @@
 import { FirebaseOptions } from "firebase/app";
-<<<<<<< HEAD
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { cmd } from "shared/commands";
@@ -9,22 +8,9 @@ import {
 } from "shared/operatorVoiceSession";
 import { RemoteRobot } from "shared/remoterobot";
 import {
-    delay,
-    getStretchTool,
-    RemoteStream,
-    ROSOccupancyGrid,
-    StretchTool,
-    waitUntil,
-    WebRTCMessage
-} from "shared/util";
-import {
     consumeOperatorTakeover,
     OPERATOR_SEAT_STALE_MS,
 } from "shared/signaling/operatorSeat";
-=======
-import { createRoot, Root } from "react-dom/client";
-import { cmd } from "shared/commands";
-import { RemoteRobot } from "shared/remoterobot";
 import {
     delay,
     JointVelocityLimitsMessage,
@@ -36,24 +22,16 @@ import {
     waitUntil,
     WebRTCMessage
 } from "shared/util";
->>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 import { WebRTCConnection } from "shared/webrtcconnections";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-<<<<<<< HEAD
 import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import { createLoginHandler } from "../../home/tsx/utils";
 import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
-=======
-import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
-import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
-import { StorageHandler } from "./storage_handler/StorageHandler";
-import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
->>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 
 import "operator/css/index.css";
 import { waitUntilAsync } from "../../../shared/util";
@@ -65,13 +43,10 @@ import { MovementRecorderFunctionProvider } from "./function_providers/MovementR
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
-<<<<<<< HEAD
 import {
     configureVoiceTokenRelay,
     resolveVoiceToken,
 } from "./voice/voiceTokenRelay";
-=======
->>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -393,7 +368,6 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "odom":
             remoteRobot.sensors.setOdom(message.message);
             break;
-<<<<<<< HEAD
         // @flag voice_control_interface
         case "voiceCapability":
             setOperatorVoiceSvc(message.enabled);
@@ -402,10 +376,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         // @flag voice_control_interface
         case "voiceToken":
             resolveVoiceToken(message);
-=======
+            break;
         case "jointVelocityLimits":
             updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
->>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
             break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
@@ -438,13 +411,10 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
-<<<<<<< HEAD
     // @flag voice_control_interface
     remoteRobot.getVoiceCapability();
     configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
-=======
     remoteRobot.getJointVelocity("getJointVelocity");
->>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(

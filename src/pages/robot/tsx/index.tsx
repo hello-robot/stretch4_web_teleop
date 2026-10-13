@@ -16,6 +16,7 @@ import {
     IsHomedMessage,
     IsRunStoppedMessage,
     JointVelocityLimits,
+    LeaseStatusMessage,
     JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
@@ -188,7 +189,6 @@ function forwardStretchTool(value: string) {
     } as StretchToolMessage);
 }
 
-<<<<<<< HEAD
 // @flag voice_control_interface
 function forwardVoiceCapability() {
     if (!connection) throw "WebRTC connection undefined!";
@@ -230,7 +230,8 @@ async function forwardVoiceToken() {
     } catch (err) {
         reply({ error: err instanceof Error ? err.message : String(err) });
     }
-=======
+}
+
 function forwardJointVelocityLimits(limits: JointVelocityLimits) {
     if (!connection) throw "WebRTC connection undefined!";
 
@@ -238,7 +239,6 @@ function forwardJointVelocityLimits(limits: JointVelocityLimits) {
         type: "jointVelocityLimits",
         jointVelocities: limits,
     } as JointVelocityLimitsMessage);
->>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 }
 
 function forwardJointStates(
