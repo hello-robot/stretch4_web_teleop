@@ -6,5 +6,9 @@
     "voice_input_recording": {
         "enabled": false,
         "description": "Records Opus (mp3-style) audio-snippet clips of voice control inputs. Does not gate the voice JSONL interaction/mic/transcribe logs, which always run when voice_control_interface is enabled."
+    },
+    "local_collision_avoidance": {
+        "enabled": true,
+        "description": "Toggles collision monitoring when the interface is launched without a map. Ignored when a map is loaded."
     }
 }

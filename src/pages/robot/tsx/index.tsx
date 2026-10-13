@@ -1,4 +1,3 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
 import { Transform } from "roslib";
@@ -16,11 +15,14 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
+    JointVelocityLimits,
+    JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
     navigationProps,
     OccupancyGridMessage,
     OdomMessage,
+    parseToolMetadata,
     RobotPose,
     ROSBatteryState,
     ROSOccupancyGrid,
@@ -52,6 +54,7 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
+    jointVelocityLimitsCallback: forwardJointVelocityLimits,
 });
 
 export let connection: WebRTCConnection;
@@ -177,12 +180,15 @@ function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
 function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
+    const isActuated = robot.isToolActuated();
     connection.sendData({
         type: "stretchTool",
         value: value,
+        toolMetadata: parseToolMetadata(value, isActuated),
     } as StretchToolMessage);
 }
 
+<<<<<<< HEAD
 // @flag voice_control_interface
 function forwardVoiceCapability() {
     if (!connection) throw "WebRTC connection undefined!";
@@ -224,6 +230,15 @@ async function forwardVoiceToken() {
     } catch (err) {
         reply({ error: err instanceof Error ? err.message : String(err) });
     }
+=======
+function forwardJointVelocityLimits(limits: JointVelocityLimits) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "jointVelocityLimits",
+        jointVelocities: limits,
+    } as JointVelocityLimitsMessage);
+>>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 }
 
 function forwardJointStates(
@@ -404,6 +419,9 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "getStretchTool":
             robot.getStretchTool();
+            break;
+        case "getJointVelocity":
+            robot.getJointVelocityLimits();
             break;
         case "homeTheRobot":
             robot.homeTheRobot();

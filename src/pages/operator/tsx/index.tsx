@@ -1,4 +1,5 @@
 import { FirebaseOptions } from "firebase/app";
+<<<<<<< HEAD
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { cmd } from "shared/commands";
@@ -20,16 +21,39 @@ import {
     consumeOperatorTakeover,
     OPERATOR_SEAT_STALE_MS,
 } from "shared/signaling/operatorSeat";
+=======
+import { createRoot, Root } from "react-dom/client";
+import { cmd } from "shared/commands";
+import { RemoteRobot } from "shared/remoterobot";
+import {
+    delay,
+    JointVelocityLimitsMessage,
+    parseToolMetadata,
+    RemoteStream,
+    ROSOccupancyGrid,
+    ToolMetadata,
+    updateJointVelocities,
+    waitUntil,
+    WebRTCMessage
+} from "shared/util";
+>>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 import { WebRTCConnection } from "shared/webrtcconnections";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
+<<<<<<< HEAD
 import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import { createLoginHandler } from "../../home/tsx/utils";
 import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
+=======
+import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
+import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
+import { StorageHandler } from "./storage_handler/StorageHandler";
+import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
+>>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 
 import "operator/css/index.css";
 import { waitUntilAsync } from "../../../shared/util";
@@ -41,10 +65,13 @@ import { MovementRecorderFunctionProvider } from "./function_providers/MovementR
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
+<<<<<<< HEAD
 import {
     configureVoiceTokenRelay,
     resolveVoiceToken,
 } from "./voice/voiceTokenRelay";
+=======
+>>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -53,7 +80,7 @@ let allRemoteStreams: Map<string, RemoteStream> = new Map<
 let remoteRobot: RemoteRobot;
 let connection: WebRTCConnection;
 let root: Root;
-export let stretchTool: StretchTool;
+let toolMetadata: ToolMetadata | undefined = undefined;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
 export let loginHandler: LoginHandler;
@@ -102,6 +129,27 @@ export function subscribeOccupancyGridReady(
 function resetOccupancyGrid() {
     occupancyGrid = undefined;
     occupancyGridReadyListeners.clear();
+}
+
+type ToolMetadataListener = (toolMetadata: ToolMetadata) => void;
+const toolMetadataListeners = new Set<ToolMetadataListener>();
+
+/** Subscribe to tool metadata updates. Fires immediately if already known. */
+export function subscribeToolMetadata(
+    callback: ToolMetadataListener,
+): () => void {
+    toolMetadataListeners.add(callback);
+    if (toolMetadata) {
+        callback(toolMetadata);
+    }
+    return () => {
+        toolMetadataListeners.delete(callback);
+    };
+}
+
+function setToolMetadata(newToolMetadata: ToolMetadata) {
+    toolMetadata = newToolMetadata;
+    toolMetadataListeners.forEach((listener) => listener(newToolMetadata));
 }
 
 // Create the function providers. These abstract the logic between the React
@@ -287,8 +335,15 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             remoteRobot.sensors.setLeaseStatus(message.holder, message.isDriverHolding);
             break;
         case "stretchTool":
-            console.log("index stretchTool", message.value);
-            stretchTool = getStretchTool(message.value);
+            setToolMetadata(
+                message.toolMetadata || parseToolMetadata(message.value),
+            );
+            console.log(
+                "[Operator index] stretchTool message received:",
+                message.value,
+                "toolMetadata:",
+                toolMetadata,
+            );
             break;
         case "occupancyGrid":
             if (!occupancyGrid) {
@@ -338,6 +393,7 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "odom":
             remoteRobot.sensors.setOdom(message.message);
             break;
+<<<<<<< HEAD
         // @flag voice_control_interface
         case "voiceCapability":
             setOperatorVoiceSvc(message.enabled);
@@ -346,6 +402,10 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         // @flag voice_control_interface
         case "voiceToken":
             resolveVoiceToken(message);
+=======
+        case "jointVelocityLimits":
+            updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
+>>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
             break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
@@ -378,9 +438,13 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+<<<<<<< HEAD
     // @flag voice_control_interface
     remoteRobot.getVoiceCapability();
     configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
+=======
+    remoteRobot.getJointVelocity("getJointVelocity");
+>>>>>>> 7fdbeb75370841c6c4e27679346771c7c0b4d3fe
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(

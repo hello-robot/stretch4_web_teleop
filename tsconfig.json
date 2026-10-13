@@ -12,5 +12,7 @@
             "home/*": ["src/pages/home/*"],
             "ai-gateway/*": ["ai-gateway/*"]
         }
-    }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "build", "dist"]
 }
