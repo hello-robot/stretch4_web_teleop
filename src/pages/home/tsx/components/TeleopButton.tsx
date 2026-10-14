@@ -76,7 +76,7 @@ const treatmentFor = (
     return "offline";
 };
 
-/** Who is driving, as a line under the button rather than inside it. */
+/** Who is driving, beside the Stop label so the photo spans both lines. */
 const OccupantNote = ({ email }: { email?: string }) => {
     const [photo, photoSet] = useState<string | null>(null);
     const [photoReady, photoReadySet] = useState(false);
@@ -86,7 +86,7 @@ const OccupantNote = ({ email }: { email?: string }) => {
         photoReadySet(false);
         if (!email) return;
         let cancelled = false;
-        gravatarUrl(email, 44).then((url) => {
+        gravatarUrl(email, 64).then((url) => {
             if (!cancelled) photoSet(url);
         });
         return () => {
@@ -95,7 +95,7 @@ const OccupantNote = ({ email }: { email?: string }) => {
     }, [email]);
 
     return (
-        <p className="hr-teleop__note">
+        <span className="hr-button__occupant">
             {photo ? (
                 <img
                     className="hr-teleop__note-photo"
@@ -109,10 +109,13 @@ const OccupantNote = ({ email }: { email?: string }) => {
                     }}
                 />
             ) : null}
-            <span className="hr-teleop__note-text">
-                {email ? `In use by ${email}` : "In use by another operator"}
+            <span className="hr-button__stack">
+                <span>Stop Interface</span>
+                <span className="hr-teleop__note-text">
+                    {email ? `In use by ${email}` : "In use by another operator"}
+                </span>
             </span>
-        </p>
+        </span>
     );
 };
 
@@ -304,14 +307,14 @@ const controlFor = (
     }
     if (treatment === "failed") {
         return (
-            <>
-                <button className="hr-button hr-button--primary" type="button" onClick={onLaunch}>
-                    Start Interface
-                </button>
-                <p className="hr-teleop__note hr-teleop__note--fail">
-                    Launch failed &mdash; check LOGS
-                </p>
-            </>
+            <button className="hr-button hr-button--primary" type="button" onClick={onLaunch}>
+                <span className="hr-button__stack">
+                    <span>Start Interface</span>
+                    <span className="hr-teleop__note hr-teleop__note--fail">
+                        Launch failed &mdash; check LOGS
+                    </span>
+                </span>
+            </button>
         );
     }
     if (treatment === "pending") {
@@ -419,12 +422,9 @@ const controlFor = (
     }
     if (treatment === "in-use") {
         return (
-            <>
-                <button className="hr-button hr-button--ghost" type="button" onClick={onStop}>
-                    Stop Interface
-                </button>
+            <button className="hr-button hr-button--ghost" type="button" onClick={onStop}>
                 <OccupantNote email={occupantEmail} />
-            </>
+            </button>
         );
     }
     return (
