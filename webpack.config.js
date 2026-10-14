@@ -2,10 +2,8 @@ const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 const dotenv = require("dotenv");
-const { envVarName, loadFeatures } = require("./feature-flags");
-const {
-    webpackPublicEnvDefinitions,
-} = require("./scripts/webpackPublicEnv");
+const { webpackPublicEnvDefinitions } = require("./scripts/webpackPublicEnv");
+const { envVarName, loadFeatures, FEATURES_PATH } = require("./feature-flags");
 
 const pages = ["robot", "operator", "home"];
 
@@ -29,7 +27,15 @@ module.exports = (webpackEnv, argv) => {
     });
 
     return {
-        mode: argv && argv.mode ? argv.mode : "development",
+        mode: "development",
+        cache: {
+            type: "filesystem",
+            version: JSON.stringify({
+                flags: loadFeatures(),
+                storage: env.storage,
+            }),
+            buildDependencies: { config: [__filename, FEATURES_PATH] },
+        },
         entry: pages.reduce((config, page) => {
             config[page] = `./src/pages/${page}/tsx/index.tsx`;
             return config;
@@ -41,9 +47,7 @@ module.exports = (webpackEnv, argv) => {
                 storageValue === "firebase" ? "dist-firebase" : "dist",
             ),
             publicPath:
-                storageValue === "localstorage" && dualMode
-                    ? "/local/"
-                    : "/",
+                storageValue === "localstorage" && dualMode ? "/local/" : "/",
             // Incremental watch builds reuse cached HTML/assets. Cleaning on
             // every rebuild can remove those cached files without re-emitting
             // them, leaving the local server with 404s.

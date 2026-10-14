@@ -78,7 +78,7 @@ function isEnabled(name) {
     return features[name];
 }
 
-module.exports = { envVarName, isEnabled, loadFeatures };
+module.exports = { envVarName, isEnabled, loadFeatures, FEATURES_PATH };
 
 if (require.main === module) {
     const arg = process.argv[2];

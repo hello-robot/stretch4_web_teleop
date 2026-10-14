@@ -7,7 +7,6 @@
  * data channel and relays minted credentials on requestVoiceToken.
  */
 
-import { FEATURE_VOICE_CONTROL_INTERFACE } from "shared/featureFlags";
 import type { Socket } from "socket.io-client";
 
 let operatorVoiceSessionToken: string | undefined;
@@ -61,15 +60,16 @@ export function subscribeOperatorVoiceSvc(listener: () => void): () => void {
 }
 
 /**
- * The single gate for every SVC surface in the operator UI.
+ * The single gate for every voice control surface in the operator UI.
  *
- * Requires both: the flag was on when this bundle was built, and the robot
- * side (local server or the robot browser over the data channel) confirmed it
- * can mint OpenAI credentials for this session.
+ * Requires that server.js had the voice_control_interface flag on at startup
+ * (reported in the join_as_operator reply) and that this is not a firebase
+ * build (firebase operators never join the local server, so never get a voice
+ * session token).
  */
 // @flag voice_control_interface
 export function isVoiceControlEnabled(): boolean {
-    return FEATURE_VOICE_CONTROL_INTERFACE && operatorVoiceSvc;
+    return operatorVoiceSvc && process.env.storage !== "firebase";
 }
 
 export function setOperatorVoiceInputRecording(enabled: boolean): void {
