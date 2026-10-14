@@ -572,7 +572,8 @@
     max-width: 100%;
 }
 
-.hr-button__occupant:has(.hr-teleop__note-photo:not([hidden])) .hr-button__stack {
+.hr-button__occupant:has(.hr-teleop__note-photo:not([hidden]))
+    .hr-button__stack {
     align-items: flex-start;
 }
 
