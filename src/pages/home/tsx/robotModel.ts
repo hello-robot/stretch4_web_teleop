@@ -84,6 +84,7 @@ export const FEATURE_FLAGS: Record<string, FeatureEntry> = featuresJson;
 export const FEATURE_LABELS: Record<string, string> = {
     voice_control_interface: "Stretch Voice Control (SVC)",
     voice_input_recording: "Record voice audio",
+    local_collision_avoidance: "Local collision avoidance",
 };
 
 export const featureLabel = (flag: string): string =>
