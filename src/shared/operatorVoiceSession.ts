@@ -63,13 +63,11 @@ export function subscribeOperatorVoiceSvc(listener: () => void): () => void {
  * The single gate for every voice control surface in the operator UI.
  *
  * Requires that server.js had the voice_control_interface flag on at startup
- * (reported in the join_as_operator reply) and that this is not a firebase
- * build (firebase operators never join the local server, so never get a voice
- * session token).
+ * (reported in the join_as_operator reply).
  */
 // @flag voice_control_interface
 export function isVoiceControlEnabled(): boolean {
-    return operatorVoiceSvc && process.env.storage !== "firebase";
+    return operatorVoiceSvc;
 }
 
 export function setOperatorVoiceInputRecording(enabled: boolean): void {
