@@ -298,7 +298,7 @@ const controlFor = (
     if (treatment === "standby") {
         return (
             <button className="hr-button hr-button--primary" type="button" onClick={onLaunch}>
-                Launch Interface
+                Start Interface
             </button>
         );
     }
@@ -306,7 +306,7 @@ const controlFor = (
         return (
             <>
                 <button className="hr-button hr-button--primary" type="button" onClick={onLaunch}>
-                    Launch Interface
+                    Start Interface
                 </button>
                 <p className="hr-teleop__note hr-teleop__note--fail">
                     Launch failed &mdash; check LOGS
@@ -429,7 +429,7 @@ const controlFor = (
     }
     return (
         <button className="hr-button hr-button--dim" type="button" disabled>
-            Launch Interface
+            Start Interface
         </button>
     );
 };
