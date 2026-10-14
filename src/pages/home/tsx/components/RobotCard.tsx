@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { loginHandler } from "../index";
 import {
     CardTone,
+    holdsOperatorSeat,
     MapIndex,
     normalizeStatus,
     OperatorSeat,
@@ -28,7 +29,10 @@ import { StatusPill } from "./StatusPill";
 import { LaunchLogPanel } from "./LaunchLogPanel";
 import { TeleopButton } from "./TeleopButton";
 
-const PENCIL: Record<CardTone, string> = { lit: pencilOnline, dim: pencilOffline };
+const PENCIL: Record<CardTone, string> = {
+    lit: pencilOnline,
+    dim: pencilOffline,
+};
 
 interface EditableRowProps {
     icon: string;
@@ -39,7 +43,14 @@ interface EditableRowProps {
     onEdit: () => void;
 }
 
-const EditableRow = ({ icon, label, tone, editLabel, locked, onEdit }: EditableRowProps) => (
+const EditableRow = ({
+    icon,
+    label,
+    tone,
+    editLabel,
+    locked,
+    onEdit,
+}: EditableRowProps) => (
     <div className="hr-row">
         <div className="hr-row__main">
             <img alt="" className="hr-row__icon" src={icon} />
@@ -89,12 +100,28 @@ const glowFor = (status: RobotStatus, beat: boolean): CardGlow | null => {
     return null;
 };
 
-export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardProps) => {
+export const RobotCard = ({
+    uid,
+    robot,
+    maps,
+    onError,
+    revealIndex,
+}: RobotCardProps) => {
     const [mapSheetOpen, mapSheetOpenSet] = useState(false);
     const [configSheetOpen, configSheetOpenSet] = useState(false);
     const [seat, seatSet] = useState<OperatorSeat | null>(null);
     const [logsOpen, logsOpenSet] = useState(false);
     const [manualLaunch, manualLaunchSet] = useState(false);
+    /**
+     * A relaunch driven from a settings sheet, tracked across the whole
+     * stop -> standby -> launch -> online cycle. The card needs the phase, not
+     * just a pending flag: it drives the Starting animation, which has to stay
+     * up for the launch itself and not only for the stop.
+     */
+    const [restart, restartSet] = useState<{
+        phase: "stopping" | "launching";
+        mapId: string | null;
+    } | null>(null);
     const [slotHeight, slotHeightSet] = useState<number | null>(null);
     const cardRef = useRef<HTMLElement>(null);
     const dialogRef = useRef<HTMLElement>(null);
@@ -111,18 +138,13 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
     const status = normalizeStatus(robot.status);
     const presence = presenceFor(status, seat !== null);
     const tone = toneForStatus(robot.status);
-    const mapName = robot.map_id ? maps[robot.map_id]?.name ?? robot.map_id : "No map selected";
-    const settingsLocked = status !== "standby";
+    const mapName = robot.map_id
+        ? maps[robot.map_id]?.name ?? robot.map_id
+        : "No map selected";
     const { beat, beatUntil } = useLaunchingBeat(status);
     const reduceMotion = usePrefersReducedMotion();
     const glow = glowFor(status, beat);
     const pulsed = glow === "outside" || glow === "inner";
-
-    useEffect(() => {
-        if (!settingsLocked) return;
-        mapSheetOpenSet(false);
-        configSheetOpenSet(false);
-    }, [settingsLocked]);
 
     useEffect(() => {
         if (status === "standby" || status === "offline") {
@@ -154,14 +176,83 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
     };
 
     const report = (what: string) => (err: unknown) =>
-        onError(`${what} failed: ${err instanceof Error ? err.message : String(err)}`);
+        onError(
+            `${what} failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+
+    const interfaceActive =
+        status === "launching" || status === "online" || status === "occupied";
+
+    const occupiedBy =
+        (status === "online" || status === "occupied") &&
+        seat &&
+        !holdsOperatorSeat(seat, loginHandler.getUserUid())
+            ? seat.initials || seat.email || "Another operator"
+            : null;
+
+    /**
+     * Persist a sheet's staged edit, then make the robot pick it up. The daemon
+     * reads map and config once per launch, so a running interface is stopped
+     * and relaunched; the relaunch itself is issued by the effect below, once
+     * the daemon reports standby.
+     *
+     * mapId is carried through rather than re-read from the record at relaunch
+     * time, so a map chosen here is the one launched even if the RTDB watch has
+     * not caught up.
+     */
+    const applyAndRestart = async (
+        what: string,
+        write: () => Promise<void>,
+        mapId: string | null
+    ) => {
+        try {
+            await write();
+            mapSheetOpenSet(false);
+            configSheetOpenSet(false);
+            if (!interfaceActive) return;
+            restartSet({ phase: "stopping", mapId });
+            await loginHandler.requestRobotStop(uid);
+        } catch (err) {
+            restartSet(null);
+            // The control node accepts a write only while empty, so a launch or
+            // stop already in flight is rejected by the rules rather than
+            // queued. That arrives as PERMISSION_DENIED, which otherwise reads
+            // as an access problem on a robot the user can plainly see.
+            const message = err instanceof Error ? err.message : String(err);
+            onError(
+                /PERMISSION_DENIED/i.test(message)
+                    ? `${what} failed: the robot is handling another launch or stop, or you are not assigned to it. Try again in a moment.`
+                    : `${what} failed: ${message}`
+            );
+        }
+    };
+
+    useEffect(() => {
+        if (restart?.phase !== "stopping" || status !== "standby") return;
+        const { mapId } = restart;
+        restartSet({ phase: "launching", mapId });
+        loginHandler.requestRobotLaunch(uid, mapId).catch((err) => {
+            restartSet(null);
+            report("Relaunching")(err);
+        });
+    }, [restart, status, uid]);
+
+    // Relaunch landed, failed back to standby, or the robot dropped off.
+    // standby is still in flight: the daemon reports it until launching begins.
+    useEffect(() => {
+        if (restart?.phase !== "launching") return;
+        if (status === "launching" || status === "standby") return;
+        restartSet(null);
+    }, [restart, status]);
 
     const cardClass = [
         "hr-card",
         `hr-card--${tone}`,
         pulsed && !reduceMotion ? "hr-card--beam" : "",
         glow === "breathe" ? "hr-card--breathe" : "",
-    ].filter(Boolean).join(" ");
+    ]
+        .filter(Boolean)
+        .join(" ");
     const rowsLayoutId = reduceMotion ? undefined : `hr-card-rows-${uid}`;
 
     const card = (expanded: boolean) => (
@@ -169,13 +260,26 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
             ref={expanded ? dialogRef : cardRef}
             layout={!reduceMotion}
             layoutId={reduceMotion ? undefined : `hr-card-${uid}`}
-            className={[cardClass, expanded ? "hr-card--logs" : "hr-card--reveal"].join(" ")}
-            style={expanded ? undefined : { animationDelay: `${revealIndex * REVEAL_STAGGER_MS}ms` }}
+            className={[
+                cardClass,
+                expanded ? "hr-card--logs" : "hr-card--reveal",
+            ].join(" ")}
+            style={
+                expanded
+                    ? undefined
+                    : { animationDelay: `${revealIndex * REVEAL_STAGGER_MS}ms` }
+            }
             role={expanded ? "dialog" : undefined}
             aria-modal={expanded ? true : undefined}
-            aria-label={expanded ? `${robotDisplayId(name)} launch logs` : undefined}
+            aria-label={
+                expanded ? `${robotDisplayId(name)} launch logs` : undefined
+            }
             tabIndex={expanded ? -1 : undefined}
-            transition={reduceMotion ? { duration: 0 } : { layout: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } }}
+            transition={
+                reduceMotion
+                    ? { duration: 0 }
+                    : { layout: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } }
+            }
         >
             <header className="hr-card__head">
                 <span className="hr-card__id">{robotDisplayId(name)}</span>
@@ -185,12 +289,20 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
             {expanded && (
                 <div className="hr-card__compact">
                     <div className="hr-card__compact-map">
-                        <img alt="" className="hr-card__compact-icon" src={mapMarkerIcon} />
+                        <img
+                            alt=""
+                            className="hr-card__compact-icon"
+                            src={mapMarkerIcon}
+                        />
                         <span>{mapName}</span>
                     </div>
                     <div className="hr-card__config">
                         <span className="hr-card__compact-label">
-                            <img alt="" className="hr-card__compact-icon" src={configIcon} />
+                            <img
+                                alt=""
+                                className="hr-card__compact-icon"
+                                src={configIcon}
+                            />
                             Config
                         </span>
                         <ConfigChecklist robot={robot} tone={tone} />
@@ -200,17 +312,23 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
 
             <div className="hr-card__body">
                 {expanded ? (
-                    <motion.div layoutId={rowsLayoutId} className="hr-launch-log-slot">
+                    <motion.div
+                        layoutId={rowsLayoutId}
+                        className="hr-launch-log-slot"
+                    >
                         <LaunchLogPanel fleetId={uid} />
                     </motion.div>
                 ) : (
-                    <motion.div layoutId={rowsLayoutId} className="hr-card__rows">
+                    <motion.div
+                        layoutId={rowsLayoutId}
+                        className="hr-card__rows"
+                    >
                         <EditableRow
                             icon={mapMarkerIcon}
                             label={mapName}
                             tone={tone}
                             editLabel="Change map"
-                            locked={settingsLocked}
+                            locked={false}
                             onEdit={() => mapSheetOpenSet(true)}
                         />
                         <div className="hr-card__config">
@@ -219,7 +337,7 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
                                 label="Config"
                                 tone={tone}
                                 editLabel="Edit config"
-                                locked={settingsLocked}
+                                locked={false}
                                 onEdit={() => configSheetOpenSet(true)}
                             />
                             <ConfigChecklist robot={robot} tone={tone} />
@@ -235,6 +353,7 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
                         beatUntil={beatUntil}
                         manualLaunch={manualLaunch}
                         logsOpen={expanded}
+                        restarting={restart !== null}
                         onOpenLogs={openLogs}
                         operatorHref={`/operator/?robot=${encodeURIComponent(name)}`}
                         onLaunch={() =>
@@ -242,15 +361,23 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
                                 .requestRobotLaunch(uid, robot.map_id ?? null)
                                 .catch(report("Launch"))
                         }
-                        onStop={() =>
-                            loginHandler.requestRobotStop(uid).catch((err) => {
-                                report("Stop")(err);
-                                throw err;
-                            })
-                        }
+                        onStop={() => {
+                            // Stop is also the abort on the Starting control.
+                            // Drop any pending relaunch, or the effect would
+                            // bring the interface straight back up at standby.
+                            restartSet(null);
+                            return loginHandler
+                                .requestRobotStop(uid)
+                                .catch((err) => {
+                                    report("Stop")(err);
+                                    throw err;
+                                });
+                        }}
                     />
                     <BranchTag
-                        branch={robot.branch || (status === "offline" ? "main" : "")}
+                        branch={
+                            robot.branch || (status === "offline" ? "main" : "")
+                        }
                         tone={tone}
                     />
                 </div>
@@ -262,18 +389,32 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
                         open={mapSheetOpen}
                         maps={maps}
                         selectedMapId={robot.map_id ?? null}
+                        interfaceActive={interfaceActive}
+                        occupiedBy={occupiedBy}
+                        busy={restart !== null}
                         onClose={() => mapSheetOpenSet(false)}
-                        onSelect={(mapId) => {
-                            mapSheetOpenSet(false);
-                            loginHandler.setRobotMap(uid, mapId).catch(report("Saving map"));
-                        }}
+                        onApply={(mapId) =>
+                            applyAndRestart(
+                                "Saving map",
+                                () => loginHandler.setRobotMap(uid, mapId),
+                                mapId
+                            )
+                        }
                     />
                     <ConfigSheet
                         open={configSheetOpen}
                         robot={robot}
+                        interfaceActive={interfaceActive}
+                        occupiedBy={occupiedBy}
+                        busy={restart !== null}
                         onClose={() => configSheetOpenSet(false)}
-                        onToggle={(flag, enabled) =>
-                            loginHandler.setRobotConfig(uid, flag, enabled).catch(report("Saving config"))
+                        onApply={(changes) =>
+                            applyAndRestart(
+                                "Applying config",
+                                () =>
+                                    loginHandler.setRobotConfigs(uid, changes),
+                                robot.map_id ?? null
+                            )
                         }
                     />
                 </>
@@ -306,27 +447,30 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
                     card(false)
                 )}
             </BorderBeam>
-            {logsOpen && createPortal(
-                <>
-                    <AnimatePresence>
-                        <motion.button
-                            key="launch-log-overlay"
-                            type="button"
-                            className="hr-log-overlay"
-                            aria-label="Close logs"
-                            onClick={() => logsOpenSet(false)}
-                            initial={reduceMotion ? false : { opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
-                        />
-                    </AnimatePresence>
-                    <div className="hr-log-stage">
-                        {card(true)}
-                    </div>
-                </>,
-                document.body,
-            )}
+            {logsOpen &&
+                createPortal(
+                    <>
+                        <AnimatePresence>
+                            <motion.button
+                                key="launch-log-overlay"
+                                type="button"
+                                className="hr-log-overlay"
+                                aria-label="Close logs"
+                                onClick={() => logsOpenSet(false)}
+                                initial={reduceMotion ? false : { opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={
+                                    reduceMotion
+                                        ? { duration: 0 }
+                                        : { duration: 0.2 }
+                                }
+                            />
+                        </AnimatePresence>
+                        <div className="hr-log-stage">{card(true)}</div>
+                    </>,
+                    document.body
+                )}
         </LayoutGroup>
     );
 };

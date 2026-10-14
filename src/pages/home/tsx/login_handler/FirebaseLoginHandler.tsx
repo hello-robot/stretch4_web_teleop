@@ -289,6 +289,15 @@ export class FirebaseLoginHandler extends LoginHandler {
         return set(ref(this.db, "robots/" + robo_uid + "/map_id"), mapId);
     }
 
+    public setRobotConfigs(
+        robo_uid: string,
+        flags: Record<string, boolean>,
+    ): Promise<void> {
+        if (!this.alias) return Promise.reject("User not logged in");
+        if (!Object.keys(flags).length) return Promise.resolve();
+        return update(ref(this.db, "robots/" + robo_uid + "/config"), flags);
+    }
+
     public setRobotConfig(
         robo_uid: string,
         flag: string,

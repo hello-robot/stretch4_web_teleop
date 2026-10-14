@@ -12,32 +12,38 @@ export abstract class LoginHandler {
     public abstract loginState(): string;
 
     public abstract listRooms(
-        resultCallback: (robots: RobotRooms) => void,
+        resultCallback: (robots: RobotRooms) => void
     ): () => void;
 
     public abstract logout(): Promise<undefined>;
 
-    public abstract login(username: string, password: string): Promise<undefined>;
+    public abstract login(
+        username: string,
+        password: string
+    ): Promise<undefined>;
 
     public abstract forgot_password(username: string): Promise<undefined>;
 
     /** Email the reset code belongs to, or a rejection if the code is spent. */
     public verifyPasswordReset(code: string): Promise<string> {
         return Promise.reject(
-            Error("LoginHandler.verifyPasswordReset() is not implemented"),
+            Error("LoginHandler.verifyPasswordReset() is not implemented")
         );
     }
 
-    public completePasswordReset(code: string, password: string): Promise<void> {
+    public completePasswordReset(
+        code: string,
+        password: string
+    ): Promise<void> {
         return Promise.reject(
-            Error("LoginHandler.completePasswordReset() is not implemented"),
+            Error("LoginHandler.completePasswordReset() is not implemented")
         );
     }
 
     /** Google popup sign-in. Email/password handlers that lack it reject. */
     public loginWithGoogle(): Promise<undefined> {
         return Promise.reject(
-            Error("LoginHandler.loginWithGoogle() is not implemented"),
+            Error("LoginHandler.loginWithGoogle() is not implemented")
         );
     }
 
@@ -57,13 +63,16 @@ export abstract class LoginHandler {
      */
     public watchOperatorSeat(
         _robotAuthUid: string,
-        onSeat: (seat: OperatorSeat | null) => void,
+        onSeat: (seat: OperatorSeat | null) => void
     ): () => void {
         onSeat(null);
         return () => {};
     }
 
-    public requestRobotLaunch(robo_uid: string, mapId?: string | null): Promise<void> {
+    public requestRobotLaunch(
+        robo_uid: string,
+        mapId?: string | null
+    ): Promise<void> {
         return Promise.resolve();
     }
 
@@ -75,7 +84,7 @@ export abstract class LoginHandler {
      */
     public watchLaunchLog(
         _fleetId: string,
-        onLog: (text: string) => void,
+        onLog: (text: string) => void
     ): () => void {
         onLog("");
         return () => {};
@@ -90,11 +99,23 @@ export abstract class LoginHandler {
         return Promise.resolve();
     }
 
+    /**
+     * Persist several feature-flag overrides as one write. The caller relaunches
+     * the robot immediately afterwards, so a partial write would relaunch into a
+     * mix of old and new values.
+     */
+    public setRobotConfigs(
+        robo_uid: string,
+        flags: Record<string, boolean>
+    ): Promise<void> {
+        return Promise.resolve();
+    }
+
     /** Persist one feature-flag override for the robot's next launch. */
     public setRobotConfig(
         robo_uid: string,
         flag: string,
-        enabled: boolean,
+        enabled: boolean
     ): Promise<void> {
         return Promise.resolve();
     }

@@ -1057,6 +1057,29 @@
     opacity: 0.75;
 }
 
+/* Sheet footer: same pair geometry as the two-up teleop controls, so Apply and
+   Discard match Connect and Stop in size and shape. */
+.hr-sheet__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 8px;
+    margin-top: 16px;
+}
+
+.hr-sheet__actions > .hr-button {
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.hr-sheet__warn {
+    margin-top: 16px;
+    font-family: var(--hr-font-body);
+    font-weight: 400;
+    font-size: 12.5px;
+    color: var(--hr-text-check);
+}
+
 @media (min-width: 768px) {
     .hr-sheet {
         padding-top: 24px;

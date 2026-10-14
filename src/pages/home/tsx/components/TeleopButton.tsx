@@ -42,17 +42,26 @@ const treatmentFor = (
     manualLaunch: boolean,
     launchedHere: boolean,
     launchFailed: boolean,
+    restarting: boolean,
 ): Treatment => {
-    if (
-        manualLaunch &&
-        (status === "launching" ||
-            status === "online" ||
-            (status === "occupied" && heldByMe))
-    ) {
+    // Manual mode exists to hold the tab back during a launch it is watching.
+    // Once the interface is up, the ordinary Connect + Stop pair is correct:
+    // the auto-navigate stays suppressed by the manualLaunch state itself, not
+    // by this treatment, so falling through does not drag the user into teleop.
+    if (manualLaunch && status === "launching") {
         return "manual";
     }
     if (status === "offline") return "offline";
     if (launchFailed) return "failed";
+
+    // A restart this tab drove is one continuous launch from the user's view,
+    // so it has to claim the treatment before the status-based branches below.
+    // The daemon still reports the old status for as long as it takes to
+    // receive the stop and tear down, and it passes back through standby on
+    // the way to launching: without this the card would offer Connect, then
+    // Start Interface, then finally animate.
+    if (restarting) return "starting";
+
     if (status === "standby") return "standby";
 
     // Someone else is driving. Their session can't be joined, so stopping the
@@ -135,6 +144,13 @@ interface TeleopButtonProps {
     manualLaunch: boolean;
     /** Log modal is open, so the LOGS control is already satisfied. */
     logsOpen: boolean;
+    /**
+     * A relaunch this tab asked for from a settings sheet is in flight. It
+     * reads as a local launch so the card animates, but deliberately does not
+     * feed the auto-navigate below: applying settings is not a request to be
+     * dropped into teleop.
+     */
+    restarting: boolean;
     onOpenLogs: () => void;
     onLaunch: () => void;
     onStop: () => void | Promise<void>;
@@ -148,6 +164,7 @@ export const TeleopButton = ({
     beatUntil,
     manualLaunch,
     logsOpen,
+    restarting,
     onOpenLogs,
     onLaunch,
     onStop,
@@ -179,6 +196,9 @@ export const TeleopButton = ({
     const [launchFailed, launchFailedSet] = useState(false);
     const sawLaunching = useRef(false);
     const launchedByMe = useRef(launchedHere);
+    useEffect(() => {
+        if (restarting) launchedByMe.current = true;
+    }, [restarting]);
 
     useEffect(() => {
         if (status === "launching") {
@@ -213,6 +233,7 @@ export const TeleopButton = ({
         manualLaunch,
         launchedHere,
         launchFailed,
+        restarting,
     );
     const [elapsedSec, elapsedSecSet] = useState(0);
     const [ending, endingSet] = useState(false);
@@ -222,7 +243,8 @@ export const TeleopButton = ({
         (treatment === "starting" ||
             treatment === "launching" ||
             treatment === "manual" ||
-            treatment === "failed");
+            treatment === "failed" ||
+            manualLaunch);
     const launchReady = status === "online" || status === "occupied";
 
     useEffect(() => {
@@ -344,13 +366,6 @@ const controlFor = (
         );
     }
     if (treatment === "manual") {
-        if (launchReady) {
-            return (
-                <button className="hr-button hr-button--primary" type="button" onClick={onEnter}>
-                    Launch
-                </button>
-            );
-        }
         return (
             <button
                 className="hr-button hr-button--dim hr-button--progress"
