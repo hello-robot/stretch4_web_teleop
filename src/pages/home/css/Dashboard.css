@@ -304,8 +304,8 @@
     white-space: nowrap;
 }
 
-.hr-pill__text--gradient {
-    background: linear-gradient(to left, #80ccff 75%, #00c4d2 100%);
+.hr-pill__text--ready {
+    background: linear-gradient(to left, #80ffcc 75%, #00d2a0 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -317,6 +317,17 @@
 
 .hr-pill__text--muted {
     color: rgba(255, 255, 255, 0.8);
+}
+
+.hr-pill__text--idle {
+    color: var(--hr-branch);
+}
+
+.hr-pill__text--busy {
+    background: linear-gradient(to left, #ffd79a 75%, #ffae2e 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
 }
 
 .hr-pill__text--pulse {
@@ -527,49 +538,43 @@
     gap: 6px;
 }
 
-.hr-button--in-use {
-    /* Taller than the 37px controls so the email fits under the label.
-       The negative margin gives that extra height back to the gap above,
-       so the card itself stays the same height. */
-    height: 49px;
-    margin-top: -12px;
-    overflow: hidden;
-    padding: 6px 12px;
-}
+/* Sub-text lives under the button, so every control keeps the same 37px box. */
 
-.hr-button__occupant {
-    min-width: 0;
-    max-width: 100%;
-}
-
-.hr-button__occupant-photo {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex: none;
-}
-
-.hr-button__occupant-copy {
+.hr-teleop__note {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     justify-content: center;
+    gap: 7px;
+    width: 100%;
     min-width: 0;
-    line-height: 1.05;
-}
-
-.hr-button__occupant-label {
-    white-space: nowrap;
-}
-
-.hr-button__occupant-email {
-    overflow: hidden;
-    font-size: 10px;
+    margin: -2px 0 0;
+    border: 0;
+    padding: 0;
+    background: none;
+    font-family: var(--hr-font-sans);
+    font-size: 11.5px;
     font-weight: 400;
-    line-height: 1.1;
+    line-height: 1.3;
+    color: var(--hr-text-muted);
+}
+
+.hr-teleop__note-text {
+    min-width: 0;
+    overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    opacity: 0.8;
+}
+
+.hr-teleop__note-photo {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.hr-teleop__note--fail {
+    color: #ff9c92;
 }
 
 .hr-teleop__logs {

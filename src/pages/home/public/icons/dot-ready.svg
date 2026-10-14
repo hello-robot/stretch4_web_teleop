@@ -9,13 +9,13 @@
 <feOffset dx="0.2" dy="1"/>
 <feGaussianBlur stdDeviation="4.95"/>
 <feComposite in2="hardAlpha" operator="out"/>
-<feColorMatrix type="matrix" values="0 0 0 0 0.435017 0 0 0 0 0.962334 0 0 0 0 1 0 0 0 0.3 0"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.435017 0 0 0 0 0.962334 0 0 0 0 0.752941 0 0 0 0.3 0"/>
 <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_97"/>
 <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_97" result="shape"/>
 </filter>
 <radialGradient id="paint0_radial_0_97" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(13.7 12.9) rotate(90) scale(4)">
-<stop offset="0.3" stop-color="#99F8FF"/>
-<stop offset="1" stop-color="#00EEFF"/>
+<stop offset="0.3" stop-color="#99FFD4"/>
+<stop offset="1" stop-color="#00EEA8"/>
 </radialGradient>
 </defs>
 </svg>

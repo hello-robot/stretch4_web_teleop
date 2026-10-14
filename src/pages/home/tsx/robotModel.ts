@@ -49,7 +49,25 @@ export const normalizeStatus = (status: string | undefined): RobotStatus =>
         (s) => s === status,
     ) ?? "offline";
 
-/** Dashboard order: cards that show Online lead; equal ranks keep the incoming order. */
+/**
+ * What a card announces about the robot, one step coarser than `RobotStatus`:
+ * offline = daemon unreachable, idle = daemon up but no interface (including
+ * while it launches), ready = interface up and free, in-use = someone is driving.
+ */
+export type RobotPresence = "offline" | "idle" | "ready" | "in-use";
+
+export const presenceFor = (
+    status: RobotStatus,
+    seatTaken: boolean,
+): RobotPresence => {
+    if (status === "offline") return "offline";
+    if (status === "standby" || status === "launching") return "idle";
+    // `occupied` is the robot's own word for "an operator joined"; the seat
+    // catches the window where the room fills before the robot writes status.
+    return status === "occupied" || seatTaken ? "in-use" : "ready";
+};
+
+/** Dashboard order: reachable robots lead; equal ranks keep the incoming order. */
 export const compareOnlineFirst = (a: RobotRecord, b: RobotRecord): number =>
     Number(normalizeStatus(b.status) !== "offline") -
     Number(normalizeStatus(a.status) !== "offline");

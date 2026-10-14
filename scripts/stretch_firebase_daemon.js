@@ -138,6 +138,130 @@ function flushLaunchLogNow() {
 
 const fs = require('fs');
 
+/**
+ * Line-buffers one source and stamps each line with where it came from.
+ * Sources are merged into a single stream, so a half-written line must never
+ * be published: whole lines only, or two logs splice into each other.
+ */
+function taggedSink(tag) {
+    const prefix = `[${tag}] `;
+    let partial = '';
+    return {
+        write(chunk) {
+            partial += chunk.toString();
+            if (partial.length > LAUNCH_LOG_MAX_CHARS) {
+                partial = partial.slice(-LAUNCH_LOG_MAX_CHARS);
+            }
+            const lines = partial.split('\n');
+            partial = lines.pop() ?? '';
+            if (lines.length) {
+                noteLaunchOutput(lines.map((line) => prefix + line).join('\n') + '\n');
+            }
+        },
+        flush() {
+            if (!partial) return;
+            noteLaunchOutput(prefix + partial + '\n');
+            partial = '';
+        },
+    };
+}
+
+/** Friendlier names than the filenames the launch writes side by side. */
+const LOG_TAGS = {
+    'web_interface_launch.txt': 'ros',
+    'rmw_zenohd.txt': 'zenoh',
+    'start_web_server_and_robot_browser.txt': 'web',
+};
+
+const logTagFor = (name) => LOG_TAGS[name] || name.replace(/\.[^.]+$/, '');
+
+const LOG_TAIL_POLL_MS = 400;
+let logTailTimer = null;
+let logTailDir = null;
+const logTailSinks = new Map();
+const logTailOffsets = new Map();
+
+function pumpLogFile(name) {
+    const file = path.join(logTailDir, name);
+    let stat;
+    try {
+        stat = fs.statSync(file);
+    } catch (err) {
+        return; // written and removed between readdir and stat
+    }
+    if (!stat.isFile()) return;
+    const seen = logTailOffsets.get(name) ?? 0;
+    // Truncated or replaced under us: read it again from the top.
+    const from = stat.size < seen ? 0 : seen;
+    if (stat.size === from) return;
+    let fd;
+    try {
+        fd = fs.openSync(file, 'r');
+        const buf = Buffer.alloc(stat.size - from);
+        const read = fs.readSync(fd, buf, 0, buf.length, from);
+        logTailOffsets.set(name, from + read);
+        if (!logTailSinks.has(name)) logTailSinks.set(name, taggedSink(logTagFor(name)));
+        logTailSinks.get(name).write(buf.subarray(0, read));
+    } catch (err) {
+        console.warn(`[DAEMON] Could not read ${name}:`, err.message);
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+    }
+}
+
+function pumpLogDir() {
+    if (!logTailDir) return;
+    let names;
+    try {
+        names = fs.readdirSync(logTailDir);
+    } catch (err) {
+        return; // the launch has not created it yet
+    }
+    names.sort().forEach(pumpLogFile);
+}
+
+/**
+ * The ROS launch and zenoh run inside detached screen sessions, so their
+ * output never reaches our stdout pipe; it only lands in files next to the
+ * launch log. Poll that directory and merge every file into the single
+ * stream the dashboard reads, so one log shows the whole stack coming up.
+ */
+function startLaunchLogTail(dir) {
+    stopLaunchLogTail();
+    logTailDir = dir;
+    logTailTimer = setInterval(pumpLogDir, LOG_TAIL_POLL_MS);
+}
+
+/** Drains whatever is left before letting go, so a crash on the way down is kept. */
+function stopLaunchLogTail() {
+    if (logTailTimer) {
+        clearInterval(logTailTimer);
+        logTailTimer = null;
+    }
+    if (!logTailDir) return;
+    pumpLogDir();
+    logTailSinks.forEach((sink) => sink.flush());
+    logTailSinks.clear();
+    logTailOffsets.clear();
+    logTailDir = null;
+}
+
+/** Matches the layout launch_interface_firebase.sh uses, to the second. */
+function launchLogDir() {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const stamp =
+        `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+        `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return path.join(
+        process.env.HOME,
+        'stretch_user',
+        'log',
+        'web_teleop',
+        `stretch4_web_teleop_${stamp}`,
+    );
+}
+
 function readGitBranch() {
     return new Promise((resolve) => {
         exec('git rev-parse --abbrev-ref HEAD', { cwd: repoRoot }, (error, stdout) => {
@@ -163,6 +287,7 @@ function publishBranch() {
 }
 
 function setStatus(status) {
+    if (status !== 'launching') stopLaunchLogTail();
     if (!auth.currentUser) return;
     currentStatus = status;
     if (status === 'launching') launchingSince = Date.now();
@@ -349,10 +474,19 @@ async function handleLaunchCommand(requestedBy, mapId) {
         await refreshBranch();
         const effectiveMapId = mapId || (await readSavedMapId());
         console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}, map: ${effectiveMapId || 'none'}`);
+        stopLaunchLogTail();
         await clearOperatorSeat();
         await clearLaunchLog();
         noteLaunchOutput(`[DAEMON] Launch requested by ${requestedBy}, map: ${effectiveMapId || 'none'}\n`);
         setStatus('launching');
+
+        const logDir = launchLogDir();
+        try {
+            fs.mkdirSync(logDir, { recursive: true });
+            startLaunchLogTail(logDir);
+        } catch (err) {
+            console.warn('[DAEMON] Could not open the launch log directory:', err.message);
+        }
 
         const launchArgs = [];
         if (effectiveMapId) {
@@ -378,15 +512,17 @@ async function handleLaunchCommand(requestedBy, mapId) {
             launchArgs,
             {
                 cwd: repoRoot,
-                env: { ...process.env, ...featureEnv },
+                env: { ...process.env, ...featureEnv, WEB_TELEOP_LOG_DIR: logDir },
                 stdio: ['ignore', 'pipe', 'pipe'],
             },
         );
         launchChild = child;
         let stderr = '';
-        child.stdout.on('data', (chunk) => noteLaunchOutput(chunk));
+        const outSink = taggedSink('launch');
+        const errSink = taggedSink('launch');
+        child.stdout.on('data', (chunk) => outSink.write(chunk));
         child.stderr.on('data', (chunk) => {
-            noteLaunchOutput(chunk);
+            errSink.write(chunk);
             stderr = (stderr + chunk.toString()).slice(-10000);
         });
 
@@ -395,6 +531,8 @@ async function handleLaunchCommand(requestedBy, mapId) {
             if (finished) return;
             finished = true;
             if (launchChild === child) launchChild = null;
+            outSink.flush();
+            errSink.flush();
             if (abortRequested || stopInFlight) return;
             isProcessingCommand = false;
             if (error) {
@@ -479,6 +617,7 @@ async function handleStopCommand(requestedBy) {
         stopInFlight = false;
         abortRequested = false;
         isProcessingCommand = false;
+        stopLaunchLogTail();
         await clearLaunchLog();
         setStatus('standby');
     }

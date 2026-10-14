@@ -12,6 +12,7 @@ import {
     MapIndex,
     normalizeStatus,
     OperatorSeat,
+    presenceFor,
     robotDisplayId,
     RobotRecord,
     RobotStatus,
@@ -108,6 +109,7 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
 
     const name = robot.name || uid;
     const status = normalizeStatus(robot.status);
+    const presence = presenceFor(status, seat !== null);
     const tone = toneForStatus(robot.status);
     const mapName = robot.map_id ? maps[robot.map_id]?.name ?? robot.map_id : "No map selected";
     const settingsLocked = status !== "standby";
@@ -177,7 +179,7 @@ export const RobotCard = ({ uid, robot, maps, onError, revealIndex }: RobotCardP
         >
             <header className="hr-card__head">
                 <span className="hr-card__id">{robotDisplayId(name)}</span>
-                <StatusPill status={status} />
+                <StatusPill presence={presence} />
             </header>
 
             {expanded && (

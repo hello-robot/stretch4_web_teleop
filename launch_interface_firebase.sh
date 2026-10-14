@@ -18,9 +18,11 @@ while getopts m: opt; do
 done
 
 timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
-logdir="$HOME/stretch_user/log/web_teleop/$timestamp"
+# The daemon picks the directory so it can tail every file we write here and
+# merge them into the log the dashboard shows. Standalone runs pick their own.
+logdir="${WEB_TELEOP_LOG_DIR:-$HOME/stretch_user/log/web_teleop/$timestamp}"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
-mkdir -p $logdir
+mkdir -p "$logdir"
 
 echo -e "${BLUE}Launching Web Teleop via Firebase Onboard...${NC}"
 
@@ -62,6 +64,7 @@ sleep 8
 # 4. Start webpack watch, the local HTTPS server, and the robot browser
 echo "Start robot browser..."
 cd "$HOME/ament_ws/src/stretch4_web_teleop"
-./start_web_server_and_robot_browser.sh -l $logdir -f |& tee $logfile_node
+echo "Logging to $logfile_node"
+./start_web_server_and_robot_browser.sh -l $logdir -f &>>"$logfile_node"
 
 echo -e "${GREEN}✓ Onboard launch completed successfully!${NC}"

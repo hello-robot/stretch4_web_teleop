@@ -1,4 +1,5 @@
 import { FirebaseOptions } from "firebase/app";
+import "operator/css/index.css";
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { cmd } from "shared/commands";
@@ -23,26 +24,24 @@ import {
     WebRTCMessage
 } from "shared/util";
 import { WebRTCConnection } from "shared/webrtcconnections";
+import { waitUntilAsync } from "../../../shared/util";
+import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
+import { createLoginHandler } from "../../home/tsx/utils";
+import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
+import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
 import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
-import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
-import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
-import { StorageHandler } from "./storage_handler/StorageHandler";
-import { createLoginHandler } from "../../home/tsx/utils";
-import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
-
-import "operator/css/index.css";
-import { waitUntilAsync } from "../../../shared/util";
-import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
-import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
 import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
 import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
 import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
+import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
+import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
+import { StorageHandler } from "./storage_handler/StorageHandler";
+import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
 import {
     configureVoiceTokenRelay,
     resolveVoiceToken,

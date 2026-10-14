@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { markOperatorTakeover } from "shared/signaling/operatorSeat";
 import { gravatarUrl } from "../gravatar";
 import { loginHandler } from "../index";
@@ -16,11 +16,22 @@ type Treatment =
     | "manual"
     | "pending"
     | "ending"
-    | "end"
+    | "failed"
+    | "connect"
     | "takeover"
     | "in-use";
 
 const launchOwnerKey = (operatorHref: string) => `hr-launch-owner:${operatorHref}`;
+
+/** Controls that tear the interface down, and so swap to Ending while it happens. */
+const STOPPABLE: Treatment[] = [
+    "starting",
+    "manual",
+    "in-use",
+    "connect",
+    "takeover",
+];
+const canStop = (treatment: Treatment) => STOPPABLE.includes(treatment);
 
 const treatmentFor = (
     status: RobotStatus,
@@ -30,6 +41,7 @@ const treatmentFor = (
     beat: boolean,
     manualLaunch: boolean,
     launchedHere: boolean,
+    launchFailed: boolean,
 ): Treatment => {
     if (
         manualLaunch &&
@@ -39,30 +51,33 @@ const treatmentFor = (
     ) {
         return "manual";
     }
-    if (!launchedHere) {
-        if ((status === "online" || status === "occupied") && seat && !heldByMe) {
-            return "in-use";
-        }
-        if (status === "occupied" && !(seat && visitorKnown)) return "pending";
-        if (
-            status === "launching" ||
-            beat ||
-            ((status === "online" || status === "occupied") && heldByMe)
-        ) {
-            return "takeover";
-        }
-    }
     if (status === "offline") return "offline";
+    if (launchFailed) return "failed";
     if (status === "standby") return "standby";
-    if (status === "launching") return "starting";
-    if (beat) return "launching";
-    if ((status === "online" || status === "occupied") && seat && !heldByMe) return "in-use";
+
+    // Someone else is driving. Their session can't be joined, so stopping the
+    // interface is the only way in.
+    if ((status === "online" || status === "occupied") && seat && !heldByMe) {
+        return "in-use";
+    }
     if (status === "occupied" && !(seat && visitorKnown)) return "pending";
-    if (status === "online" || status === "occupied") return "end";
+
+    // A launch in flight: the tab that asked for it watches progress and can
+    // abort; everyone else can queue up behind it.
+    if (status === "launching") return launchedHere ? "starting" : "takeover";
+    if (beat) return launchedHere ? "launching" : "takeover";
+
+    // Interface up and free to us. Reclaiming our own seat needs the takeover
+    // flag; an empty seat does not. Either way the pair is Connect + Stop,
+    // whether or not this tab is the one that launched it.
+    if (status === "online" || status === "occupied") {
+        return heldByMe ? "takeover" : "connect";
+    }
     return "offline";
 };
 
-const OccupantFace = ({ email }: { email?: string }) => {
+/** Who is driving, as a line under the button rather than inside it. */
+const OccupantNote = ({ email }: { email?: string }) => {
     const [photo, photoSet] = useState<string | null>(null);
     const [photoReady, photoReadySet] = useState(false);
 
@@ -80,10 +95,10 @@ const OccupantFace = ({ email }: { email?: string }) => {
     }, [email]);
 
     return (
-        <span className="hr-button__face hr-button__occupant">
+        <p className="hr-teleop__note">
             {photo ? (
                 <img
-                    className="hr-button__occupant-photo"
+                    className="hr-teleop__note-photo"
                     alt=""
                     src={photo}
                     hidden={!photoReady}
@@ -94,13 +109,10 @@ const OccupantFace = ({ email }: { email?: string }) => {
                     }}
                 />
             ) : null}
-            <span className="hr-button__occupant-copy">
-                <span className="hr-button__occupant-label">Currently in Use</span>
-                {email ? (
-                    <span className="hr-button__occupant-email">{email}</span>
-                ) : null}
+            <span className="hr-teleop__note-text">
+                {email ? `In use by ${email}` : "In use by another operator"}
             </span>
-        </span>
+        </p>
     );
 };
 
@@ -155,6 +167,38 @@ export const TeleopButton = ({
         return () => window.clearTimeout(timer);
     }, [beatUntil, launchedHere, manualLaunch, operatorHref, status]);
 
+    /**
+     * The daemon reports a failed launch by dropping back to standby without
+     * ever reaching online, and leaves its output in launch_logs for the LOGS
+     * panel. Only the tab that asked for the launch is told: a bystander
+     * watching someone else abort a launch hasn't had anything fail.
+     */
+    const [launchFailed, launchFailedSet] = useState(false);
+    const sawLaunching = useRef(false);
+    const launchedByMe = useRef(launchedHere);
+
+    useEffect(() => {
+        if (status === "launching") {
+            sawLaunching.current = true;
+            launchFailedSet(false);
+            return;
+        }
+        if (status === "online" || status === "occupied") {
+            sawLaunching.current = false;
+            launchFailedSet(false);
+            return;
+        }
+        // Only standby — daemon up, interface gone — reads as a failed launch.
+        // An unreachable robot is already reported by the Offline pill, and
+        // retrying there cannot work, so drop the notice instead of raising it.
+        if (status === "offline") {
+            launchFailedSet(false);
+        } else if (sawLaunching.current && launchedByMe.current) {
+            launchFailedSet(true);
+        }
+        sawLaunching.current = false;
+    }, [status]);
+
     const visitorUid = loginHandler.getUserUid();
     const heldByMe = holdsOperatorSeat(seat, visitorUid);
     const treatment = treatmentFor(
@@ -165,30 +209,36 @@ export const TeleopButton = ({
         beat,
         manualLaunch,
         launchedHere,
+        launchFailed,
     );
     const [elapsedSec, elapsedSecSet] = useState(0);
     const [ending, endingSet] = useState(false);
-    const shown =
-        ending && (treatment === "starting" || treatment === "end" || treatment === "manual")
-            ? "ending"
-            : treatment;
+    const shown = ending && canStop(treatment) ? "ending" : treatment;
     const logsAvailable =
         !logsOpen &&
-        (treatment === "starting" || treatment === "launching" || treatment === "manual");
+        (treatment === "starting" ||
+            treatment === "launching" ||
+            treatment === "manual" ||
+            treatment === "failed");
     const launchReady = status === "online" || status === "occupied";
 
     useEffect(() => {
-        if (treatment !== "starting" && treatment !== "end" && treatment !== "manual") {
-            endingSet(false);
-        }
+        if (!canStop(treatment)) endingSet(false);
     }, [treatment]);
 
     const stop = () => {
         if (ending) return;
-        if (treatment === "starting" || treatment === "end" || treatment === "manual") {
-            endingSet(true);
-        }
+        launchedByMe.current = false;
+        if (canStop(treatment)) endingSet(true);
         void Promise.resolve(onStop()).catch(() => endingSet(false));
+    };
+
+    const launch = () => {
+        sessionStorage.setItem(ownerKey, "1");
+        launchedHereSet(true);
+        launchedByMe.current = true;
+        launchFailedSet(false);
+        onLaunch();
     };
 
     const timing = treatment === "starting" || (treatment === "manual" && !launchReady);
@@ -221,11 +271,7 @@ export const TeleopButton = ({
             {controlFor(
                 shown,
                 formatElapsed(elapsedSec),
-                () => {
-                    sessionStorage.setItem(ownerKey, "1");
-                    launchedHereSet(true);
-                    onLaunch();
-                },
+                launch,
                 stop,
                 () => window.location.assign(operatorHref),
                 () => {
@@ -252,8 +298,20 @@ const controlFor = (
     if (treatment === "standby") {
         return (
             <button className="hr-button hr-button--primary" type="button" onClick={onLaunch}>
-                Teleoperate
+                Launch Interface
             </button>
+        );
+    }
+    if (treatment === "failed") {
+        return (
+            <>
+                <button className="hr-button hr-button--primary" type="button" onClick={onLaunch}>
+                    Launch Interface
+                </button>
+                <p className="hr-teleop__note hr-teleop__note--fail">
+                    Launch failed &mdash; check LOGS
+                </p>
+            </>
         );
     }
     if (treatment === "pending") {
@@ -279,13 +337,6 @@ const controlFor = (
                         <span className="hr-button__ellipsis" aria-hidden="true" />
                     </span>
                 </span>
-            </button>
-        );
-    }
-    if (treatment === "end") {
-        return (
-            <button className="hr-button hr-button--ghost" type="button" onClick={onStop}>
-                End Teleoperation
             </button>
         );
     }
@@ -332,11 +383,28 @@ const controlFor = (
             </button>
         );
     }
-    if (treatment === "takeover") {
+    // `takeover` is our own seat, or one being launched: claim it rather than
+    // relaunching. `connect` is a free seat on a running interface.
+    if (treatment === "connect" || treatment === "takeover") {
         return (
-            <button className="hr-button hr-button--primary" type="button" onClick={onTakeover}>
-                Launch
-            </button>
+            <>
+                <button
+                    className="hr-button hr-button--primary"
+                    type="button"
+                    onClick={treatment === "connect" ? onEnter : onTakeover}
+                >
+                    Connect
+                </button>
+                {launchReady && (
+                    <button
+                        className="hr-button hr-button--ghost"
+                        type="button"
+                        onClick={onStop}
+                    >
+                        Stop Interface
+                    </button>
+                )}
+            </>
         );
     }
     if (treatment === "launching") {
@@ -350,22 +418,18 @@ const controlFor = (
         );
     }
     if (treatment === "in-use") {
-        const label = occupantEmail
-            ? `Currently in Use, ${occupantEmail}`
-            : "Currently in Use";
         return (
-            <div
-                className="hr-button hr-button--dim hr-button--progress hr-button--in-use"
-                role="status"
-                aria-label={label}
-            >
-                <OccupantFace email={occupantEmail} />
-            </div>
+            <>
+                <button className="hr-button hr-button--ghost" type="button" onClick={onStop}>
+                    Stop Interface
+                </button>
+                <OccupantNote email={occupantEmail} />
+            </>
         );
     }
     return (
         <button className="hr-button hr-button--dim" type="button" disabled>
-            Teleoperate
+            Launch Interface
         </button>
     );
 };
