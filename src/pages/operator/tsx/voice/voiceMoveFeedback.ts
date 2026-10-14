@@ -1,9 +1,17 @@
-import type { BaseMoveAction, JointMoveAction, MacroMoveAction, VoiceSpeed } from "./constants";
+import type {
+    BaseMoveAction,
+    FlyingGripperMoveAction,
+    JointMoveAction,
+    MacroMoveAction,
+    VoiceSpeed,
+} from "./constants";
+
+export type FlyingMoveAction = `fly_${FlyingGripperMoveAction}`;
 
 export type VoiceMoveFeedback =
     | {
         kind: "move_started";
-        action: BaseMoveAction | JointMoveAction;
+        action: BaseMoveAction | JointMoveAction | FlyingMoveAction;
         speed: VoiceSpeed;
         duration_ms: number;
         /** Pre-formatted user-facing distance string (e.g. "5°", "0.3 m", "1.2 rad").
@@ -18,7 +26,10 @@ export type VoiceMoveFeedback =
         reason: "busy" | "disconnected" | "duplicate" | "invalid" | "no_repeat";
     };
 
-const ACTION_LABELS: Record<BaseMoveAction | JointMoveAction | MacroMoveAction, string> = {
+const ACTION_LABELS: Record<
+    BaseMoveAction | JointMoveAction | MacroMoveAction | FlyingMoveAction,
+    string
+> = {
     // BASE ACTIONS
     forward: "Moving forward",
     backward: "Moving backward",
@@ -42,6 +53,13 @@ const ACTION_LABELS: Record<BaseMoveAction | JointMoveAction | MacroMoveAction, 
     // MACRO ACTIONS
     center_wrist: "Centering wrist",
     stow_wrist: "Stowing wrist",
+    // FLYING GRIPPER ACTIONS
+    fly_forward: "Flying forward",
+    fly_backward: "Flying backward",
+    fly_left: "Flying left",
+    fly_right: "Flying right",
+    fly_up: "Flying up",
+    fly_down: "Flying down",
 };
 
 const SPEED_LABELS: Record<VoiceSpeed, string> = {
