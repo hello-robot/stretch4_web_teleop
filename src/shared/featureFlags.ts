@@ -13,3 +13,10 @@
 export const FEATURE_VOICE_CONTROL_INTERFACE: boolean = Boolean(
     process.env.FEATURE_VOICE_CONTROL_INTERFACE,
 );
+
+/**
+ * End-effector velocity limiter. Enforces Cartesian velocity limits on the tool.
+ */
+export const FEATURE_EE_VELOCITY_LIMITER: boolean = Boolean(
+    process.env.FEATURE_EE_VELOCITY_LIMITER,
+);
