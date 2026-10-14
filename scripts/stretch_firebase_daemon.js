@@ -73,10 +73,11 @@ const repoRoot = path.join(__dirname, '..');
 
 /** Tail kept in RTDB. Rules reject anything longer. */
 const LAUNCH_LOG_MAX_CHARS = 32 * 1024;
-const LAUNCH_LOG_FLUSH_MS = 250;
+const LAUNCH_LOG_FLUSH_MS = 1000;
 let launchLog = '';
 let launchLogPartial = '';
 let launchLogTimer = null;
+let lastPublishedLaunchLog = null;
 
 function resetLaunchLogBuffer() {
     launchLog = '';
@@ -89,7 +90,10 @@ function resetLaunchLogBuffer() {
 
 function publishLaunchLog(text) {
     if (!auth.currentUser) return Promise.resolve();
+    if (text === lastPublishedLaunchLog) return Promise.resolve();
+    lastPublishedLaunchLog = text;
     return set(ref(db, `launch_logs/${fleetId}`), text).catch((err) => {
+        lastPublishedLaunchLog = null;
         console.error('[DAEMON] Error updating launch log:', err.message);
     });
 }
@@ -101,6 +105,7 @@ function clearLaunchLog() {
 
 function flushLaunchLogSoon() {
     if (launchLogTimer) return;
+    if (currentStatus !== 'launching' && !isProcessingCommand) return;
     launchLogTimer = setTimeout(() => {
         launchLogTimer = null;
         const visible = launchLogPartial
@@ -110,7 +115,7 @@ function flushLaunchLogSoon() {
     }, LAUNCH_LOG_FLUSH_MS);
 }
 
-/** Line-buffer child output and publish the tail a few times a second. */
+/** Line-buffer child output and publish the tail once a second while launching. */
 function noteLaunchOutput(chunk) {
     launchLogPartial += chunk.toString();
     if (launchLogPartial.length > LAUNCH_LOG_MAX_CHARS) {
@@ -175,7 +180,7 @@ const LOG_TAGS = {
 
 const logTagFor = (name) => LOG_TAGS[name] || name.replace(/\.[^.]+$/, '');
 
-const LOG_TAIL_POLL_MS = 400;
+const LOG_TAIL_POLL_MS = 1000;
 let logTailTimer = null;
 let logTailDir = null;
 const logTailSinks = new Map();
@@ -661,6 +666,26 @@ async function initDaemon() {
                 }
             } else {
                 console.log('[DAEMON] Disconnected from Firebase.');
+            }
+        });
+
+        // Keep currentStatus synchronized with transitions written by the robot browser
+        // (e.g. 'launching' -> 'online' <-> 'occupied') so launch log tailing stops as
+        // soon as the robot is online and reconcileInterfaceStatus knows the live state.
+        onValue(statusRef, (snapshot) => {
+            const val = snapshot.val();
+            if (!val || val === currentStatus) return;
+            if (val === 'offline' && currentStatus === 'launching' && (isProcessingCommand || launchChild)) {
+                // A previous robot browser shutting down during relaunch wrote 'offline';
+                // restore 'launching' while the new launch is actively in progress.
+                setStatus('launching');
+                return;
+            }
+            const wasLaunching = currentStatus === 'launching';
+            currentStatus = val;
+            if (wasLaunching && val !== 'launching') {
+                stopLaunchLogTail();
+                flushLaunchLogNow();
             }
         });
 

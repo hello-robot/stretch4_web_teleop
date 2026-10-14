@@ -554,7 +554,10 @@ export class Robot extends React.Component {
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
                         let limits: [boolean, boolean] = [!isNeg, !isPos];
-                        console.log(`[Diagnostics] at_limit for ${rawKey} (${jointName}): limits=[${limits[0]}, ${limits[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        let prevLimits = this.diagnosticJointLimits[jointName];
+                        if (!prevLimits || prevLimits[0] !== limits[0] || prevLimits[1] !== limits[1]) {
+                            console.log(`[Diagnostics] at_limit for ${rawKey} (${jointName}): limits=[${limits[0]}, ${limits[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        }
                         this.diagnosticJointLimits[jointName] = limits;
                         // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
                         if (jointName === "arm_joint") this.diagnosticJointLimits["wrist_extension"] = limits;
@@ -569,7 +572,10 @@ export class Robot extends React.Component {
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
                         let collisions: [boolean, boolean] = [isNeg, isPos];
-                        console.log(`[Diagnostics] in_collision for ${rawKey} (${jointName}): collisions=[${collisions[0]}, ${collisions[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        let prevCollisions = this.diagnosticInCollision[jointName];
+                        if (!prevCollisions || prevCollisions[0] !== collisions[0] || prevCollisions[1] !== collisions[1]) {
+                            console.log(`[Diagnostics] in_collision for ${rawKey} (${jointName}): collisions=[${collisions[0]}, ${collisions[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        }
                         this.diagnosticInCollision[jointName] = collisions;
                         // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
                         if (jointName === "arm_joint") this.diagnosticInCollision["wrist_extension"] = collisions;
@@ -1924,11 +1930,7 @@ export class Robot extends React.Component {
 
     inJointLimits(jointName: ValidJoints) {
         let jointValue = this.getJointValue(jointName);
-        let res = this.inJointLimitsHelper(jointValue, jointName);
-        if (res && (!res[0] || !res[1])) {
-            console.log(`[Robot] inJointLimits for ${jointName}: [${res[0]}, ${res[1]}] (diagnostic: ${this.diagnosticJointLimits[jointName] !== undefined})`);
-        }
-        return res;
+        return this.inJointLimitsHelper(jointValue, jointName);
     }
 
     inJointLimitsHelper(jointValue: number, jointName: ValidJoints) {
@@ -1968,9 +1970,6 @@ export class Robot extends React.Component {
             if (alias && this.diagnosticInCollision[alias] !== undefined) {
                 res = this.diagnosticInCollision[alias]!;
             }
-        }
-        if (res[0] || res[1]) {
-            console.log(`[Robot] inCollision for ${jointName}: [${res[0]}, ${res[1]}] (diagnostic: ${this.diagnosticInCollision[jointName] !== undefined})`);
         }
         return res;
     }
