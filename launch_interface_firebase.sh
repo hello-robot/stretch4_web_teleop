@@ -31,6 +31,7 @@ export PATH="$HOME/.local/bin:$PATH"
 . /etc/hello-robot/hello-robot.conf
 export HELLO_FLEET_ID
 export HELLO_FLEET_PATH=$HOME/stretch_user
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 if [ -z "$WEB_TELEOP_BUILD_MODE" ] && [ -f "$HOME/ament_ws/src/stretch4_web_teleop/.env" ]; then
 	WEB_TELEOP_BUILD_MODE=$(grep -m1 '^WEB_TELEOP_BUILD_MODE=' "$HOME/ament_ws/src/stretch4_web_teleop/.env" | cut -d= -f2-)
 fi
@@ -51,14 +52,14 @@ pm2 kill 2>/dev/null || true
 echo "Check rmw_zenohd..."
 if ! pgrep -x rmw_zenohd >/dev/null; then
 	echo "rmw_zenohd not running, starting it..."
-	screen -dm -S "rmw_zenohd" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $logdir/rmw_zenohd.txt"
+	screen -dm -S "rmw_zenohd" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $logdir/rmw_zenohd.txt"
 	sleep 2
 fi
 
 # 3. Start ROS2 launch file
 echo "Start ROS2..."
 LAUNCH_LOGFILE="$logdir/web_interface_launch.txt"
-screen -dm -S "web_teleop_ros" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
+screen -dm -S "web_teleop_ros" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
 sleep 8
 
 # 4. Start webpack watch, the local HTTPS server, and the robot browser

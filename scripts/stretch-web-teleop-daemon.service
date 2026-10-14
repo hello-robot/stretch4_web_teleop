@@ -11,6 +11,7 @@ ExecStart=/usr/bin/node /home/hello-robot/ament_ws/src/stretch4_web_teleop/scrip
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
+Environment=RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
 [Install]
 WantedBy=multi-user.target

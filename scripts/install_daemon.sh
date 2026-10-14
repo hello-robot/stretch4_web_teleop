@@ -30,6 +30,7 @@ ExecStart=/usr/bin/node $WORKSPACE_DIR/scripts/stretch_firebase_daemon.js
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
+Environment=RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
 [Install]
 WantedBy=multi-user.target
