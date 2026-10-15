@@ -1,6 +1,9 @@
 import "operator/css/MobileOperator.css";
-import React, { useState } from "react";
-import { isVoiceControlEnabled } from "shared/operatorVoiceSession";
+import { default as React, useState, useSyncExternalStore } from "react";
+import {
+    isVoiceControlEnabled,
+    subscribeOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
 import {
     ActionState,
     ActionState as MoveBaseState,
@@ -22,8 +25,8 @@ import {
 } from "./function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
 import { ButtonPad } from "./layout_components/ButtonPad";
-import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
 import { SharedState } from "./layout_components/CustomizableComponent";
+import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
 import PilotMode from "./layout_components/PilotMode";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import {
@@ -375,8 +378,8 @@ export const MobileOperator = (props: {
         layout.current.pilotControlsCurrent = pilotControlsCurrent;
         FunctionProvider.pilotControlsCurrent =
             pilotControlsCurrent as PilotButtonPadType;
+        setButtonStateMapRerender((rerender) => !rerender);
         props.storageHandler.saveCurrentLayout(layout.current);
-        setButtonStateMapRerender(!buttonStateMapRerender);
     }
 
     function moveBaseStateCallback(state: MoveBaseState) {
@@ -474,7 +477,10 @@ export const MobileOperator = (props: {
     };
 
     // @flag voice_control_interface
-    const voiceSvc = isVoiceControlEnabled();
+    const voiceSvc = useSyncExternalStore(
+        subscribeOperatorVoiceSvc,
+        isVoiceControlEnabled,
+    );
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
