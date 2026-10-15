@@ -15,6 +15,7 @@ import {
     PlaybackPosesCommand,
     HomeTheRobotCommand,
     GetStretchTool,
+    SetMaxEeSpeedCommand,
     GetJointVelocity,
     SetJointVelocityCommand,
     SeedLocalizationCommand,
@@ -312,6 +313,19 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Sets the velocity limiter's end-effector speed ceiling.
+     *
+     * @param speed max end-effector linear speed, in m/s
+     */
+    setMaxEeSpeed(speed: number) {
+        let cmd: SetMaxEeSpeedCommand = {
+            type: "setMaxEeSpeed",
+            speed: speed,
         };
         this.robotChannel(cmd);
     }

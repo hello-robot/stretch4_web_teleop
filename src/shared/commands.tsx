@@ -20,10 +20,17 @@ export type cmd =
     | GetStretchTool
     | GetJointVelocity
     | HomeTheRobotCommand
-    | SeedLocalizationCommand;
+    | SeedLocalizationCommand
+    | SetMaxEeSpeedCommand;
 
 export interface SeedLocalizationCommand {
     type: "seedLocalization";
+}
+
+/** Max end-effector linear speed, in m/s, for the velocity_limiter node. */
+export interface SetMaxEeSpeedCommand {
+    type: "setMaxEeSpeed";
+    speed: number;
 }
 
 export interface VelocityCommand {

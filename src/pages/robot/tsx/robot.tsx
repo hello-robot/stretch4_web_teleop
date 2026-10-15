@@ -23,8 +23,6 @@ import {
     ROSOdometry,
     ROSPose,
     JointVelocityLimits,
-    SPEED_PROFILES,
-    SpeedProfile,
     updateJointVelocities,
     updateJointIncrements,
     JOINT_VELOCITY_HEARTBEAT_MS,
@@ -630,32 +628,30 @@ export class Robot extends React.Component {
             name: "/stretch_driver:mode"
         });
 
-        // Gripper velocity for each speed profile; its units depend on the attached tool
-        const JOINT_VELOCITY_PARAM_PREFIXES: Record<SpeedProfile, string> = {
-            slow: "joint_velocity.slow",
-            medium: "joint_velocity",
-            fast: "joint_velocity.fast",
-        };
+        // Base joint velocities: the driver's slow motion profile, which the operator
+        // interface uses as its medium setting and scales for slow and fast. The gripper's
+        // units depend on the attached tool.
         const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
+            lift_joint: "lift",
+            arm_joint: "arm",
+            wrist_yaw_joint: "wrist_yaw",
+            wrist_pitch_joint: "wrist_pitch",
+            wrist_roll_joint: "wrist_roll",
             gripper_joint: "gripper",
+            translate_mobile_base: "omnibase.linear",
+            rotate_mobile_base: "omnibase.angular",
         };
-        for (const profile of SPEED_PROFILES) {
-            const prefix = JOINT_VELOCITY_PARAM_PREFIXES[profile];
-            for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
-                new Param({
-                    ros: this.ros,
-                    name: `/stretch_driver:${prefix}.${paramKey}`,
-                }).get((value: number) => {
-                    if (typeof value === "number" && value > 0) {
-                        this.jointVelocityLimits[profile] = {
-                            ...this.jointVelocityLimits[profile],
-                            [rosJointName]: value,
-                        };
-                        updateJointVelocities({ [profile]: { [rosJointName]: value } });
-                        this.getJointVelocityLimits();
-                    }
-                });
-            }
+        for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
+            new Param({
+                ros: this.ros,
+                name: `/stretch_driver:joint_velocity.slow.${paramKey}`,
+            }).get((value: number) => {
+                if (typeof value === "number" && value > 0) {
+                    this.jointVelocityLimits[rosJointName] = value;
+                    updateJointVelocities({ [rosJointName]: value });
+                    this.getJointVelocityLimits();
+                }
+            });
         }
     }
 
@@ -949,6 +945,20 @@ export class Robot extends React.Component {
         return this.collisionMonitorActive
             ? this.cmdVelNavTopic
             : this.cmdVelDirectTopic;
+    }
+
+    /**
+     * Sets the velocity limiter's max_ee_speed param. No-op when the limiter is
+     * disabled, since nothing is running to read the param.
+     *
+     * @param speed max end-effector linear speed, in m/s
+     */
+    setMaxEeSpeed(speed: number) {
+        if (!FEATURE_EE_VELOCITY_LIMITER || !(speed > 0)) return;
+        new Param({
+            ros: this.ros,
+            name: "/ee_velocity_safety_filter:max_ee_speed",
+        }).set(speed, () => {});
     }
 
     createJointVelTopic() {
