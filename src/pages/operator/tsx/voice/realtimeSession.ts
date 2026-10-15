@@ -15,6 +15,8 @@ import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { flyingGripperFunctionProvider } from "../index";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import { TASK_SPACE_LINEAR_VEL } from "shared/util";
+import { isIosLike } from "../utils/isIosLike";
+import { RobotAudioPlayer } from "../utils/robotAudioPlayer";
 import {
     clearLastVoiceBaseMove,
     executeBaseMoveOnProvider,
@@ -624,11 +626,15 @@ const MIC_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
 
 /** getUserMedia with privilege transition logs (granted / rejected only). */
 async function getUserMediaWithPrivilegeLog(): Promise<MediaStream> {
+    // Create the robot AudioContext before capture. Do not await resume();
+    // iOS drops the unmute gesture if resume() is awaited first.
+    RobotAudioPlayer.getInstance().ensureContextBeforeCapture();
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: MIC_AUDIO_CONSTRAINTS,
         });
         logMicPrivilege(true);
+        RobotAudioPlayer.getInstance().kickPlayAndRecordRoute();
         return stream;
     } catch (error) {
         if (isMicPermissionDenied(error)) {
@@ -636,17 +642,6 @@ async function getUserMediaWithPrivilegeLog(): Promise<MediaStream> {
         }
         throw error;
     }
-}
-
-function isIosLike(): boolean {
-    const ua = navigator.userAgent;
-    if (/iPad|iPhone|iPod/.test(ua)) {
-        return true;
-    }
-    // iPadOS 13+ can report as MacIntel with touch.
-    return (
-        navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1
-    );
 }
 
 /**
@@ -793,9 +788,11 @@ export async function connectOpenAIRealtimeVoice(
 
     pc.ontrack = () => { };
 
+    RobotAudioPlayer.getInstance().ensureContextBeforeCapture();
     let inputStream = await navigator.mediaDevices.getUserMedia({
         audio: MIC_AUDIO_CONSTRAINTS,
     });
+    RobotAudioPlayer.getInstance().kickPlayAndRecordRoute();
 
     const syncMicCaptureFromInputStream = () => {
         logMicCaptureConnected(streamHasLiveAudio(inputStream));
