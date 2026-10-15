@@ -160,7 +160,11 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 name: isRobotAudioMuted ? "Unmute Robot Mic" : "Mute Robot Mic",
                 description: "Toggle robot microphone audio stream playback",
                 onClick: () => {
-                    RobotAudioPlayer.getInstance().toggleMuted();
+                    const player = RobotAudioPlayer.getInstance();
+                    if (player.getMuted()) {
+                        player.unlockFromUserGesture();
+                    }
+                    player.toggleMuted();
                 },
                 icon: isRobotAudioMuted ? <MicOffIcon /> : <MicIcon />,
                 enabled: true,
