@@ -21,11 +21,18 @@ export type cmd =
     | GetJointVelocity
     | HomeTheRobotCommand
     | SeedLocalizationCommand
+    | SetMaxEeSpeedCommand;
     | GetVoiceCapabilityCommand
     | RequestVoiceTokenCommand;
 
 export interface SeedLocalizationCommand {
     type: "seedLocalization";
+}
+
+/** Max end-effector linear speed, in m/s, for the velocity_limiter node. */
+export interface SetMaxEeSpeedCommand {
+    type: "setMaxEeSpeed";
+    speed: number;
 }
 
 /** Ask the robot whether its server can mint OpenAI Realtime credentials. */

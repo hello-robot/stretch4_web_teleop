@@ -35,6 +35,7 @@ import {
     WebRTCMessage,
 } from "shared/util";
 import { StretchToolMessage } from "../../../shared/util";
+import { SetMaxEeSpeedCommand } from "../../../shared/commands";
 import { WebRTCConnection } from "../../../shared/webrtcconnections";
 import { Robot } from "../../robot/tsx/robot";
 import { AudioStream } from "./audiostreams";
@@ -440,6 +441,11 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "homeTheRobot":
             robot.homeTheRobot();
+            break;
+        case "setMaxEeSpeed":
+            // Cast because ActionStateMessage types `type` as string, which
+            // defeats discrimination on this union.
+            robot.setMaxEeSpeed((message as SetMaxEeSpeedCommand).speed);
             break;
         case "seedLocalization":
             robot.seedLocalization((response) => {

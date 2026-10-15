@@ -87,6 +87,7 @@ export const MobileOperator = (props: {
     const applyVelocityScale = React.useCallback((scale: number) => {
         setVelocityScale(scale);
         FunctionProvider.velocityScale = scale;
+        FunctionProvider.syncMaxEeSpeed();
     }, []);
     const [activeMainGroupTab, setActiveMainGroupTab] =
         React.useState<number>(0);

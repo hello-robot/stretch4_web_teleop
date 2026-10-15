@@ -2,9 +2,9 @@ import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
 import {
-    JOINT_VELOCITIES,
+    DEFAULT_JOINT_VELOCITIES,
     JOINT_VELOCITY_HEARTBEAT_MS,
-    PROFILE_JOINT_VELOCITIES,
+    PROFILE_SCALES,
     RobotPose,
     SpeedProfile,
     ValidJoints,
@@ -46,6 +46,24 @@ export abstract class FunctionProvider {
      */
     static addRemoteRobot(remoteRobot: RemoteRobot) {
         FunctionProvider.remoteRobot = remoteRobot;
+        FunctionProvider.syncMaxEeSpeed();
+    }
+
+    /**
+     * Max end-effector linear speed for the current speed profile, in m/s: the profile's base
+     * translation velocity, so the tool is never driven faster than the base can drive.
+     */
+    static get maxEeSpeed(): number | undefined {
+        return this.jointVelocity("translate_mobile_base");
+    }
+
+    /**
+     * Pushes the current profile's end-effector speed ceiling to the velocity limiter. Call
+     * whenever the speed profile changes.
+     */
+    static syncMaxEeSpeed() {
+        const speed = this.maxEeSpeed;
+        if (speed !== undefined) this.remoteRobot?.setMaxEeSpeed(speed);
     }
 
     /**
@@ -73,14 +91,14 @@ export abstract class FunctionProvider {
 
     /**
      * Velocity of a joint at the current speed setting, in URDF units/s: the joint's
-     * PROFILE_JOINT_VELOCITIES entry if it has one, otherwise JOINT_VELOCITIES times the velocity
-     * scale. Undefined if the joint has neither.
+     * DEFAULT_JOINT_VELOCITIES entry scaled by PROFILE_SCALES. Undefined if the joint has no
+     * entry.
      */
     static jointVelocity(jointName: ValidJoints): number | undefined {
-        const profileVelocity = PROFILE_JOINT_VELOCITIES[this.speedProfile][jointName];
-        if (profileVelocity !== undefined) return profileVelocity;
-        const velocity = JOINT_VELOCITIES[jointName];
-        return velocity === undefined ? undefined : velocity * this.velocityScale;
+        const velocity = DEFAULT_JOINT_VELOCITIES[jointName];
+        return velocity === undefined
+            ? undefined
+            : velocity * PROFILE_SCALES[this.speedProfile];
     }
 
     /**

@@ -1,33 +1,33 @@
 import React from "react";
-import { Transform, Vector3, Quaternion } from "roslib";
+import { Quaternion, Transform, Vector3 } from "roslib";
 import {
+    CameraPerspectiveCommand,
     cmd,
     DriveCommand,
-    CameraPerspectiveCommand,
-    IncrementalMove,
-    SetTaskSpaceVelocityCommand,
-    setRobotModeCommand,
-    VelocityCommand,
-    RobotPoseCommand,
-    ToggleCommand,
+    GetJointVelocity,
     GetOccupancyGrid,
+    GetStretchTool,
+    GetVoiceCapabilityCommand,
+    HomeTheRobotCommand,
+    IncrementalMove,
     MoveBaseCommand,
     PlaybackPosesCommand,
-    HomeTheRobotCommand,
-    GetStretchTool,
-    GetJointVelocity,
-    SetJointVelocityCommand,
-    SeedLocalizationCommand,
-    GetVoiceCapabilityCommand,
     RequestVoiceTokenCommand,
+    RobotPoseCommand,
+    SeedLocalizationCommand,
+    SetJointVelocityCommand,
+    SetMaxEeSpeedCommand,
+    setRobotModeCommand,
+    SetTaskSpaceVelocityCommand,
+    ToggleCommand,
+    VelocityCommand,
 } from "shared/commands";
 import {
-    ValidJointStateDict,
     RobotPose,
-    ValidJoints,
-    ROSPose,
-    waitUntil,
     ROSOdometry,
+    ROSPose,
+    ValidJoints,
+    ValidJointStateDict
 } from "shared/util";
 export type robotMessageChannel = (message: cmd) => void;
 
@@ -314,6 +314,19 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Sets the velocity limiter's end-effector speed ceiling.
+     *
+     * @param speed max end-effector linear speed, in m/s
+     */
+    setMaxEeSpeed(speed: number) {
+        let cmd: SetMaxEeSpeedCommand = {
+            type: "setMaxEeSpeed",
+            speed: speed,
         };
         this.robotChannel(cmd);
     }
