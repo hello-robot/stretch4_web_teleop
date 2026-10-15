@@ -7,14 +7,6 @@ cd "$(dirname "$0")"
 
 FIREBASE="./node_modules/.bin/firebase"
 
-# The git branch this robot runs and deploys. Set ROBOT_DEPLOY_BRANCH in .env,
-# for example ROBOT_DEPLOY_BRANCH=main.
-deploy_branch="$(sed -n 's/^ROBOT_DEPLOY_BRANCH=//p' .env | head -n 1 | tr -d '\r"')"
-if [ -z "$deploy_branch" ]; then
-	echo "ERROR: ROBOT_DEPLOY_BRANCH is not defined in .env" >&2
-	exit 1
-fi
-
 fleet_id="$(sed -n 's/^HELLO_FLEET_ID=//p' .env | head -n 1 | tr -d '\r"')"
 if [ -z "$fleet_id" ]; then
 	echo "ERROR: HELLO_FLEET_ID is not defined in .env" >&2
@@ -46,16 +38,6 @@ prompt_operator_email() {
 }
 
 prompt_operator_email
-
-# Switch to the branch and grab the latest. Checkout is a no-op when already there.
-current_branch="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$current_branch" = "$deploy_branch" ]; then
-	echo "Already on ${deploy_branch}."
-else
-	echo "Checking out ${deploy_branch}..."
-	git checkout "$deploy_branch"
-fi
-git pull --ff-only
 
 # Finish a partial install. A completed node_modules is left as it is.
 if [ -x "$FIREBASE" ] && [ -d node_modules/firebase ] && [ -d node_modules/dotenv ]; then

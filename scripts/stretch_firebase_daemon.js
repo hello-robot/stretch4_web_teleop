@@ -270,7 +270,9 @@ function launchLogDir() {
 function readGitBranch() {
     return new Promise((resolve) => {
         exec('git rev-parse --abbrev-ref HEAD', { cwd: repoRoot }, (error, stdout) => {
-            resolve(error ? null : stdout.trim() || null);
+            if (error) return resolve(null);
+            const name = stdout.trim();
+            return resolve(!name || name === 'HEAD' ? 'unknown' : name);
         });
     });
 }

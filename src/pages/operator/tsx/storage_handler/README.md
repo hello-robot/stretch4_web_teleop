@@ -137,7 +137,6 @@ First add the 8 shared `PUBLIC_FIREBASE_*` lines to the robot's .env file. Then,
 ROBOT_USERNAME=<fleet-id>@example.com
 ROBOT_PASSWORD=your_secure_password
 HELLO_FLEET_ID=stretch-se4-4001
-ROBOT_DEPLOY_BRANCH=main
 ```
 
 `ROBOT_USERNAME` and `ROBOT_PASSWORD` are secrets. Keep them only in the robot's `.env`; never add them
@@ -159,6 +158,12 @@ When prompted:
 1. Enter the robot's `sudo` password to install the background service.
 
 The script is safe to re-run. When it finishes, the robot will appear on your dashboard.
+
+It does not touch the checkout. The daemon it installs runs this working tree directly, so whatever
+branch is checked out is what the robot runs. Changing the code a robot runs is ordinary git work —
+`git checkout`, `git pull`, rebuild, relaunch — and needs nothing from Firebase or `.env`. The daemon
+publishes the live branch to `robots/<fleetId>/branch`, so each robot's card shows what it is
+running; a detached HEAD or an unreadable tree shows `unknown`.
 
 ### Step 11: Teleoperate
 
@@ -261,6 +266,35 @@ To grant, revoke, or alias access by hand, edit the `assignments` and `uids` pat
 ```bash
 ./node_modules/.bin/firebase database:update "/assignments/<authUid>/robots" --data '{"<fleetId>":true}'
 ```
+
+> \[!IMPORTANT\]
+> Aliases are the easiest of these to get wrong. Once `uids/<authUid>` holds an alias, every
+> assignment is read from `assignments/<alias>` and `assignments/<authUid>` is ignored. Adding an
+> alias to an account that already has robots or maps means moving that assignment to the new key in
+> the same sitting; leaving it behind takes away everything that account could reach, with no error
+> anywhere. Write the new node first and delete the old one last, so an interruption leaves a
+> duplicate rather than an account pointing at nothing.
+
+### Why maps are assigned twice
+
+A map is assigned to people and, separately, to robots, and the two grants do different work:
+
+- `assignments/<person>/maps` is what the dashboard's map picker offers that person.
+- `assignments/<fleetId>/maps` is what the robot's daemon may read out of `maps/<mapId>` when a
+  launch asks for a map the robot does not already have on disk.
+
+The second cannot be derived from the first. A security rule sees only the identity making the
+request, and that request is made by the robot, so the rule has no way to know which operator asked.
+The daemon does check the requesting operator — `ensureMapLocal` in
+[`scripts/stretch_firebase_daemon.js`](../../../../../scripts/stretch_firebase_daemon.js) refuses a
+map the requester does not hold — but it can only run that check after it has read the map, which
+takes a grant of its own.
+
+> \[!WARNING\]
+> A map assigned to a person but not to the robot still appears in their picker and the launch still
+> proceeds, but the robot logs `Launch will continue without map` and comes up without it unless that
+> map's `.yaml` is already in `~/stretch_user/maps/`. When you give someone a new map, give it to the
+> robots they drive as well.
 
 ## Database layout
 

@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loginHandler } from "../index";
 import {
+    branchLabel,
     CardTone,
     holdsOperatorSeat,
     MapIndex,
@@ -374,12 +375,7 @@ export const RobotCard = ({
                                 });
                         }}
                     />
-                    <BranchTag
-                        branch={
-                            robot.branch || (status === "offline" ? "main" : "")
-                        }
-                        tone={tone}
-                    />
+                    <BranchTag branch={branchLabel(robot.branch)} tone={tone} />
                 </div>
             </div>
 

@@ -35,8 +35,24 @@ export interface OperatorSeat {
 
 export const holdsOperatorSeat = (
     seat: OperatorSeat | null,
-    myUid: string | undefined,
+    myUid: string | undefined
 ): boolean => Boolean(seat && myUid && seat.uid === myUid);
+
+/**
+ * What the branch tag shows for a robot.
+ *
+ * The daemon publishes the branch checked out on the robot as of its last
+ * status change, so this value can trail the robot's current tree. That is the
+ * reading to keep: it names the code the running interface was launched from,
+ * which is what an operator needs to know.
+ *
+ * Anything that names no branch reads as "unknown": a robot that has never
+ * published one, a tree git could not read, or a detached HEAD, which git
+ * reports as the literal string "HEAD". Guessing a branch name here would put
+ * a claim on the card that nothing on the robot supports.
+ */
+export const branchLabel = (branch: string | undefined): string =>
+    !branch || branch === "HEAD" ? "unknown" : branch;
 
 /** Visual tone of a card: lit when the robot daemon is reachable, dim when not. */
 export type CardTone = "lit" | "dim";
@@ -46,7 +62,7 @@ export const toneForStatus = (status: string | undefined): CardTone =>
 
 export const normalizeStatus = (status: string | undefined): RobotStatus =>
     (["online", "offline", "standby", "launching", "occupied"] as const).find(
-        (s) => s === status,
+        (s) => s === status
     ) ?? "offline";
 
 /**
@@ -58,7 +74,7 @@ export type RobotPresence = "offline" | "idle" | "ready" | "in-use";
 
 export const presenceFor = (
     status: RobotStatus,
-    seatTaken: boolean,
+    seatTaken: boolean
 ): RobotPresence => {
     if (status === "offline") return "offline";
     if (status === "standby" || status === "launching") return "idle";

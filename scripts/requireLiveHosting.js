@@ -85,11 +85,27 @@ let channel;
 try {
     channel = hostingChannel(repoRoot);
 } catch (err) {
+    if (process.env.WEB_TELEOP_ALLOW_DIRTY_LIVE) {
+        console.warn(
+            "Publishing a detached HEAD to the live site under --allow-dirty."
+        );
+        process.exit(0);
+    }
     console.error(err.message);
     process.exit(1);
 }
 
 if (!channel.live) {
+    // deployLive.js sets this on the child process once --allow-dirty has been
+    // confirmed at a terminal, since the Firebase CLI spawns this hook itself.
+    // Keep it scoped to that child: a shell that exports it has opened the live
+    // channel to every deploy it runs, silently.
+    if (process.env.WEB_TELEOP_ALLOW_DIRTY_LIVE) {
+        console.warn(
+            `Publishing ${channel.id} to the live site under --allow-dirty.`
+        );
+        process.exit(0);
+    }
     console.error(
         `Refusing to publish the live site. This checkout is ${channel.id}, not clean origin/main.`,
     );
