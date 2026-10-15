@@ -165,7 +165,8 @@ class ConfigureVideoStreams(Node):
             # Subscribe to the RGB ompressed image topic
             self.gripper_camera_rgb_subscriber = self.create_subscription(
                 CompressedImage if use_compressed_image else Image,
-                "/cameras_gripper/right/image_raw"
+                # "/cameras_gripper/right/image_raw"
+                "/grasping_perception/annotated_image"
                 + ("/compressed" if use_compressed_image else ""),
                 self.gripper_camera_rgb_cb,
                 QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT),
