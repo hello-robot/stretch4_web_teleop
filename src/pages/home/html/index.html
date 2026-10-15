@@ -2,7 +2,30 @@
 <html>
     <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#101519" />
         <title>Home - Stretch Web Teleop</title>
+            <script>
+            (function () {
+                var host = location.hostname;
+                if (host.endsWith(".web.app") || host.endsWith(".firebaseapp.com")) {
+                    var seen = null;
+                    setInterval(function () {
+                        fetch("/home/bundle.js", { method: "HEAD", cache: "no-store" })
+                            .then(function (res) {
+                                var tag = res.headers.get("etag");
+                                if (!tag) return;
+                                if (seen && seen !== tag) location.reload();
+                                seen = tag;
+                            })
+                            .catch(function () {});
+                    }, 2000);
+                    return;
+                }
+                var source = new EventSource("/dev-reload");
+                source.onmessage = function () { location.reload(); };
+            })();
+        </script>
     </head>
     <body>
         <div id="root"></div>

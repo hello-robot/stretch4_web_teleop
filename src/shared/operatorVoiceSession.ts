@@ -1,11 +1,19 @@
-/** Socket.io voice session token from join_as_operator (local signaling only). */
+/**
+ * Operator-side voice session state.
+ *
+ * Local signaling: join_as_operator returns a socket.io voice session token
+ * used to mint OpenAI credentials from the robot's server directly.
+ * Firebase signaling: the robot answers getVoiceCapability over the WebRTC
+ * data channel and relays minted credentials on requestVoiceToken.
+ */
 
 import type { Socket } from "socket.io-client";
 
 let operatorVoiceSessionToken: string | undefined;
-/** Whether the signaling server registered its SVC routes for this session. */
+/** Whether the robot side can mint OpenAI credentials for this session. */
 // @flag voice_control_interface
 let operatorVoiceSvc = false;
+const voiceSvcListeners = new Set<() => void>();
 /**
  * Server `voice_input_recording` feature flag — pre-gate uplink Opus (mp3)
  * audio-snippet clips. Does not gate voice JSONL logging, which always runs
@@ -29,7 +37,10 @@ export function getOperatorVoiceSessionToken(): string | undefined {
 }
 
 export function setOperatorVoiceSvc(enabled: boolean): void {
-    operatorVoiceSvc = Boolean(enabled);
+    const next = Boolean(enabled);
+    if (next === operatorVoiceSvc) return;
+    operatorVoiceSvc = next;
+    voiceSvcListeners.forEach((listener) => listener());
 }
 
 export function getOperatorVoiceSvc(): boolean {
@@ -37,24 +48,26 @@ export function getOperatorVoiceSvc(): boolean {
 }
 
 /**
- * The single gate for every SVC surface in the operator UI.
+ * Re-render hook for components that read isVoiceControlEnabled(): the robot's
+ * voiceCapability reply can arrive after the operator UI first mounts.
+ * Shaped for React.useSyncExternalStore.
+ */
+export function subscribeOperatorVoiceSvc(listener: () => void): () => void {
+    voiceSvcListeners.add(listener);
+    return () => {
+        voiceSvcListeners.delete(listener);
+    };
+}
+
+/**
+ * The single gate for every voice control surface in the operator UI.
  *
- * Requires both: the signaling server confirmed SVC for this operator session,
- * and storage is not firebase (only the local signaling server mints voice
- * session tokens).
- *
- * Keep this gate runtime-only. server.js owns the flag because it owns the
- * capability: it registers the OpenAI routes and mints the credentials, so
- * operatorVoiceSvc is the authoritative answer for this session. ANDing a
- * build-time FEATURE_* literal in here adds a second copy of that decision
- * which can only agree or be wrong -- the bundle and the server are built and
- * started independently. When they disagree the failure is silent either way:
- * the UI goes dark with nothing logged, or it offers controls the server
- * refuses.
+ * Requires that server.js had the voice_control_interface flag on at startup
+ * (reported in the join_as_operator reply).
  */
 // @flag voice_control_interface
 export function isVoiceControlEnabled(): boolean {
-    return operatorVoiceSvc && process.env.storage !== "firebase";
+    return operatorVoiceSvc;
 }
 
 export function setOperatorVoiceInputRecording(enabled: boolean): void {

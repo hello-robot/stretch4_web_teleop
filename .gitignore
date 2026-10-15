@@ -17,6 +17,7 @@
 # misc
 .DS_Store
 # Secrets
+# .env.example is the tracked template; the real .env never is.
 .env
 .env.local
 .env.development.local
@@ -38,6 +39,7 @@ mkcert*
 
 # Build output
 dist/*
+dist-firebase/*
 
 # Outcomes
 outcomes/*
@@ -48,8 +50,16 @@ outcomes/*
 # Specialized URDFs
 urdf/*.urdf
 
+# Firebase
+# Project identity is per-machine. Create it with `firebase use --add`, or let
+# scripts/syncFirebaseRc.js write it from projectId in .env.
+.firebaserc
+.firebase/
+firebase-debug.log*
+database-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.runtimeconfig.json
+
 # Cursor
 .cursor/*
-
-# Misc
-.DS_Store

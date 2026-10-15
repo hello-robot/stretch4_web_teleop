@@ -1,32 +1,33 @@
 import React from "react";
-import { Transform, Vector3, Quaternion } from "roslib";
+import { Quaternion, Transform, Vector3 } from "roslib";
 import {
+    CameraPerspectiveCommand,
     cmd,
     DriveCommand,
-    CameraPerspectiveCommand,
-    IncrementalMove,
-    SetTaskSpaceVelocityCommand,
-    setRobotModeCommand,
-    VelocityCommand,
-    RobotPoseCommand,
-    ToggleCommand,
+    GetJointVelocity,
     GetOccupancyGrid,
+    GetStretchTool,
+    GetVoiceCapabilityCommand,
+    HomeTheRobotCommand,
+    IncrementalMove,
     MoveBaseCommand,
     PlaybackPosesCommand,
-    HomeTheRobotCommand,
-    GetStretchTool,
-    SetMaxEeSpeedCommand,
-    GetJointVelocity,
-    SetJointVelocityCommand,
+    RequestVoiceTokenCommand,
+    RobotPoseCommand,
     SeedLocalizationCommand,
+    SetJointVelocityCommand,
+    SetMaxEeSpeedCommand,
+    setRobotModeCommand,
+    SetTaskSpaceVelocityCommand,
+    ToggleCommand,
+    VelocityCommand,
 } from "shared/commands";
 import {
-    ValidJointStateDict,
     RobotPose,
-    ValidJoints,
-    ROSPose,
-    waitUntil,
     ROSOdometry,
+    ROSPose,
+    ValidJoints,
+    ValidJointStateDict
 } from "shared/util";
 export type robotMessageChannel = (message: cmd) => void;
 
@@ -326,6 +327,22 @@ export class RemoteRobot extends React.Component<{}, any> {
         let cmd: SetMaxEeSpeedCommand = {
             type: "setMaxEeSpeed",
             speed: speed,
+        };
+        this.robotChannel(cmd);
+    }
+
+    // @flag voice_control_interface
+    getVoiceCapability() {
+        let cmd: GetVoiceCapabilityCommand = {
+            type: "getVoiceCapability",
+        };
+        this.robotChannel(cmd);
+    }
+
+    // @flag voice_control_interface
+    requestVoiceToken() {
+        let cmd: RequestVoiceTokenCommand = {
+            type: "requestVoiceToken",
         };
         this.robotChannel(cmd);
     }
