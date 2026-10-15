@@ -5,6 +5,7 @@ import { ValidJoints } from "./util";
 export type cmd =
     | DriveCommand
     | SetJointVelocityCommand
+    | SetTaskSpaceVelocityCommand
     | IncrementalMove
     | setRobotModeCommand
     | CameraPerspectiveCommand
@@ -17,6 +18,7 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
+    | GetJointVelocity
     | HomeTheRobotCommand
     | SeedLocalizationCommand;
 
@@ -42,6 +44,14 @@ export interface SetJointVelocityCommand {
     type: "setJointVelocity";
     jointName: ValidJoints;
     velocity: number;
+}
+
+/** Tool-frame linear twist for stretch_kinematics task_space_controller (/ee_cmd_vel). */
+export interface SetTaskSpaceVelocityCommand {
+    type: "setTaskSpaceVelocity";
+    linear_X: number;
+    linear_Y: number;
+    linear_Z: number;
 }
 
 export interface IncrementalMove {
@@ -81,6 +91,10 @@ export interface GetOccupancyGrid {
 
 export interface GetStretchTool {
     type: "getStretchTool";
+}
+
+export interface GetJointVelocity {
+    type: "getJointVelocity";
 }
 
 export interface MoveBaseCommand {

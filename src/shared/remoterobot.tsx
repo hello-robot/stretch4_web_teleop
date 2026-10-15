@@ -5,6 +5,7 @@ import {
     DriveCommand,
     CameraPerspectiveCommand,
     IncrementalMove,
+    SetTaskSpaceVelocityCommand,
     setRobotModeCommand,
     VelocityCommand,
     RobotPoseCommand,
@@ -14,6 +15,7 @@ import {
     PlaybackPosesCommand,
     HomeTheRobotCommand,
     GetStretchTool,
+    GetJointVelocity,
     SetJointVelocityCommand,
     SeedLocalizationCommand,
 } from "shared/commands";
@@ -103,6 +105,38 @@ export class RemoteRobot extends React.Component<{}, any> {
                     },
                 };
                 this.robotChannel(affirmEvent);
+            },
+        };
+    }
+
+    setTaskSpaceVelocity(
+        linear_X: number,
+        linear_Y: number,
+        linear_Z: number
+    ): VelocityCommand {
+        if (!this.sensors.getLeaseDriverHolding()) {
+            return {
+                stop: () => {},
+            };
+        }
+
+        const cmd: SetTaskSpaceVelocityCommand = {
+            type: "setTaskSpaceVelocity",
+            linear_X,
+            linear_Y,
+            linear_Z,
+        };
+        this.robotChannel(cmd);
+
+        return {
+            stop: () => {
+                const stopEvent: SetTaskSpaceVelocityCommand = {
+                    type: "setTaskSpaceVelocity",
+                    linear_X: 0,
+                    linear_Y: 0,
+                    linear_Z: 0,
+                };
+                this.robotChannel(stopEvent);
             },
         };
     }
@@ -217,6 +251,13 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getStretchTool(type: "getStretchTool") {
         let cmd: GetStretchTool = {
+            type: type,
+        };
+        this.robotChannel(cmd);
+    }
+
+    getJointVelocity(type: "getJointVelocity") {
+        let cmd: GetJointVelocity = {
             type: type,
         };
         this.robotChannel(cmd);
@@ -544,7 +585,7 @@ class RobotSensors extends React.Component {
             filteredPose["wrist_yaw_joint"] = this.robotPose["wrist_yaw_joint"];
         }
         if (gripper) {
-            filteredPose["stretch_gripper_joint"] = this.robotPose["stretch_gripper_joint"];
+            filteredPose["gripper_joint"] = this.robotPose["gripper_joint"];
         }
         return filteredPose;
     }

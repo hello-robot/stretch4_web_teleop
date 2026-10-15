@@ -1,4 +1,3 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
 import { Transform } from "roslib";
@@ -12,11 +11,14 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
+    JointVelocityLimits,
+    JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
     navigationProps,
     OccupancyGridMessage,
     OdomMessage,
+    parseToolMetadata,
     RobotPose,
     ROSBatteryState,
     ROSOccupancyGrid,
@@ -46,6 +48,7 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
+    jointVelocityLimitsCallback: forwardJointVelocityLimits,
 });
 
 export let connection: WebRTCConnection;
@@ -181,10 +184,21 @@ function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
 function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
+    const isActuated = robot.isToolActuated();
     connection.sendData({
         type: "stretchTool",
         value: value,
+        toolMetadata: parseToolMetadata(value, isActuated),
     } as StretchToolMessage);
+}
+
+function forwardJointVelocityLimits(limits: JointVelocityLimits) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "jointVelocityLimits",
+        jointVelocities: limits,
+    } as JointVelocityLimitsMessage);
 }
 
 function forwardJointStates(
@@ -323,6 +337,9 @@ function handleMessage(message: WebRTCMessage) {
         case "setJointVelocity":
             robot.setJointVelocity(message.jointName, message.velocity);
             break;
+        case "setTaskSpaceVelocity":
+            robot.setTaskSpaceVelocity(message.linear_X, message.linear_Y, message.linear_Z);
+            break;
         case "incrementalMove":
             robot.executeIncrementalMove(message.jointName, message.increment);
             break;
@@ -362,6 +379,9 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "getStretchTool":
             robot.getStretchTool();
+            break;
+        case "getJointVelocity":
+            robot.getJointVelocityLimits();
             break;
         case "homeTheRobot":
             robot.homeTheRobot();

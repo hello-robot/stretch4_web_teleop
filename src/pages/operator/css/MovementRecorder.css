@@ -19,10 +19,15 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    /* matches the 0.2s framer opacity fade so visibility flips after fade-out */
+    transition: visibility 0.2s;
 }
 
+/* `button.mrecord-button` re-enables pointer-events on itself and a disabled
+   button still blocks taps to whatever is beneath it, so hide it outright. */
 .mrecord-button-wrapper--inert {
     pointer-events: none;
+    visibility: hidden;
 }
 
 button.mrecord-button {
