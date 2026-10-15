@@ -2,7 +2,7 @@ const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 const dotenv = require("dotenv");
-const { envVarName, loadFeatures } = require("./feature-flags");
+const { envVarName, loadFeatures, FEATURES_PATH } = require("./feature-flags");
 
 const pages = ["robot", "operator", "home"];
 
@@ -26,6 +26,20 @@ module.exports = (env) => {
 
     return {
         mode: "development",
+        // DefinePlugin substitutions are invisible to webpack's module
+        // hashing, so the cache key has to name them. Anything added to
+        // envKeys above belongs in `version` as well: omit it and a cached
+        // build quietly serves the previous value after features.json or
+        // --env changes. buildDependencies covers edits to this file and to
+        // the registry it reads.
+        cache: {
+            type: "filesystem",
+            version: JSON.stringify({
+                flags: loadFeatures(),
+                storage: env.storage,
+            }),
+            buildDependencies: { config: [__filename, FEATURES_PATH] },
+        },
         entry: pages.reduce((config, page) => {
             config[page] = `./src/pages/${page}/tsx/index.tsx`;
             return config;

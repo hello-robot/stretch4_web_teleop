@@ -1,6 +1,5 @@
 /** Socket.io voice session token from join_as_operator (local signaling only). */
 
-import { FEATURE_VOICE_CONTROL_INTERFACE } from "shared/featureFlags";
 import type { Socket } from "socket.io-client";
 
 let operatorVoiceSessionToken: string | undefined;
@@ -40,17 +39,22 @@ export function getOperatorVoiceSvc(): boolean {
 /**
  * The single gate for every SVC surface in the operator UI.
  *
- * Requires all three: the flag was on when this bundle was built, the
- * signaling server confirmed SVC for this operator session, and storage is not
- * firebase (only the local signaling server mints voice session tokens).
+ * Requires both: the signaling server confirmed SVC for this operator session,
+ * and storage is not firebase (only the local signaling server mints voice
+ * session tokens).
+ *
+ * Keep this gate runtime-only. server.js owns the flag because it owns the
+ * capability: it registers the OpenAI routes and mints the credentials, so
+ * operatorVoiceSvc is the authoritative answer for this session. ANDing a
+ * build-time FEATURE_* literal in here adds a second copy of that decision
+ * which can only agree or be wrong -- the bundle and the server are built and
+ * started independently. When they disagree the failure is silent either way:
+ * the UI goes dark with nothing logged, or it offers controls the server
+ * refuses.
  */
 // @flag voice_control_interface
 export function isVoiceControlEnabled(): boolean {
-    return (
-        FEATURE_VOICE_CONTROL_INTERFACE &&
-        operatorVoiceSvc &&
-        process.env.storage !== "firebase"
-    );
+    return operatorVoiceSvc && process.env.storage !== "firebase";
 }
 
 export function setOperatorVoiceInputRecording(enabled: boolean): void {
