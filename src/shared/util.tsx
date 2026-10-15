@@ -4,7 +4,7 @@ import { cmd } from "./commands";
 export type ValidJoints =
     | "head_tilt_joint"
     | "head_pan_joint"
-    | "stretch_gripper_joint"
+    | "gripper_joint"
     | "arm_joint"
     | "wrist_extension"
     | "lift_joint"
@@ -13,7 +13,6 @@ export type ValidJoints =
     | "wrist_yaw_joint"
     | "translate_mobile_base"
     | "rotate_mobile_base"
-    | "gripper_aperture"
     | "arm_l0_joint"
     | "arm_l1_joint"
     | "arm_l2_joint"
@@ -52,24 +51,17 @@ export interface KeyValue {
     key: string;
     value: string;
 }
-export enum StretchTool {
-    DW4 = "eoa_wrist_dw4_tool_sg4",
-    TABLET = "eoa_wrist_dw3_tool_tablet",
-    UNKNOWN = "unknown",
+export interface ToolMetadata {
+    name: string;
+    isActuated: boolean;
 }
 
-
-
-export function getStretchTool(stretchTool: string) {
-    if (stretchTool === "eoa_wrist_dw3_tool_tablet") {
-        return StretchTool.TABLET;
-    } else if (stretchTool === "eoa_wrist_dw4_tool_sg4") {
-        return StretchTool.DW4;
-    } else {
-        return StretchTool.UNKNOWN;
-    }
+export function parseToolMetadata(toolName: string, isActuated?: boolean): ToolMetadata {
+    return {
+        name: toolName || "unknown",
+        isActuated: isActuated ?? true,
+    };
 }
-
 
 
 export interface ROSBatteryState extends Message {
@@ -108,7 +100,28 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | SeedLocalizationStateMessage
+    | VoiceCapabilityMessage
+    | VoiceTokenMessage
+    | JointVelocityLimitsMessage
     | cmd;
+
+/** Robot -> operator reply to getVoiceCapability. */
+export interface VoiceCapabilityMessage {
+    type: "voiceCapability";
+    enabled: boolean;
+    voiceInputRecording: boolean;
+}
+
+/**
+ * Robot -> operator reply to requestVoiceToken. `credential` is the raw
+ * OpenAI client_secrets response (short-lived); exactly one of
+ * `credential` / `error` is set.
+ */
+export interface VoiceTokenMessage {
+    type: "voiceToken";
+    credential?: Record<string, unknown>;
+    error?: string;
+}
 
 interface StopTrajectoryMessage {
     type: "stopTrajectory";
@@ -151,6 +164,15 @@ export interface LeaseStatusMessage {
 export interface StretchToolMessage {
     type: "stretchTool";
     value: string;
+    toolMetadata?: ToolMetadata;
+}
+
+/** Per-profile joint velocities, keyed by joint name. */
+export type JointVelocityLimits = Partial<Record<SpeedProfile, Record<string, number>>>;
+
+export interface JointVelocityLimitsMessage {
+    type: "jointVelocityLimits";
+    jointVelocities: JointVelocityLimits;
 }
 
 
@@ -242,22 +264,17 @@ export interface ROSOdometry extends Message {
     };
 }
 
-export const JOINT_LIMITS: { [key in ValidJoints]?: [number, number] } = {
-    arm_joint: [0.001, 0.518],
-    wrist_roll_joint: [-2.95, 2.94],
-    wrist_pitch_joint: [-1.57, 0.57],
-    wrist_yaw_joint: [-1.37, 4.41],
-    lift_joint: [0.001, 1.1],
-    translate_mobile_base: [-30.0, 30.0],
-    rotate_mobile_base: [-3.14, 3.14],
-    stretch_gripper_joint: [-0.37, 0.17],
-    head_tilt_joint: [-1.6, 0.3],
-    head_pan_joint: [-3.95, 1.7],
-};
 
+/** Speed setting, matching the driver's slow / default / fast motion profiles. */
+export type SpeedProfile = "slow" | "medium" | "fast";
+
+export const SPEED_PROFILES: SpeedProfile[] = ["slow", "medium", "fast"];
+
+/** Joint velocities at a velocity scale of 1, in m/s or rad/s. */
 export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
+    gripper_joint: 0.1,
     arm_joint: 0.04,
     lift_joint: 0.04,
     wrist_roll_joint: 0.5,
@@ -265,16 +282,40 @@ export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     wrist_yaw_joint: 1.0,
     translate_mobile_base: 0.2,
     rotate_mobile_base: 0.3,
-    stretch_gripper_joint: 0.1
+};
+
+/**
+ * Joint velocities per speed profile, in URDF units/s, used instead of JOINT_VELOCITIES and the
+ * velocity scale. Holds the gripper, whose units depend on the attached tool; populated at runtime
+ * from the driver's joint_velocity.{slow,fast}.gripper and joint_velocity.gripper params.
+ */
+export const PROFILE_JOINT_VELOCITIES: Record<SpeedProfile, { [key in ValidJoints]?: number }> = {
+    slow: { gripper_joint: 0.075 },
+    medium: { gripper_joint: 0.125 },
+    fast: { gripper_joint: 0.2 },
 };
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
 export const TASK_SPACE_LINEAR_VEL = 0.04;
 
+export function updateJointVelocities(newVelocities: JointVelocityLimits) {
+    for (const profile of SPEED_PROFILES) {
+        for (const [key, val] of Object.entries(newVelocities[profile] ?? {})) {
+            if (typeof val === "number" && val > 0) {
+                (PROFILE_JOINT_VELOCITIES[profile] as Record<string, number>)[key] = val;
+            }
+        }
+    }
+}
+
+/**
+ * Default fallback jog increments. The gripper's is refreshed at runtime from the driver's
+ * tool_info.urdf_range, since the right step depends on which tool is attached.
+ */
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.1,
     head_pan_joint: 0.1,
-    stretch_gripper_joint: 0.1,
+    gripper_joint: 0.1,
     arm_joint: 0.1,
     lift_joint: 0.1,
     wrist_roll_joint: 0.1,
@@ -284,14 +325,66 @@ export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
     rotate_mobile_base: 0.5,
 };
 
-const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
-
-export function getPlaybackJointVelocity(jointName: ValidJoints): number {
-    return (JOINT_VELOCITIES[jointName] || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
+export function updateJointIncrements(newIncrements: Record<string, number>) {
+    for (const [key, val] of Object.entries(newIncrements)) {
+        if (typeof val === "number" && val > 0) {
+            (JOINT_INCREMENTS as Record<string, number>)[key] = val;
+        }
+    }
 }
 
+/**
+ * Republish period for continuous joint velocity commands, in ms. The JointJog `duration` must
+ * match it: the driver multiplies rate by duration to get each command's displacement, so a
+ * mismatch scales the realised joint speed by the ratio between them.
+ */
+export const JOINT_VELOCITY_HEARTBEAT_MS = 50;
+
+/** Fraction of a tool's full travel that one jog click should cover. */
+export const GRIPPER_INCREMENT_RANGE_FRACTION = 0.1;
+
+const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playback
+
+/**
+ * Returns the target velocity limit for a joint during pose playback.
+ *
+ * Resolves joint name aliases (such as tool-specific gripper and telescoping arm links)
+ * to ensure correct velocity limits are applied.
+ *
+ * @param jointName The joint identifier to look up.
+ * @returns The playback joint velocity limit in m/s or rad/s.
+ */
+export function getPlaybackJointVelocity(jointName: ValidJoints): number {
+    let resolvedJoint: ValidJoints = jointName;
+    if (jointName === "stretch_gripper_joint" || (jointName as string) === "gripper_aperture") {
+        resolvedJoint = "gripper_joint";
+    } else if (
+        jointName === "wrist_extension" ||
+        jointName === "arm_l0_joint" ||
+        jointName === "arm_l1_joint" ||
+        jointName === "arm_l2_joint" ||
+        jointName === "arm_l3_joint" ||
+        jointName === "arm_l4_joint"
+    ) {
+        resolvedJoint = "arm_joint";
+    }
+
+    const velocity =
+        PROFILE_JOINT_VELOCITIES.medium[resolvedJoint] ??
+        JOINT_VELOCITIES[resolvedJoint] ??
+        PROFILE_JOINT_VELOCITIES.medium[jointName] ??
+        JOINT_VELOCITIES[jointName];
+    return (velocity || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
+}
+
+/**
+ * Maps a list of joint names to their corresponding playback velocities.
+ *
+ * @param jointNames Array of joint names.
+ * @returns Array of playback velocities in the same order as jointNames.
+ */
 export function getPlaybackJointVelocities(jointNames: ValidJoints[]): number[] {
-    return jointNames.map(getPlaybackJointVelocity);
+    return jointNames.map((name) => getPlaybackJointVelocity(name));
 }
 
 export const navigationProps = {

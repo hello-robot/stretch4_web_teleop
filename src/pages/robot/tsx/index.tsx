@@ -1,7 +1,10 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
 import { Transform } from "roslib";
+import {
+    FEATURE_VOICE_CONTROL_INTERFACE,
+    FEATURE_VOICE_INPUT_RECORDING,
+} from "shared/featureFlags";
 import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
 import {
     ActionState,
@@ -12,17 +15,23 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
+    JointVelocityLimits,
+    LeaseStatusMessage,
+    JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
     navigationProps,
     OccupancyGridMessage,
     OdomMessage,
+    parseToolMetadata,
     RobotPose,
     ROSBatteryState,
     ROSOccupancyGrid,
     ROSOdometry,
     ValidJointStateDict,
     ValidJointStateMessage,
+    VoiceCapabilityMessage,
+    VoiceTokenMessage,
     WebRTCMessage,
 } from "shared/util";
 import { StretchToolMessage } from "../../../shared/util";
@@ -46,6 +55,7 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
+    jointVelocityLimitsCallback: forwardJointVelocityLimits,
 });
 
 export let connection: WebRTCConnection;
@@ -81,7 +91,12 @@ robot.setOnRosConnectCallback(async () => {
     console.log(
         "Waiting for configured signaler (i.e. logging in if using Firebase)"
     );
-    await loginFirebaseSignalerAsRobot();
+    try {
+        await loginFirebaseSignalerAsRobot();
+        console.log("Firebase login successful!");
+    } catch (e) {
+        console.error("Firebase login FAILED:", e);
+    }
     await connection.configure_signaler("");
     console.log("Signaler ready! Joining room.");
     let joinedRobotRoom = await connection.joinRobotRoom();
@@ -166,10 +181,64 @@ function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
 function forwardStretchTool(value: string) {
     if (!connection) throw "WebRTC connection undefined!";
 
+    const isActuated = robot.isToolActuated();
     connection.sendData({
         type: "stretchTool",
         value: value,
+        toolMetadata: parseToolMetadata(value, isActuated),
     } as StretchToolMessage);
+}
+
+// @flag voice_control_interface
+function forwardVoiceCapability() {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "voiceCapability",
+        enabled: FEATURE_VOICE_CONTROL_INTERFACE,
+        voiceInputRecording:
+            FEATURE_VOICE_CONTROL_INTERFACE && FEATURE_VOICE_INPUT_RECORDING,
+    } as VoiceCapabilityMessage);
+}
+
+/**
+ * Mint an OpenAI Realtime credential from the local server and relay it to
+ * the operator. The robot browser runs on the robot itself, so the server
+ * accepts this loopback request without an operator voice session token.
+ */
+// @flag voice_control_interface
+async function forwardVoiceToken() {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    const reply = (message: Omit<VoiceTokenMessage, "type">) =>
+        connection.sendData({ type: "voiceToken", ...message } as VoiceTokenMessage);
+
+    if (!FEATURE_VOICE_CONTROL_INTERFACE) {
+        reply({ error: "Voice control is not enabled on this robot" });
+        return;
+    }
+    try {
+        const r = await fetch("/openai-realtime/token", {
+            method: "GET",
+            credentials: "same-origin",
+        });
+        if (!r.ok) {
+            reply({ error: `Token endpoint HTTP ${r.status}: ${(await r.text()).slice(0, 200)}` });
+            return;
+        }
+        reply({ credential: (await r.json()) as Record<string, unknown> });
+    } catch (err) {
+        reply({ error: err instanceof Error ? err.message : String(err) });
+    }
+}
+
+function forwardJointVelocityLimits(limits: JointVelocityLimits) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "jointVelocityLimits",
+        jointVelocities: limits,
+    } as JointVelocityLimitsMessage);
 }
 
 function forwardJointStates(
@@ -351,6 +420,9 @@ function handleMessage(message: WebRTCMessage) {
         case "getStretchTool":
             robot.getStretchTool();
             break;
+        case "getJointVelocity":
+            robot.getJointVelocityLimits();
+            break;
         case "homeTheRobot":
             robot.homeTheRobot();
             break;
@@ -364,6 +436,14 @@ function handleMessage(message: WebRTCMessage) {
                     "seedLocalizationState"
                 );
             });
+            break;
+        // @flag voice_control_interface
+        case "getVoiceCapability":
+            forwardVoiceCapability();
+            break;
+        // @flag voice_control_interface
+        case "requestVoiceToken":
+            void forwardVoiceToken();
             break;
     }
 }

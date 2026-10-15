@@ -18,11 +18,28 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
+    | GetJointVelocity
     | HomeTheRobotCommand
-    | SeedLocalizationCommand;
+    | SeedLocalizationCommand
+    | GetVoiceCapabilityCommand
+    | RequestVoiceTokenCommand;
 
 export interface SeedLocalizationCommand {
     type: "seedLocalization";
+}
+
+/** Ask the robot whether its server can mint OpenAI Realtime credentials. */
+export interface GetVoiceCapabilityCommand {
+    type: "getVoiceCapability";
+}
+
+/**
+ * Ask the robot to mint an OpenAI Realtime ephemeral credential and relay it
+ * back over the data channel (used when the operator page cannot reach the
+ * robot's local server, e.g. Firebase Hosting).
+ */
+export interface RequestVoiceTokenCommand {
+    type: "requestVoiceToken";
 }
 
 export interface VelocityCommand {
@@ -90,6 +107,10 @@ export interface GetOccupancyGrid {
 
 export interface GetStretchTool {
     type: "getStretchTool";
+}
+
+export interface GetJointVelocity {
+    type: "getJointVelocity";
 }
 
 export interface MoveBaseCommand {

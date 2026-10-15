@@ -15,8 +15,11 @@ import {
     PlaybackPosesCommand,
     HomeTheRobotCommand,
     GetStretchTool,
+    GetJointVelocity,
     SetJointVelocityCommand,
     SeedLocalizationCommand,
+    GetVoiceCapabilityCommand,
+    RequestVoiceTokenCommand,
 } from "shared/commands";
 import {
     ValidJointStateDict,
@@ -255,6 +258,13 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
+    getJointVelocity(type: "getJointVelocity") {
+        let cmd: GetJointVelocity = {
+            type: type,
+        };
+        this.robotChannel(cmd);
+    }
+
     setMapPose(pose: Transform) {
         this.mapPose = pose;
         this.mapPoseListeners.forEach((listener) => {
@@ -304,6 +314,22 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
+        };
+        this.robotChannel(cmd);
+    }
+
+    // @flag voice_control_interface
+    getVoiceCapability() {
+        let cmd: GetVoiceCapabilityCommand = {
+            type: "getVoiceCapability",
+        };
+        this.robotChannel(cmd);
+    }
+
+    // @flag voice_control_interface
+    requestVoiceToken() {
+        let cmd: RequestVoiceTokenCommand = {
+            type: "requestVoiceToken",
         };
         this.robotChannel(cmd);
     }
@@ -577,7 +603,7 @@ class RobotSensors extends React.Component {
             filteredPose["wrist_yaw_joint"] = this.robotPose["wrist_yaw_joint"];
         }
         if (gripper) {
-            filteredPose["stretch_gripper_joint"] = this.robotPose["stretch_gripper_joint"];
+            filteredPose["gripper_joint"] = this.robotPose["gripper_joint"];
         }
         return filteredPose;
     }

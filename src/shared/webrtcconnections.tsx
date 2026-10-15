@@ -20,6 +20,7 @@ interface WebRTCProps {
     onRobotConnectionStart?: () => void;
     onMessageChannelOpen?: () => void;
     onConnectionEnd?: () => void;
+    onOperatorDisplaced?: () => void;
 }
 
 export class WebRTCConnection extends React.Component {
@@ -62,7 +63,9 @@ export class WebRTCConnection extends React.Component {
         this.signaler = createSignaler({
             onSignal: this.onSignal,
             onGoodbye: this.stop,
+            onOperatorDisplaced: props.onOperatorDisplaced,
             onRobotConnectionStart: props.onRobotConnectionStart,
+            role: props.peerRole,
         });
     }
 
@@ -195,6 +198,18 @@ export class WebRTCConnection extends React.Component {
     addOperatorToRobotRoom() {
         console.log("joining room as operator");
         return this.signaler.join_as_operator();
+    }
+
+    operatorJoinBlocked() {
+        return this.signaler.operatorJoinBlocked();
+    }
+
+    operatorJoinBlock() {
+        return this.signaler.operatorJoinBlock();
+    }
+
+    requestOperatorTakeover() {
+        this.signaler.requestOperatorTakeover();
     }
 
     addTrack(track: MediaStreamTrack, stream: MediaStream, streamName: string) {

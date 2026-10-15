@@ -1,6 +1,5 @@
 import {
     JOINT_INCREMENTS,
-    JOINT_VELOCITIES,
     ValidJoints,
     ValidJointStateDict,
 } from "shared/util";
@@ -275,23 +274,18 @@ export class ButtonFunctionProvider extends FunctionProvider {
         )
             ? -1
             : 1;
-        const velocity =
-            multiplier *
-            (JOINT_VELOCITIES[jointName] ?? 0.1) *
-            FunctionProvider.velocityScale;
-
-        if (velocity === undefined) {
+        const jointVelocity = FunctionProvider.jointVelocity(jointName);
+        if (jointVelocity === undefined) {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Velocity for joint ${jointName} is undefined!`);
         }
+        const velocity = multiplier * jointVelocity;
 
-        const increment =
-            multiplier *
-            (JOINT_INCREMENTS[jointName] ?? 0.1) *
-            FunctionProvider.velocityScale;
-
-        if (increment === undefined) {
+        const jointIncrement = JOINT_INCREMENTS[jointName];
+        if (jointIncrement === undefined) {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Increment for joint ${jointName} is undefined!`);
         }
+        const increment =
+            multiplier * jointIncrement * FunctionProvider.velocityScale;
 
         switch (FunctionProvider.actionMode) {
             case ActionModeType.StepActions:
@@ -451,8 +445,7 @@ function getButtonsFromJointName(
     jointName: ValidJoints
 ): [ButtonPadButton, ButtonPadButton] | undefined {
     switch (jointName) {
-        case "stretch_gripper_joint":
-        case "gripper_aperture":
+        case "gripper_joint":
             return [ButtonPadButton.GripperClose, ButtonPadButton.GripperOpen];
         case "arm_joint":
         case "wrist_extension":
@@ -518,7 +511,7 @@ function getJointNameFromButtonFunction(
 
         case ButtonPadButton.GripperClose:
         case ButtonPadButton.GripperOpen:
-            return "stretch_gripper_joint";
+            return "gripper_joint";
 
         case ButtonPadButton.WristRollLeft:
         case ButtonPadButton.WristRollRight:

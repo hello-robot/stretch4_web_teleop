@@ -1,6 +1,5 @@
 import {
     JOINT_INCREMENTS,
-    JOINT_VELOCITIES,
     TASK_SPACE_LINEAR_VEL,
 } from "shared/util";
 import { ActionModeType } from "../utils/component_definitions";
@@ -35,7 +34,7 @@ const TRANSLATION: Record<
     [FlyingGripperButton.GripperClose]: undefined,
 };
 
-const GRIPPER_JOINT = "stretch_gripper_joint" as const;
+const GRIPPER_JOINT = "gripper_joint" as const;
 
 /**
  * Flying-gripper pad: six tool-frame translations plus gripper open/close.
@@ -112,9 +111,7 @@ export class FlyingGripperFunctionProvider extends FunctionProvider {
         const translation = TRANSLATION[button];
         const gripperSign = button === FlyingGripperButton.GripperClose ? -1 : 1;
         const gripperVelocity =
-            gripperSign *
-            (JOINT_VELOCITIES[GRIPPER_JOINT] ?? 0.1) *
-            FunctionProvider.velocityScale;
+            gripperSign * (FunctionProvider.jointVelocity(GRIPPER_JOINT) ?? 0.1);
         const gripperIncrement =
             gripperSign *
             (JOINT_INCREMENTS[GRIPPER_JOINT] ?? 0.1) *
