@@ -1,7 +1,17 @@
 import { FirebaseOptions } from "firebase/app";
+import "operator/css/index.css";
+import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { cmd } from "shared/commands";
+import {
+    setOperatorVoiceInputRecording,
+    setOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
 import { RemoteRobot } from "shared/remoterobot";
+import {
+    consumeOperatorTakeover,
+    OPERATOR_SEAT_STALE_MS,
+} from "shared/signaling/operatorSeat";
 import {
     delay,
     JointVelocityLimitsMessage,
@@ -14,24 +24,28 @@ import {
     WebRTCMessage
 } from "shared/util";
 import { WebRTCConnection } from "shared/webrtcconnections";
+import { waitUntilAsync } from "../../../shared/util";
+import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
+import { createLoginHandler } from "../../home/tsx/utils";
+import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
+import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
 import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
-import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
-import { StorageHandler } from "./storage_handler/StorageHandler";
-import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
-
-import "operator/css/index.css";
-import { waitUntilAsync } from "../../../shared/util";
-import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
-import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
 import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
 import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
 import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
+import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
+import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
+import { StorageHandler } from "./storage_handler/StorageHandler";
+import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
+import {
+    configureVoiceTokenRelay,
+    resolveVoiceToken,
+} from "./voice/voiceTokenRelay";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -43,6 +57,9 @@ let root: Root;
 let toolMetadata: ToolMetadata | undefined = undefined;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
+export let loginHandler: LoginHandler;
+let room_name: string | null = null;
+let yieldedToOtherTab = false;
 
 /** True when all WebRTC occupancy-grid chunks have been reassembled. */
 export function isOccupancyGridComplete(
@@ -132,32 +149,81 @@ connection = new WebRTCConnection({
     onTrackAdded: handleRemoteTrackAdded,
     onMessageChannelOpen: configureRemoteRobot,
     onConnectionEnd: disconnectFromRobot,
+    onOperatorDisplaced: () => {
+        yieldedToOtherTab = true;
+        showOperatorSeatNotice(
+            "This account is already operating from another tab.",
+        );
+        connection.hangup();
+    },
+});
+
+loginHandler = createLoginHandler(() => {
+    console.log("Operator login handler ready");
 });
 
 new Promise<void>(async (resolve) => {
     let currURL = new URL(window.location.href);
-    let room_name = currURL.searchParams.get("robot");
+    room_name = currURL.searchParams.get("robot");
+    if (process.env.storage === "firebase" && !room_name) {
+        room_name = process.env.HELLO_FLEET_ID;
+    }
     if (
         process.env.storage === "firebase" &&
-        !/^stretch-(re1|re2|se3)-\d{4}$/.test(room_name)
+        !/^stretch-(re1|re2|se3|se4)-\d{4}$/.test(room_name)
     ) {
         console.error(`ERROR: Invalid room ${room_name}`);
         throw new Error("Invalid room name");
     }
-    await connection.configure_signaler(room_name);
-    console.log("Signaler ready!");
+    try {
+        await connection.configure_signaler(room_name);
+        console.log("Signaler ready!");
+    } catch (error) {
+        console.error("Failed to configure signaler.", error);
+        return;
+    }
+
+    if (consumeOperatorTakeover()) connection.requestOperatorTakeover();
 
     let connected = false;
+    let occupiedSince: number | undefined;
+    let waitingOnSameAccount = false;
     while (!connected) {
-        connection.hangup();
+        if (!waitingOnSameAccount) connection.hangup();
 
         // Attempt to join robot room
         let joinedRobotRoom = await connection.addOperatorToRobotRoom();
         if (!joinedRobotRoom) {
+            const block = connection.operatorJoinBlock();
+            if (block === "same-account") {
+                if (!waitingOnSameAccount) {
+                    console.log("Operator seat is in use in another tab");
+                    showOperatorSeatNotice(
+                        "Your account is teleoperating this robot from another browser tab.",
+                    );
+                }
+                waitingOnSameAccount = true;
+                await delay(2000);
+                continue;
+            }
+            waitingOnSameAccount = false;
             console.log("Operator failed to join robot room");
+            if (block === "other") {
+                occupiedSince ??= Date.now();
+                if (Date.now() - occupiedSince > OPERATOR_SEAT_STALE_MS) {
+                    showOperatorSeatNotice(
+                        "Another account is teleoperating this robot.",
+                    );
+                    return;
+                }
+            } else {
+                occupiedSince = undefined;
+            }
             await delay(500);
             continue;
         }
+        waitingOnSameAccount = false;
+        occupiedSince = undefined;
 
         // Wait for WebRTC connection to resolve, timeout after 10 seconds
         let isResolved = await waitUntil(
@@ -301,6 +367,15 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "odom":
             remoteRobot.sensors.setOdom(message.message);
             break;
+        // @flag voice_control_interface
+        case "voiceCapability":
+            setOperatorVoiceSvc(message.enabled);
+            setOperatorVoiceInputRecording(message.voiceInputRecording);
+            break;
+        // @flag voice_control_interface
+        case "voiceToken":
+            resolveVoiceToken(message);
+            break;
         case "jointVelocityLimits":
             updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
             break;
@@ -335,6 +410,9 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+    // @flag voice_control_interface
+    remoteRobot.getVoiceCapability();
+    configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
     remoteRobot.getJointVelocity("getJointVelocity");
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
@@ -373,13 +451,13 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
     switch (process.env.storage) {
         case "firebase":
             const config: FirebaseOptions = {
-                apiKey: process.env.apiKey,
-                authDomain: process.env.authDomain,
-                projectId: process.env.projectId,
-                storageBucket: process.env.storageBucket,
-                messagingSenderId: process.env.messagingSenderId,
-                appId: process.env.appId,
-                measurementId: process.env.measurementId,
+                apiKey: process.env.PUBLIC_FIREBASE_API_KEY,
+                authDomain: process.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
+                projectId: process.env.PUBLIC_FIREBASE_PROJECT_ID,
+                storageBucket: process.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
+                messagingSenderId: process.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+                appId: process.env.PUBLIC_FIREBASE_APP_ID,
+                measurementId: process.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
             };
             return new FirebaseStorageHandler(
                 storageHandlerReadyCallback,
@@ -388,6 +466,37 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
         default:
             return new LocalStorageHandler(storageHandlerReadyCallback);
     }
+}
+
+function showOperatorSeatNotice(detail: string) {
+    document.querySelector(".loader-background")?.remove();
+    document.querySelector(".loader")?.remove();
+    document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+    const host = document.getElementById("root");
+    if (!host) return;
+    host.replaceChildren();
+
+    const kicker = document.createElement("p");
+    kicker.className = "op-seat-notice__kicker";
+    kicker.textContent = "hello robot";
+
+    const body = document.createElement("p");
+    body.className = "op-seat-notice__detail";
+    body.textContent = detail;
+
+    const back = document.createElement("a");
+    back.className = "op-seat-notice__button";
+    back.href = "/";
+    back.textContent = "←  Home";
+
+    const card = document.createElement("div");
+    card.className = "op-seat-notice__card";
+    card.append(kicker, body, back);
+
+    const notice = document.createElement("div");
+    notice.className = "op-seat-notice";
+    notice.append(card);
+    host.append(notice);
 }
 
 /**
@@ -411,6 +520,12 @@ function initConnectionStateCheck() {
     loaderText.appendChild(text);
 
     setInterval(async () => {
+        if (yieldedToOtherTab) {
+            document.querySelector(".loader-background")?.remove();
+            document.querySelector(".loader")?.remove();
+            document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+            return;
+        }
         let connected = await connection.isConnected();
         if (!connected && !window.document.body.contains(loader)) {
             window.document.body.appendChild(loaderText);
@@ -451,6 +566,9 @@ function renderOperator(storageHandler: StorageHandler) {
 }
 
 function disconnectFromRobot() {
+    // @flag voice_control_interface
+    configureVoiceTokenRelay(null);
+    setOperatorVoiceSvc(false);
     connection.hangup();
     connection.stop();
 }

@@ -1,4 +1,4 @@
-import { LoginHandler } from "./LoginHandler";
+import { LoginHandler, RobotRooms } from "./LoginHandler";
 import io, { Socket } from "socket.io-client";
 
 export class LocalLoginHandler extends LoginHandler {
@@ -24,13 +24,17 @@ export class LocalLoginHandler extends LoginHandler {
         return this._loginState;
     }
 
-    public listRooms(resultCallback) {
+    public listRooms(resultCallback: (robots: RobotRooms) => void): () => void {
         this.socket.emit("list_rooms");
-        this.socket.on("update_rooms", (ret) => {
-            let robo_info = ret["robot_id"];
-            robo_info["is_active"] = true;
-            resultCallback("robot_id", robo_info);
-        });
+        const handleRooms = (ret) => {
+            const robotInfo = {
+                ...ret["robot_id"],
+                is_active: true,
+            };
+            resultCallback({ robot_id: robotInfo });
+        };
+        this.socket.on("update_rooms", handleRooms);
+        return () => this.socket.off("update_rooms", handleRooms);
     }
 
     public logout(): Promise<undefined> {
@@ -41,16 +45,18 @@ export class LocalLoginHandler extends LoginHandler {
         });
     }
 
-    public login(
-        username: string,
-        password: string,
-        remember_me: boolean,
-    ): Promise<undefined> {
+    public login(username: string, password: string): Promise<undefined> {
         return new Promise<undefined>((resolve, reject) => {
             this._loginState = "authenticated";
             this.onReadyCallback();
             resolve(undefined);
         });
+    }
+
+    public loginWithGoogle(): Promise<undefined> {
+        return Promise.reject(
+            Error("LocalLoginHandler.loginWithGoogle() is not implemented"),
+        );
     }
 
     public forgot_password(username: string): Promise<undefined> {
