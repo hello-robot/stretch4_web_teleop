@@ -73,18 +73,20 @@ fi
 
 if [ "$DEPLOY" = true ]; then
 	echo -e "${BLUE}--- Deploying to Firebase ---${NC}"
-	# 1. Resolve Firebase Project URL
-	FIREBASE_RC=".firebaserc"
-	if [ ! -f "$FIREBASE_RC" ]; then
-		echo -e "${RED}ERROR:${NC} .firebaserc not found. Ensure you are in the project root."
+	# 1. Resolve the Firebase project from .env, the single place it is entered,
+	#    and regenerate .firebaserc so the CLI resolves the same one.
+	if [ ! -f ".env" ]; then
+		echo -e "${RED}ERROR:${NC} .env not found. Ensure you are in the project root."
 		exit 1
 	fi
 
-	PROJECT_ID=$(grep -o '"default": "[^"]*' "$FIREBASE_RC" | cut -d'"' -f4)
+	PROJECT_ID=$(grep -m1 '^PUBLIC_FIREBASE_PROJECT_ID=' .env | cut -d= -f2- | tr -d '\r"')
 	if [ -z "$PROJECT_ID" ]; then
-		echo -e "${RED}ERROR:${NC} Could not parse default project ID from .firebaserc"
+		echo -e "${RED}ERROR:${NC} PUBLIC_FIREBASE_PROJECT_ID is not set in .env"
 		exit 1
 	fi
+
+	node scripts/syncFirebaseRc.js || exit 1
 
 	HOSTED_URL="${PROJECT_ID}.web.app"
 	echo -e "Resolved Firebase Project ID: ${GREEN}${PROJECT_ID}${NC}"

@@ -15,8 +15,35 @@
 const fs = require("fs");
 const path = require("path");
 const { hostingChannel } = require("./hostingChannel");
+const { envProjectId } = require("./syncFirebaseRc");
 
 const repoRoot = path.join(__dirname, "..");
+
+/**
+ * The CLI resolved its project from .firebaserc before this hook ran, so a
+ * stale file cannot be corrected here -- only caught. Aborting in predeploy
+ * still stops the upload, which is the part that matters: otherwise one
+ * project's interface is published over another project's data.
+ */
+function requireMatchingProject() {
+    const fromEnv = envProjectId();
+    if (!fromEnv) return;
+    let fromRc;
+    try {
+        fromRc = JSON.parse(
+            fs.readFileSync(path.join(repoRoot, ".firebaserc"), "utf8"),
+        ).projects?.default;
+    } catch {
+        fromRc = undefined;
+    }
+    if (fromRc !== fromEnv) {
+        console.error(
+            `.firebaserc targets ${fromRc ?? "no project"} but .env projectId is ${fromEnv}.\n` +
+                "Run: node scripts/syncFirebaseRc.js",
+        );
+        process.exit(1);
+    }
+}
 
 function cmdline(pid) {
     try {
@@ -46,6 +73,8 @@ function ancestorCommand() {
     }
     return lines.join("\n");
 }
+
+requireMatchingProject();
 
 const ancestors = ancestorCommand();
 if (ancestors.includes("hosting:channel:deploy")) {

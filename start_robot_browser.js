@@ -13,8 +13,8 @@ if (process.argv.length > 2) {
 }
 
 const fleetId = process.env.HELLO_FLEET_ID || "unknown";
-const roboUser = process.env.roboUsername || "";
-const roboPass = process.env.roboPassword || "";
+const roboUser = process.env.ROBOT_USERNAME || "";
+const roboPass = process.env.ROBOT_PASSWORD || "";
 const isFirebaseMode = process.env.WEB_TELEOP_DIST === "dist-firebase";
 const urlParams = `?fleet_id=${encodeURIComponent(fleetId)}`;
 

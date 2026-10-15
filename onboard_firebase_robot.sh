@@ -7,11 +7,11 @@ cd "$(dirname "$0")"
 
 FIREBASE="./node_modules/.bin/firebase"
 
-# Which git branch this robot tracks. Set `release` in .env, for example
-# release=feature/firebase-sandbox or release=main.
-release="$(sed -n 's/^release=//p' .env | head -n 1 | tr -d '\r"')"
-if [ -z "$release" ]; then
-	echo "ERROR: release is not defined in .env" >&2
+# The git branch this robot runs and deploys. Set ROBOT_DEPLOY_BRANCH in .env,
+# for example ROBOT_DEPLOY_BRANCH=main.
+deploy_branch="$(sed -n 's/^ROBOT_DEPLOY_BRANCH=//p' .env | head -n 1 | tr -d '\r"')"
+if [ -z "$deploy_branch" ]; then
+	echo "ERROR: ROBOT_DEPLOY_BRANCH is not defined in .env" >&2
 	exit 1
 fi
 
@@ -49,11 +49,11 @@ prompt_operator_email
 
 # Switch to the branch and grab the latest. Checkout is a no-op when already there.
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$current_branch" = "$release" ]; then
-	echo "Already on ${release}."
+if [ "$current_branch" = "$deploy_branch" ]; then
+	echo "Already on ${deploy_branch}."
 else
-	echo "Checking out ${release}..."
-	git checkout "$release"
+	echo "Checking out ${deploy_branch}..."
+	git checkout "$deploy_branch"
 fi
 git pull --ff-only
 
@@ -64,6 +64,10 @@ else
 	echo "Installing npm dependencies..."
 	npm install --legacy-peer-deps
 fi
+
+# projectId is entered once, in .env. Regenerate .firebaserc from it so bare
+# `firebase <command>` calls on this robot resolve the same project afterwards.
+node scripts/syncFirebaseRc.js || exit 1
 
 # For the remainder of the script, you will need to be an
 # Admin or Owner of the Firebase web app.
@@ -85,12 +89,12 @@ const { getAuth, signInWithEmailAndPassword } = require("firebase/auth");
 
 const required = [
 	"HELLO_FLEET_ID",
-	"projectId",
-	"databaseURL",
-	"apiKey",
-	"authDomain",
-	"roboUsername",
-	"roboPassword",
+	"PUBLIC_FIREBASE_PROJECT_ID",
+	"PUBLIC_FIREBASE_DATABASE_URL",
+	"PUBLIC_FIREBASE_API_KEY",
+	"PUBLIC_FIREBASE_AUTH_DOMAIN",
+	"ROBOT_USERNAME",
+	"ROBOT_PASSWORD",
 ];
 for (const key of required) {
 	if (!process.env[key]) {
@@ -100,24 +104,24 @@ for (const key of required) {
 }
 
 const app = initializeApp({
-	apiKey: process.env.apiKey,
-	authDomain: process.env.authDomain,
-	databaseURL: process.env.databaseURL,
-	projectId: process.env.projectId,
+	apiKey: process.env.PUBLIC_FIREBASE_API_KEY,
+	authDomain: process.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
+	databaseURL: process.env.PUBLIC_FIREBASE_DATABASE_URL,
+	projectId: process.env.PUBLIC_FIREBASE_PROJECT_ID,
 });
-const instance = new URL(process.env.databaseURL).hostname.split(".")[0];
+const instance = new URL(process.env.PUBLIC_FIREBASE_DATABASE_URL).hostname.split(".")[0];
 
 signInWithEmailAndPassword(
 	getAuth(app),
-	process.env.roboUsername,
-	process.env.roboPassword,
+	process.env.ROBOT_USERNAME,
+	process.env.ROBOT_PASSWORD,
 )
 	.then((credential) => {
 		process.stdout.write(
 			[
 				credential.user.uid,
 				process.env.HELLO_FLEET_ID,
-				process.env.projectId,
+				process.env.PUBLIC_FIREBASE_PROJECT_ID,
 				instance,
 			].join("\n") + "\n",
 		);
@@ -168,7 +172,7 @@ while true; do
 	if [ "$found_operator" -eq 1 ] && [ -n "$operator_auth_uid" ]; then
 		break
 	fi
-	echo "No Cloud account uses ${operator_email}. Create one at https://stretch4-web-interface.web.app, then enter the email again."
+	echo "No Cloud account uses ${operator_email}. Create one at https://${project_id}.web.app, then enter the email again."
 	prompt_operator_email
 done
 

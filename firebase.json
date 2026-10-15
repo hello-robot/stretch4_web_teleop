@@ -31,15 +31,6 @@
       }
     ]
   },
-  "auth": {
-    "providers": {
-      "emailPassword": true,
-      "googleSignIn": {
-        "oAuthBrandDisplayName": "Web Interface",
-        "supportEmail": "annagarverick@hello-robot.com"
-      }
-    }
-  },
   "emulators": {
     "database": {
       "port": 9000

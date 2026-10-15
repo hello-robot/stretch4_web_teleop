@@ -62,8 +62,8 @@ function createTeleopLeaseClient(env = process.env) {
         {
             apiKey: env.apiKey,
             authDomain: env.authDomain,
-            databaseURL: env.databaseURL,
-            projectId: env.projectId,
+            databaseURL: env.PUBLIC_FIREBASE_DATABASE_URL,
+            projectId: env.PUBLIC_FIREBASE_PROJECT_ID,
             storageBucket: env.storageBucket,
             messagingSenderId: env.messagingSenderId,
             appId: env.appId,

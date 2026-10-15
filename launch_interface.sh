@@ -34,8 +34,8 @@ env_val() {
 	grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-
 }
 if [ -z "$FIREBASE" ] && [ -f "$ENV_FILE" ]; then
-	if [ -n "$(env_val apiKey)" ] && [ -n "$(env_val databaseURL)" ] &&
-		[ -n "$(env_val roboUsername)" ] && [ -n "$(env_val roboPassword)" ] &&
+	if [ -n "$(env_val PUBLIC_FIREBASE_API_KEY)" ] && [ -n "$(env_val PUBLIC_FIREBASE_DATABASE_URL)" ] &&
+		[ -n "$(env_val ROBOT_USERNAME)" ] && [ -n "$(env_val ROBOT_PASSWORD)" ] &&
 		[ -n "$(env_val HELLO_FLEET_ID)" ]; then
 		FIREBASE="-f"
 	fi
@@ -44,6 +44,12 @@ if [ -z "$WEB_TELEOP_BUILD_MODE" ] && [ -f "$ENV_FILE" ]; then
 	WEB_TELEOP_BUILD_MODE="$(env_val WEB_TELEOP_BUILD_MODE)"
 fi
 export WEB_TELEOP_BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
+
+# projectId is entered once, in .env. The Firebase CLI can only read it from
+# .firebaserc, so regenerate that before anything shells out to the CLI.
+if [ "$FIREBASE" = "-f" ]; then
+	node "$REPO_DIR/scripts/syncFirebaseRc.js" || exit 1
+fi
 
 timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
 logdir="$HOME/stretch_user/log/web_teleop/$timestamp"
@@ -225,11 +231,9 @@ echo "#############################################"
 echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
 echo "Visit the appropriate URL(s) below to see web teleop:"
 if [ "$FIREBASE" = "-f" ]; then
-	if [ -f "$REPO_DIR/.firebaserc" ]; then
-		PROJECT_ID=$(grep -o '"default": "[^"]*' "$REPO_DIR/.firebaserc" | cut -d'"' -f4)
-		if [ -n "$PROJECT_ID" ]; then
-			echo "Dashboard: https://${PROJECT_ID}.web.app/"
-		fi
+	PROJECT_ID="$(env_val PUBLIC_FIREBASE_PROJECT_ID)"
+	if [ -n "$PROJECT_ID" ]; then
+		echo "Dashboard: https://${PROJECT_ID}.web.app/"
 	fi
 	echo "Localhost: https://localhost/operator"
 	print_interface_urls
