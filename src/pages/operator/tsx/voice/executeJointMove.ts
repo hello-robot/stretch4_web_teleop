@@ -48,9 +48,9 @@ type JointActionMeta = {
  * Signs verified against `negativeButtonPadFunctions` in ButtonFunctionProvider.tsx:
  *   ArmLower, ArmRetract, GripperClose, WristRollLeft, WristPitchUp, WristRotateOut → negative.
  *
- * Velocity magnitudes come from `FunctionProvider.jointVelocity()`: `JOINT_VELOCITIES` in
- * shared/util.tsx times the velocity scale, or for gripper_joint the driver's
- * joint_velocity.* param for the current speed profile; GRIPPER_FALLBACK_VEL if unset.
+ * Velocity magnitudes come from `FunctionProvider.jointVelocity()`: `DEFAULT_JOINT_VELOCITIES`
+ * in shared/util.tsx times the current profile's `PROFILE_SCALES` entry; GRIPPER_FALLBACK_VEL
+ * if unset.
  */
 const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     // Lift (m) — ArmLower is in negativeButtonPadFunctions

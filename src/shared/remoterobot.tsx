@@ -1,33 +1,31 @@
 import React from "react";
-import { Transform, Vector3, Quaternion } from "roslib";
+import { Quaternion, Transform, Vector3 } from "roslib";
 import {
+    CameraPerspectiveCommand,
     cmd,
     DriveCommand,
-    CameraPerspectiveCommand,
-    IncrementalMove,
-    SetTaskSpaceVelocityCommand,
-    setRobotModeCommand,
-    VelocityCommand,
-    RobotPoseCommand,
-    ToggleCommand,
     GetOccupancyGrid,
+    GetStretchTool,
+    GetVoiceCapabilityCommand,
+    HomeTheRobotCommand,
+    IncrementalMove,
     MoveBaseCommand,
     PlaybackPosesCommand,
-    HomeTheRobotCommand,
-    GetStretchTool,
-    GetJointVelocity,
-    SetJointVelocityCommand,
-    SeedLocalizationCommand,
-    GetVoiceCapabilityCommand,
     RequestVoiceTokenCommand,
+    RobotPoseCommand,
+    SeedLocalizationCommand,
+    SetJointVelocityCommand,
+    setRobotModeCommand,
+    SetTaskSpaceVelocityCommand,
+    ToggleCommand,
+    VelocityCommand,
 } from "shared/commands";
 import {
-    ValidJointStateDict,
     RobotPose,
-    ValidJoints,
-    ROSPose,
-    waitUntil,
     ROSOdometry,
+    ROSPose,
+    ValidJoints,
+    ValidJointStateDict
 } from "shared/util";
 export type robotMessageChannel = (message: cmd) => void;
 
@@ -253,13 +251,6 @@ export class RemoteRobot extends React.Component<{}, any> {
 
     getStretchTool(type: "getStretchTool") {
         let cmd: GetStretchTool = {
-            type: type,
-        };
-        this.robotChannel(cmd);
-    }
-
-    getJointVelocity(type: "getJointVelocity") {
-        let cmd: GetJointVelocity = {
             type: type,
         };
         this.robotChannel(cmd);

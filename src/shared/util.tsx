@@ -102,7 +102,6 @@ export type WebRTCMessage =
     | SeedLocalizationStateMessage
     | VoiceCapabilityMessage
     | VoiceTokenMessage
-    | JointVelocityLimitsMessage
     | cmd;
 
 /** Robot -> operator reply to getVoiceCapability. */
@@ -166,16 +165,6 @@ export interface StretchToolMessage {
     value: string;
     toolMetadata?: ToolMetadata;
 }
-
-/** Per-profile joint velocities, keyed by joint name. */
-export type JointVelocityLimits = Partial<Record<SpeedProfile, Record<string, number>>>;
-
-export interface JointVelocityLimitsMessage {
-    type: "jointVelocityLimits";
-    jointVelocities: JointVelocityLimits;
-}
-
-
 
 export interface ActionState {
     state: string;
@@ -268,45 +257,47 @@ export interface ROSOdometry extends Message {
 /** Speed setting, matching the driver's slow / default / fast motion profiles. */
 export type SpeedProfile = "slow" | "medium" | "fast";
 
-export const SPEED_PROFILES: SpeedProfile[] = ["slow", "medium", "fast"];
-
-/** Joint velocities at a velocity scale of 1, in m/s or rad/s. */
-export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
-    head_tilt_joint: 0.3,
-    head_pan_joint: 0.3,
-    gripper_joint: 0.1,
-    arm_joint: 0.04,
-    lift_joint: 0.04,
-    wrist_roll_joint: 0.5,
-    wrist_pitch_joint: 0.5,
-    wrist_yaw_joint: 1.0,
-    translate_mobile_base: 0.2,
-    rotate_mobile_base: 0.3,
+/**
+ * Web teleop speed multipliers, applied to both DEFAULT_JOINT_VELOCITIES and JOINT_INCREMENTS so
+ * a speed profile changes held and step actions by the same proportion.
+ */
+export const PROFILE_SCALES: Record<SpeedProfile, number> = {
+    slow: 0.75,
+    medium: 1.0,
+    fast: 2.0,
 };
 
 /**
- * Joint velocities per speed profile, in URDF units/s, used instead of JOINT_VELOCITIES and the
- * velocity scale. Holds the gripper, whose units depend on the attached tool; populated at runtime
- * from the driver's joint_velocity.{slow,fast}.gripper and joint_velocity.gripper params.
+ * Joint velocities at the medium speed setting, in URDF units/s; PROFILE_SCALES derives the slow
+ * and fast settings from these. The driver's own joint_velocity.* params are its default motion
+ * profile, which is far faster than the end-effector limiter allows, so these are set here rather
+ * than read from it.
+ *
+ * Keep each entry under the limiter's ceiling at the fast profile, or that axis loses its speed
+ * settings entirely: the limiter scales a command down to max_ee_speed, so once
+ * `velocity * PROFILE_SCALES.fast * toolSpeedPerUnit` exceeds the ceiling, every profile comes out
+ * at the same clipped speed. `toolSpeedPerUnit` is 1.0 for the base's translation and for the lift
+ * and arm, and about 0.29 m/s per rad/s for the base's rotation with the arm stowed (0.78 with it
+ * extended half a metre).
+ *
+ * The gripper's URDF units depend on the attached tool, so its entry is only nominal; its jog
+ * increment is normalized to the tool's travel in updateJointIncrements().
  */
-export const PROFILE_JOINT_VELOCITIES: Record<SpeedProfile, { [key in ValidJoints]?: number }> = {
-    slow: { gripper_joint: 0.075 },
-    medium: { gripper_joint: 0.125 },
-    fast: { gripper_joint: 0.2 },
+export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
+    head_tilt_joint: 0.3,
+    head_pan_joint: 0.3,
+    gripper_joint: 0.075,
+    arm_joint: 0.1,
+    lift_joint: 0.15,
+    wrist_roll_joint: 4.0,
+    wrist_pitch_joint: 4.0,
+    wrist_yaw_joint: 4.0,
+    translate_mobile_base: 0.1,
+    rotate_mobile_base: 1.0,
 };
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
 export const TASK_SPACE_LINEAR_VEL = 0.04;
-
-export function updateJointVelocities(newVelocities: JointVelocityLimits) {
-    for (const profile of SPEED_PROFILES) {
-        for (const [key, val] of Object.entries(newVelocities[profile] ?? {})) {
-            if (typeof val === "number" && val > 0) {
-                (PROFILE_JOINT_VELOCITIES[profile] as Record<string, number>)[key] = val;
-            }
-        }
-    }
-}
 
 /**
  * Default fallback jog increments. The gripper's is refreshed at runtime from the driver's
@@ -370,10 +361,7 @@ export function getPlaybackJointVelocity(jointName: ValidJoints): number {
     }
 
     const velocity =
-        PROFILE_JOINT_VELOCITIES.medium[resolvedJoint] ??
-        JOINT_VELOCITIES[resolvedJoint] ??
-        PROFILE_JOINT_VELOCITIES.medium[jointName] ??
-        JOINT_VELOCITIES[jointName];
+        DEFAULT_JOINT_VELOCITIES[resolvedJoint] ?? DEFAULT_JOINT_VELOCITIES[jointName];
     return (velocity || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
 }
 
