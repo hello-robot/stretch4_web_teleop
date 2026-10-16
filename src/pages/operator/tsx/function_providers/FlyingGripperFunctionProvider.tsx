@@ -115,7 +115,7 @@ export class FlyingGripperFunctionProvider extends FunctionProvider {
         const gripperIncrement =
             gripperSign *
             (JOINT_INCREMENTS[GRIPPER_JOINT] ?? 0.1) *
-            FunctionProvider.velocityScale;
+            FunctionProvider.profileScale;
         const linScale = TASK_SPACE_LINEAR_VEL * FunctionProvider.velocityScale;
 
         const startAction = () => {

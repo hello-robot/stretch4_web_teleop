@@ -15,9 +15,7 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
-    JointVelocityLimits,
     LeaseStatusMessage,
-    JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
     navigationProps,
@@ -35,7 +33,6 @@ import {
     WebRTCMessage,
 } from "shared/util";
 import { StretchToolMessage } from "../../../shared/util";
-import { SetMaxEeSpeedCommand } from "../../../shared/commands";
 import { WebRTCConnection } from "../../../shared/webrtcconnections";
 import { Robot } from "../../robot/tsx/robot";
 import { AudioStream } from "./audiostreams";
@@ -56,7 +53,6 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
-    jointVelocityLimitsCallback: forwardJointVelocityLimits,
 });
 
 export let connection: WebRTCConnection;
@@ -231,15 +227,6 @@ async function forwardVoiceToken() {
     } catch (err) {
         reply({ error: err instanceof Error ? err.message : String(err) });
     }
-}
-
-function forwardJointVelocityLimits(limits: JointVelocityLimits) {
-    if (!connection) throw "WebRTC connection undefined!";
-
-    connection.sendData({
-        type: "jointVelocityLimits",
-        jointVelocities: limits,
-    } as JointVelocityLimitsMessage);
 }
 
 function forwardJointStates(
@@ -421,16 +408,8 @@ function handleMessage(message: WebRTCMessage) {
         case "getStretchTool":
             robot.getStretchTool();
             break;
-        case "getJointVelocity":
-            robot.getJointVelocityLimits();
-            break;
         case "homeTheRobot":
             robot.homeTheRobot();
-            break;
-        case "setMaxEeSpeed":
-            // Cast because ActionStateMessage types `type` as string, which
-            // defeats discrimination on this union.
-            robot.setMaxEeSpeed((message as SetMaxEeSpeedCommand).speed);
             break;
         case "seedLocalization":
             robot.seedLocalization((response) => {
