@@ -4,7 +4,6 @@ import {
     CameraPerspectiveCommand,
     cmd,
     DriveCommand,
-    GetJointVelocity,
     GetOccupancyGrid,
     GetStretchTool,
     GetVoiceCapabilityCommand,
@@ -16,7 +15,6 @@ import {
     RobotPoseCommand,
     SeedLocalizationCommand,
     SetJointVelocityCommand,
-    SetMaxEeSpeedCommand,
     setRobotModeCommand,
     SetTaskSpaceVelocityCommand,
     ToggleCommand,
@@ -258,13 +256,6 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
-    getJointVelocity(type: "getJointVelocity") {
-        let cmd: GetJointVelocity = {
-            type: type,
-        };
-        this.robotChannel(cmd);
-    }
-
     setMapPose(pose: Transform) {
         this.mapPose = pose;
         this.mapPoseListeners.forEach((listener) => {
@@ -314,19 +305,6 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
-        };
-        this.robotChannel(cmd);
-    }
-
-    /**
-     * Sets the velocity limiter's end-effector speed ceiling.
-     *
-     * @param speed max end-effector linear speed, in m/s
-     */
-    setMaxEeSpeed(speed: number) {
-        let cmd: SetMaxEeSpeedCommand = {
-            type: "setMaxEeSpeed",
-            speed: speed,
         };
         this.robotChannel(cmd);
     }

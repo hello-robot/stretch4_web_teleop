@@ -285,7 +285,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Increment for joint ${jointName} is undefined!`);
         }
         const increment =
-            multiplier * jointIncrement * FunctionProvider.velocityScale;
+            multiplier * jointIncrement * FunctionProvider.profileScale;
 
         switch (FunctionProvider.actionMode) {
             case ActionModeType.StepActions:

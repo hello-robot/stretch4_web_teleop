@@ -18,21 +18,13 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
-    | GetJointVelocity
     | HomeTheRobotCommand
     | SeedLocalizationCommand
-    | SetMaxEeSpeedCommand;
     | GetVoiceCapabilityCommand
     | RequestVoiceTokenCommand;
 
 export interface SeedLocalizationCommand {
     type: "seedLocalization";
-}
-
-/** Max end-effector linear speed, in m/s, for the velocity_limiter node. */
-export interface SetMaxEeSpeedCommand {
-    type: "setMaxEeSpeed";
-    speed: number;
 }
 
 /** Ask the robot whether its server can mint OpenAI Realtime credentials. */
@@ -114,10 +106,6 @@ export interface GetOccupancyGrid {
 
 export interface GetStretchTool {
     type: "getStretchTool";
-}
-
-export interface GetJointVelocity {
-    type: "getJointVelocity";
 }
 
 export interface MoveBaseCommand {
