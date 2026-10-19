@@ -159,6 +159,12 @@ When prompted:
 
 The script is safe to re-run. When it finishes, the robot will appear on your dashboard.
 
+Pass `--email <address>` to skip the first prompt, and `--non-interactive` to fail rather than prompt at
+all — useful from a provisioning script, though it needs the Firebase CLI already logged in. On a host
+without `systemd`, `--skip-daemon` does the Firebase work and installs no service; that robot can still
+be launched by hand with `./launch_interface.sh -f`, it just cannot be started from your
+dashboard. Run `./onboard_firebase_robot.sh --help` for the full list.
+
 It does not touch the checkout. The daemon it installs runs this working tree directly, so whatever
 branch is checked out is what the robot runs. Changing the code a robot runs is ordinary git work —
 `git checkout`, `git pull`, rebuild, relaunch — and needs nothing from Firebase or `.env`. The daemon
@@ -350,7 +356,8 @@ staging Firebase project before running either of those against the project your
 
 `src/pages/home` is the dashboard; `src/pages/operator` is the teleop interface.
 
-On a Firebase-configured robot, the normal launch runs both the local and the Firebase webpack watchers:
+On an onboarded robot a plain launch runs both the local and the Firebase webpack watchers, because
+`dual` is the default hosting mode:
 
 ```bash
 ./launch_interface.sh
@@ -359,6 +366,9 @@ On a Firebase-configured robot, the normal launch runs both the local and the Fi
 The no-login local operator stays at `https://<robot_ip>/operator`, and the Firebase build is published
 to a preview channel for the current checkout. Both URLs connect to the same robot browser and share one
 operator seat, so opening one blocks the other until teleoperation ends.
+
+Use `-f` for the Firebase build alone, or `-L` for local only. See
+[Primer: Launching the Interface](../../../../primer_launch.md) for the full set of hosting modes.
 
 To publish a one-off build to the preview channel:
 
@@ -372,8 +382,8 @@ file redeploys the same preview channel: the local tab reloads from webpack, and
 after the deploy finishes.
 
 For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`. Launch then creates
-one-shot local and Firebase bundles instead of starting webpack watchers. Publishing the live site stays
-an explicit, separate `npm run deploy:firebase` from clean `main`.
+one-shot bundles for whichever hosting mode you asked for, instead of starting webpack watchers.
+Publishing the live site stays an explicit, separate `npm run deploy:firebase` from clean `main`.
 
 [`firebase_console_config.sh`](../../../../../firebase_console_config.sh) collects the common maintenance
 operations:

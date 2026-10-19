@@ -109,7 +109,7 @@ if [ "$DEPLOY" = true ]; then
 
 	echo "######################################################"
 	echo -e "${GREEN}SUCCESS! DASHBOARD DEPLOYED!${NC}"
-	echo -e "To start the session, go to the dashboard:"
+	echo -e "To start the session, go to your dashboard:"
 	echo -e "  ${BLUE}https://${HOSTED_URL}/${NC}"
 	echo -e "And click ${GREEN}Start Interface${NC} to spin up ROS and the client browser!"
 	echo "######################################################"

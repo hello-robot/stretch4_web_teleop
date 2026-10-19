@@ -25,9 +25,9 @@ Next, launch the interface:
 In the terminal, you will see output similar to:
 
 ```
-Visit the URL(s) below to see the web interface:
-https://localhost/operator
-https://192.168.1.14/operator
+Visit the appropriate URL(s) below to see web teleop:
+Localhost: https://localhost/operator
+WiFi: https://192.168.1.14/operator
 ```
 
 Look for a URL like `https://<ip_address>/operator`. Visit this URL in a web browser on your personal laptop or desktop to see the web interface. Ensure your personal computer is connected to the same network as Stretch. You might see a warning that says "Your connection is not private". If you do, click `Advanced` and `Proceed`.
@@ -42,7 +42,9 @@ Once you're done with the interface, close the browser and run:
 
 ## Firebase (optional)
 
-The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted dashboard, user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project. See the [Firebase storage handler README](src/pages/operator/tsx/storage_handler/README.md) for instructions to set up Firebase hosting.
+The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted dashboard, user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project.
+
+Once a robot is onboarded, a plain `./launch_interface.sh` serves the interface from both your Firebase project and the robot itself. Narrow that with `-f` for Firebase only, or `-L` for the robot only; `--hosting local|firebase|dual` names the mode outright. A robot that was never onboarded serves locally, as before. See the [Firebase storage handler README](src/pages/operator/tsx/storage_handler/README.md) for instructions to set up Firebase hosting, and [Primer: Launching the Interface](src/primer_launch.md) for how a launch chooses its hosting mode.
 
 ## Feature flags
 
@@ -76,6 +78,8 @@ find every seam for a given flag.
 ## Using the Interface Remotely
 
 **WARNING: This is prototype code and there are security issues. Deploy this code at your own risk.**
+
+This section covers remote access in local hosting mode, where the interface is served from the robot and needs a tunnel to reach the public internet. In `firebase` or `dual` hosting mode your own Firebase dashboard already reaches the robot from anywhere, and none of the setup below is needed.
 
 We recommend setting up the interface for remote use using [ngrok](https://ngrok.com/docs/what-is-ngrok/). First, create an account with `ngrok` and follow the Linux installation instructions in the `Setup & Installation` tab in your ngrok account dashboard.
 
