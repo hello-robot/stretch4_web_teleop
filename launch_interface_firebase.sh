@@ -1,71 +1,39 @@
 #!/bin/bash
+# Daemon-facing entry point.
+#
+# stretch_firebase_daemon.js names this script, so it stays. All it does now is
+# pick the mode and hand off to the shared spine: a daemon launch exists to
+# serve a Firebase dashboard, and building the local bundle alongside it buys
+# nothing here. Everything else -- teardown, ROS, the web server -- is the
+# same code the hand-run launch takes.
 set -e
 
-# Define color variables
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$REPO_DIR/scripts/lib/teleop_config.sh"
+
+MAP=""
 while getopts m: opt; do
 	case $opt in
 	m)
 		if [[ -n "$OPTARG" ]]; then
 			echo "Setting map to: $OPTARG"
-			MAP_ARG="map_yaml:=$OPTARG"
+			MAP="-m $OPTARG"
 		fi
 		;;
 	esac
 done
 
-timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
-# The daemon picks the directory so it can tail every file we write here and
-# merge them into the log the dashboard shows. Standalone runs pick their own.
-logdir="${WEB_TELEOP_LOG_DIR:-$HOME/stretch_user/log/web_teleop/$timestamp}"
-logfile_node="$logdir/start_web_server_and_robot_browser.txt"
-mkdir -p "$logdir"
+# The daemon picks the directory so it can tail every file we write there and
+# merge them into the log a dashboard shows. Standalone runs pick their own.
+logdir="$(teleop_log_dir "${WEB_TELEOP_LOG_DIR:-}")"
 
 echo -e "${BLUE}Launching Web Teleop via Firebase Onboard...${NC}"
+echo "Logging to $logdir"
 
-# Setup environment
-export PATH="$HOME/.local/bin:$PATH"
-. /etc/hello-robot/hello-robot.conf
-export HELLO_FLEET_ID
-export HELLO_FLEET_PATH=$HOME/stretch_user
-export RMW_IMPLEMENTATION=rmw_zenoh_cpp
-if [ -z "$WEB_TELEOP_BUILD_MODE" ] && [ -f "$HOME/ament_ws/src/stretch4_web_teleop/.env" ]; then
-	WEB_TELEOP_BUILD_MODE=$(grep -m1 '^WEB_TELEOP_BUILD_MODE=' "$HOME/ament_ws/src/stretch4_web_teleop/.env" | cut -d= -f2-)
-fi
-export WEB_TELEOP_BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
-source /opt/ros/jazzy/setup.bash &>/dev/null || true
-source ~/ament_ws/install/setup.bash &>/dev/null || true
-
-# 1. Stop any legacy or previous instances safely without sudo
-echo "Stopping previous instances..."
-screen -S "web_teleop_ros" -X stuff '^C' 2>/dev/null || true
-screen -S "rmw_zenohd" -X stuff '^C' 2>/dev/null || true
-sleep 2
-pkill -u $USER -f web_interface.launch.py 2>/dev/null || true
-pkill -u $USER -f rmw_zenohd 2>/dev/null || true
-pm2 kill 2>/dev/null || true
-
-# 2. Check and start rmw_zenohd if not already running
-echo "Check rmw_zenohd..."
-if ! pgrep -x rmw_zenohd >/dev/null; then
-	echo "rmw_zenohd not running, starting it..."
-	screen -dm -S "rmw_zenohd" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $logdir/rmw_zenohd.txt"
-	sleep 2
-fi
-
-# 3. Start ROS2 launch file
-echo "Start ROS2..."
-LAUNCH_LOGFILE="$logdir/web_interface_launch.txt"
-screen -dm -S "web_teleop_ros" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
-sleep 8
-
-# 4. Start webpack watch, the local HTTPS server, and the robot browser
-echo "Start robot browser..."
-cd "$HOME/ament_ws/src/stretch4_web_teleop"
-echo "Logging to $logfile_node"
-./start_web_server_and_robot_browser.sh -l $logdir -f &>>"$logfile_node"
+"$REPO_DIR/launch_teleop_stack.sh" --hosting firebase -l "$logdir" $MAP
 
 echo -e "${GREEN}✓ Onboard launch completed successfully!${NC}"
