@@ -472,6 +472,7 @@ function showOperatorSeatNotice(detail: string) {
     document.querySelector(".loader-background")?.remove();
     document.querySelector(".loader")?.remove();
     document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+    document.querySelector(".loader-reload-container")?.remove();
     const host = document.getElementById("root");
     if (!host) return;
     host.replaceChildren();
@@ -519,11 +520,25 @@ function initConnectionStateCheck() {
     text.textContent = "Reconnecting...";
     loaderText.appendChild(text);
 
+    // Full-width "Reload Page" button bar at the bottom of the reconnecting screen
+    var reloadContainer = document.createElement("div");
+    reloadContainer.className = "loader-reload-container";
+    var reloadButton = document.createElement("button");
+    reloadButton.className = "loader-reload-button";
+    reloadButton.type = "button";
+    reloadButton.textContent = "Reload Page";
+    reloadButton.setAttribute("aria-label", "Reload Page");
+    reloadButton.addEventListener("click", () => {
+        window.location.reload();
+    });
+    reloadContainer.appendChild(reloadButton);
+
     setInterval(async () => {
         if (yieldedToOtherTab) {
             document.querySelector(".loader-background")?.remove();
             document.querySelector(".loader")?.remove();
             document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+            document.querySelector(".loader-reload-container")?.remove();
             return;
         }
         let connected = await connection.isConnected();
@@ -531,10 +546,14 @@ function initConnectionStateCheck() {
             window.document.body.appendChild(loaderText);
             window.document.body.appendChild(loader);
             window.document.body.appendChild(loadingBackground);
+            window.document.body.appendChild(reloadContainer);
         } else if (connected && window.document.body.contains(loader)) {
             window.document.body.removeChild(loaderText);
             window.document.body.removeChild(loader);
             window.document.body.removeChild(loadingBackground);
+            if (window.document.body.contains(reloadContainer)) {
+                window.document.body.removeChild(reloadContainer);
+            }
         }
     }, 1000);
 }

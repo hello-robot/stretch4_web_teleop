@@ -112,6 +112,49 @@
     color: hsl(204, 100%, 70%);
 }
 
+.loader-reload-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px;
+    z-index: 4;
+}
+
+.loader-reload-button {
+    width: 100%;
+    min-height: 48px;
+    height: 52px;
+    background-color: hsla(204, 100%, 70%, 0.15);
+    color: hsl(204, 100%, 70%);
+    border: 2px solid hsl(204, 100%, 70%);
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.loader-reload-button:hover {
+    background-color: hsl(204, 100%, 70%);
+    color: #000;
+}
+
+.loader-reload-button:active {
+    transform: translateY(1px);
+}
+
+.loader-reload-button:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
 .control-modes {
     touch-action: none;
     font-size: 3.5rem;
