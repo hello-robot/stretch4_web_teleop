@@ -307,19 +307,29 @@ io.on("connection", function (socket) {
             updateRooms();
             return;
         }
-        let leaseClaimed = true;
+        // Reaching Firebase is not a condition of local teleop. A seat whose
+        // lease cannot be read is treated as free: the only thing that could
+        // be holding it is a Firebase operator, who needs the same Firebase
+        // this claim just failed to reach.
+        let leaseOutcome = "claimed";
         try {
-            leaseClaimed =
-                !teleopLease || (await teleopLease.claimLocal(sessionId));
+            if (teleopLease) {
+                leaseOutcome = await teleopLease.claimLocal(sessionId);
+            }
         } catch (error) {
-            leaseClaimed = false;
+            leaseOutcome = "unavailable";
             console.error("join_as_operator lease failure:", error.message);
+        }
+        if (leaseOutcome === "unavailable") {
+            console.warn(
+                "join_as_operator: Firebase lease unreachable, granting the local seat",
+            );
         }
         const decision = localOperatorJoinResult({
             operSession: undefined,
             sessionId,
             connected: socket.connected,
-            leaseCommitted: leaseClaimed,
+            leaseCommitted: leaseOutcome !== "held",
         });
         if (decision === "disconnected") {
             if (!oper_sock) {
