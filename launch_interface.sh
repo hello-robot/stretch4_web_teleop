@@ -27,6 +27,30 @@ while getopts m:t:f opt; do
 	esac
 done
 
+# Firebase keys in .env mean this robot joins through Firebase. The same
+# launch still serves https://<this-robot>/operator and the Hosting dashboard.
+ENV_FILE="$REPO_DIR/.env"
+env_val() {
+	grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-
+}
+if [ -z "$FIREBASE" ] && [ -f "$ENV_FILE" ]; then
+	if [ -n "$(env_val PUBLIC_FIREBASE_API_KEY)" ] && [ -n "$(env_val PUBLIC_FIREBASE_DATABASE_URL)" ] &&
+		[ -n "$(env_val ROBOT_USERNAME)" ] && [ -n "$(env_val ROBOT_PASSWORD)" ] &&
+		[ -n "$(env_val HELLO_FLEET_ID)" ]; then
+		FIREBASE="-f"
+	fi
+fi
+if [ -z "$WEB_TELEOP_BUILD_MODE" ] && [ -f "$ENV_FILE" ]; then
+	WEB_TELEOP_BUILD_MODE="$(env_val WEB_TELEOP_BUILD_MODE)"
+fi
+export WEB_TELEOP_BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
+
+# projectId is entered once, in .env. The Firebase CLI can only read it from
+# .firebaserc, so regenerate that before anything shells out to the CLI.
+if [ "$FIREBASE" = "-f" ]; then
+	node "$REPO_DIR/scripts/syncFirebaseRc.js" || exit 1
+fi
+
 timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
 logdir="$HOME/stretch_user/log/web_teleop/$timestamp"
 logfile_ros="$logdir/start_ros2.txt"
@@ -207,7 +231,12 @@ echo "#############################################"
 echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
 echo "Visit the appropriate URL(s) below to see web teleop:"
 if [ "$FIREBASE" = "-f" ]; then
-	echo "https://web.hello-robot.com/"
+	PROJECT_ID="$(env_val PUBLIC_FIREBASE_PROJECT_ID)"
+	if [ -n "$PROJECT_ID" ]; then
+		echo "Dashboard: https://${PROJECT_ID}.web.app/"
+	fi
+	echo "Localhost: https://localhost/operator"
+	print_interface_urls
 else
 	echo "Localhost: https://localhost/operator"
 	print_interface_urls

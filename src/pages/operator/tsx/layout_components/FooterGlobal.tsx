@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import MicIcon from "@mui/icons-material/Mic";
@@ -16,7 +22,10 @@ import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
 import { mapFunctionProvider, runStopFunctionProvider } from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
-import { isVoiceControlEnabled } from "shared/operatorVoiceSession";
+import {
+    isVoiceControlEnabled,
+    subscribeOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
 import { ActionState } from "shared/util";
 import {
     getVoiceStatusSnapshot,
@@ -64,7 +73,10 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         RobotAudioPlayer.getInstance().getMuted()
     );
     // @flag voice_control_interface
-    const voiceSvc = isVoiceControlEnabled();
+    const voiceSvc = useSyncExternalStore(
+        subscribeOperatorVoiceSvc,
+        isVoiceControlEnabled,
+    );
     const [localizeStatus, localizeStatusSet] =
         useState<SceneItemStatus>("idle");
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
@@ -295,7 +307,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                         </React.Suspense>
                     ) : (
                         <span className="scene-menu-button__label">
-                            {sceneNameCurrent}
+                         {sceneNameCurrent}
                         </span>
                     )}
                 </button>
