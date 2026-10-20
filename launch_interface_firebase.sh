@@ -62,7 +62,12 @@ LAUNCH_LOGFILE="$logdir/web_interface_launch.txt"
 screen -dm -S "web_teleop_ros" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
 sleep 8
 
-# 4. Start webpack watch, the local HTTPS server, and the robot browser
+# 4. Configure audio
+echo "Configure audio..."
+cd "$HOME/ament_ws/src/stretch4_web_teleop"
+./configure_audio.sh
+
+# 5. Start webpack watch, the local HTTPS server, and the robot browser
 echo "Start robot browser..."
 cd "$HOME/ament_ws/src/stretch4_web_teleop"
 echo "Logging to $logfile_node"
