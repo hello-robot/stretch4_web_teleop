@@ -22,6 +22,7 @@ import {
     ModeMessage,
     navigationProps,
     OccupancyGridMessage,
+    OccupancyGridUnavailableMessage,
     OdomMessage,
     parseToolMetadata,
     RobotPose,
@@ -44,6 +45,7 @@ export const robot = new Robot({
     jointStateCallback: forwardJointStates,
     batteryStateCallback: forwardBatteryState,
     occupancyGridCallback: forwardOccupancyGrid,
+    occupancyGridUnavailableCallback: forwardOccupancyGridUnavailable,
     odomCallback: forwardOdom,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
@@ -272,6 +274,14 @@ function forwardOdom(odom: ROSOdometry) {
         type: "odom",
         message: odom,
     } as OdomMessage);
+}
+
+function forwardOccupancyGridUnavailable() {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "occupancyGridUnavailable",
+    } as OccupancyGridUnavailableMessage);
 }
 
 function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {
