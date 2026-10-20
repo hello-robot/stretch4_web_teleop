@@ -38,6 +38,7 @@ import {
     ValidJointStateDict
 } from "../../../shared/util";
 import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
+const { createRosReconnectGuard } = require("./rosReconnectGuard");
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
 export var rosConnected = false;
@@ -85,6 +86,7 @@ export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
     private rosReconnectTimerID?: ReturnType<typeof setTimeout>;
+    private rosReconnectGuard = createRosReconnectGuard();
     private onRosConnectCallback?: () => Promise<void>;
     /**
      * Simulation only [lower, upper] position bounds per joint
@@ -253,19 +255,32 @@ export class Robot extends React.Component {
 
         this.ros.on("close", () => {
             console.log("Connection to ROS has been closed.");
+            if (!this.rosReconnectGuard.shouldReconnectAfterClose()) {
+                console.log("Ignoring close requested by ROS reconnect.");
+                return;
+            }
             this.reconnect();
         });
     }
 
     async reconnect(interval_ms: number = 1000) {
-        if (!this.rosReconnectTimerID) {
-            this.rosReconnectTimerID = setTimeout(() => {
-                console.log("Reconnecting to ROS...");
-                this.ros.close();
-                this.ros.connect(this.rosURL);
-                this.rosReconnectTimerID = undefined;
-            }, interval_ms);
+        if (this.rosReconnectTimerID) {
+            return;
         }
+        this.rosReconnectTimerID = setTimeout(() => {
+            // Clear before close/connect. Those events call reconnect()
+            // synchronously, and a still-set timer id would drop the next try.
+            this.rosReconnectTimerID = undefined;
+            console.log("Reconnecting to ROS...");
+            try {
+                this.rosReconnectGuard.beginIntentionalClose();
+                this.ros.close();
+            } catch (error) {
+                this.rosReconnectGuard.cancelIntentionalClose();
+                console.log("Error closing ROS socket:", error);
+            }
+            this.ros.connect(this.rosURL);
+        }, interval_ms);
     }
 
     async checkROSConnection(
@@ -540,7 +555,10 @@ export class Robot extends React.Component {
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
                         let limits: [boolean, boolean] = [!isNeg, !isPos];
-                        console.log(`[Diagnostics] at_limit for ${rawKey} (${jointName}): limits=[${limits[0]}, ${limits[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        let prevLimits = this.diagnosticJointLimits[jointName];
+                        if (!prevLimits || prevLimits[0] !== limits[0] || prevLimits[1] !== limits[1]) {
+                            console.log(`[Diagnostics] at_limit for ${rawKey} (${jointName}): limits=[${limits[0]}, ${limits[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        }
                         this.diagnosticJointLimits[jointName] = limits;
                         // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
                         if (jointName === "arm_joint") this.diagnosticJointLimits["wrist_extension"] = limits;
@@ -555,7 +573,10 @@ export class Robot extends React.Component {
                         let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
                         let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
                         let collisions: [boolean, boolean] = [isNeg, isPos];
-                        console.log(`[Diagnostics] in_collision for ${rawKey} (${jointName}): collisions=[${collisions[0]}, ${collisions[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        let prevCollisions = this.diagnosticInCollision[jointName];
+                        if (!prevCollisions || prevCollisions[0] !== collisions[0] || prevCollisions[1] !== collisions[1]) {
+                            console.log(`[Diagnostics] in_collision for ${rawKey} (${jointName}): collisions=[${collisions[0]}, ${collisions[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        }
                         this.diagnosticInCollision[jointName] = collisions;
                         // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
                         if (jointName === "arm_joint") this.diagnosticInCollision["wrist_extension"] = collisions;
@@ -1921,11 +1942,7 @@ export class Robot extends React.Component {
 
     inJointLimits(jointName: ValidJoints) {
         let jointValue = this.getJointValue(jointName);
-        let res = this.inJointLimitsHelper(jointValue, jointName);
-        if (res && (!res[0] || !res[1])) {
-            console.log(`[Robot] inJointLimits for ${jointName}: [${res[0]}, ${res[1]}] (diagnostic: ${this.diagnosticJointLimits[jointName] !== undefined})`);
-        }
-        return res;
+        return this.inJointLimitsHelper(jointValue, jointName);
     }
 
     inJointLimitsHelper(jointValue: number, jointName: ValidJoints) {
@@ -1965,9 +1982,6 @@ export class Robot extends React.Component {
             if (alias && this.diagnosticInCollision[alias] !== undefined) {
                 res = this.diagnosticInCollision[alias]!;
             }
-        }
-        if (res[0] || res[1]) {
-            console.log(`[Robot] inCollision for ${jointName}: [${res[0]}, ${res[1]}] (diagnostic: ${this.diagnosticInCollision[jointName] !== undefined})`);
         }
         return res;
     }

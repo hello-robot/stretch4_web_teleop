@@ -8,15 +8,25 @@ import {
 import { BaseSignaling, SignalingProps } from "./Signaling";
 import io, { Socket } from "socket.io-client";
 
+const RECLAIM_LIMIT = 5;
+const RECLAIM_DELAY_MS = 400;
+
 export class LocalSignaling extends BaseSignaling {
     private socket: Socket;
     private role: string;
+    private readonly sessionId = crypto.randomUUID();
+    private reclaimTimer: ReturnType<typeof setTimeout> | undefined;
 
     constructor(props: SignalingProps) {
         super(props);
         this.socket = io();
         this.socket.on("connect", () => {
             console.log("Connected to local socket");
+            if (this.role === "robot") {
+                this.reclaimRoom(() => this.join_as_robot(), 0);
+            } else if (this.role === "operator") {
+                this.reclaimRoom(() => this.join_as_operator(), 0);
+            }
         });
         this.socket.on("signalling", (signal: SignallingMessage) => {
             this.onSignal(signal);
@@ -36,6 +46,24 @@ export class LocalSignaling extends BaseSignaling {
         });
     }
 
+    private reclaimRoom(join: () => Promise<boolean>, attempt: number) {
+        if (this.reclaimTimer !== undefined) {
+            clearTimeout(this.reclaimTimer);
+            this.reclaimTimer = undefined;
+        }
+        join().then((joined) => {
+            if (joined) return;
+            if (attempt >= RECLAIM_LIMIT) {
+                console.error("Local signaling room reclaim stopped");
+                return;
+            }
+            this.reclaimTimer = setTimeout(
+                () => this.reclaimRoom(join, attempt + 1),
+                RECLAIM_DELAY_MS,
+            );
+        });
+    }
+
     public join_as_robot(): Promise<boolean> {
         return new Promise<boolean>((resolve) => {
             this.socket.emit("join_as_robot", (response) => {
@@ -51,6 +79,7 @@ export class LocalSignaling extends BaseSignaling {
         return new Promise<boolean>((resolve) => {
             this.socket.emit(
                 "join_as_operator",
+                this.sessionId,
                 (response: {
                     success: boolean;
                     voiceSessionToken?: string;
@@ -79,6 +108,10 @@ export class LocalSignaling extends BaseSignaling {
     }
 
     public leave(): void {
+        if (this.reclaimTimer !== undefined) {
+            clearTimeout(this.reclaimTimer);
+            this.reclaimTimer = undefined;
+        }
         console.log(`Leaving. My role: ${this.role}.`);
         setOperatorVoiceSessionToken(undefined);
         // @flag voice_control_interface

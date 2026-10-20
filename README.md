@@ -6,7 +6,7 @@ This interface enables a user to remotely teleoperate a Stretch robot through a 
 
 ## Setup & Installation
 
-The interface is compatible with the Stretch 4. It currently only supports Ubuntu 24.04 and ROS2 Humble. Upgrade your operating system if necessary ([instructions](https://docs.hello-robot.com/0.3/installation/robot_install/)) and create/update the Stretch ROS2 Humble workspace ([instructions](https://docs.hello-robot.com/0.3/installation/ros_workspace/)). This will install all package dependencies and install the web teleop interface.
+The interface is compatible with the Stretch 4. It currently only supports Ubuntu 24.04 and ROS2 Jazzy. Upgrade your operating system if necessary ([instructions](https://docs.hello-robot.com/stretch4_install/docs/install_ubuntu_24.04)) and create/update the Stretch ROS2 Jazzy workspace ([instructions](https://docs.hello-robot.com/stretch4_install/docs/ros_workspace)). This will install all package dependencies and install the web teleop interface.
 
 ## Launching the Interface
 
@@ -39,6 +39,10 @@ Once you're done with the interface, close the browser and run:
 ```
 
 **Note:** Only one browser can be connected to the interface at a time.
+
+## Firebase (optional)
+
+The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted dashboard, user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project. See the [Firebase storage handler README](src/pages/operator/tsx/storage_handler/README.md) for instructions to set up Firebase hosting.
 
 ## Feature flags
 
