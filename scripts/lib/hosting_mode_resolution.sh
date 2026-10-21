@@ -71,6 +71,8 @@ function hosting_mode_setting {
 function check_firebase_readiness {
 	local probe_output probe_status
 
+	echo -e "Checking Firebase hosting readiness..."
+
 	probe_output="$(node "$TELEOP_REPO_DIR/scripts/checkFirebaseRobotAccess.js" 2>&1)"
 	probe_status=$?
 	if [ "$probe_status" -ne "$STATUS_READY" ]; then
@@ -92,6 +94,7 @@ function check_firebase_readiness {
 		export WEB_TELEOP_AUTODEPLOY=0
 	fi
 	firebase_warn_if_daemon_down
+	echo -e "${GREEN}✓ Firebase hosting check passed${NC}"
 }
 
 # projectId is entered once, in .env. The CLI can only read it from .firebaserc,

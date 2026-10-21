@@ -229,12 +229,7 @@ fi
 # downstream re-decides it and nothing upstream is consulted again.
 if [ "$LAUNCH_INTENT" = "ARG_FIREBASE" ]; then
 	if [ "$fb_status" -ne "$STATUS_READY" ]; then
-		echo -e "${RED}ERROR:${NC} Firebase hosting was asked for and is unavailable."
-		echo "$firebase_error"
-		if [ "$fb_status" -eq "$STATUS_NOT_CONFIGURED" ]; then
-			echo "       This robot is not set up for Firebase. Run ./onboard_firebase_robot.sh"
-		fi
-		echo "       Relaunch without -f to serve the LAN door alone."
+		echo -e "${RED}ERROR${NC} $firebase_error"
 		exit 1
 	fi
 	HOSTING_MODE="firebase"
