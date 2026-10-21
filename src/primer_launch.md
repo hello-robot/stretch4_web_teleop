@@ -80,24 +80,11 @@ Two scripts were deleted on the way here. `launch_interface_firebase.sh` parsed 
 
 ## All launch paths
 
-Every path through a launch, the script that owns each step, the argument that chooses between them, and the condition that produces each of the signaling preflight's three exit codes.
+Every path through a launch, the script that owns each step, the argument that chooses between them, and what each of the signaling preflight's exit codes produces, is drawn in [`launch_paths.md`](../.gitbook/assets/launch_paths.md).
 
-![Launch Paths](../.gitbook/assets/launch_paths.png)
+It is mermaid in a fenced block, so it renders inline and is edited as text. There is no generated image beside it to keep in step.
 
-[`launch_paths.dot`](../.gitbook/assets/launch_paths.dot) beside it is the source the image comes from. Edit that and regenerate rather than patching the image:
-
-```bash
-dot -Tpng -Gdpi=105 -o .gitbook/assets/launch_paths.png .gitbook/assets/launch_paths.dot
-python3 -c "from PIL import Image; p='.gitbook/assets/launch_paths.png'; Image.open(p).convert('RGB').quantize(colors=64).save(p, optimize=True)"
-```
-
-The second line is not optional. `graphviz` writes truecolour PNG, which puts this diagram well over the 500 KB `check-added-large-files` limit; the diagram has about twenty flat colours, so a 64-colour palette costs nothing visible and roughly quarters the file. The `dpi` is 105 rather than 130 for the same reason — at 130 the quantized file is still well over the limit, and 115 leaves only a few KiB of headroom.
-
-[`launch_paths.md`](../.gitbook/assets/launch_paths.md) holds the same diagram as mermaid, for viewers that render it inline and for editing without `graphviz` installed. It is a second copy of one diagram, so a change to either has to be made in both.
-
-Only `launch_interface.sh` has a gate. A daemon launch skips it: being signed in already proves what the preflight would ask, and a dashboard has no use for a robot reachable only over Tailscale.
-
-## The shared spine
+## After the mode is locked
 
 Once `HOSTING_MODE` is locked, `launch_interface.sh` resolves the build mode and runs `start_ros2.sh`, then `start_web_server_and_robot_browser.sh` with that mode. ROS comes up exactly one way regardless of who asked, because there is only one way.
 
