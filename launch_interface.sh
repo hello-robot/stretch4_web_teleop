@@ -242,7 +242,6 @@ else
 	HOSTING_MODE="local"
 fi
 
-
 # Bring up ROS, then the web server and robot browser. These were a separate
 # launch_teleop_stack.sh for as long as a second front door called it; with the
 # daemon coming through this script too, a spine with one caller was indirection
