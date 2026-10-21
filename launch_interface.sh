@@ -115,18 +115,14 @@ function print_interface_urls {
 	echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
 	echo ""
 
+	echo -e "${BLUE}Hosting Mode:${NC} $HOSTING_MODE ($INTENT_REASON)"
+	echo "  Robot: https://localhost/local/operator/"
 	if [ "$mode" = "firebase" ]; then
 		project_id="$(teleop_env_val PUBLIC_FIREBASE_PROJECT_ID)"
-		echo -e "${BLUE}Cloud door${NC} (signs in through Firebase):"
 		if [ -n "$project_id" ]; then
 			echo "  Dashboard: https://${project_id}.web.app/"
 		fi
-		echo "  https://localhost/operator/"
-		echo ""
 	fi
-
-	echo -e "${BLUE}LAN door${NC} (socket.io direct to this robot, no internet needed):"
-	echo "  https://localhost/local/operator/"
 	ifconfig | awk '
 	  /^[^ \t]/ {
 	    iface=$1
@@ -154,10 +150,6 @@ function print_interface_urls {
 	    }
 	  }'
 
-	if [ "$mode" = "local" ]; then
-		echo ""
-		echo "(/operator/ redirects here. Relaunch with -f to open the cloud door.)"
-	fi
 	echo "#############################################"
 	echo ""
 }
@@ -250,7 +242,6 @@ else
 	HOSTING_MODE="local"
 fi
 
-echo -e "${BLUE}Hosting mode:${NC} $HOSTING_MODE ($INTENT_REASON)"
 
 # Bring up ROS, then the web server and robot browser. These were a separate
 # launch_teleop_stack.sh for as long as a second front door called it; with the
