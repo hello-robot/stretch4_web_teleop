@@ -120,12 +120,18 @@ function endOperatorClipSession() {
     setClipSession(null);
 }
 
-const dualMode = process.env.WEB_TELEOP_DUAL === "1";
-const distDir = path.join(__dirname, process.env.WEB_TELEOP_DIST || "dist");
+// "Is the cloud door open" is exactly which bundle / serves, so it is read from
+// one variable rather than a second flag that could disagree with it. This is
+// the same test start_robot_browser.js makes.
+const firebaseMode = process.env.WEB_TELEOP_DIST === "dist-firebase";
 const localDistDir = path.join(__dirname, "dist");
 const firebaseDistDir = path.join(__dirname, "dist-firebase");
-const reloadDistDirs = dualMode ? [localDistDir, firebaseDistDir] : [distDir];
-const teleopLease = dualMode
+const reloadDistDirs = firebaseMode
+    ? [localDistDir, firebaseDistDir]
+    : [localDistDir];
+// Only needed while both doors are open, to stop a dashboard operator and a LAN
+// operator holding the robot at once. Local-only has a single door to arbitrate.
+const teleopLease = firebaseMode
     ? require("./scripts/teleopLease").createTeleopLeaseClient(process.env)
     : null;
 
@@ -139,16 +145,33 @@ function cacheHashedVideo(res, filePath) {
     }
 }
 
-if (dualMode) {
-    app.use(
-        "/operator/",
-        express.static(path.join(localDistDir, "operator")),
-    );
-    app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }));
-    app.use("/", express.static(firebaseDistDir, { setHeaders: cacheHashedVideo }));
-} else {
-    app.use("/", express.static(distDir, { setHeaders: cacheHashedVideo }));
+// One meaning per URL, in both modes:
+//   /local/operator/  always the LAN bundle, signalling over socket.io
+//   /operator/        always the cloud bundle -- a visible redirect to the LAN
+//                     door when no cloud door was opened
+//   /robot/           the robot's own page, from whichever bundle this mode runs
+//
+// The redirect is registered before the static mounts so it wins over them, and
+// it is a redirect rather than a 404 because the address bar then shows which
+// door the operator actually landed in. Serving a different bundle under one
+// unchanged URL is what previously made it possible to believe you were testing
+// the cloud while driving over the LAN.
+if (!firebaseMode) {
+    app.get(/^\/operator(\/.*)?$/, (req, res) => {
+        res.redirect(302, "/local/operator/");
+    });
 }
+app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }));
+// The localstorage bundle is built with publicPath /local/, so its assets
+// resolve through the mount above no matter which path served the HTML. That is
+// what lets local mode serve /robot/ and the home page from the root mount too,
+// which start_robot_browser.js requires: it loads https://localhost/robot.
+app.use(
+    "/",
+    express.static(firebaseMode ? firebaseDistDir : localDistDir, {
+        setHeaders: cacheHashedVideo,
+    }),
+);
 
 // Webpack watch rewrites dist/. Tell open home/operator tabs to reload.
 const reloadClients = new Set();

@@ -8,92 +8,126 @@ What differs between them is the **hosting mode**: which host serves the operato
 
 The robot's own `express` server runs in every mode. The hosting mode decides where an operator *fetches* the interface from, and with it which signaling transport the robot browser joins.
 
-| Mode | Operator interface served by | Bundles built | Reachable from |
+| Mode | Doors open | Bundles built | Robot's signaling |
 | --- | --- | --- | --- |
-| `local` | the robot's `express` server | `dist/` | Tailscale, WiFi, localhost |
-| `firebase` | Firebase Hosting | `dist-firebase/` | your Firebase site |
-| `dual` | both hosts at once | `dist/` and `dist-firebase/` | both |
+| `local` | LAN only | `dist/` | `LocalSignaling` over `socket.io` |
+| `firebase` | LAN **and** cloud | `dist/` and `dist-firebase/` | `TeleopSignalingCoordinator`, both at once |
 
-In `local` mode the robot browser uses `LocalSignaling` over `socket.io`. In `firebase` mode it uses `FirebaseSignaling` against the Realtime Database. In `dual` mode it runs `TeleopSignalingCoordinator`, which joins both and lets whichever operator arrives first hold the session.
+There is no `dual`. `--firebase` *adds* the cloud door rather than replacing the LAN one, so the configuration that used to be called dual is simply what `firebase` means now — and the operator picks a door by URL, not by launch flag.
+
+The LAN bundle is built in both modes, because the LAN door is what keeps working when the cloud does not. In `local` mode the robot browser uses `LocalSignaling` over `socket.io`. In `firebase` mode it runs `TeleopSignalingCoordinator`, which joins both the `socket.io` room and the Realtime Database and lets whichever operator arrives first hold the session; the other is ignored with `Ignoring ${transport} operator while another transport is active`.
+
+## Operator URLs
+
+One meaning per URL, in every mode. This is the point of the split: it used to be possible to believe you were testing the cloud while driving over the LAN.
+
+| URL | Serves | Signaling | Modes |
+| --- | --- | --- | --- |
+| `https://<host>/local/operator/` | LAN bundle | `socket.io`, no WAN needed | both |
+| `https://<host>/operator/` | cloud bundle | Firebase | `firebase`; redirects (302) to `/local/operator/` under `local` |
+| `https://<project-id>.web.app/operator` | cloud bundle, from Hosting | Firebase | `firebase` |
+
+The redirect is deliberate rather than a 404: the address bar changes, so an operator can see which door they landed in. No URL ever silently serves a different bundle.
+
+`/robot/` exists in both modes and is the robot's own page, loaded from loopback by `start_robot_browser.js`. Opening it by hand gets you nothing — credentials are injected only into that trusted Playwright context, on loopback, so any other robot page fails closed.
 
 The Firebase modes are optional and self-hosted: they work only if you have set up a Firebase project under your own account and deployed a dashboard into it, which is what [`onboard_firebase_robot.sh`](pages/operator/tsx/storage_handler/README.md) does. Nothing here is operated by Hello Robot.
 
 ## Launch intents
 
-Choosing hosts is only half of what a launch decides. The other half is what counts as a failure worth printing — and those are different questions. A plain `./launch_interface.sh` and `--hosting dual` ask for the same two hosts, but they should not complain in the same way.
+Choosing hosts is only half of what a launch decides. The other half is what counts as a failure worth printing — and those are different questions.
 
-`launch_interface.sh` resolves its flags into one of four intents.
+`launch_interface.sh` resolves one binary flag into one of two intents. **Local is the default**: a launch that names nothing asks for the LAN door and nothing else.
 
-| Intent | Set by | Attempts | Fatal when | Reports |
-| --- | --- | --- | --- | --- |
-| `ARG_DEFAULT` | no hosting flag | local and firebase | neither is available | a Firebase that was set up and broke — never one that was never set up |
-| `ARG_DUAL` | `--hosting dual` | local and firebase | neither is available | whichever half failed |
-| `ARG_LOCAL` | `-L`, `--hosting local` | local | local fails | local's failure |
-| `ARG_FIREBASE` | `-f`, `--hosting firebase` | firebase | firebase fails | firebase's failure |
+| Intent | Set by | Opens | Fatal when |
+| --- | --- | --- | --- |
+| `ARG_LOCAL` | no flag — the default — or `WEB_TELEOP_HOSTING=local` | the LAN door | the installation does not validate |
+| `ARG_FIREBASE` | `-f`, `--firebase`, or `WEB_TELEOP_HOSTING=firebase` | the LAN door **and** the cloud door | Firebase is unavailable |
 
-`ARG_DEFAULT` and `ARG_DUAL` request identical hosts and die under identical conditions. They differ only in what they say on the way, and that difference is the whole point: naming a mode asserts that you want it, so a half that does not come up is news. Naming nothing asserts nothing.
+The flag is additive and has no negating form, so a standing `WEB_TELEOP_HOSTING=firebase` is overridden for one run from the environment instead:
 
-The silence has a specific target. Most robots will never touch Firebase, and an operator who has never set it up should not be told that something they never enabled is broken. So `ARG_DEFAULT` separates two outcomes a boolean could not hold apart: no Firebase credentials in `.env` at all means nobody ever started, and it passes without comment; credentials present with anything failing means somebody did start and it has since stopped working, which earns a warning even on a launch that never asked for it.
+```bash
+WEB_TELEOP_HOSTING=local ./launch_interface.sh
+```
+
+**A bare launch never probes Firebase at all** — no sign-in, no `assignments/<uid>` read, no network call. A robot that was never onboarded is not merely quiet about Firebase; it is never asked.
+
+And **nothing downgrades**. `--firebase` on a robot whose Firebase is broken is an error, resolved by relaunching without the flag. It is never silently served as local, which is what made the old `dual` mode ambiguous to troubleshoot.
+
+| Intent | `fb_status` | Outcome |
+| --- | --- | --- |
+| `ARG_LOCAL` | not checked | `local`, quiet |
+| `ARG_FIREBASE` | `0` | `firebase`, quiet |
+| `ARG_FIREBASE` | `2` or `3` | error, exit 1 |
 
 > _**NOTE:**_ Hosting mode is a different axis from Hosting *deploys*. `WEB_TELEOP_AUTODEPLOY=0` stops preview-channel uploads while Firebase Hosting carries on serving the build it already has. A robot can be in `firebase` hosting mode with deploys switched off.
 
 ## Two ways to launch
 
-**From a terminal**, `./launch_interface.sh` is the front door. It resolves the hosting mode, runs the Firebase preflight when a cloud mode was asked for, validates the installation, and at the end prints the URLs an operator should visit. It is the only script that decides anything.
+There is **one launch path**, and both entry points take it.
 
-**From your dashboard**, `stretch_firebase_daemon.js` receives a command over the Realtime Database and runs `launch_interface_firebase.sh`. That script picks `firebase` and hands off; it has no gate of its own, because a daemon that is already signed in has proven what the preflight would ask. It never builds the local bundle, since a robot reachable only over Tailscale is no use to a dashboard.
+**From a terminal**, `./launch_interface.sh` does the whole launch: it parses its flag, validates the installation, resolves the intent, probes Firebase when the cloud door was asked for, locks `HOSTING_MODE`, runs `start_ros2.sh` and then `start_web_server_and_robot_browser.sh`, and prints the URLs an operator should visit.
 
-Everything after that point is shared.
+Flags are parsed before the installation is validated, so `--help` and a misspelled flag are answered without an `npm list` on a checkout that may not have one. Everything after that waits for validation to pass, because a checkout that cannot build has nothing to say about which door should open.
+
+**From your dashboard**, `stretch_firebase_daemon.js` receives a command over the Realtime Database and spawns **the same script with the same flag**: `./launch_interface.sh -f`, with `WEB_TELEOP_LOG_DIR` in the child environment so the run lands in a directory the daemon is already tailing.
+
+That means the daemon re-runs a Firebase probe its claim has already proved. The database rules gate `robots/$fleetId` on exactly the predicate `checkFirebaseRobotAccess.js` asserts — `assignments/<uid>/role === 'robot'`, `name === $fleetId`, `robots/$fleetId/uid === auth.uid` — so a daemon that received a claim and is reporting status has satisfied it. The probe costs one redundant sign-in, typically a second or two.
+
+That redundancy is the price of there being one path. A second path to avoid one gate means every future divergence compounds; if probe flakiness ever proves real, the fix is a retry inside `check_firebase_readiness`, which helps both callers.
+
+Two scripts were deleted on the way here. `launch_interface_firebase.sh` parsed `-m` and resolved `teleop_log_dir`, both of which were already done downstream, and the daemon judged success by exit code alone. `launch_teleop_stack.sh` was the shared spine for as long as a second front door called it; once the daemon came through the front door, a spine with one caller was indirection for its own sake, so `start_ros2.sh` and `start_web_server_and_robot_browser.sh` are invoked from `launch_interface.sh` directly.
+
+## All launch paths
+
+Every path through a launch, the script that owns each step, the argument that chooses between them, and the condition that produces each of the signaling preflight's three exit codes.
+
+![Launch Paths](../.gitbook/assets/launch_paths.png)
+
+[`launch_paths.dot`](../.gitbook/assets/launch_paths.dot) beside it is the source the image comes from. Edit that and regenerate rather than patching the image:
+
+```bash
+dot -Tpng -Gdpi=105 -o .gitbook/assets/launch_paths.png .gitbook/assets/launch_paths.dot
+python3 -c "from PIL import Image; p='.gitbook/assets/launch_paths.png'; Image.open(p).convert('RGB').quantize(colors=64).save(p, optimize=True)"
+```
+
+The second line is not optional. `graphviz` writes truecolour PNG, which puts this diagram well over the 500 KB `check-added-large-files` limit; the diagram has about twenty flat colours, so a 64-colour palette costs nothing visible and roughly quarters the file. The `dpi` is 105 rather than 130 for the same reason — at 130 the quantized file is still well over the limit, and 115 leaves only a few KiB of headroom.
+
+[`launch_paths.md`](../.gitbook/assets/launch_paths.md) holds the same diagram as mermaid, for viewers that render it inline and for editing without `graphviz` installed. It is a second copy of one diagram, so a change to either has to be made in both.
+
+Only `launch_interface.sh` has a gate. A daemon launch skips it: being signed in already proves what the preflight would ask, and a dashboard has no use for a robot reachable only over Tailscale.
 
 ## The shared spine
 
-`launch_teleop_stack.sh` is the spine both front doors call. It sets up the robot environment, runs `start_ros2.sh`, then runs `start_web_server_and_robot_browser.sh` with the chosen mode. ROS comes up exactly one way regardless of who asked.
+Once `HOSTING_MODE` is locked, `launch_interface.sh` resolves the build mode and runs `start_ros2.sh`, then `start_web_server_and_robot_browser.sh` with that mode. ROS comes up exactly one way regardless of who asked, because there is only one way.
 
-```mermaid
-flowchart TD
-    daemon["Daemon<br/>stretch_firebase_daemon.js"]
-    terminal["Terminal<br/>./launch_interface.sh"]
-    wrapper["Picks firebase<br/>launch_interface_firebase.sh"]
-    gate["Gate and preflight<br/>--hosting, -f, -L; probe, onboarding"]
-    spine["launch_teleop_stack.sh<br/>--hosting local, firebase or dual"]
-    ros["start_ros2.sh<br/>stop_interface.sh, zenoh, ROS"]
-    child["Child script<br/>start_web_server_and_robot_browser.sh"]
-    localb["Local build<br/>robot's own server"]
-    fbb["Firebase build<br/>Firebase Hosting"]
-    dualb["Dual build<br/>both hosts"]
-    pm2["pm2 starts<br/>server.js + start_robot_browser.js"]
-    exit1["exit 1"]
+`echo_failure_help` lives in `scripts/lib/teleop_config.sh` and is called when the installation does not validate and when either of those two scripts fails. Since the daemon spawns `launch_interface.sh` itself, a dashboard launch packages the same `stretch4_web_teleop_logs.zip` as a hand-run one, and the non-zero exit reaches `stretch_firebase_daemon.js` either way.
 
-    daemon --> wrapper
-    terminal --> gate
-    wrapper -->|hosting firebase| spine
-    gate -->|hosting mode| spine
-    spine --> ros
-    ros --> child
-    child -->|local| localb
-    child -->|firebase| fbb
-    child -->|dual| dualb
-    localb --> pm2
-    fbb --> pm2
-    dualb --> pm2
-
-    gate -.->|firebase probe fails| exit1
-    ros -.->|ROS fails to come up| exit1
-    fbb -.->|build fails| exit1
-    dualb -.->|firebase half fails| localb
-```
+Validation runs before anything is torn down, which matters: `start_ros2.sh` calls `stop_interface.sh`, so a robot with missing certificates would otherwise lose a working stack to a launch that cannot finish.
 
 `start_ros2.sh` is a gate, not merely a step. It tears down any previous stack through `stop_interface.sh`, verifies `rmw_zenohd` actually started, and scans the launch log for errors. Any of those failing stops the launch before bundles are built, so a dead `ROS2` stack can never be reported as a successful launch.
 
-`start_web_server_and_robot_browser.sh` builds the bundles the mode calls for, waits for them with `waitForBundles.js`, then starts `server.js` and `start_robot_browser.js` under `pm2`. It writes the mode it actually started to `<logdir>/hosting_mode`, which the front door reads back so it never advertises a host the launch did not bring up.
+`start_web_server_and_robot_browser.sh` builds the bundles the mode calls for through `build_and_wait_bundles`, waits for them with `waitForBundles.js`, then starts `server.js` and `start_robot_browser.js` under `pm2`. Nothing is written back to the front door: `HOSTING_MODE` cannot change after it is locked, so there is no `<logdir>/hosting_mode` file and no read-back.
+
+`build_and_wait_bundles` is also where `WEB_TELEOP_DIST` is set, next to the build that produces the matching bundle rather than anywhere it could drift from it. There is no longer a separate `WEB_TELEOP_DUAL`: "is the cloud door open" is exactly `WEB_TELEOP_DIST=dist-firebase`, which is the test `start_robot_browser.js` already made. `server.js` derives its mounts and its lease from the same variable.
+
+Because the localstorage bundle is always built with publicPath `/local/`, `dist/` is identical whichever mode produced it and never needs rebuilding because the mode changed. `clear_bundles` remains, for a different reason: a bundle left by an earlier run would satisfy `waitForBundles.js` on sight and pass a build that never ran.
+
+A failed build calls `stop_cloud_mode`, which stays private to this script: it deletes the `pm2` processes it started, the autodeploy watcher included, and clears the bundles. Then it exits 1 in either mode. Neither degrades into the other.
+
+`start_hosting_autodeploy` starts after the bundles exist rather than before, so the watcher never surveys a directory `clear_bundles` has just emptied.
 
 ## When a host is unavailable
 
 Four checks run before the stack starts, and they fail differently on purpose.
 
-The **local preflight** checks the certificates the robot's own HTTPS server needs, which are named after `HELLO_FLEET_ID`. It gates the local host alone — a robot with broken certificates can still serve through Firebase Hosting — so it stops `-L` without stopping `-f`.
+**`validate_installation`** checks `.env`, `node_modules`, `npm list --depth=0` and the SSL certificates. It gates every launch in every mode, because the certificates are not a per-transport concern: `server.js` reads them with `fs.readFileSync` at module scope, unguarded, so a missing certificate means the robot's HTTPS server never starts — and `start_robot_browser.js` can only load the robot page from loopback, which that same server provides. A robot with broken certificates therefore has no teleop in any hosting mode, Firebase included. There is no `check_local_readiness` and no `local_status`: local hosting has no precondition of its own.
 
-The **signaling preflight** (`scripts/checkFirebaseRobotAccess.js`) signs in with the robot account and reads `assignments/<uid>` — exactly what the robot page does moments later. It is the only check that can veto a cloud host, and its exit code says which of two very different things went wrong:
+It also runs before the Firebase probe on purpose. `checkFirebaseRobotAccess.js` reports a missing `node_modules` as its own "set up and broken" code, so probing first would blame Firebase for a broken installation.
+
+The **Firebase readiness check** (`check_firebase_readiness`) runs the other three in order and sets `fb_status`. Only the first of them decides that value.
+
+The **signaling preflight** (`scripts/checkFirebaseRobotAccess.js`) signs in with the robot account and reads `assignments/<uid>` — exactly what the robot page does moments later. It is the only check that can veto a cloud host, and `fb_status` is its exit code, which separates a robot that was never set up from one that was set up and has stopped working:
 
 | Exit | Meaning |
 | --- | --- |
@@ -101,13 +135,19 @@ The **signaling preflight** (`scripts/checkFirebaseRobotAccess.js`) signs in wit
 | `2` | No Firebase credentials in `.env`; nobody has ever set this robot up for Firebase. |
 | `3` | Credentials are present and something is wrong — the install, the account, the binding, or the network. |
 
+Any other non-zero code is node failing to run the probe, and counts as `3`. Both are fatal to `--firebase`; they differ only in what the error advises. The header of [`checkFirebaseRobotAccess.js`](../scripts/checkFirebaseRobotAccess.js) lists what produces each code.
+
+Since local is the default, this probe runs only when `-f`, `--firebase` or `WEB_TELEOP_HOSTING=firebase` asked for the cloud door. A bare `./launch_interface.sh` never executes it.
+
 It parses `.env` itself instead of through `dotenv`, and requires the Firebase packages only after the credential check passes, so a robot that never touched Firebase exits `2` at once rather than dying on a missing module.
 
-The **hosting preflight** checks the Firebase CLI credential, which is separate from the robot account and only uploads builds. Failing it sets `WEB_TELEOP_AUTODEPLOY=0` and the launch proceeds.
+The **hosting preflight** (`check_firebase_host_setup`) checks the Firebase CLI credential, which is separate from the robot account and only uploads builds. It runs only once the signaling preflight has passed. Failing it sets `WEB_TELEOP_AUTODEPLOY=0` and the launch proceeds — it never touches `fb_status`, so a robot can be in `firebase` hosting mode with preview uploads switched off.
 
 The **daemon check** warns when `stretch-web-teleop-daemon.service` is down, because your dashboard cannot start or stop a robot without it. It never vetoes.
 
-What happens next is the intent's decision, not the preflight's. `ARG_FIREBASE` exits non-zero, because it has no second host to fall back to — and a non-zero exit is how the daemon learns to report the launch as failed rather than claiming success over a robot your dashboard cannot reach. Every other intent keeps whichever host works, and they differ only in whether they say so.
+Those last two print whatever they have to say straight to the terminal. The probe's own reason is captured into `firebase_error` instead, so the caller can frame it: `2` and `3` are both fatal but want different advice.
+
+`ARG_FIREBASE` exits non-zero on any failure, because the cloud door was asked for by name and is not quietly substituted — and a non-zero exit is how the daemon learns to report the launch as failed rather than claiming success over a robot your dashboard cannot reach.
 
 The same rule applies later, if the build itself fails rather than the preflight.
 
@@ -115,19 +155,14 @@ The same rule applies later, if the build itself fails rather than the preflight
 
 | Script | Flag | Argument | Meaning |
 | --- | --- | --- | --- |
-| `launch_interface.sh` | `--hosting` | `local`, `firebase` or `dual` | Hosting mode, asserted. With no flag the intent is `ARG_DEFAULT`. |
-| | `-f` | — | Firebase only. Shorthand for `--hosting firebase`. |
-| | `-L` | — | Local only. Wins over every other source. |
+| `launch_interface.sh` | `-f`, `--firebase` | — | Also open the cloud door. Additive: the LAN door opens either way. With no flag the intent is `ARG_LOCAL`. |
 | | `-m` | path to `.yaml` | Map to load. Ignored if the file does not exist. |
 | | `-h`, `--help` | — | Show usage. |
-| `launch_interface_firebase.sh` | `-m` | path to `.yaml` | Map, passed through. Mode is fixed at `firebase`. |
-| `launch_teleop_stack.sh` | `--hosting` | `local`, `firebase` or `dual` | Hosting mode. Defaults to `dual`; rejected if not one of the three. |
 | | `-m` | path to `.yaml` | Map, passed to `start_ros2.sh`. |
 | | `-l` | directory | Log directory. Defaults to `WEB_TELEOP_LOG_DIR`, then a fresh timestamped one. |
 | `start_ros2.sh` | `-l` | directory | Log directory. Ignored if not an existing directory. |
 | | `-m` | path to `.yaml` | Map; becomes `map_yaml:=` on the ROS launch. |
-| `start_web_server_and_robot_browser.sh` | `--hosting` | `local`, `firebase` or `dual` | Hosting mode, and so which bundles to build. Defaults to `dual`. |
-| | `-f` | — | Firebase only. Shorthand for `--hosting firebase`. |
+| `start_web_server_and_robot_browser.sh` | `--hosting` | `local` or `firebase` | Hosting mode, and so which bundles to build. Defaults to `local`. |
 | | `-l` | directory | Log directory, also exported as `REDIRECT_LOGDIR` for `pm2` children. |
 | | `-o` | file path | Log file, so parent and child write to the same one. |
 | `stop_interface.sh` | — | — | No arguments. |
@@ -143,16 +178,17 @@ The same rule applies later, if the build itself fails rather than the preflight
 
 | Variable | Values | Meaning |
 | --- | --- | --- |
-| `WEB_TELEOP_HOSTING` | `local`, `firebase` or `dual` | Standing hosting mode, from the environment or `.env`, asserted like a flag. Any other value is an error. Beaten by `-f`, `--hosting` and `-L`. |
+| `WEB_TELEOP_HOSTING` | `local` or `firebase` | Standing hosting mode, from the environment or `.env`. Any other value is an error, `dual` included. Beaten by `-f`/`--firebase`. Unset means `local`. Since the flag is additive, setting this in the environment is also the only way to force `local` for a single run. |
 | `WEB_TELEOP_BUILD_MODE` | `development` or `production` | Watch-and-rebuild, or a one-shot production build. |
 | `WEB_TELEOP_LOG_DIR` | directory | Log directory. The daemon sets it so it can tail the whole run. |
-| `WEB_TELEOP_AUTODEPLOY` | `0` or `1` | Set to `0` when the Firebase CLI has no usable credential. Skips preview uploads; does not change the hosting mode. |
+| `WEB_TELEOP_AUTODEPLOY` | `0` or `1` | Set to `0` when the Firebase CLI has no usable credential. Skips preview uploads; does not change the hosting mode or `fb_status`. Unset means on, which is what a daemon claim gets. |
+| `WEB_TELEOP_DIST` | `dist` or `dist-firebase` | Which bundle `/` serves, and so whether the cloud door is open. `server.js` and `start_robot_browser.js` both derive the mode from it. Set by `build_and_wait_bundles`, not by hand. |
 | `WEB_TELEOP_FIREBASE_PROBE_TIMEOUT_MS` | milliseconds, default `15000` | Deadline on the signaling preflight. |
 | `WEB_TELEOP_LEASE_TIMEOUT_MS` | milliseconds, default `8000` | Deadline on each teleop-lease call. |
 | `WEB_TELEOP_BUILD_TIMEOUT_MS` | milliseconds, default `120000` | How long `waitForBundles.js` waits for bundles. |
 | `FIREBASE_TOKEN` | CI token | Lets the hosting preflight pass with no interactive CLI login. |
 
-Intent precedence runs lowest to highest; the last one that applies wins. Default, then `WEB_TELEOP_HOSTING`, then `-f`, then `--hosting`, then `-L`.
+Intent precedence runs lowest to highest; the last one that applies wins. Default (`local`), then `WEB_TELEOP_HOSTING`, then `-f`/`--firebase`.
 Every launch script rejects an unknown flag and takes `-h`/`--help`.
 
 ## Shared libraries
@@ -161,6 +197,12 @@ These are sourced rather than executed, because the environment they set has to 
 
 | Library | Provides | Sourced by |
 | --- | --- | --- |
-| `scripts/lib/teleop_env.sh` | `teleop_setup_env`: `PATH`, `hello-robot.conf`, fleet identity, middleware, workspace overlay | `launch_interface.sh`, `launch_teleop_stack.sh`, `start_ros2.sh` |
-| `scripts/lib/teleop_config.sh` | `.env` reading, build-mode resolution, log directory and the `latest_run` symlink | `launch_interface_firebase.sh`, `launch_teleop_stack.sh` |
-| `scripts/lib/hosting_gate.sh` | `hosting_mode_setting`, the local and Firebase preflights, the daemon warning | `launch_interface.sh` |
+| `scripts/lib/teleop_env.sh` | `teleop_setup_env`: `PATH`, `hello-robot.conf`, fleet identity, middleware, workspace overlay | `launch_interface.sh`, `start_ros2.sh`, `scripts/validate_installation.sh` |
+| `scripts/lib/teleop_config.sh` | `.env` reading, build-mode resolution, log directory and the `latest_run` symlink, `validate_installation`, `echo_failure_help` | `scripts/validate_installation.sh`, and `launch_interface.sh` by way of `hosting_mode_resolution.sh` |
+| `scripts/lib/hosting_mode_resolution.sh` | `hosting_mode_setting`, the `STATUS_*` codes, `check_firebase_readiness`, the hosting preflight and the daemon warning | `launch_interface.sh` |
+
+`scripts/validate_installation.sh` is not a library but a thin wrapper around `validate_installation`, so the check can be run without starting a launch. Nothing in the launch path depends on it — `launch_interface.sh` calls the function directly — but it is the thing to run by hand when a launch is refused, and worth asking for in a support thread:
+
+```bash
+./scripts/validate_installation.sh; echo $?
+```

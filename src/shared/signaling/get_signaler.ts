@@ -39,10 +39,11 @@ export function createSignaler(props: SignalingProps) {
                 appId: process.env.PUBLIC_FIREBASE_APP_ID,
                 measurementId: process.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
             };
-            if (
-                props.role === "robot" &&
-                process.env.dual_signaling === true
-            ) {
+            // The robot listens on both transports whenever the cloud door is
+            // open, so a LAN operator can still reach it when Firebase cannot.
+            // Operators get a single transport, fixed by the bundle they
+            // loaded, which is fixed by the URL they opened.
+            if (props.role === "robot") {
                 return new TeleopSignalingCoordinator(props, config);
             }
             return new FirebaseSignaling(props, config);

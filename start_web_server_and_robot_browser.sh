@@ -2,35 +2,31 @@
 set -e
 
 REDIRECT_LOGDIR="$HOME/stretch_user/log/web_teleop/stretch4_web_teleop_$(date '+%Y%m%d%H%M')"
-HOSTING_MODE="dual"
+HOSTING_MODE="local"
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)"
 export FEATURE_VOICE_CONTROL_INTERFACE
 
 usage() {
-	echo "Usage: $0 [--hosting local|firebase|dual] [-f] [-l logdir] [-o logfile]"
+	echo "Usage: $0 [--hosting local|firebase] [-l logdir] [-o logfile]"
 }
 
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--hosting)
-		# Which host serves the operator UI, and so which bundles to build.
-		#   local    robot's server serves dist/
-		#   firebase Firebase Hosting serves dist-firebase/
-		#   dual     both; dist-firebase/ at / with dist/ at /local/
+		# Whether the cloud door is opened as well as the LAN one, and so which
+		# bundles to build.
+		#   local     dist/ only; / and /local/ both serve it
+		#   firebase  dist-firebase/ at / with dist/ at /local/
 		shift
 		if [ $# -eq 0 ]; then
-			echo "--hosting needs local, firebase, or dual."
+			echo "--hosting needs local or firebase."
 			exit 1
 		fi
 		HOSTING_MODE="$1"
 		;;
 	--hosting=*) HOSTING_MODE="${1#--hosting=}" ;;
-	-f)
-		# Firebase only. Shorthand for --hosting firebase.
-		HOSTING_MODE="firebase"
-		;;
 	-l)
 		shift
 		if [ $# -gt 0 ] && [ -d "$1" ]; then
@@ -38,7 +34,7 @@ while [ $# -gt 0 ]; do
 		fi
 		;;
 	-o)
-		# Passed explicitly by launch_teleop_stack.sh so both scripts always log
+		# Passed explicitly by launch_interface.sh so both scripts always log
 		# to the same file, instead of each rebuilding the same filename.
 		shift
 		if [ $# -eq 0 ]; then
@@ -74,28 +70,36 @@ while IFS='=' read -r var value; do
 done < <(node "$REPO_DIR/feature-flags.js" --all)
 echo "flags={$flags}" &>>$REDIRECT_LOGFILE
 
-# Local and Firebase builds stay in separate folders so one launch cannot
-# serve the other mode's bundle. Firebase Hosting publishes dist-firebase.
+# Watch-and-rebuild, or a one-shot production build. Resolved by
+# launch_interface.sh and inherited; defaulted again here so this script
+# still runs when it is called on its own.
 BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
 if [[ "$BUILD_MODE" != "development" && "$BUILD_MODE" != "production" ]]; then
 	echo "WEB_TELEOP_BUILD_MODE must be development or production."
 	exit 1
 fi
-if [[ "$HOSTING_MODE" != "local" && "$HOSTING_MODE" != "firebase" && "$HOSTING_MODE" != "dual" ]]; then
-	echo "--hosting must be local, firebase, or dual."
+if [[ "$HOSTING_MODE" != "local" && "$HOSTING_MODE" != "firebase" ]]; then
+	echo "--hosting must be local or firebase."
 	exit 1
 fi
 
 export NODE_EXTRA_CA_CERTS="$REPO_DIR/certificates/rootCA.pem"
 
-# Bundles left by an earlier run satisfy waitForBundles.js on sight, which
-# would pass a build that never ran. Clear them so the wait tests this build.
+# Bundles left by an earlier run satisfy waitForBundles.js on sight, which would
+# pass a build that never ran. Clear them so the wait tests this build. The
+# bundles are no longer mode-specific -- dist/ is built the same way either way
+# -- but a stale one is still indistinguishable from a fresh one.
 function clear_bundles {
 	rm -rf "$REPO_DIR/dist" "$REPO_DIR/dist-firebase"
 }
 
-# Hosting uploads only ever publish dist-firebase, so both cloud modes want
-# the watcher. launch_interface.sh clears the flag when the CLI cannot deploy.
+# Hosting uploads only ever publish dist-firebase, so only the cloud door wants
+# the watcher. launch_interface.sh clears the flag when the CLI cannot deploy; a
+# daemon launch never sets it and so defaults to on, which is what a dashboard
+# claim has always done.
+#
+# Started after the bundles exist rather than before, so the watcher never
+# surveys a directory clear_bundles has just emptied.
 function start_hosting_autodeploy {
 	if [ "${WEB_TELEOP_AUTODEPLOY:-1}" = 0 ]; then
 		echo "Hosting preview autodeploy disabled."
@@ -105,53 +109,73 @@ function start_hosting_autodeploy {
 	cd "$REPO_DIR" && pm2 start -s scripts/firebase_hosting_autodeploy.js --name="firebase_hosting_autodeploy" &>>$REDIRECT_LOGFILE || return 1
 }
 
-# Firebase signaling alone. No local bundle is built, so this robot is
-# reachable through a Firebase dashboard and not over Tailscale.
-function start_firebase_mode {
-	export WEB_TELEOP_DIST="dist-firebase"
-	export WEB_TELEOP_DUAL=0
-	echo "Firebase teleop: signaling and operator UI come from Firebase."
-	clear_bundles
-	start_hosting_autodeploy || return 1
-	if [ "$BUILD_MODE" = "development" ]; then
-		echo "Start Firebase webpack watcher..."
-		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop" -- run firebase &>>$REDIRECT_LOGFILE || return 1
+# Build the bundles this mode calls for and wait for them to land.
+#
+# The LAN bundle is built in both modes: it is what /local/operator/ serves, and
+# it is the door that keeps working when the cloud does not. The cloud bundle is
+# built only when the cloud door was asked for.
+#
+# WEB_TELEOP_DIST is what server.js and start_robot_browser.js read to decide
+# what / serves and which signaling the robot page joins, so it is set here
+# beside the build that produces the matching bundle. There is no longer a
+# separate WEB_TELEOP_DUAL: "is the cloud door open" is exactly
+# WEB_TELEOP_DIST=dist-firebase, which start_robot_browser.js already tested.
+#
+# Args:
+#   $1: hosting mode: local or firebase.
+#
+# Returns 0 once every bundle the mode needs exists, 1 on a failed build or a
+# wait that timed out. set -e does not apply inside a function the caller tests,
+# so every step reports for itself.
+function build_and_wait_bundles {
+	local mode="$1"
+
+	if [ "$mode" = "firebase" ]; then
+		export WEB_TELEOP_DIST="dist-firebase"
+		echo "Firebase teleop: cloud door at /operator/, LAN door at /local/operator/."
 	else
-		echo "Build Firebase production bundle..."
-		cd "$REPO_DIR" && npm run build:firebase &>>$REDIRECT_LOGFILE || return 1
+		export WEB_TELEOP_DIST="dist"
+		echo "Local teleop: LAN door at /local/operator/."
 	fi
-	node "$REPO_DIR/scripts/waitForBundles.js" \
-		dist-firebase/index.html \
-		dist-firebase/operator/index.html \
-		dist-firebase/robot/index.html || return 1
+
+	clear_bundles
+
+	if [ "$BUILD_MODE" = "development" ]; then
+		echo "Start local webpack watcher..."
+		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_local" -- run localstorage &>>$REDIRECT_LOGFILE || return 1
+		if [ "$mode" = "firebase" ]; then
+			echo "Start Firebase webpack watcher..."
+			cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_firebase" -- run firebase &>>$REDIRECT_LOGFILE || return 1
+		fi
+	else
+		echo "Build local production bundle..."
+		cd "$REPO_DIR" && npm run build:localstorage &>>$REDIRECT_LOGFILE || return 1
+		if [ "$mode" = "firebase" ]; then
+			echo "Build Firebase production bundle..."
+			cd "$REPO_DIR" && npm run build:firebase &>>$REDIRECT_LOGFILE || return 1
+		fi
+	fi
+
+	# Local mode serves dist/ at both / and /local/, so it needs the whole set.
+	# Firebase mode takes /robot/ and /operator/ from dist-firebase and wants
+	# only the operator entry out of dist/.
+	if [ "$mode" = "firebase" ]; then
+		node "$REPO_DIR/scripts/waitForBundles.js" \
+			dist/operator/index.html \
+			dist-firebase/index.html \
+			dist-firebase/operator/index.html \
+			dist-firebase/robot/index.html || return 1
+	else
+		node "$REPO_DIR/scripts/waitForBundles.js" \
+			dist/index.html \
+			dist/operator/index.html \
+			dist/robot/index.html || return 1
+	fi
 }
 
-# Both transports at once. The robot page runs TeleopSignalingCoordinator, so
-# Tailscale uses local signaling while Hosting uses Firebase.
-function start_dual_mode {
-	export WEB_TELEOP_DIST="dist-firebase"
-	export WEB_TELEOP_DUAL=1
-	echo "Dual teleop: Tailscale uses local signaling; Hosting uses Firebase."
-	clear_bundles
-	start_hosting_autodeploy || return 1
-	if [ "$BUILD_MODE" = "development" ]; then
-		echo "Start local and Firebase webpack watchers..."
-		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_local" -- run localstorage -- --env dual=true &>>$REDIRECT_LOGFILE || return 1
-		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_firebase" -- run firebase -- --env dual=true &>>$REDIRECT_LOGFILE || return 1
-	else
-		echo "Build local and Firebase production bundles..."
-		cd "$REPO_DIR" && npm run build:localstorage -- --env dual=true &>>$REDIRECT_LOGFILE || return 1
-		cd "$REPO_DIR" && npm run build:firebase -- --env dual=true &>>$REDIRECT_LOGFILE || return 1
-	fi
-	node "$REPO_DIR/scripts/waitForBundles.js" \
-		dist/operator/index.html \
-		dist-firebase/index.html \
-		dist-firebase/operator/index.html \
-		dist-firebase/robot/index.html || return 1
-}
-
-# Dual mode builds dist/ with publicPath /local/, which a local-only server
-# cannot serve, so dist/ is removed for a rebuild rather than reused.
+# Private to this script. Tears down whatever a failed build left behind: the
+# pm2 processes it started, the autodeploy watcher if it got that far, and the
+# bundles themselves.
 function stop_cloud_mode {
 	local proc
 	for proc in firebase_hosting_autodeploy stretch4_web_teleop stretch4_web_teleop_firebase stretch4_web_teleop_local; do
@@ -162,53 +186,23 @@ function stop_cloud_mode {
 	fi
 }
 
-function start_local_mode {
-	export WEB_TELEOP_DIST="dist"
-	export WEB_TELEOP_DUAL=0
-	clear_bundles
-	if [ "$BUILD_MODE" = "development" ]; then
-		echo "Start local webpack watcher..."
-		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop" -- run localstorage &>>$REDIRECT_LOGFILE
-	else
-		echo "Build local production bundle..."
-		cd "$REPO_DIR" && npm run build:localstorage &>>$REDIRECT_LOGFILE
-	fi
-	node "$REPO_DIR/scripts/waitForBundles.js" \
-		dist/index.html \
-		dist/operator/index.html \
-		dist/robot/index.html
-}
-
-# Only dual mode may degrade. It was asked for both transports and local still
-# works without Firebase, so it keeps the half that survived. A launch asked
-# for Firebase alone has no second route to fall back to, and says so by
-# exiting non-zero -- which is how the daemon learns the launch failed.
-if [ "$HOSTING_MODE" = "firebase" ] && ! start_firebase_mode; then
+# Neither mode degrades into the other. A launch that asked for the cloud door
+# and could not build it exits non-zero rather than quietly serving the LAN door
+# alone -- which is how launch_interface.sh learns to package the logs, and how
+# stretch_firebase_daemon.js learns the launch failed.
+if ! build_and_wait_bundles "$HOSTING_MODE"; then
 	stop_cloud_mode
-	echo "Firebase setup failed."
-	echo "--hosting firebase (failed)" &>>$REDIRECT_LOGFILE
-	mkdir -p "$REDIRECT_LOGDIR"
-	echo "failed" >"$REDIRECT_LOGDIR/hosting_mode"
+	echo "Bundle build failed for --hosting $HOSTING_MODE."
+	echo "--hosting $HOSTING_MODE (failed)" &>>$REDIRECT_LOGFILE
 	exit 1
 fi
-if [ "$HOSTING_MODE" = "dual" ] && ! start_dual_mode; then
-	stop_cloud_mode
-	echo "Firebase setup failed. Falling back to local hosting."
-	HOSTING_MODE="local"
-	echo "--hosting $HOSTING_MODE (after fallback)" &>>$REDIRECT_LOGFILE
-fi
-if [ "$HOSTING_MODE" = "local" ]; then
-	start_local_mode
-fi
 
-# The caller asked for a mode; this is the one that started. launch_interface.sh
-# reads it so it never advertises a route this robot did not actually bring up.
-mkdir -p "$REDIRECT_LOGDIR"
-echo "$HOSTING_MODE" >"$REDIRECT_LOGDIR/hosting_mode"
+if [ "$HOSTING_MODE" = "firebase" ]; then
+	start_hosting_autodeploy || exit 1
+fi
 
 echo "Start local server..."
 cd "$REPO_DIR" && pm2 start -s server.js &>>$REDIRECT_LOGFILE
 
 echo "Start robot browser..."
 cd "$REPO_DIR" && pm2 start -s start_robot_browser.js &>>$REDIRECT_LOGFILE
-ifconfig | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/https:\/\/\2\/operator/p' &>>$REDIRECT_LOGFILE

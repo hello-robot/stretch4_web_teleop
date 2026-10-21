@@ -4,21 +4,40 @@
  * checkFirebaseRobotAccess.js
  *
  * Firebase signaling preflight. Signs in with the robot account from .env and
- * reads assignments/<uid> -- exactly what the robot page and the teleop lease
- * do moments later.
+ * reads assignments/<uid> -- what the robot page and the teleop lease do
+ * moments later.
  *
- * The exit code separates two conditions a launch must treat very differently:
+ * Scope: the Firebase CLI credential is not consulted. It uploads Hosting and
+ * does not affect signaling.
  *
- *   0  Firebase signaling can work on this robot right now.
- *   2  No Firebase credentials in .env at all. Nobody has ever set this robot
- *      up for Firebase, so nothing is broken and a default launch has nothing
- *      worth reporting.
- *   3  Credentials are present and something is wrong -- the install, the
- *      account, the binding, or the network. Somebody started this, so even a
- *      launch that never asked for Firebase should say so.
+ * Exit codes. Callers separate 2 from 3: a launch that did not ask for Firebase
+ * reports 3 and passes over 2. Every failing case writes its cause to stderr.
  *
- * The Firebase CLI credential is deliberately not consulted. That credential
- * uploads Hosting and has no bearing on signaling.
+ *   0  Signaling can work now. Every key in FIREBASE_KEYS and HELLO_FLEET_ID
+ *      are set, the robot account signed in, and assignments/<uid> carries
+ *      role "robot" and this fleet's name.
+ *
+ *   2  Not set up for Firebase. No key in FIREBASE_KEYS is set, in .env or in
+ *      the environment. Produced by a fresh checkout, an .env with no Firebase
+ *      section, and a missing .env.
+ *
+ *   3  Set up and not working. At least one key in FIREBASE_KEYS is set and a
+ *      later step failed:
+ *        - some keys set and others missing, or HELLO_FLEET_ID unset
+ *        - firebase/app, firebase/auth or firebase/database cannot be
+ *          required, meaning node_modules is missing or incomplete
+ *        - sign-in rejected: ROBOT_PASSWORD wrong, ROBOT_USERNAME absent from
+ *          the project, or PUBLIC_FIREBASE_API_KEY belonging to another project
+ *        - sign-in or the assignments read exceeding
+ *          WEB_TELEOP_FIREBASE_PROBE_TIMEOUT_MS, which an unreachable network
+ *          and a wrong PUBLIC_FIREBASE_DATABASE_URL both produce
+ *        - assignments/<uid> rejected by the database rules
+ *        - assignments/<uid> absent, role not "robot", or name not matching
+ *          HELLO_FLEET_ID: onboarding did not finish, or this account is bound
+ *          to another fleet
+ *
+ * Any other non-zero code comes from node rather than this script and means the
+ * probe could not run. Callers treat it as 3.
  */
 
 const fs = require("fs");
@@ -124,9 +143,9 @@ async function main() {
         fail(EXIT_BROKEN, "HELLO_FLEET_ID is not set.");
     }
 
-    // Required lazily: everything above has to work on a checkout with no
-    // node_modules, so that a robot which never touched Firebase exits 2
-    // rather than dying on a missing module.
+    // Required here rather than at module scope: the checks above must run on
+    // a checkout with no node_modules, so an unconfigured robot exits 2 instead
+    // of on a missing module.
     let initializeApp, getAuth, signInWithEmailAndPassword, getDatabase, ref, get;
     try {
         ({ initializeApp } = require("firebase/app"));

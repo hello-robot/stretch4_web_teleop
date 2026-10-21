@@ -1,0 +1,209 @@
+digraph launch_paths {
+	rankdir=TB;
+	bgcolor="white";
+	compound=true;
+	newrank=true;
+	splines=polyline;
+	nodesep=1.0;
+	ranksep=0.85;
+	labeljust="l";
+	labelloc="t";
+	node [shape=box, style="filled,rounded", fillcolor="#f4f6f8", color="#5b6773",
+	      fontname="Helvetica", fontsize=11, margin="0.18,0.10"];
+	edge [fontname="Helvetica", fontsize=9, color="#5b6773", fontcolor="#2f3a45"];
+
+	term [label="Terminal\n./launch_interface.sh  [-f|--firebase]  [-m map.yaml]", fillcolor="#dbeafe", color="#2563eb"];
+
+	subgraph cluster_daemon {
+		label="scripts/stretch_firebase_daemon.js";
+		fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+		labeljust="l"; labelloc="t";
+		style="rounded"; color="#9aa5b1"; bgcolor="#fbfcfd";
+
+		dash  [label="spawns the same script a person runs\nlaunch_interface.sh -f  [-m map]\nWEB_TELEOP_LOG_DIR in the child env",
+		       fillcolor="#dbeafe", color="#2563eb"];
+		dfail [label="reports the launch as failed\nrather than claiming a robot\nyour dashboard cannot reach",
+		       fillcolor="#fecaca", color="#b91c1c"];
+		nowrap [shape=note, fillcolor="#fafafa", color="#9e9e9e",
+		        label="one launch path, not two\llaunch_interface_firebase.sh and\llaunch_teleop_stack.sh are both deleted\lthe wrapper duplicated the spine, and the spine\lexisted only while a second front door called it\l\lthe daemon re-runs a probe its claim already\lproved — the price of one path instead of two\l"];
+	}
+
+	subgraph cluster_launch {
+		label="launch_interface.sh  —  decides";
+		fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+		labeljust="l"; labelloc="t";
+		style="rounded"; color="#9aa5b1"; bgcolor="#fbfcfd";
+
+		argp [label="teleop_setup_env  ·  parse CLI flags  ·  teleop_log_dir\lsets HELLO_FLEET_ID, RMW_IMPLEMENTATION, ROS overlay\lcaptures -m and -f/--firebase, resolves LOGDIR\l"];
+
+		vi   [label="validate_installation()\nscripts/lib/teleop_config.sh\n.env · node_modules · npm list --depth=0\nAND the SSL certificates"];
+
+		vinote [shape=note, fillcolor="#fafafa", color="#9e9e9e",
+		        label="why certificates gate every mode\lserver.js reads them with fs.readFileSync at\lmodule scope, unguarded, so a missing cert\lmeans the HTTPS server never starts — and\lstart_robot_browser.js can only load the robot\lpage from loopback, which that server provides\l\lruns before the Firebase probe: the probe\lreports a missing node_modules as its own\l\"set up and broken\" code\l"];
+
+		pick [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+		      label="firebase asked for?\nexports WEB_TELEOP_AUTODEPLOY=1\nprecedence low to high:\ndefault=local · WEB_TELEOP_HOSTING · -f/--firebase"];
+
+		loc  [label="ARG_LOCAL\n(the default)", fillcolor="#e0e7ff", color="#4338ca"];
+		fire [label="ARG_FIREBASE", fillcolor="#e0e7ff", color="#4338ca"];
+
+		nodual [shape=note, fillcolor="#fafafa", color="#9e9e9e",
+		        label="no dual intent, no negating flag\l--firebase serves the cloud door AND the LAN door\lthe operator picks a door by URL, not by flag\l\loverride a standing setting from the environment:\lWEB_TELEOP_HOSTING=local ./launch_interface.sh\l"];
+
+		pol [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+		     label="readiness outcome"];
+
+		quiet    [label="say nothing", fillcolor="#dcfce7", color="#15803d"];
+		gatefail [label="ERROR\nexit 1", fillcolor="#fecaca", color="#b91c1c"];
+
+		mode [label="lock HOSTING_MODE = local | firebase\nsingle source of truth from here down",
+		      fillcolor="#dbeafe", color="#2563eb"];
+
+		back [label="print_interface_urls(HOSTING_MODE)\nLAN door /local/operator/ in both modes\ncloud door /operator/ and the Hosting URL under firebase",
+		      fillcolor="#dcfce7", color="#15803d"];
+
+		subgraph cluster_hgate {
+			label="scripts/lib/hosting_mode_resolution.sh";
+			fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+			labeljust="l"; labelloc="t";
+			style="rounded"; color="#9aa5b1"; bgcolor="#fbfcfd";
+
+			hms [label="hosting_mode_setting()\nlocal | firebase | empty\ndual is rejected as a value"];
+			sp  [label="check_firebase_readiness()\nruns the probe as a separate process\nsets fb_status · firebase_error\nnever reached by a bare launch\nno local counterpart: certificates are an install gate"];
+			hp  [label="check_firebase_host_setup()\nonly once the probe is ready\nclears WEB_TELEOP_AUTODEPLOY to 0 on failure · never vetoes"];
+			dw  [label="firebase_warn_if_daemon_down()\nwarns · never vetoes"];
+		}
+
+		subgraph cluster_probe {
+			label="scripts/checkFirebaseRobotAccess.js";
+			fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+			labeljust="l"; labelloc="t";
+			style="rounded"; color="#9aa5b1"; bgcolor="#f3f5f7";
+
+			k1 [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+			    label="any FIREBASE_KEYS set?\n(.env or the environment)"];
+			k2 [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+			    label="all six keys set?\nHELLO_FLEET_ID set?"];
+			rq [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+			    label="require firebase/app · /auth · /database"];
+			si [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+			    label="signInWithEmailAndPassword\ndeadline WEB_TELEOP_FIREBASE_PROBE_TIMEOUT_MS"];
+			rd [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+			    label="get assignments/<uid>\nsame deadline"];
+			ck [shape=diamond, style="filled", fillcolor="#fef3c7", color="#b45309",
+			    label="role = robot\nand name = HELLO_FLEET_ID?"];
+
+			e0 [label="exit 0\nSTATUS_READY", fillcolor="#dcfce7", color="#15803d"];
+			e2 [label="exit 2\nSTATUS_NOT_CONFIGURED", fillcolor="#e5e7eb", color="#6b7280"];
+			e3 [label="exit 3\nSTATUS_BROKEN", fillcolor="#fed7aa", color="#c2410c"];
+
+			k1 -> e2 [label="  no key set anywhere\l"];
+			k1 -> k2 [label="  at least one key set"];
+			k2 -> e3 [label="  some keys missing, or\l  HELLO_FLEET_ID unset\l"];
+			k2 -> rq [label="  all present"];
+			rq -> e3 [label="  node_modules missing\l  or incomplete\l"];
+			rq -> si [label="  loaded"];
+			si -> e3 [label="  bad password, unknown user,\l  API key from another project,\l  deadline hit\l"];
+			si -> rd [label="  signed in"];
+			rd -> e3 [label="  denied by database rules\l  wrong databaseURL · deadline hit\l"];
+			rd -> ck [minlen=2, label="  read"];
+			ck -> e3 [label="  no assignment, role not robot,\l  or name is another fleet\l"];
+			ck -> e0 [label="  matches"];
+		}
+	}
+
+	term -> argp;
+	dash -> argp [label="  -f  [-m map]"];
+	argp -> gatefail [label="  unknown flag"];
+	argp -> vi;
+	vi -> fail [label="  fail — certificates included"];
+	vi -> hms [label="  pass"];
+	hms -> pick [label="  local · firebase · empty\l  ERROR exit 1 on any other value\l"];
+
+	pick -> loc  [label="  no flag, no setting\l  WEB_TELEOP_HOSTING=local\l"];
+	pick -> fire [minlen=2, label="  -f  ·  --firebase\l  WEB_TELEOP_HOSTING=firebase\l"];
+
+	loc  -> pol;
+	fire -> sp;
+	sp -> k1 [label="  node checkFirebaseRobotAccess.js"];
+	e0 -> hp [label="  signaling ready"];
+	hp -> dw;
+	dw -> pol; e2 -> pol; e3 -> pol;
+
+	pol -> quiet    [minlen=3, label="  ARG_LOCAL · always\l  ARG_FIREBASE · fb 0\l"];
+	pol -> gatefail [minlen=3, label="  ARG_FIREBASE · fb 2|3\l  prints: relaunch without -f\l"];
+
+	quiet -> mode;
+
+	subgraph cluster_stack {
+		label="launch_interface.sh  —  executes (same script)";
+		fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+		labeljust="l"; labelloc="t";
+		style="rounded"; color="#9aa5b1"; bgcolor="#fbfcfd";
+
+		env  [label="teleop_resolve_build_mode\nLOGDIR already resolved at the top,\nhonouring WEB_TELEOP_LOG_DIR"];
+		fail [label="echo_failure_help\nscripts/lib/teleop_config.sh\nzip the logs · exit 1", fillcolor="#fecaca", color="#b91c1c"];
+	}
+	mode -> env;
+
+	subgraph cluster_ros {
+		label="start_ros2.sh";
+		fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+		labeljust="l"; labelloc="t";
+		style="rounded"; color="#9aa5b1"; bgcolor="#fbfcfd";
+
+		stop [label="stop_interface.sh\ntear down any previous stack"];
+		zen [label="rmw_zenohd in a screen\nverified with pgrep -x"];
+		rl  [label="ros2 launch web_interface.launch.py\nlaunch log scanned for ERROR"];
+		stop -> zen -> rl;
+	}
+	env  -> stop [label="  -l logdir  [-m map]"];
+	rl -> fail [label="  zenoh or ROS failed"];
+
+	subgraph cluster_web {
+		label="start_web_server_and_robot_browser.sh";
+		fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+		labeljust="l"; labelloc="t";
+		style="rounded"; color="#9aa5b1"; bgcolor="#fbfcfd";
+
+		bld [label="build_and_wait_bundles(HOSTING_MODE)\llocal     dist/                   WEB_TELEOP_DIST=dist\lfirebase  dist/ + dist-firebase/  WEB_TELEOP_DIST=dist-firebase\lthe LAN bundle is built in both modes\lverified with scripts/waitForBundles.js\l"];
+
+		nodualenv [shape=note, fillcolor="#fafafa", color="#9e9e9e",
+		           label="WEB_TELEOP_DUAL and dual_signaling are gone\lboth encoded one fact, now derived from\lWEB_TELEOP_DIST == dist-firebase\l\ldist/ has publicPath /local/ in both modes,\lso it is never rebuilt because the mode changed\l"];
+
+		mounts [label="server.js route mounts\llocal     /operator/ -> 302 /local/operator/  ·  /local/ -> dist  ·  / -> dist\lfirebase  /local/ -> dist  ·  / -> dist-firebase\l/robot/ comes from the root mount in both modes\l"];
+
+		clean  [label="stop_cloud_mode\npm2 delete, autodeploy included\nclear_bundles", fillcolor="#fed7aa", color="#c2410c"];
+		bfail  [label="no fallback in either mode\nexit 1", fillcolor="#fecaca", color="#b91c1c"];
+
+		wrote [label="firebase: start_hosting_autodeploy if WEB_TELEOP_AUTODEPLOY != 0\nthen pm2 starts server.js and start_robot_browser.js",
+		       fillcolor="#dcfce7", color="#15803d"];
+
+		bld -> clean [label="  bundle build failed"];
+		clean -> bfail;
+		bld -> mounts [label="  bundles ready"];
+		mounts -> wrote;
+	}
+	rl -> bld [label="  ROS is up\l  --hosting MODE  -l logdir  -o logfile\l"];
+
+	subgraph cluster_doors {
+		label="operator URLs  —  one meaning per URL, in every mode";
+		fontname="Helvetica-Bold"; fontsize=11; fontcolor="#1f2933";
+		labeljust="l"; labelloc="t";
+		style="rounded"; color="#9aa5b1"; bgcolor="#fbfcfd";
+
+		dlan   [label="https://<host>/local/operator/\nLAN bundle · LocalSignaling over socket.io\nneeds no WAN · served in BOTH modes",
+		        fillcolor="#dcfce7", color="#15803d"];
+		dcloud [label="https://<host>/operator/\nfirebase: cloud bundle · FirebaseSignaling\nlocal: 302 to /local/operator/",
+		        fillcolor="#dcfce7", color="#15803d"];
+		dhost  [label="https://<project-id>.web.app/operator\ncloud bundle from Firebase Hosting · firebase only\nautodeploy publishes to a preview channel, not live",
+		        fillcolor="#dcfce7", color="#15803d"];
+		dnote  [shape=note, fillcolor="#fafafa", color="#9e9e9e",
+		        label="a redirect, not a 404: the address bar shows\lwhich door you landed in\lno URL ever silently serves a different bundle\l"];
+	}
+	wrote -> dlan; wrote -> dcloud; wrote -> dhost;
+
+	bfail -> fail [label="  returns 1"];
+	wrote -> back;
+	fail  -> dfail [label="  non-zero exit to the daemon"];
+}

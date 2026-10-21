@@ -1,4 +1,16 @@
 #!/bin/bash
+# The launch. Decides which doors to open, then opens them.
+#
+# Both entry points come through here: a person at a terminal, and
+# stretch_firebase_daemon.js, which spawns this with -f on a dashboard claim.
+# There is one launch path, so a change lands on both callers at once -- the
+# daemon pays a redundant Firebase probe for that, which is cheap next to the
+# cost of two paths drifting apart.
+#
+# Usage: ./launch_interface.sh [-f|--firebase] [-m map.yaml]
+#
+# The log directory comes from WEB_TELEOP_LOG_DIR when set, which is how the
+# daemon points a run at a directory it is already tailing.
 set -o pipefail
 
 # Define color variables
@@ -9,7 +21,7 @@ NC='\033[0m' # No Color (Reset)
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$REPO_DIR/scripts/lib/teleop_env.sh"
-source "$REPO_DIR/scripts/lib/hosting_gate.sh"
+source "$REPO_DIR/scripts/lib/hosting_mode_resolution.sh"
 
 # Before validate_installation, which names certificate files after the fleet
 # id. Without this it reads whatever the invoking shell happened to export.
@@ -19,9 +31,7 @@ FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_contr
 export FEATURE_VOICE_CONTROL_INTERFACE
 
 MAP=""
-MODE_OPT=""
-FORCE_FIREBASE=0
-FORCE_LOCAL=0
+WANT_FIREBASE=0
 
 usage() {
 	cat <<'USAGE'
@@ -30,37 +40,37 @@ Usage: ./launch_interface.sh [options]
 Launch web teleop on this robot.
 
 Options:
-  --hosting <mode>  Which host serves the operator interface. The robot's own
-                    server runs either way; this picks where an operator
-                    fetches the interface from, and with it the signaling
-                    transport.
-                      local     the robot's Express server, over Tailscale or WiFi
-                      firebase  Firebase Hosting, through your own dashboard
-                      dual      both hosts at once
-                    Naming a mode makes it a requirement, so the launch reports
-                    any host it cannot bring up. Given no mode, both are served
-                    when available and a Firebase that was never set up passes
-                    without comment.
-  -f                Firebase only. Shorthand for --hosting firebase.
-  -L                Local only. Wins over every other source.
+  -f, --firebase    Also serve the operator interface through Firebase Hosting,
+                    so an operator can reach this robot from your own dashboard.
+                    The robot's own server runs either way, and the LAN door at
+                    /local/operator/ is served in both cases; this adds the
+                    cloud door. Firebase must already be set up on this robot --
+                    the launch reports an error rather than quietly serving
+                    local instead.
   -m <map.yaml>     Map to load. Ignored when the file does not exist.
   -h, --help        Show this message.
+
+Without -f the launch is local only, which is the default.
+
+To override a standing WEB_TELEOP_HOSTING=firebase for a single run, set it in
+the environment instead -- there is no negating flag:
+
+  WEB_TELEOP_HOSTING=local ./launch_interface.sh
+
+Operator URLs, once the launch finishes:
+  https://<host>/local/operator/   the LAN door, over Tailscale or WiFi, in
+                                   both modes. Needs no internet.
+  https://<host>/operator/         the cloud door with -f; in local mode it
+                                   redirects to /local/operator/.
 USAGE
 }
 
+# Arguments are parsed before anything else runs: --help and a misspelled flag
+# are answers this script can give without an npm dependency tree, and a broken
+# checkout is no reason to withhold its own usage text.
 while [ $# -gt 0 ]; do
 	case "$1" in
-	--hosting)
-		shift
-		if [ $# -eq 0 ]; then
-			echo -e "${RED}ERROR:${NC} --hosting needs local, firebase, or dual."
-			exit 1
-		fi
-		MODE_OPT="$1"
-		;;
-	--hosting=*) MODE_OPT="${1#--hosting=}" ;;
-	-f) FORCE_FIREBASE=1 ;;
-	-L) FORCE_LOCAL=1 ;;
+	-f | --firebase) WANT_FIREBASE=1 ;;
 	-m)
 		shift
 		if [ $# -eq 0 ]; then
@@ -84,225 +94,39 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-# Map a named hosting mode onto the intent it expresses. A mode someone names
-# is asserted, so dual becomes ARG_DUAL rather than ARG_DEFAULT: it reports a
-# half that failed instead of passing over it.
-function intent_for_mode {
-	case "$1" in
-	local) echo ARG_LOCAL ;;
-	firebase) echo ARG_FIREBASE ;;
-	dual) echo ARG_DUAL ;;
-	esac
-}
-
-# What was asked for, and with it what counts as a failure worth reporting.
-#
-#   ARG_DEFAULT   both transports if available; silent when Firebase was never
-#                 set up, since nothing is broken and the operator may never
-#                 have wanted it
-#   ARG_DUAL      both; proceeds on one, but names the half that broke
-#   ARG_LOCAL     local alone; its failure is fatal
-#   ARG_FIREBASE  firebase alone; its failure is fatal
-#
-# Precedence, lowest first: default, WEB_TELEOP_HOSTING, -f, --hosting, -L.
-LAUNCH_INTENT="ARG_DEFAULT"
-INTENT_REASON="default"
-
-MODE_SETTING="$(hosting_mode_setting)" || exit 1
-if [ -n "$MODE_SETTING" ]; then
-	LAUNCH_INTENT="$(intent_for_mode "$MODE_SETTING")"
-	INTENT_REASON="WEB_TELEOP_HOSTING"
-fi
-if [ "$FORCE_FIREBASE" = 1 ]; then
-	LAUNCH_INTENT="ARG_FIREBASE"
-	INTENT_REASON="-f"
-fi
-if [ -n "$MODE_OPT" ]; then
-	case "$MODE_OPT" in
-	local | firebase | dual) ;;
-	*)
-		echo -e "${RED}ERROR:${NC} --hosting must be local, firebase, or dual (got '$MODE_OPT')."
-		exit 1
-		;;
-	esac
-	LAUNCH_INTENT="$(intent_for_mode "$MODE_OPT")"
-	INTENT_REASON="--hosting"
-fi
-if [ "$FORCE_LOCAL" = 1 ]; then
-	LAUNCH_INTENT="ARG_LOCAL"
-	INTENT_REASON="-L"
-fi
-
-export WEB_TELEOP_AUTODEPLOY=1
-
-want_local=0
-want_firebase=0
-case "$LAUNCH_INTENT" in
-ARG_DEFAULT | ARG_DUAL) want_local=1 want_firebase=1 ;;
-ARG_LOCAL) want_local=1 ;;
-ARG_FIREBASE) want_firebase=1 ;;
-esac
-
-# Captured rather than printed. ARG_DEFAULT has to be able to stay quiet about
-# a transport nobody asked for, which it cannot do if the checks write straight
-# to the terminal.
-local_ok=1
-local_error=""
-if [ "$want_local" = 1 ]; then
-	local_error="$(local_preflight 2>&1)" || local_ok=0
-fi
-
-# 0 ready, 2 never set up for Firebase, 3 set up and broken.
-firebase_ok=1
-firebase_status=0
-firebase_error=""
-if [ "$want_firebase" = 1 ]; then
-	firebase_error="$(firebase_signaling_preflight 2>&1)"
-	firebase_status=$?
-	[ "$firebase_status" -ne 0 ] && firebase_ok=0
-fi
-
-case "$LAUNCH_INTENT" in
-ARG_DEFAULT)
-	# A robot with no Firebase credentials was never set up for Firebase.
-	# Calling that broken would puzzle an operator who has never touched it and
-	# does not want to. A robot that WAS set up and has stopped working is worth
-	# saying out loud, even to someone who only asked for a plain launch.
-	if [ "$firebase_status" -eq 3 ]; then
-		echo -e "${RED}WARNING:${NC} Firebase is set up on this robot but not working."
-		echo "$firebase_error"
-		echo "       Continuing with local hosting."
-	fi
-	if [ "$local_ok" = 0 ] && [ "$firebase_ok" = 0 ]; then
-		echo -e "${RED}ERROR:${NC} no hosting is available."
-		echo "$local_error"
-		if [ "$firebase_status" -eq 2 ]; then
-			echo "       Firebase is not set up on this robot, so there is no fallback."
-		fi
-		exit 1
-	fi
-	;;
-ARG_DUAL)
-	if [ "$local_ok" = 0 ]; then
-		echo -e "${RED}WARNING:${NC} local hosting is unavailable."
-		echo "$local_error"
-	fi
-	if [ "$firebase_ok" = 0 ]; then
-		echo -e "${RED}WARNING:${NC} Firebase hosting is unavailable."
-		echo "$firebase_error"
-	fi
-	if [ "$local_ok" = 0 ] && [ "$firebase_ok" = 0 ]; then
-		echo -e "${RED}ERROR:${NC} dual asked for both hosts; neither is available."
-		exit 1
-	fi
-	;;
-ARG_LOCAL)
-	if [ "$local_ok" = 0 ]; then
-		echo -e "${RED}ERROR:${NC} local hosting is unavailable."
-		echo "$local_error"
-		exit 1
-	fi
-	;;
-ARG_FIREBASE)
-	if [ "$firebase_ok" = 0 ]; then
-		echo -e "${RED}ERROR:${NC} Firebase hosting is unavailable."
-		echo "$firebase_error"
-		exit 1
-	fi
-	;;
-esac
-
-# The spine speaks hosting modes, not intents. Collapse to what came up.
-started_local=$((want_local && local_ok))
-started_firebase=$((want_firebase && firebase_ok))
-if [ "$started_local" = 1 ] && [ "$started_firebase" = 1 ]; then
-	HOSTING_MODE="dual"
-elif [ "$started_firebase" = 1 ]; then
-	HOSTING_MODE="firebase"
-else
-	HOSTING_MODE="local"
-fi
-
-if [ "$HOSTING_MODE" != "local" ]; then
-	# Hosting uploads are a convenience. Losing them costs preview deploys of
-	# this checkout and nothing else, so they never veto the launch.
-	if ! firebase_hosting_preflight; then
-		echo "       Continuing without Hosting preview autodeploy."
-		export WEB_TELEOP_AUTODEPLOY=0
-	fi
-	firebase_warn_if_daemon_down
-fi
-
-echo -e "${BLUE}Hosting mode:${NC} $HOSTING_MODE ($INTENT_REASON)"
-
 logdir="$(teleop_log_dir)"
 logzip="$logdir/stretch4_web_teleop_logs.zip"
 
-echo ""
-echo "#############################################"
-echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
-echo "#############################################"
-echo ""
-
-# Voice JSONL logs and audio-snippet clips (when voice_input_recording is
-# enabled) are written under this run's own timestamped $logdir — see
-# voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
-# in a separate persistent directory across runs, so there is no pre-run disk
-# usage to report here.
-web_teleop_du=$(du -sh "$HOME/stretch_user/log/web_teleop" 2>/dev/null | awk '{print $1}')
-echo -e "${BLUE}web_teleop logs total size:${NC} ${web_teleop_du:-0} in $HOME/stretch_user/log/web_teleop (not auto-purged; purge old run folders manually if desired)"
-
-# Validate web teleop installation
-# Shared installation sanity, required by every hosting mode. The
-# certificates the local HTTPS server needs are checked by local_preflight
-# instead, so a robot with broken certificates can still serve through
-# Firebase Hosting.
-function validate_installation {
-	local env_file="$HOME/ament_ws/src/stretch4_web_teleop/.env"
-
-	echo -e "Validating web teleop installation..."
-
-	# Check .env file exists
-	if [ ! -f "$env_file" ]; then
-		echo -e "${RED}ERROR:${NC} .env file not found at $env_file"
-		echo "       Update your ROS workspace: https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	# Check node_modules folder exists
-	local node_modules_dir="$HOME/ament_ws/src/stretch4_web_teleop/node_modules"
-	if [ ! -d "$node_modules_dir" ]; then
-		echo -e "${RED}ERROR:${NC} node_modules folder not found at $node_modules_dir"
-		echo "       Run 'npm install --force' to install dependencies OR update your ROS workspace https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	# Check npm dependencies have no errors
-	cd "$HOME/ament_ws/src/stretch4_web_teleop"
-	npm list --depth=0 >/dev/null 2>&1
-	if [ $? -ne 0 ]; then
-		echo -e "${RED}ERROR:${NC} npm dependencies have errors. "
-		echo "       Run 'npm install --force' to fix OR update your ROS workspace https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	echo -e "${GREEN}✓ Installation validation passed${NC}"
-	return 0
-}
-
-function echo_failure_help {
-	zip -r $logzip $logdir/ >/dev/null
-	echo ""
-	echo "#############################################"
-	echo -e "${RED}FAILURE. COULD NOT LAUNCH WEB TELEOP.${NC}"
-	echo "Look at the troubleshooting guide for solutions to common issues: https://docs.hello-robot.com/0.3/getting_started/demos_web_teleop/#troubleshooting"
-	echo "or contact Hello Robot support and include $logzip"
-	echo "#############################################"
-	echo ""
-	exit 1
-}
-
+# Print the URLs an operator should visit for the mode that started.
+#
+# Both doors are named in both modes, because the point of the split is that a
+# URL means one thing: /local/operator/ is always the LAN bundle over socket.io,
+# and /operator/ is always the cloud bundle -- a redirect to the former when no
+# cloud door was opened.
+#
+# Args:
+#   $1: hosting mode: local or firebase.
 function print_interface_urls {
+	local mode="$1"
+	local project_id
+
+	echo ""
+	echo "#############################################"
+	echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
+	echo ""
+
+	if [ "$mode" = "firebase" ]; then
+		project_id="$(teleop_env_val PUBLIC_FIREBASE_PROJECT_ID)"
+		echo -e "${BLUE}Cloud door${NC} (signs in through Firebase):"
+		if [ -n "$project_id" ]; then
+			echo "  Dashboard: https://${project_id}.web.app/"
+		fi
+		echo "  https://localhost/operator/"
+		echo ""
+	fi
+
+	echo -e "${BLUE}LAN door${NC} (socket.io direct to this robot, no internet needed):"
+	echo "  https://localhost/local/operator/"
 	ifconfig | awk '
 	  /^[^ \t]/ {
 	    iface=$1
@@ -320,16 +144,37 @@ function print_interface_urls {
 	    if (ip == "" || ip == "127.0.0.1") next
 
 	    if (iface == "tailscale0") {
-	      print "Tailscale: https://" ip "/operator"
+	      print "  Tailscale: https://" ip "/local/operator/"
 	    } else if (iface ~ /^(wlan|wl)/) {
-	      print "WiFi: https://" ip "/operator"
+	      print "  WiFi: https://" ip "/local/operator/"
 	    } else if (iface ~ /^(eth|en)/) {
-	      print "Ethernet: https://" ip "/operator"
+	      print "  Ethernet: https://" ip "/local/operator/"
 	    } else {
-	      print iface ": https://" ip "/operator"
+	      print "  " iface ": https://" ip "/local/operator/"
 	    }
 	  }'
+
+	if [ "$mode" = "local" ]; then
+		echo ""
+		echo "(/operator/ redirects here. Relaunch with -f to open the cloud door.)"
+	fi
+	echo "#############################################"
+	echo ""
 }
+
+echo ""
+echo "#############################################"
+echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
+echo "#############################################"
+echo ""
+
+# Voice JSONL logs and audio-snippet clips (when voice_input_recording is
+# enabled) are written under this run's own timestamped $logdir — see
+# voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
+# in a separate persistent directory across runs, so there is no pre-run disk
+# usage to report here.
+web_teleop_du=$(du -sh "$HOME/stretch_user/log/web_teleop" 2>/dev/null | awk '{print $1}')
+echo -e "${BLUE}web_teleop logs total size:${NC} ${web_teleop_du:-0} in $HOME/stretch_user/log/web_teleop (not auto-purged; purge old run folders manually if desired)"
 
 echo ""
 echo "#############################################"
@@ -345,49 +190,88 @@ while IFS='=' read -r var value; do
 	fi
 done < <(node "$REPO_DIR/feature-flags.js" --all)
 
-validate_installation
-if [ $? -ne 0 ]; then
-	echo_failure_help
+# Certificates included, so this gates every mode. It also runs before the
+# Firebase probe on purpose: that probe reports a missing node_modules as its
+# own "set up and broken" code, which would blame Firebase for a broken install.
+validate_installation || echo_failure_help "$logdir"
+
+# What was asked for, and with it what counts as a failure worth reporting.
+#
+#   ARG_LOCAL     the robot's own server alone. What a launch that names
+#                 nothing gets, so a bare launch never probes Firebase.
+#   ARG_FIREBASE  the cloud door as well as the LAN one. Firebase failing is
+#                 fatal: there is no downgrade to local.
+#
+# Precedence, lowest first: default, WEB_TELEOP_HOSTING, -f/--firebase. The flag
+# is additive, so overriding a standing setting is done from the environment.
+LAUNCH_INTENT="ARG_LOCAL"
+INTENT_REASON="default"
+
+MODE_SETTING="$(hosting_mode_setting)" || exit 1
+case "$MODE_SETTING" in
+local)
+	LAUNCH_INTENT="ARG_LOCAL"
+	INTENT_REASON="WEB_TELEOP_HOSTING"
+	;;
+firebase)
+	LAUNCH_INTENT="ARG_FIREBASE"
+	INTENT_REASON="WEB_TELEOP_HOSTING"
+	;;
+esac
+if [ "$WANT_FIREBASE" = 1 ]; then
+	LAUNCH_INTENT="ARG_FIREBASE"
+	INTENT_REASON="--firebase"
 fi
 
-# The spine brings up ROS and the web server. The daemon reaches the same code
-# through launch_interface_firebase.sh, so neither path has its own copy.
-cd "$REPO_DIR"
-./launch_teleop_stack.sh --hosting "$HOSTING_MODE" -l "$logdir" $MAP
-if [ $? -ne 0 ]; then
-	echo_failure_help
+export WEB_TELEOP_AUTODEPLOY=1
+
+# Only ARG_FIREBASE has anything left to check. ARG_LOCAL needs nothing beyond
+# the installation that was just validated.
+fb_status=$STATUS_READY
+firebase_error=""
+if [ "$LAUNCH_INTENT" = "ARG_FIREBASE" ]; then
+	check_firebase_readiness
 fi
 
-# Dual mode downgrades itself when the Firebase half of the build fails, so the
-# URLs below report the mode that actually started, not the one that was asked
-# for.
-if [ -f "$logdir/hosting_mode" ]; then
-	STARTED_MODE="$(cat "$logdir/hosting_mode")"
-	if [ "$STARTED_MODE" != "$HOSTING_MODE" ]; then
-		echo -e "${RED}WARNING:${NC} Firebase setup failed during startup. Started $STARTED_MODE instead."
-		HOSTING_MODE="$STARTED_MODE"
+# Lock HOSTING_MODE. Past this point it is the single source of truth: nothing
+# downstream re-decides it and nothing upstream is consulted again.
+if [ "$LAUNCH_INTENT" = "ARG_FIREBASE" ]; then
+	if [ "$fb_status" -ne "$STATUS_READY" ]; then
+		echo -e "${RED}ERROR:${NC} Firebase hosting was asked for and is unavailable."
+		echo "$firebase_error"
+		if [ "$fb_status" -eq "$STATUS_NOT_CONFIGURED" ]; then
+			echo "       This robot is not set up for Firebase. Run ./onboard_firebase_robot.sh"
+		fi
+		echo "       Relaunch without -f to serve the LAN door alone."
+		exit 1
 	fi
+	HOSTING_MODE="firebase"
+else
+	HOSTING_MODE="local"
+fi
+
+echo -e "${BLUE}Hosting mode:${NC} $HOSTING_MODE ($INTENT_REASON)"
+
+# Bring up ROS, then the web server and robot browser. These were a separate
+# launch_teleop_stack.sh for as long as a second front door called it; with the
+# daemon coming through this script too, a spine with one caller was indirection
+# for its own sake.
+teleop_resolve_build_mode
+logfile_ros="$logdir/start_ros2.txt"
+logfile_node="$logdir/start_web_server_and_robot_browser.txt"
+
+cd "$REPO_DIR"
+# set -o pipefail is what makes these statuses the scripts' and not tee's.
+./start_ros2.sh -l "$logdir" $MAP |& tee "$logfile_ros"
+if [ $? -ne 0 ]; then
+	echo_failure_help "$logdir"
+fi
+
+./start_web_server_and_robot_browser.sh -l "$logdir" -o "$logfile_node" --hosting "$HOSTING_MODE" |& tee -a "$logfile_node"
+if [ $? -ne 0 ]; then
+	echo_failure_help "$logdir"
 fi
 
 zip -r $logzip $logdir/ >/dev/null
 
-echo ""
-echo "#############################################"
-echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
-echo "Visit the appropriate URL(s) below to see web teleop:"
-if [ "$HOSTING_MODE" != "local" ]; then
-	PROJECT_ID="$(teleop_env_val PUBLIC_FIREBASE_PROJECT_ID)"
-	if [ -n "$PROJECT_ID" ]; then
-		echo "Dashboard: https://${PROJECT_ID}.web.app/"
-	fi
-fi
-if [ "$HOSTING_MODE" = "firebase" ]; then
-	# The local server still answers, but it is serving the Firebase bundle,
-	# which signs in to the cloud rather than connecting over the LAN.
-	echo "(Firebase-only: this robot is not reachable over Tailscale or WiFi.)"
-else
-	echo "Localhost: https://localhost/operator"
-	print_interface_urls
-fi
-echo "#############################################"
-echo ""
+print_interface_urls "$HOSTING_MODE"
