@@ -25,6 +25,7 @@ export const FEATURE_EE_VELOCITY_LIMITER: boolean = Boolean(
  * Opus audio-snippet clip recording of voice inputs. Only meaningful when
  * FEATURE_VOICE_CONTROL_INTERFACE is also on.
  */
+
 export const FEATURE_VOICE_INPUT_RECORDING: boolean = Boolean(
     process.env.FEATURE_VOICE_INPUT_RECORDING,
 );

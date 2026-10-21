@@ -34,6 +34,7 @@ import {
     rosJointStatetoRobotPose,
     ValidJointStateDict
 } from "../../../shared/util";
+import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 const { createRosReconnectGuard } = require("./rosReconnectGuard");
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
