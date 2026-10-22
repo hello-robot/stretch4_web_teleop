@@ -592,12 +592,6 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     ]);
 
     const cancelAutoNav = useCallback((): AutoNavNavControlResult => {
-        if (!isCurrentlyMoving) {
-            return {
-                ok: false,
-                detail: "AutoNav is not navigating.",
-            };
-        }
         functs.CancelGoal();
         functs.RemoveGoalMarker();
         isCurrentlyMovingSet(false);
@@ -605,7 +599,6 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         return { ok: true, detail: "Cancelled AutoNav." };
     }, [
         functs,
-        isCurrentlyMoving,
         isCurrentlyMovingSet,
         isSelectingGoalSet,
     ]);

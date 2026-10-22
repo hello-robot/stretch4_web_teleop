@@ -46,7 +46,6 @@ export enum MapFunction {
     GetMap,
     GetPose,
     MoveBase,
-    GoalReached,
     SeedLocalization,
 }
 
@@ -76,7 +75,6 @@ export interface AutoNavFunctions {
     DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) => void;
     Play: () => void;
     RemoveGoalMarker: () => void;
-    GoalReached: () => Promise<boolean>;
     RenamePose: (poseNameOld: string, poseNameNew: string) => void;
 }
 
@@ -84,7 +82,6 @@ export interface MapFunctions {
     GetMap: ROSOccupancyGrid;
     GetPose: () => Transform;
     MoveBase: (pose: ROSPose) => void;
-    GoalReached: () => boolean;
     SelectGoal: () => boolean;
     SetSelectGoal: (selectGoal: boolean) => void;
     SeedLocalization: () => void;
@@ -211,9 +208,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
          */
         Play: () => occupancyGrid!.play(),
         RemoveGoalMarker: () => occupancyGrid!.removeGoalMarker(),
-        GoalReached: underMapFunctionProvider.provideFunctions(
-            UnderMapButton.GoalReached,
-        ) as () => Promise<boolean>,
         RenamePose: underMapFunctionProvider.provideFunctions(
             UnderMapButton.RenamePose,
         ) as (poseNameOld: string, poseNameNew: string) => void,
@@ -243,9 +237,6 @@ const AutoNav: React.FC<AutoNavProps> = ({
         MoveBase: mapFunctionProvider.provideFunctions(
             MapFunction.MoveBase,
         ) as (pose: ROSPose) => void,
-        GoalReached: mapFunctionProvider.provideFunctions(
-            MapFunction.GoalReached,
-        ) as () => boolean,
         SeedLocalization: mapFunctionProvider.provideFunctions(
             MapFunction.SeedLocalization,
         ) as () => void,
