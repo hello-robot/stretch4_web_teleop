@@ -805,10 +805,6 @@ export class Robot extends React.Component {
         successMsg: string,
         failureMsg: string,
     ) {
-        if (!this.moveBaseStatusWatching) {
-            return;
-        }
-
         // rosbridge may deliver status as string; coerce before compares.
         const statuses = statusList.map((entry) => Number(entry.status));
         const terminalCount = statuses.filter(
@@ -824,6 +820,23 @@ export class Robot extends React.Component {
         const hasAccepted = statuses.includes(GoalStatus.STATUS_ACCEPTED);
         const hasExecuting = statuses.includes(GoalStatus.STATUS_EXECUTING);
         const hasCanceling = statuses.includes(GoalStatus.STATUS_CANCELING);
+
+        // Check if Nav2 action server is actively tracking a goal even if we weren't
+        // actively watching (e.g. app reload or mid-navigation session sync).
+        if (!this.moveBaseStatusWatching) {
+            if (hasAccepted || hasExecuting || hasCanceling) {
+                console.log("Nav2 action server has active goal on (re)load; activating watch session");
+                this.moveBaseStatusWatching = true;
+                this.moveBaseStatusSeenActive = true;
+                this.toggleBaseOnlyCollision(false);
+                callback({
+                    state: executingMsg,
+                    alert_type: "info",
+                });
+                this.moveBaseStatusLastEmitted = GoalStatus.STATUS_EXECUTING;
+            }
+            return;
+        }
 
         if (hasAccepted || hasExecuting || hasCanceling) {
             this.moveBaseStatusSeenActive = true;

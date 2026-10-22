@@ -267,12 +267,17 @@ const AutoNav: React.FC<AutoNavProps> = ({
     // Whether the robot is currently auto-navigating
     const [isCurrentlyMoving, isCurrentlyMovingSet] = useState<boolean>(false);
 
-    // Drive Start/Stop from terminal Nav2 / cancel alerts (not GoalReached flag race).
+    // Drive Start/Stop from terminal Nav2 / cancel alerts or executing alerts.
     useEffect(() => {
         if (!moveBaseState) {
             return;
         }
         const alertType = moveBaseState.alert_type;
+        if (alertType === "info" && moveBaseState.state === "Navigation executing!") {
+            isCurrentlyMovingSet(true);
+            isSelectingGoalSet(false);
+            return;
+        }
         if (
             alertType !== "success" &&
             alertType !== "warning" &&
