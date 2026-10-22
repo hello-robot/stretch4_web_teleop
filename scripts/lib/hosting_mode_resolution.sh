@@ -22,29 +22,55 @@ STATUS_READY=0
 STATUS_NOT_CONFIGURED=2
 STATUS_BROKEN=3
 
-# Read a standing hosting mode out of WEB_TELEOP_HOSTING, the way
-# WEB_TELEOP_BUILD_MODE is read. The process environment wins over .env, which is
-# also the only way to override a standing setting for a single run, since
-# --firebase is additive and has no negating flag:
+# Resolve and export HOSTING_MODE and HOSTING_MODE_SOURCE.
 #
-#   WEB_TELEOP_HOSTING=local ./launch_interface.sh
+# Precedence, lowest to highest (last match wins):
+#   1. default ("local")
+#   2. .env (HOSTING_MODE)
+#   3. process environment (HOSTING_MODE)
+#   4. CLI flag (--hosting local|firebase, --local, -f, --firebase)
 #
-# Echoes local or firebase, or nothing when unset. Returns non-zero on a value
-# that is set but unrecognized -- dual among them, which is no longer a mode --
-# rather than falling through to a default the operator did not ask for.
-function hosting_mode_setting {
-	local raw
-	raw="${WEB_TELEOP_HOSTING:-$(teleop_env_val WEB_TELEOP_HOSTING)}"
-	[ -z "$raw" ] && return 0
-	case "$raw" in
-	local | firebase) echo "$raw" ;;
+# Args:
+#   $1: CLI hosting mode override (optional).
+#   $2: CLI flag label for provenance reporting (optional).
+#
+# Returns 0 when HOSTING_MODE is local or firebase, 1 on an unrecognized value.
+function resolve_hosting_mode {
+	local cli_mode="${1:-}"
+	local cli_flag="${2:-}"
+	local mode="local"
+	local source="default"
+	local dotenv_hosting
+
+	dotenv_hosting="$(teleop_env_val HOSTING_MODE)"
+	if [ -n "$dotenv_hosting" ]; then
+		mode="$dotenv_hosting"
+		source=".env"
+	fi
+
+	if [ -n "${HOSTING_MODE:-}" ]; then
+		mode="$HOSTING_MODE"
+		source="env:HOSTING_MODE"
+	fi
+
+	if [ -n "$cli_mode" ]; then
+		mode="$cli_mode"
+		source="cli: ${cli_flag:---hosting}"
+	fi
+
+	case "$mode" in
+	local | firebase)
+		export HOSTING_MODE="$mode"
+		export HOSTING_MODE_SOURCE="$source"
+		return 0
+		;;
 	dual)
-		echo "WEB_TELEOP_HOSTING=dual is no longer a mode. Use firebase: it serves" >&2
+		echo "HOSTING_MODE=dual is no longer a mode. Use firebase: it serves" >&2
 		echo "the cloud door and the LAN door, and the operator picks one by URL." >&2
 		return 1
 		;;
 	*)
-		echo "WEB_TELEOP_HOSTING must be local or firebase (got '$raw')." >&2
+		echo "HOSTING_MODE must be local or firebase (got '$mode')." >&2
 		return 1
 		;;
 	esac
@@ -92,6 +118,7 @@ function check_firebase_readiness {
 	if ! check_firebase_host_setup; then
 		echo "       Continuing without Hosting preview autodeploy."
 		export WEB_TELEOP_AUTODEPLOY=0
+		export WEB_TELEOP_AUTODEPLOY_SOURCE="preflight (no Firebase CLI credential)"
 	fi
 	firebase_warn_if_daemon_down
 	echo -e "${GREEN}✓ Firebase hosting check passed${NC}"

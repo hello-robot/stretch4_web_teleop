@@ -120,20 +120,22 @@ function endOperatorClipSession() {
     setClipSession(null);
 }
 
-// "Is the cloud door open" is exactly which bundle / serves, so it is read from
-// one variable rather than a second flag that could disagree with it. This is
-// the same test start_robot_browser.js makes.
-const firebaseMode = process.env.WEB_TELEOP_DIST === "dist-firebase";
+// "Is the cloud door open" is read from the canonical HOSTING_MODE ("local" or
+// "firebase"), shared across launch_interface.sh,
+// start_web_server_and_robot_browser.sh, and start_robot_browser.js.
+const HOSTING_MODE = process.env.HOSTING_MODE || "local";
 const localDistDir = path.join(__dirname, "dist");
 const firebaseDistDir = path.join(__dirname, "dist-firebase");
-const reloadDistDirs = firebaseMode
-    ? [localDistDir, firebaseDistDir]
-    : [localDistDir];
+const reloadDistDirs =
+    HOSTING_MODE === "firebase"
+        ? [localDistDir, firebaseDistDir]
+        : [localDistDir];
 // Only needed while both doors are open, to stop a dashboard operator and a LAN
 // operator holding the robot at once. Local-only has a single door to arbitrate.
-const teleopLease = firebaseMode
-    ? require("./scripts/teleopLease").createTeleopLeaseClient(process.env)
-    : null;
+const teleopLease =
+    HOSTING_MODE === "firebase"
+        ? require("./scripts/teleopLease").createTeleopLeaseClient(process.env)
+        : null;
 
 teleopLease?.ready.catch((error) => {
     console.error("Firebase teleop lease login failed:", error.message);
@@ -156,7 +158,7 @@ function cacheHashedVideo(res, filePath) {
 // door the operator actually landed in. Serving a different bundle under one
 // unchanged URL is what previously made it possible to believe you were testing
 // the cloud while driving over the LAN.
-if (!firebaseMode) {
+if (HOSTING_MODE !== "firebase") {
     app.get(/^\/operator(\/.*)?$/, (req, res) => {
         res.redirect(302, "/local/operator/");
     });
@@ -168,9 +170,12 @@ app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }
 // which start_robot_browser.js requires: it loads https://localhost/robot.
 app.use(
     "/",
-    express.static(firebaseMode ? firebaseDistDir : localDistDir, {
-        setHeaders: cacheHashedVideo,
-    }),
+    express.static(
+        HOSTING_MODE === "firebase" ? firebaseDistDir : localDistDir,
+        {
+            setHeaders: cacheHashedVideo,
+        },
+    ),
 );
 
 // Webpack watch rewrites dist/. Tell open home/operator tabs to reload.

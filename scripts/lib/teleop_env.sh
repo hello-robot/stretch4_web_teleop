@@ -16,6 +16,11 @@ function teleop_setup_env {
 	# may have exported it by hand.
 	if [ -f /etc/hello-robot/hello-robot.conf ]; then
 		. /etc/hello-robot/hello-robot.conf
+		export HELLO_FLEET_ID_SOURCE="/etc/hello-robot/hello-robot.conf"
+	elif [ -n "${HELLO_FLEET_ID:-}" ]; then
+		export HELLO_FLEET_ID_SOURCE="${HELLO_FLEET_ID_SOURCE:-env:HELLO_FLEET_ID}"
+	else
+		export HELLO_FLEET_ID_SOURCE="unset"
 	fi
 	export HELLO_FLEET_ID
 	export HELLO_FLEET_PATH="${HELLO_FLEET_PATH:-$HOME/stretch_user}"

@@ -2,14 +2,12 @@
 set -e
 
 REDIRECT_LOGDIR="$HOME/stretch_user/log/web_teleop/stretch4_web_teleop_$(date '+%Y%m%d%H%M')"
-HOSTING_MODE="local"
+HOSTING_MODE="${HOSTING_MODE:-local}"
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)"
-export FEATURE_VOICE_CONTROL_INTERFACE
 
 usage() {
-	echo "Usage: $0 [--hosting local|firebase] [-l logdir] [-o logfile]"
+	echo "Usage: $0 [--hosting [local|firebase]] [-f|--firebase] [--local] [-l logdir] [-o logfile]"
 }
 
 while [ $# -gt 0 ]; do
@@ -17,16 +15,21 @@ while [ $# -gt 0 ]; do
 	--hosting)
 		# Whether the cloud door is opened as well as the LAN one, and so which
 		# bundles to build.
-		#   local     dist/ only; / and /local/ both serve it
+		#   local     dist/ only; / and /local/ both serve it (default)
 		#   firebase  dist-firebase/ at / with dist/ at /local/
-		shift
-		if [ $# -eq 0 ]; then
-			echo "--hosting needs local or firebase."
-			exit 1
+		if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+			shift
+			HOSTING_MODE="$1"
+		else
+			HOSTING_MODE="local"
 		fi
-		HOSTING_MODE="$1"
 		;;
-	--hosting=*) HOSTING_MODE="${1#--hosting=}" ;;
+	--hosting=*)
+		HOSTING_MODE="${1#--hosting=}"
+		HOSTING_MODE="${HOSTING_MODE:-local}"
+		;;
+	-f | --firebase) HOSTING_MODE="firebase" ;;
+	--local) HOSTING_MODE="local" ;;
 	-l)
 		shift
 		if [ $# -gt 0 ] && [ -d "$1" ]; then
@@ -70,6 +73,9 @@ while IFS='=' read -r var value; do
 done < <(node "$REPO_DIR/feature-flags.js" --all)
 echo "flags={$flags}" &>>$REDIRECT_LOGFILE
 
+FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)"
+export FEATURE_VOICE_CONTROL_INTERFACE
+
 # Watch-and-rebuild, or a one-shot production build. Resolved by
 # launch_interface.sh and inherited; defaulted again here so this script
 # still runs when it is called on its own.
@@ -79,7 +85,7 @@ if [[ "$BUILD_MODE" != "development" && "$BUILD_MODE" != "production" ]]; then
 	exit 1
 fi
 if [[ "$HOSTING_MODE" != "local" && "$HOSTING_MODE" != "firebase" ]]; then
-	echo "--hosting must be local or firebase."
+	echo "HOSTING_MODE must be local or firebase."
 	exit 1
 fi
 
@@ -106,7 +112,7 @@ function start_hosting_autodeploy {
 		return 0
 	fi
 	echo "Start hosting preview autodeploy..."
-	cd "$REPO_DIR" && pm2 start -s scripts/firebase_hosting_autodeploy.js --name="firebase_hosting_autodeploy" &>>$REDIRECT_LOGFILE || return 1
+	cd "$REPO_DIR" && pm2 start -s --update-env scripts/firebase_hosting_autodeploy.js --name="firebase_hosting_autodeploy" &>>$REDIRECT_LOGFILE || return 1
 }
 
 # Build the bundles this mode calls for and wait for them to land.
@@ -115,11 +121,9 @@ function start_hosting_autodeploy {
 # it is the door that keeps working when the cloud does not. The cloud bundle is
 # built only when the cloud door was asked for.
 #
-# WEB_TELEOP_DIST is what server.js and start_robot_browser.js read to decide
-# what / serves and which signaling the robot page joins, so it is set here
-# beside the build that produces the matching bundle. There is no longer a
-# separate WEB_TELEOP_DUAL: "is the cloud door open" is exactly
-# WEB_TELEOP_DIST=dist-firebase, which start_robot_browser.js already tested.
+# HOSTING_MODE is what server.js and start_robot_browser.js read to decide
+# what / serves and which signaling the robot page joins, so it is exported here
+# beside the build that produces the matching bundle.
 #
 # Args:
 #   $1: hosting mode: local or firebase.
@@ -130,11 +134,10 @@ function start_hosting_autodeploy {
 function build_and_wait_bundles {
 	local mode="$1"
 
+	export HOSTING_MODE="$mode"
 	if [ "$mode" = "firebase" ]; then
-		export WEB_TELEOP_DIST="dist-firebase"
 		echo "Firebase teleop: cloud door at /operator/, LAN door at /local/operator/."
 	else
-		export WEB_TELEOP_DIST="dist"
 		echo "Local teleop: LAN door at /local/operator/."
 	fi
 
@@ -142,10 +145,10 @@ function build_and_wait_bundles {
 
 	if [ "$BUILD_MODE" = "development" ]; then
 		echo "Start local webpack watcher..."
-		cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_local" -- run localstorage &>>$REDIRECT_LOGFILE || return 1
+		cd "$REPO_DIR" && pm2 start -s --update-env npm --name="stretch4_web_teleop_local" -- run localstorage &>>$REDIRECT_LOGFILE || return 1
 		if [ "$mode" = "firebase" ]; then
 			echo "Start Firebase webpack watcher..."
-			cd "$REPO_DIR" && pm2 start -s npm --name="stretch4_web_teleop_firebase" -- run firebase &>>$REDIRECT_LOGFILE || return 1
+			cd "$REPO_DIR" && pm2 start -s --update-env npm --name="stretch4_web_teleop_firebase" -- run firebase &>>$REDIRECT_LOGFILE || return 1
 		fi
 	else
 		echo "Build local production bundle..."
@@ -202,7 +205,7 @@ if [ "$HOSTING_MODE" = "firebase" ]; then
 fi
 
 echo "Start local server..."
-cd "$REPO_DIR" && pm2 start -s server.js &>>$REDIRECT_LOGFILE
+cd "$REPO_DIR" && pm2 start -s --update-env server.js &>>$REDIRECT_LOGFILE
 
 echo "Start robot browser..."
-cd "$REPO_DIR" && pm2 start -s start_robot_browser.js &>>$REDIRECT_LOGFILE
+cd "$REPO_DIR" && pm2 start -s --update-env start_robot_browser.js &>>$REDIRECT_LOGFILE

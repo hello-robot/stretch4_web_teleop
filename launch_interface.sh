@@ -27,11 +27,12 @@ source "$REPO_DIR/scripts/lib/hosting_mode_resolution.sh"
 # id. Without this it reads whatever the invoking shell happened to export.
 teleop_setup_env
 
-FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
-export FEATURE_VOICE_CONTROL_INTERFACE
-
 MAP=""
-WANT_FIREBASE=0
+MAP_YAML="<none>"
+MAP_YAML_SOURCE="map-less mode"
+CLI_HOSTING=""
+CLI_HOSTING_FLAG=""
+DRY_RUN=0
 
 usage() {
 	cat <<'USAGE'
@@ -40,28 +41,27 @@ Usage: ./launch_interface.sh [options]
 Launch web teleop on this robot.
 
 Options:
-  -f, --firebase    Also serve the operator interface through Firebase Hosting,
-                    so an operator can reach this robot from your own dashboard.
-                    The robot's own server runs either way, and the LAN door at
-                    /local/operator/ is served in both cases; this adds the
-                    cloud door. Firebase must already be set up on this robot --
-                    the launch reports an error rather than quietly serving
-                    local instead.
+  --hosting [mode]  Set hosting mode: local (default) or firebase.
+  -f, --firebase    Shorthand for --hosting firebase. Serve the operator
+                    interface through Firebase Hosting in addition to the LAN
+                    door at /local/operator/. Firebase must already be set up
+                    on this robot -- the launch reports an error rather than
+                    quietly serving local instead.
+  --local           Shorthand for --hosting local. Overrides a standing
+                    HOSTING_MODE=firebase in .env or the environment.
   -m <map.yaml>     Map to load. Ignored when the file does not exist.
+  --dry-run         Validate installation, resolve all configuration and
+                    provenance, run preflights, print the manifest, and exit 0
+                    without touching ROS2 or pm2.
   -h, --help        Show this message.
 
-Without -f the launch is local only, which is the default.
-
-To override a standing WEB_TELEOP_HOSTING=firebase for a single run, set it in
-the environment instead -- there is no negating flag:
-
-  WEB_TELEOP_HOSTING=local ./launch_interface.sh
+Without flags or standing HOSTING_MODE configuration, the launch is local only.
 
 Operator URLs, once the launch finishes:
   https://<host>/local/operator/   the LAN door, over Tailscale or WiFi, in
                                    both modes. Needs no internet.
-  https://<host>/operator/         the cloud door with -f; in local mode it
-                                   redirects to /local/operator/.
+  https://<host>/operator/         the cloud door in firebase mode; in local
+                                   mode it redirects to /local/operator/.
 USAGE
 }
 
@@ -70,7 +70,29 @@ USAGE
 # checkout is no reason to withhold its own usage text.
 while [ $# -gt 0 ]; do
 	case "$1" in
-	-f | --firebase) WANT_FIREBASE=1 ;;
+	-f | --firebase)
+		CLI_HOSTING="firebase"
+		CLI_HOSTING_FLAG="$1"
+		;;
+	--local)
+		CLI_HOSTING="local"
+		CLI_HOSTING_FLAG="--local"
+		;;
+	--hosting)
+		if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+			shift
+			CLI_HOSTING="$1"
+			CLI_HOSTING_FLAG="--hosting $1"
+		else
+			CLI_HOSTING="local"
+			CLI_HOSTING_FLAG="--hosting (default: local)"
+		fi
+		;;
+	--hosting=*)
+		CLI_HOSTING="${1#--hosting=}"
+		CLI_HOSTING="${CLI_HOSTING:-local}"
+		CLI_HOSTING_FLAG="$1"
+		;;
 	-m)
 		shift
 		if [ $# -eq 0 ]; then
@@ -79,7 +101,15 @@ while [ $# -gt 0 ]; do
 		fi
 		if [ -f "$1" ]; then
 			MAP="-m $1"
+			MAP_YAML="$1"
+			MAP_YAML_SOURCE="from cli: -m"
+		else
+			MAP_YAML="<none>"
+			MAP_YAML_SOURCE="cli: -m ($1 not found; map-less mode)"
 		fi
+		;;
+	--dry-run)
+		DRY_RUN=1
 		;;
 	-h | --help)
 		usage
@@ -94,8 +124,20 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-logdir="$(teleop_log_dir)"
-logzip="$logdir/stretch4_web_teleop_logs.zip"
+if [ -n "${WEB_TELEOP_LOG_DIR:-}" ]; then
+	export WEB_TELEOP_LOG_DIR_SOURCE="env:WEB_TELEOP_LOG_DIR"
+else
+	export WEB_TELEOP_LOG_DIR_SOURCE="default"
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+	RESOLVED_LOG_DIR="${WEB_TELEOP_LOG_DIR:-$TELEOP_LOG_ROOT/stretch4_web_teleop_$(date '+%Y%m%d%H%M')}"
+	export RESOLVED_LOG_DIR
+else
+	logdir="$(teleop_log_dir)"
+	export RESOLVED_LOG_DIR="$logdir"
+	logzip="$logdir/stretch4_web_teleop_logs.zip"
+fi
 
 # Print the URLs an operator should visit for the mode that started.
 #
@@ -115,7 +157,7 @@ function print_interface_urls {
 	echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
 	echo ""
 
-	echo -e "${BLUE}Hosting Mode:${NC} $HOSTING_MODE ($INTENT_REASON)"
+	echo -e "${BLUE}Hosting Mode:${NC} $HOSTING_MODE ($HOSTING_MODE_SOURCE)"
 	echo "  Robot: https://localhost/local/operator/"
 	if [ "$mode" = "firebase" ]; then
 		project_id="$(teleop_env_val PUBLIC_FIREBASE_PROJECT_ID)"
@@ -174,74 +216,55 @@ echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
 
 echo "Feature Flags:"
-while IFS='=' read -r var value; do
+while IFS=$'=\t' read -r var value source; do
 	if [[ "$value" -eq 1 ]]; then
-		echo -e "  ${GREEN}$var=$value${NC}"
+		echo -e "  ${GREEN}$var=$value${NC} (from $source)"
 	else
-		echo -e "  ${RED}$var=$value${NC}"
+		echo -e "  ${RED}$var=$value${NC} (from $source)"
 	fi
-done < <(node "$REPO_DIR/feature-flags.js" --all)
+done < <(node "$REPO_DIR/feature-flags.js" --all --sources)
 
 # Certificates included, so this gates every mode. It also runs before the
 # Firebase probe on purpose: that probe reports a missing node_modules as its
 # own "set up and broken" code, which would blame Firebase for a broken install.
-validate_installation || echo_failure_help "$logdir"
-
-# What was asked for, and with it what counts as a failure worth reporting.
-#
-#   ARG_LOCAL     the robot's own server alone. What a launch that names
-#                 nothing gets, so a bare launch never probes Firebase.
-#   ARG_FIREBASE  the cloud door as well as the LAN one. Firebase failing is
-#                 fatal: there is no downgrade to local.
-#
-# Precedence, lowest first: default, WEB_TELEOP_HOSTING, -f/--firebase. The flag
-# is additive, so overriding a standing setting is done from the environment.
-LAUNCH_INTENT="ARG_LOCAL"
-INTENT_REASON="default"
-
-MODE_SETTING="$(hosting_mode_setting)" || exit 1
-case "$MODE_SETTING" in
-local)
-	LAUNCH_INTENT="ARG_LOCAL"
-	INTENT_REASON="WEB_TELEOP_HOSTING"
-	;;
-firebase)
-	LAUNCH_INTENT="ARG_FIREBASE"
-	INTENT_REASON="WEB_TELEOP_HOSTING"
-	;;
-esac
-if [ "$WANT_FIREBASE" = 1 ]; then
-	LAUNCH_INTENT="ARG_FIREBASE"
-	INTENT_REASON="--firebase"
+if [ "$DRY_RUN" -eq 1 ]; then
+	validate_installation || exit 1
+else
+	validate_installation || echo_failure_help "$logdir"
 fi
 
-export WEB_TELEOP_AUTODEPLOY=1
+# Resolve HOSTING_MODE across all layers (default < .env < env < CLI).
+resolve_hosting_mode "$CLI_HOSTING" "$CLI_HOSTING_FLAG" || exit 1
+teleop_resolve_autodeploy
+teleop_resolve_build_mode
 
-# Only ARG_FIREBASE has anything left to check. ARG_LOCAL needs nothing beyond
-# the installation that was just validated.
+# Only HOSTING_MODE=firebase has anything left to check. HOSTING_MODE=local
+# needs nothing beyond the installation that was just validated.
 fb_status=$STATUS_READY
 firebase_error=""
-if [ "$LAUNCH_INTENT" = "ARG_FIREBASE" ]; then
+if [ "$HOSTING_MODE" = "firebase" ]; then
 	check_firebase_readiness
-fi
-
-# Lock HOSTING_MODE. Past this point it is the single source of truth: nothing
-# downstream re-decides it and nothing upstream is consulted again.
-if [ "$LAUNCH_INTENT" = "ARG_FIREBASE" ]; then
 	if [ "$fb_status" -ne "$STATUS_READY" ]; then
 		echo -e "${RED}ERROR${NC} $firebase_error"
 		exit 1
 	fi
-	HOSTING_MODE="firebase"
-else
-	HOSTING_MODE="local"
 fi
+
+export MAP_YAML MAP_YAML_SOURCE
+if [ "$DRY_RUN" -eq 1 ]; then
+	print_launch_manifest
+	exit 0
+fi
+
+print_launch_manifest "$logdir/launch_manifest.txt"
+
+FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
+export FEATURE_VOICE_CONTROL_INTERFACE
 
 # Bring up ROS, then the web server and robot browser. These were a separate
 # launch_teleop_stack.sh for as long as a second front door called it; with the
 # daemon coming through this script too, a spine with one caller was indirection
 # for its own sake.
-teleop_resolve_build_mode
 logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 

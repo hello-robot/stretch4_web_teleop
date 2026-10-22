@@ -11,22 +11,22 @@ flowchart TD
 
     %% ================= 1. ENTRY POINTS =================
     subgraph ENTRY["1. Entry Points"]
-        term(["<b>Terminal</b><br/><code>./launch_interface.sh [-f|--firebase] [-m map.yaml]</code>"]):::entry
+        term(["<b>Terminal</b><br/><code>./launch_interface.sh [--hosting [local|firebase]] [-f|--firebase] [--local] [-m map.yaml] [--dry-run]</code>"]):::entry
         dash(["<b>Firebase Dashboard</b><br/><code>scripts/stretch_firebase_daemon.js</code><br/><code>./launch_interface.sh -f [-m map]</code>"]):::entry
     end
 
     %% ================= 2. HOSTING MODE RESOLUTION =================
-    subgraph RESOLUTION["2. Installation Validation &amp; Hosting Mode Resolution (launch_interface.sh + scripts/lib/hosting_mode_resolution.sh)"]
+    subgraph RESOLUTION["2. Installation Validation &amp; Configuration Resolution (launch_interface.sh + scripts/lib/)"]
 
-        argp["<b>2a. teleop_setup_env(), parse CLI flags, teleop_log_dir()</b><br/>Sets <code>HELLO_FLEET_ID</code>, <code>RMW_IMPLEMENTATION</code> &amp; the ROS overlay<br/>Captures <code>-m</code>, <code>-f / --firebase</code>, and resolves <code>LOGDIR</code>"]:::rule
+        argp["<b>2a. teleop_setup_env(), parse CLI flags, teleop_log_dir()</b><br/>Sets <code>HELLO_FLEET_ID</code> (+ source), <code>RMW_IMPLEMENTATION</code> &amp; ROS overlay<br/>Captures <code>--hosting</code>, <code>-f/--firebase</code>, <code>--local</code>, <code>-m</code>, <code>--dry-run</code><br/>Prints feature flags with provenance (<code>feature-flags.js --all --sources</code>)"]:::rule
 
         vi["<b>2b. validate_installation()</b><br/>Checks <code>.env</code>, <code>node_modules</code>, <code>npm list --depth=0</code>,<br/><code>HELLO_FLEET_ID+6.pem</code> &amp; key, and <code>.env</code> cert/key"]:::rule
 
-        vi_pass["<b>Installation Valid</b><br/>Exports <code>WEB_TELEOP_AUTODEPLOY=1</code><br/>Resolves <code>LAUNCH_INTENT</code> from <code>-f/--firebase</code> &amp; <code>WEB_TELEOP_HOSTING</code>"]:::success
+        vi_pass["<b>Installation Valid</b><br/>Calls <code>resolve_hosting_mode()</code>, <code>teleop_resolve_autodeploy()</code>,<br/>and <code>teleop_resolve_build_mode()</code>"]:::success
 
-        subgraph ARGS["2c. Resolve LAUNCH_INTENT (default=local &lt; WEB_TELEOP_HOSTING &lt; -f / --firebase)"]
-            t_loc["<b>ARG_LOCAL</b><br/>• no flag, no setting (default)<br/>• <code>WEB_TELEOP_HOSTING=local</code>"]
-            t_fire["<b>ARG_FIREBASE</b><br/>• <code>-f, --firebase</code><br/>• <code>WEB_TELEOP_HOSTING=firebase</code>"]
+        subgraph ARGS["2c. resolve_hosting_mode (default=local &lt; .env &lt; env:HOSTING_MODE &lt; CLI)"]
+            t_loc["<b>HOSTING_MODE=local</b><br/>• no flag, no setting (default)<br/>• <code>HOSTING_MODE=local</code> (.env or env)<br/>• <code>--local</code> or <code>--hosting [local]</code>"]
+            t_fire["<b>HOSTING_MODE=firebase</b><br/>• <code>HOSTING_MODE=firebase</code> (.env or env)<br/>• <code>-f, --firebase</code> or <code>--hosting firebase</code>"]
         end
 
         subgraph CHECKS["2d. Readiness Check (scripts/lib/hosting_mode_resolution.sh)"]
@@ -36,19 +36,19 @@ flowchart TD
         end
 
         subgraph RULES["2e. Readiness Outcomes"]
-            r_loc["<b>HOSTING_MODE=local</b><br/>• <code>ARG_LOCAL</code>"]:::success
-            r_fire["<b>HOSTING_MODE=firebase</b><br/>• <code>ARG_FIREBASE</code><br/>  <code>fb_status=0</code>"]:::success
-            r_inv["<b>Invalid Mode / Flag</b><br/>• Unknown CLI flag<br/>• Invalid <code>WEB_TELEOP_HOSTING</code>"]:::rule
-            r_err["<b>Could Not Launch Requested Mode</b><br/>• <code>ARG_FIREBASE</code><br/>  <code>fb_status=2|3</code><br/>• Prints: relaunch without <code>-f</code> for the LAN door alone"]:::rule
+            r_loc["<b>Ready: HOSTING_MODE=local</b><br/>• No Firebase probe needed"]:::success
+            r_fire["<b>Ready: HOSTING_MODE=firebase</b><br/>• <code>fb_status=0</code>"]:::success
+            r_inv["<b>Invalid Mode / Flag</b><br/>• Unknown CLI flag<br/>• Invalid <code>HOSTING_MODE</code>"]:::rule
+            r_err["<b>Could Not Launch Requested Mode</b><br/>• <code>HOSTING_MODE=firebase</code> &amp; <code>fb_status=2|3</code><br/>"]:::rule
         end
 
-            resfail(["<b>Error Output (exit 1)</b><br/>Prints mode error &amp; exits"]):::error
+        resfail(["<b>Error Output (exit 1)</b><br/>Prints mode error &amp; exits"]):::error
 
     end
 
     %% Step 2 Connections
-    r_loc --> env
-    r_fire --> env
+    r_loc --> manifest
+    r_fire --> manifest
     term --> argp
     dash ===> argp
     argp --> vi
@@ -57,7 +57,7 @@ flowchart TD
     vi -.-> fail
 
     vi_pass --> t_loc & t_fire
-    vi_pass -.->|"bad WEB_TELEOP_HOSTING"| r_inv
+    vi_pass -.->|"bad HOSTING_MODE"| r_inv
 
     t_loc --> r_loc
     t_fire --> fp
@@ -70,9 +70,10 @@ flowchart TD
 
     r_inv & r_err -.-> resfail
 
-    %% ================= 3. CORE STACK & ROS 2 =================
-    subgraph CORE["3. Stack Setup &amp; ROS 2 Launch"]
-        env["<b>teleop_resolve_build_mode()</b> (<code>launch_interface.sh</code>)<br/>Resolves <code>WEB_TELEOP_BUILD_MODE</code>"]
+    %% ================= 3. MANIFEST & ROS 2 =================
+    subgraph CORE["3. Launch Manifest &amp; ROS 2 Launch"]
+        manifest["<b>print_launch_manifest()</b> (<code>scripts/lib/teleop_config.sh</code>)<br/>Prints resolved config + provenance &amp; writes <code>launch_manifest.txt</code><br/>(Exits 0 here if <code>--dry-run</code>)"]
+        dry(["<b>Dry-Run Complete (exit 0)</b>"]):::success
 
         subgraph ROS2["start_ros2.sh"]
             stop["<b>stop_interface.sh</b><br/>Tears down any previous stack"]
@@ -80,18 +81,18 @@ flowchart TD
         end
     end
 
-
-    env --> stop --> ros
+    manifest -.->|"--dry-run"| dry
+    manifest --> stop --> ros
 
     %% ================= 4. WEB SERVER & BUNDLES =================
     subgraph WEB["4. Web Server &amp; Robot Browser (start_web_server_and_robot_browser.sh)"]
-        bld["<b>build_and_wait_bundles(HOSTING_MODE)</b><br/><code>clear_bundles()</code> first, then builds:<br/>• <code>local</code>: <code>npm run localstorage</code> → <code>dist/</code> (<code>WEB_TELEOP_DIST=dist</code>)<br/>• <code>firebase</code>: builds <code>dist/</code> + <code>dist-firebase/</code> (<code>WEB_TELEOP_DIST=dist-firebase</code>)<br/>Verifies via <code>scripts/waitForBundles.js</code>"]
+        bld["<b>build_and_wait_bundles(HOSTING_MODE)</b><br/>Exports <code>HOSTING_MODE</code>, runs <code>clear_bundles()</code>, then builds:<br/>• <code>local</code>: <code>npm run localstorage</code> → <code>dist/</code><br/>• <code>firebase</code>: builds <code>dist/</code> + <code>dist-firebase/</code><br/>Verifies via <code>scripts/waitForBundles.js</code>"]
 
         bfail["<b>Bundle Build Failed</b><br/>Calls <code>stop_cloud_mode()</code>: <code>pm2 delete</code> &amp; <code>clear_bundles()</code>"]:::error
 
-        subgraph PM2["Start PM2 Services (Branches by HOSTING_MODE)"]
-            pm2_loc["<b>PM2: Local Mode (<code>HOSTING_MODE=local</code>)</b><br/>• <code>pm2 start server.js</code> (<code>WEB_TELEOP_DIST=dist</code>)<br/>• <code>pm2 start start_robot_browser.js</code> (<code>dist/robot</code>: <code>LocalSignaling</code>)"]:::success
-            pm2_fire["<b>PM2: Firebase Mode (<code>HOSTING_MODE=firebase</code>)</b><br/>• <code>start_hosting_autodeploy()</code>: if <code>WEB_TELEOP_AUTODEPLOY!=0</code>,<br/>runs <code>pm2 start scripts/firebase_hosting_autodeploy.js</code><br/>• <code>pm2 start server.js</code> (<code>WEB_TELEOP_DIST=dist-firebase</code>)<br/>• <code>pm2 start start_robot_browser.js</code> (<code>dist-firebase/robot</code>: <code>TeleopSignalingCoordinator</code>)"]:::success
+        subgraph PM2["Start PM2 Services (--update-env, Branches by HOSTING_MODE)"]
+            pm2_loc["<b>PM2: Local Mode (<code>HOSTING_MODE=local</code>)</b><br/>• <code>pm2 start -s --update-env server.js</code><br/>• <code>pm2 start -s --update-env start_robot_browser.js</code> (<code>dist/robot</code>: <code>LocalSignaling</code>)"]:::success
+            pm2_fire["<b>PM2: Firebase Mode (<code>HOSTING_MODE=firebase</code>)</b><br/>• <code>start_hosting_autodeploy()</code>: if <code>WEB_TELEOP_AUTODEPLOY!=0</code>,<br/>runs <code>pm2 start -s --update-env scripts/firebase_hosting_autodeploy.js</code><br/>• <code>pm2 start -s --update-env server.js</code><br/>• <code>pm2 start -s --update-env start_robot_browser.js</code> (<code>dist-firebase/robot</code>: <code>TeleopSignalingCoordinator</code>)"]:::success
         end
     end
 
@@ -117,7 +118,7 @@ flowchart TD
         dfail(["<b>Daemon Launch Failed</b><br/><code>stretch_firebase_daemon.js</code> reports<br/>non-zero exit from <code>launch_interface.sh</code>"]):::error
     end
 
-    ros -.->|"zenoh or ROS ERROR"| fail
+    ros -.->|"zenoh or ROS error"| fail
     bfail -.-> fail
     resfail -.->|"if spawned by daemon"| dfail
     fail -.->|"if spawned by daemon"| dfail

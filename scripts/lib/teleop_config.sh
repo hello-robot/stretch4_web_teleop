@@ -14,24 +14,50 @@ TELEOP_LOG_ROOT="$HOME/stretch_user/log/web_teleop"
 : "${BLUE:=\033[0;34m}"
 : "${NC:=\033[0m}"
 
-# Read one key out of .env.
+# Read one key out of .env, stripping optional export prefix, whitespace, and
+# matching outer quotes so Bash lookups match Node's dotenv and readEnvFile.
 #
 # Args:
 #   $1: key name.
 #
 # Echoes the value, or nothing when the key or the file is missing.
 function teleop_env_val {
-	grep -m1 "^$1=" "$TELEOP_ENV_FILE" 2>/dev/null | cut -d= -f2-
+	sed -nE "/^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=/ { s/^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=[[:space:]]*//; s/[[:space:]]+$//; s/^\"(.*)\"$/\1/; s/^'(.*)'$/\1/; p; q; }" "$TELEOP_ENV_FILE" 2>/dev/null
 }
 
-# Resolve and export WEB_TELEOP_BUILD_MODE. The process environment wins over
-# .env so one launch can be overridden without editing the file. Defaults to
-# development.
+# Resolve and export WEB_TELEOP_BUILD_MODE and WEB_TELEOP_BUILD_MODE_SOURCE.
+# The process environment wins over .env so one launch can be overridden without
+# editing the file. Defaults to development.
 function teleop_resolve_build_mode {
-	if [ -z "$WEB_TELEOP_BUILD_MODE" ]; then
+	if [ -n "${WEB_TELEOP_BUILD_MODE:-}" ]; then
+		export WEB_TELEOP_BUILD_MODE_SOURCE="${WEB_TELEOP_BUILD_MODE_SOURCE:-env:WEB_TELEOP_BUILD_MODE}"
+	else
 		WEB_TELEOP_BUILD_MODE="$(teleop_env_val WEB_TELEOP_BUILD_MODE)"
+		if [ -n "$WEB_TELEOP_BUILD_MODE" ]; then
+			export WEB_TELEOP_BUILD_MODE_SOURCE=".env"
+		else
+			WEB_TELEOP_BUILD_MODE="development"
+			export WEB_TELEOP_BUILD_MODE_SOURCE="default"
+		fi
 	fi
-	export WEB_TELEOP_BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
+	export WEB_TELEOP_BUILD_MODE
+}
+
+# Resolve and export WEB_TELEOP_AUTODEPLOY and WEB_TELEOP_AUTODEPLOY_SOURCE.
+# Respects caller environment and .env before defaulting to 1.
+function teleop_resolve_autodeploy {
+	if [ -n "${WEB_TELEOP_AUTODEPLOY:-}" ]; then
+		export WEB_TELEOP_AUTODEPLOY_SOURCE="${WEB_TELEOP_AUTODEPLOY_SOURCE:-env:WEB_TELEOP_AUTODEPLOY}"
+	else
+		WEB_TELEOP_AUTODEPLOY="$(teleop_env_val WEB_TELEOP_AUTODEPLOY)"
+		if [ -n "$WEB_TELEOP_AUTODEPLOY" ]; then
+			export WEB_TELEOP_AUTODEPLOY_SOURCE=".env"
+		else
+			WEB_TELEOP_AUTODEPLOY="1"
+			export WEB_TELEOP_AUTODEPLOY_SOURCE="default"
+		fi
+	fi
+	export WEB_TELEOP_AUTODEPLOY
 }
 
 # Resolve this run's log directory, create it, and repoint latest_run at it.
@@ -53,6 +79,43 @@ function teleop_log_dir {
 	mkdir -p "$dir"
 	ln -sfn "$dir" "$TELEOP_LOG_ROOT/latest_run"
 	echo "$dir"
+}
+
+# Print the resolved launch configuration with provenance, and optionally write
+# a plain-text copy to a manifest file inside the run's log directory.
+#
+# Args:
+#   $1: optional path to write the plain-text manifest file.
+function print_launch_manifest {
+	local manifest_file="${1:-}"
+	local manifest_text
+
+	manifest_text="$(
+		cat <<EOF
+Resolved Launch Configuration:
+  HOSTING_MODE          = ${HOSTING_MODE:-local} (from ${HOSTING_MODE_SOURCE:-default})
+  WEB_TELEOP_BUILD_MODE = ${WEB_TELEOP_BUILD_MODE:-development} (from ${WEB_TELEOP_BUILD_MODE_SOURCE:-default})
+  WEB_TELEOP_AUTODEPLOY = ${WEB_TELEOP_AUTODEPLOY:-1} (from ${WEB_TELEOP_AUTODEPLOY_SOURCE:-default})
+  HELLO_FLEET_ID        = ${HELLO_FLEET_ID:-<unset>} (from ${HELLO_FLEET_ID_SOURCE:-unset})
+  MAP_YAML              = ${MAP_YAML:-<none>} (${MAP_YAML_SOURCE:-map-less mode})
+  WEB_TELEOP_LOG_DIR    = ${RESOLVED_LOG_DIR:-<unset>} (from ${WEB_TELEOP_LOG_DIR_SOURCE:-default})
+EOF
+	)"
+
+	echo ""
+	echo "$manifest_text"
+	echo ""
+
+	if [ -n "$manifest_file" ]; then
+		{
+			echo "$manifest_text"
+			echo ""
+			echo "Feature Flags:"
+			while IFS=$'=\t' read -r var value source; do
+				echo "  $var = $value (from $source)"
+			done < <(node "$TELEOP_REPO_DIR/feature-flags.js" --all --sources)
+		} >"$manifest_file"
+	fi
 }
 
 # Whether this robot's web teleop installation can serve at all.

@@ -15,16 +15,16 @@ if (process.argv.length > 2) {
 const fleetId = process.env.HELLO_FLEET_ID || "unknown";
 const roboUser = process.env.ROBOT_USERNAME || "";
 const roboPass = process.env.ROBOT_PASSWORD || "";
-const isFirebaseMode = process.env.WEB_TELEOP_DIST === "dist-firebase";
+const HOSTING_MODE = process.env.HOSTING_MODE || "local";
 const urlParams = `?fleet_id=${encodeURIComponent(fleetId)}`;
 
 if (
-    isFirebaseMode &&
+    HOSTING_MODE === "firebase" &&
     !["localhost", "127.0.0.1", "::1", "[::1]"].includes(robotHostname)
 ) {
     throw new Error("Firebase robot credentials may only be injected on loopback");
 }
-if (isFirebaseMode && (!roboUser || !roboPass)) {
+if (HOSTING_MODE === "firebase" && (!roboUser || !roboPass)) {
     throw new Error("Missing robot Firebase credentials");
 }
 
@@ -95,7 +95,7 @@ const listenConsole = async (page) => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true }); // avoid ERR_CERT_COMMON_NAME_INVALID
     // The robot account is available only inside this trusted local Playwright
     // context. It never enters webpack definitions, URLs, or HTTP logs.
-    if (isFirebaseMode) {
+    if (HOSTING_MODE === "firebase") {
         await context.addInitScript(
             ({ username, password }) => {
                 Object.defineProperty(window, "__STRETCH_ROBOT_FIREBASE_AUTH__", {

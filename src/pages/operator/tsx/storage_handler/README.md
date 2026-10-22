@@ -356,19 +356,21 @@ staging Firebase project before running either of those against the project your
 
 `src/pages/home` is the dashboard; `src/pages/operator` is the teleop interface.
 
-On an onboarded robot a plain launch runs both the local and the Firebase webpack watchers, because
-`dual` is the default hosting mode:
+On an onboarded robot, pass `-f` / `--firebase` (or set `HOSTING_MODE=firebase` in `.env`) to run both
+the local and the Firebase webpack watchers:
 
 ```bash
-./launch_interface.sh
+./launch_interface.sh -f
 ```
 
-The no-login local operator stays at `https://<robot_ip>/operator`, and the Firebase build is published
-to a preview channel for the current checkout. Both URLs connect to the same robot browser and share one
-operator seat, so opening one blocks the other until teleoperation ends.
+The no-login local operator stays at `https://<robot_ip>/local/operator/`, and the Firebase build is
+served at `https://<robot_ip>/operator/` and published to a preview channel for the current checkout.
+Both URLs connect to the same robot browser and share one operator seat, so opening one blocks the
+other until teleoperation ends.
 
-Use `-f` for the Firebase build alone, or `-L` for local only. See
-[Primer: Launching the Interface](../../../../primer_launch.md) for the full set of hosting modes.
+Without `-f` (or `HOSTING_MODE=firebase`), `./launch_interface.sh` defaults to `local` only. Use
+`--local` (or `--hosting local`) to override a standing `HOSTING_MODE=firebase` for a single local-only
+run. See [Primer: Launching the Interface](../../../../primer_launch.md) for the full resolution rules.
 
 To publish a one-off build to the preview channel:
 
