@@ -146,7 +146,7 @@ PM2 outputs logs to `~/.pm2/logs`. You can configure log rotation using [pm2-log
 
 ```bash
 pm2 install pm2-logrotate
-pm2 set pm2-logrotate:max_size 10M # Clamps directory size to 10M
+pm2 set pm2-logrotate:max_size 10M # Clamps each log file to 10M
 ```
 
 The `pm2 flush` command is also available but will delete every log file in `~/.pm2/logs`.
