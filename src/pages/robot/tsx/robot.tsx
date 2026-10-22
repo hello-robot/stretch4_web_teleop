@@ -168,6 +168,7 @@ export class Robot extends React.Component {
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
+    private shutdownService?: Service;
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
@@ -391,6 +392,7 @@ export class Robot extends React.Component {
         // this.subscribeToMapTF();
         this.createHomeTheRobotService();
         this.createSeedLocalizationService();
+        this.createShutdownService();
         this.initStretchParams();
 
         return Promise.resolve();
@@ -1028,6 +1030,14 @@ export class Robot extends React.Component {
         });
     }
 
+    createShutdownService() {
+        this.shutdownService = new Service({
+            ros: this.ros,
+            name: "/system/shutdown",
+            serviceType: "std_srvs/Trigger",
+        });
+    }
+
     createExpandedGripperService() {
         this.setExpandedGripperService = new Service({
             ros: this.ros,
@@ -1277,6 +1287,22 @@ export class Robot extends React.Component {
             request,
             (response: { success: boolean; message: string }) => {
                 console.log("Seed localization complete", response);
+                resultCallback?.(response);
+            }
+        );
+    }
+
+    /**
+     * Ask the robot to shut down via /system/shutdown (std_srvs/Trigger).
+     */
+    shutdown(
+        resultCallback?: (result: { success: boolean; message: string }) => void
+    ) {
+        var request = {};
+        this.shutdownService!.callService(
+            request,
+            (response: { success: boolean; message: string }) => {
+                console.log("Shutdown complete", response);
                 resultCallback?.(response);
             }
         );

@@ -68,4 +68,7 @@ cd "$HOME/ament_ws/src/stretch4_web_teleop"
 echo "Logging to $logfile_node"
 ./start_web_server_and_robot_browser.sh -l $logdir -f &>>"$logfile_node"
 
+echo "Configure shutdown permissions..."
+./configure_shutdown_permissions.sh || true
+
 echo -e "${GREEN}✓ Onboard launch completed successfully!${NC}"
