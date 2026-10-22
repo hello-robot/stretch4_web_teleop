@@ -40,9 +40,9 @@ Choosing hosts is only half of what a launch decides. The other half is what cou
 The entire stack uses one canonical identifier, `HOSTING_MODE` (`local` or `firebase`), from `.env` and `launch_interface.sh` through `start_web_server_and_robot_browser.sh`, `server.js`, and `start_robot_browser.js`. `resolve_hosting_mode` in `scripts/lib/hosting_mode_resolution.sh` resolves `HOSTING_MODE` and records its provenance in `HOSTING_MODE_SOURCE` across four precedence layers (lowest to highest; last match wins):
 
 1. **Default**: `local` (`HOSTING_MODE_SOURCE="default"`)
-2. **`.env`**: `HOSTING_MODE=local|firebase` (`HOSTING_MODE_SOURCE=".env"`)
-3. **Process environment**: `HOSTING_MODE=local|firebase` (`HOSTING_MODE_SOURCE="env:HOSTING_MODE"`)
-4. **CLI flags**: `--hosting [local|firebase]`, `--local`, or `-f` / `--firebase` (`HOSTING_MODE_SOURCE="cli: ..."`)
+1. **`.env`**: `HOSTING_MODE=local|firebase` (`HOSTING_MODE_SOURCE=".env"`)
+1. **Process environment**: `HOSTING_MODE=local|firebase` (`HOSTING_MODE_SOURCE="env:HOSTING_MODE"`)
+1. **CLI flags**: `--hosting [local|firebase]`, `--local`, or `-f` / `--firebase` (`HOSTING_MODE_SOURCE="cli: ..."`)
 
 **Local is the default**: a launch that names nothing asks for the LAN door and nothing else. Passing `--hosting` without a mode argument (or `--hosting=`) also defaults to `local`.
 
