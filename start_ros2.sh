@@ -33,6 +33,12 @@ echo "-m $MAP_ARG" &>>$REDIRECT_LOGFILE
 
 echo ""
 echo "Setup environment..."
+if [ -n "$VIRTUAL_ENV" ]; then
+	unset VIRTUAL_ENV
+fi
+unset PYTHONHOME
+# Strip any virtualenv bin directories from PATH
+export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v -E '/(\.?[a-zA-Z0-9_-]*venv|env)/bin' | paste -sd:)
 export PATH="$HOME/.local/bin:$PATH"
 . /etc/hello-robot/hello-robot.conf
 export HELLO_FLEET_ID HELLO_FLEET_ID
@@ -51,7 +57,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger &>>$REDIRECT_LOGFILE
 echo "Check rmw_zenohd..."
 if ! pgrep -x rmw_zenohd >/dev/null; then
 	echo "rmw_zenohd not running, starting it..."
-	screen -dm -S "rmw_zenohd" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $REDIRECT_LOGDIR/rmw_zenohd.txt"
+	screen -dm -S "rmw_zenohd" bash -c "unset VIRTUAL_ENV PYTHONHOME && export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $REDIRECT_LOGDIR/rmw_zenohd.txt"
 	sleep 2
 	if ! pgrep -x rmw_zenohd >/dev/null; then
 		echo "ERROR: Failed to start rmw_zenohd. See logs: $REDIRECT_LOGDIR/rmw_zenohd.txt"
@@ -72,7 +78,7 @@ export FEATURE_EE_VELOCITY_LIMITER
 LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
 echo "Start ROS2..."
 echo "ROS2 launch output: $LAUNCH_LOGFILE"
-screen -dm -S "web_teleop_ros" bash -c "export RMW_IMPLEMENTATION=rmw_zenoh_cpp && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
+screen -dm -S "web_teleop_ros" bash -c "unset VIRTUAL_ENV PYTHONHOME && export PATH=\$(echo \"\$PATH\" | tr ':' '\n' | grep -v -E '/(\.?[a-zA-Z0-9_-]*venv|env)/bin' | paste -sd:) && export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
 sleep 8
 
 # Check if the launch log contains any errors
