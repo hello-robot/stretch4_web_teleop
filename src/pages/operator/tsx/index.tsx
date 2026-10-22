@@ -529,7 +529,7 @@ function createBootScreen(label: string): HTMLDivElement {
     dashboard.setAttribute("aria-label", "Dashboard");
     dashboard.addEventListener("click", (event) => {
         event.preventDefault();
-        history.back();
+        window.history.back();
     });
     const icon = document.createElement("span");
     icon.className = "boot-screen__dashboard-icon";
