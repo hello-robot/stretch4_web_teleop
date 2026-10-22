@@ -52,6 +52,14 @@ if [[ "$BUILD_MODE" != "development" && "$BUILD_MODE" != "production" ]]; then
 	exit 1
 fi
 
+# Ensure PM2 log rotation is active so log files cannot grow indefinitely
+if command -v pm2 &>/dev/null && ! pm2 describe pm2-logrotate &>/dev/null; then
+	echo "Configuring PM2 log rotation..." &>>$REDIRECT_LOGFILE
+	pm2 install pm2-logrotate &>>$REDIRECT_LOGFILE
+	pm2 set pm2-logrotate:max_size 10M &>>$REDIRECT_LOGFILE
+	pm2 set pm2-logrotate:retain 5 &>>$REDIRECT_LOGFILE
+fi
+
 export NODE_EXTRA_CA_CERTS="$REPO_DIR/certificates/rootCA.pem"
 if [ "$STORAGE" = "firebase" ]; then
 	export WEB_TELEOP_DIST="dist-firebase"
