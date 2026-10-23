@@ -89,6 +89,7 @@ export interface SignallingMessage {
 export type WebRTCMessage =
     | ValidJointStateMessage
     | OccupancyGridMessage
+    | OccupancyGridUnavailableMessage
     | MapPoseMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
@@ -199,6 +200,11 @@ export interface ActionStatusList {
 export interface OccupancyGridMessage {
     type: "occupancyGrid";
     message: ROSOccupancyGrid;
+}
+
+/** Robot -> operator: /map_server/map is missing or returned an empty grid. */
+export interface OccupancyGridUnavailableMessage {
+    type: "occupancyGridUnavailable";
 }
 
 export interface MapPoseMessage {

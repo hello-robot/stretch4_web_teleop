@@ -74,35 +74,42 @@ export function isOccupancyGridReady(): boolean {
     return isOccupancyGridComplete(occupancyGrid);
 }
 
-type OccupancyGridReadyListener = () => void;
-const occupancyGridReadyListeners = new Set<OccupancyGridReadyListener>();
+export type OccupancyGridStatus = "loading" | "ready" | "unavailable";
 
-function notifyOccupancyGridReady() {
-    occupancyGridReadyListeners.forEach((listener) => {
+let occupancyGridStatus: OccupancyGridStatus = "loading";
+type OccupancyGridStatusListener = (status: OccupancyGridStatus) => void;
+const occupancyGridStatusListeners = new Set<OccupancyGridStatusListener>();
+
+export function getOccupancyGridStatus(): OccupancyGridStatus {
+    return occupancyGridStatus;
+}
+
+function setOccupancyGridStatus(status: OccupancyGridStatus) {
+    if (occupancyGridStatus === status) return;
+    occupancyGridStatus = status;
+    occupancyGridStatusListeners.forEach((listener) => {
         try {
-            listener();
+            listener(status);
         } catch (err) {
-            console.warn("occupancyGridReady listener failed:", err);
+            console.warn("occupancyGridStatus listener failed:", err);
         }
     });
 }
 
-/** Subscribe to full map reassembly. Fires immediately if already ready. */
-export function subscribeOccupancyGridReady(
-    callback: OccupancyGridReadyListener,
+/** Subscribe to map load status. Fires immediately with the current status. */
+export function subscribeOccupancyGridStatus(
+    callback: OccupancyGridStatusListener,
 ): () => void {
-    occupancyGridReadyListeners.add(callback);
-    if (isOccupancyGridReady()) {
-        callback();
-    }
+    occupancyGridStatusListeners.add(callback);
+    callback(occupancyGridStatus);
     return () => {
-        occupancyGridReadyListeners.delete(callback);
+        occupancyGridStatusListeners.delete(callback);
     };
 }
 
 function resetOccupancyGrid() {
     occupancyGrid = undefined;
-    occupancyGridReadyListeners.clear();
+    setOccupancyGridStatus("loading");
 }
 
 type ToolMetadataListener = (toolMetadata: ToolMetadata) => void;
@@ -327,9 +334,15 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
                     message.message.data
                 );
             }
-            // Map has loaded successfully
-            if (isOccupancyGridComplete(occupancyGrid)) {
-                notifyOccupancyGridReady();
+            if (isOccupancyGridReady()) {
+                setOccupancyGridStatus("ready");
+            } else if (occupancyGridStatus === "unavailable") {
+                setOccupancyGridStatus("loading");
+            }
+            break;
+        case "occupancyGridUnavailable":
+            if (!isOccupancyGridReady()) {
+                setOccupancyGridStatus("unavailable");
             }
             break;
         case "amclPose":
