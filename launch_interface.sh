@@ -217,6 +217,9 @@ if [ $? -ne 0 ]; then
 	echo_failure_help
 fi
 
+cd $HOME/ament_ws/src/stretch4_web_teleop
+./configure_audio.sh
+
 # echo ""
 cd $HOME/ament_ws/src/stretch4_web_teleop
 ./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE |& tee -a $logfile_node
