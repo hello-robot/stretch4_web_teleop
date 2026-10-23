@@ -10,25 +10,22 @@ import {
     Topic,
     Transform,
 } from "roslib";
+import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
     getPlaybackJointVelocities,
     getPlaybackJointVelocity,
+    GRIPPER_INCREMENT_RANGE_FRACTION,
+    JOINT_VELOCITY_HEARTBEAT_MS,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    JointVelocityLimits,
-    SPEED_PROFILES,
-    SpeedProfile,
-    updateJointVelocities,
     updateJointIncrements,
-    JOINT_VELOCITY_HEARTBEAT_MS,
-    GRIPPER_INCREMENT_RANGE_FRACTION,
     ValidJoints,
     VideoProps,
 } from "shared/util";
@@ -161,7 +158,6 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-    private jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam?: Param;
     private toolIsActuatedParam?: Param;
@@ -171,7 +167,6 @@ export class Robot extends React.Component {
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
-    private jointVelocityLimits: JointVelocityLimits = {};
 
     constructor(props: {
         jointStateCallback: (
@@ -190,7 +185,6 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-        jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -216,7 +210,6 @@ export class Robot extends React.Component {
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
         this.leaseStatusCallback = props.leaseStatusCallback;
-        this.jointVelocityLimitsCallback = props.jointVelocityLimitsCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -650,34 +643,6 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
-
-        // Gripper velocity for each speed profile; its units depend on the attached tool
-        const JOINT_VELOCITY_PARAM_PREFIXES: Record<SpeedProfile, string> = {
-            slow: "joint_velocity.slow",
-            medium: "joint_velocity",
-            fast: "joint_velocity.fast",
-        };
-        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
-            gripper_joint: "gripper",
-        };
-        for (const profile of SPEED_PROFILES) {
-            const prefix = JOINT_VELOCITY_PARAM_PREFIXES[profile];
-            for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
-                new Param({
-                    ros: this.ros,
-                    name: `/stretch_driver:${prefix}.${paramKey}`,
-                }).get((value: number) => {
-                    if (typeof value === "number" && value > 0) {
-                        this.jointVelocityLimits[profile] = {
-                            ...this.jointVelocityLimits[profile],
-                            [rosJointName]: value,
-                        };
-                        updateJointVelocities({ [profile]: { [rosJointName]: value } });
-                        this.getJointVelocityLimits();
-                    }
-                });
-            }
-        }
     }
 
     isToolActuated(): boolean {
@@ -691,18 +656,6 @@ export class Robot extends React.Component {
         await this.stretchParamsReady;
         if (this.stretchToolCallback)
             this.stretchToolCallback(this.stretchToolName);
-    }
-
-    /**
-     * Returns the joint velocity limits fetched so far from ROS params, on
-     * demand. This lets a newly (re)connected operator pull the current
-     * values instead of relying solely on the one-time push that fires when
-     * each param resolves, which can be missed if it happens before the
-     * operator's WebRTC data channel is open.
-     */
-    getJointVelocityLimits() {
-        if (this.jointVelocityLimitsCallback)
-            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
     }
 
     getOccupancyGrid() {

@@ -2,9 +2,9 @@ import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
 import {
-    JOINT_VELOCITIES,
+    DEFAULT_JOINT_VELOCITIES,
     JOINT_VELOCITY_HEARTBEAT_MS,
-    PROFILE_JOINT_VELOCITIES,
+    PROFILE_SCALES,
     RobotPose,
     SpeedProfile,
     ValidJoints,
@@ -72,15 +72,21 @@ export abstract class FunctionProvider {
     }
 
     /**
+     * Multiplier for the current speed setting. Velocities and jog increments share it, so a
+     * speed profile changes a step action and a held action by the same proportion.
+     */
+    static get profileScale(): number {
+        return PROFILE_SCALES[this.speedProfile];
+    }
+
+    /**
      * Velocity of a joint at the current speed setting, in URDF units/s: the joint's
-     * PROFILE_JOINT_VELOCITIES entry if it has one, otherwise JOINT_VELOCITIES times the velocity
-     * scale. Undefined if the joint has neither.
+     * DEFAULT_JOINT_VELOCITIES entry scaled by PROFILE_SCALES. Undefined if the joint has no
+     * entry.
      */
     static jointVelocity(jointName: ValidJoints): number | undefined {
-        const profileVelocity = PROFILE_JOINT_VELOCITIES[this.speedProfile][jointName];
-        if (profileVelocity !== undefined) return profileVelocity;
-        const velocity = JOINT_VELOCITIES[jointName];
-        return velocity === undefined ? undefined : velocity * this.velocityScale;
+        const velocity = DEFAULT_JOINT_VELOCITIES[jointName];
+        return velocity === undefined ? undefined : velocity * this.profileScale;
     }
 
     /**

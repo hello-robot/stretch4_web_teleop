@@ -14,12 +14,10 @@ import {
 } from "shared/signaling/operatorSeat";
 import {
     delay,
-    JointVelocityLimitsMessage,
     parseToolMetadata,
     RemoteStream,
     ROSOccupancyGrid,
     ToolMetadata,
-    updateJointVelocities,
     waitUntil,
     WebRTCMessage
 } from "shared/util";
@@ -376,9 +374,6 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "voiceToken":
             resolveVoiceToken(message);
             break;
-        case "jointVelocityLimits":
-            updateJointVelocities((message as JointVelocityLimitsMessage).jointVelocities);
-            break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
     }
@@ -413,7 +408,6 @@ function configureRemoteRobot() {
     // @flag voice_control_interface
     remoteRobot.getVoiceCapability();
     configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
-    remoteRobot.getJointVelocity("getJointVelocity");
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(

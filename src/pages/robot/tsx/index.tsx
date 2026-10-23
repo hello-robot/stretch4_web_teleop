@@ -15,9 +15,7 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
-    JointVelocityLimits,
     LeaseStatusMessage,
-    JointVelocityLimitsMessage,
     MapPoseMessage,
     ModeMessage,
     navigationProps,
@@ -55,7 +53,6 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
-    jointVelocityLimitsCallback: forwardJointVelocityLimits,
 });
 
 export let connection: WebRTCConnection;
@@ -230,15 +227,6 @@ async function forwardVoiceToken() {
     } catch (err) {
         reply({ error: err instanceof Error ? err.message : String(err) });
     }
-}
-
-function forwardJointVelocityLimits(limits: JointVelocityLimits) {
-    if (!connection) throw "WebRTC connection undefined!";
-
-    connection.sendData({
-        type: "jointVelocityLimits",
-        jointVelocities: limits,
-    } as JointVelocityLimitsMessage);
 }
 
 function forwardJointStates(
@@ -419,9 +407,6 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "getStretchTool":
             robot.getStretchTool();
-            break;
-        case "getJointVelocity":
-            robot.getJointVelocityLimits();
             break;
         case "homeTheRobot":
             robot.homeTheRobot();
