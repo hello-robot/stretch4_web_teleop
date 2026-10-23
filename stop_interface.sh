@@ -1,19 +1,17 @@
 #!/bin/bash
 
 # Usage: ./stop_interface.sh
-# TODO: The below command(s) sometimes doesn't fully terminate
-# the realsense_ros nodes. Then, when we re-launch the web interface,
-# realsense_ros fails to connect, and moving forward it can't
-# find the D435 until we power cycle the robot. The face that
-# power-cycling is necessary is a bug (e.g., with realsense code),
-# but this would not arise if this script properly terminates
-# realsense nodes.
-screen -S "web_teleop_ros" -X stuff '^C'
-screen -S "rmw_zenohd" -X stuff '^C'
-t1=$?
+# Tear down a running web teleop stack: the ROS screens, the middleware, and
+# the pm2 processes. Safe to run when nothing is up, and safe to run as an
+# unprivileged user -- the daemon reaches this through start_ros2.sh.
+screen -S "web_teleop_ros" -X stuff '^C' 2>/dev/null || true
+screen -S "rmw_zenohd" -X stuff '^C' 2>/dev/null || true
 sleep 3
-if [[ $t1 -ne 0 ]]; then
-	echo "Using pkill"
-	sudo pkill screen
-fi
-pm2 kill
+
+# Whatever ignored the interrupt, or was started outside a screen. Scoped to
+# this user, so it needs no sudo and cannot touch anyone else's processes.
+pkill -u "$USER" -f web_interface.launch.py 2>/dev/null || true
+pkill -u "$USER" -f rmw_zenohd 2>/dev/null || true
+
+pm2 kill 2>/dev/null || true
+exit 0

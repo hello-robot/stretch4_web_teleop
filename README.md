@@ -25,12 +25,12 @@ Next, launch the interface:
 In the terminal, you will see output similar to:
 
 ```
-Visit the URL(s) below to see the web interface:
-https://localhost/operator
-https://192.168.1.14/operator
+Hosting Mode: local (default)
+  Robot: https://localhost/local/operator/
+  WiFi: https://192.168.1.14/local/operator/
 ```
 
-Look for a URL like `https://<ip_address>/operator`. Visit this URL in a web browser on your personal laptop or desktop to see the web interface. Ensure your personal computer is connected to the same network as Stretch. You might see a warning that says "Your connection is not private". If you do, click `Advanced` and `Proceed`.
+Look for a URL like `https://<ip_address>/local/operator/`. Visit this URL in a web browser on your personal laptop or desktop to see the web interface (`https://<ip_address>/operator/` also redirects to `/local/operator/` in local mode). Ensure your personal computer is connected to the same network as Stretch. You might see a warning that says "Your connection is not private". If you do, click `Advanced` and `Proceed`.
 
 Once you're done with the interface, close the browser and run:
 
@@ -42,7 +42,9 @@ Once you're done with the interface, close the browser and run:
 
 ## Firebase (optional)
 
-The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted dashboard, user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project. See the [Firebase storage handler README](src/pages/operator/tsx/storage_handler/README.md) for instructions to set up Firebase hosting.
+The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted dashboard, user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project.
+
+A plain `./launch_interface.sh` defaults to `local` hosting (serving the LAN door at `/local/operator/`). Once a robot is onboarded, pass `-f` / `--firebase` (or `--hosting firebase`, or set `HOSTING_MODE=firebase` in `.env` or the environment) to serve the interface through Firebase Hosting in addition to the robot's local LAN door. To override a standing `HOSTING_MODE=firebase` for a single local-only run, pass `--local` or `--hosting local` (a bare `--hosting` with no argument also defaults to `local`). Run `./launch_interface.sh --dry-run` to validate the installation and print the resolved launch configuration and provenance without starting ROS2 or PM2. See the [Firebase storage handler README](src/pages/operator/tsx/storage_handler/README.md) for instructions to set up Firebase hosting, and [Primer: Launching the Interface](src/primer_launch.md) for how a launch resolves `HOSTING_MODE`.
 
 ## Feature flags
 
@@ -76,6 +78,8 @@ find every seam for a given flag.
 ## Using the Interface Remotely
 
 **WARNING: This is prototype code and there are security issues. Deploy this code at your own risk.**
+
+This section covers remote access in `local` hosting mode, where the interface is served from the robot and needs a tunnel to reach the public internet. In `firebase` hosting mode your own Firebase dashboard already reaches the robot from anywhere, and none of the setup below is needed.
 
 We recommend setting up the interface for remote use using [ngrok](https://ngrok.com/docs/what-is-ngrok/). First, create an account with `ngrok` and follow the Linux installation instructions in the `Setup & Installation` tab in your ngrok account dashboard.
 
@@ -120,6 +124,7 @@ The following primers provide a high-level introduction to the codebase for deve
 | Primer                                                       | Description                                                                                                                                                                                                                                                                       |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the robot browser, operator browser, ROS2, and WebRTC fit together. Includes a render logic flow diagram showing how `MobileOperator` is structured into scenes, function providers, and the global footer.                             |
+| [Launching the Interface](src/primer_launch.md)              | How `launch_interface.sh` resolves `HOSTING_MODE`, validates the installation and Firebase readiness, prints the launch manifest, and brings up ROS2, the HTTPS server, and the robot browser.                                                                                      |
 | [Operator Page](src/primer_operator.md)                      | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`), the entry point (`index.tsx`), function providers, component folders, storage handler, and a step-by-step guide for adding new features. |
 | [Robot Page](src/primer_robot.md)                            | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and the full bidirectional data flow between ROS2 and the operator browser.                                                  |
 

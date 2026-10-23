@@ -251,7 +251,7 @@ function stopLaunchLogTail() {
     logTailDir = null;
 }
 
-/** Matches the layout launch_interface_firebase.sh uses, to the second. */
+/** Matches the layout launch_interface.sh uses, to the second. */
 function launchLogDir() {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -512,8 +512,14 @@ async function handleLaunchCommand(requestedBy, mapId) {
             return;
         }
 
-        const launchScript = path.join(repoRoot, 'launch_interface_firebase.sh');
-        noteLaunchOutput(`[DAEMON] Starting ${path.basename(launchScript)}\n`);
+        // The same script a person runs, with the same flag. A claim already
+        // proves what the Firebase probe re-checks -- the database rules gate
+        // robots/<fleetId> on exactly the assignment the probe asserts -- so the
+        // probe is redundant here, and worth it: one launch path means a change
+        // lands on both callers instead of drifting between two.
+        const launchScript = path.join(repoRoot, 'launch_interface.sh');
+        launchArgs.push('-f');
+        noteLaunchOutput(`[DAEMON] Starting ${path.basename(launchScript)} -f\n`);
         const child = spawnProcessGroup(
             launchScript,
             launchArgs,
@@ -550,8 +556,8 @@ async function handleLaunchCommand(requestedBy, mapId) {
                 setStatus('standby');
                 return;
             }
-            console.log('[DAEMON] launch_interface_firebase.sh succeeded.');
-            noteLaunchOutput('[DAEMON] launch_interface_firebase.sh succeeded.\n');
+            console.log('[DAEMON] launch_interface.sh succeeded.');
+            noteLaunchOutput('[DAEMON] launch_interface.sh succeeded.\n');
             flushLaunchLogNow();
             // Status will be transitioned to 'online' by robot browser joining room
         };
