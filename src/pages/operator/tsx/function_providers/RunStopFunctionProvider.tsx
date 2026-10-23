@@ -33,9 +33,17 @@ export class RunStopFunctionProvider extends FunctionProvider {
     public provideFunctions(): RunStopFunctions {
         return {
             onClick: () => {
+                const nextState = !this.enabled;
+                if (nextState) {
+                    try {
+                        FunctionProvider.remoteRobot?.stopMoveBase();
+                    } catch {
+                        // RemoteRobot may not be initialized
+                    }
+                }
                 FunctionProvider.remoteRobot?.setToggle(
                     "setRunStop",
-                    !this.enabled,
+                    nextState,
                 );
             },
         };

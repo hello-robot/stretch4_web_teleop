@@ -77,11 +77,6 @@ export enum GoalStatus {
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
 
-// Pose-proximity arrival (primary completion when rosbridge action status/result fail).
-// Slightly above Nav2 xy_goal_tolerance (0.25m); streak avoids a single noisy TF sample.
-const MOVE_BASE_GOAL_XY_TOL_M = 0.35;
-const MOVE_BASE_GOAL_INSIDE_STREAK = 5;
-
 export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
@@ -120,9 +115,6 @@ export class Robot extends React.Component {
     private moveBaseStatusLastEmitted?: number;
     /** Count of terminal statuses when this goal session began (stale SUCCEEDED pile). */
     private moveBaseTerminalBaseline?: number;
-    /** Goal XY for pose-proximity arrival detection. */
-    private moveBaseGoalXY?: { x: number; y: number };
-    private moveBaseInsideTolStreak = 0;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
@@ -204,8 +196,6 @@ export class Robot extends React.Component {
                 this.moveBaseStatusWatching = false;
                 this.moveBaseStatusSeenActive = false;
                 this.moveBaseTerminalBaseline = undefined;
-                this.moveBaseGoalXY = undefined;
-                this.moveBaseInsideTolStreak = 0;
             }
             props.moveBaseResultCallback(goalState);
         };
@@ -815,10 +805,6 @@ export class Robot extends React.Component {
         successMsg: string,
         failureMsg: string,
     ) {
-        if (!this.moveBaseStatusWatching) {
-            return;
-        }
-
         // rosbridge may deliver status as string; coerce before compares.
         const statuses = statusList.map((entry) => Number(entry.status));
         const terminalCount = statuses.filter(
@@ -834,6 +820,23 @@ export class Robot extends React.Component {
         const hasAccepted = statuses.includes(GoalStatus.STATUS_ACCEPTED);
         const hasExecuting = statuses.includes(GoalStatus.STATUS_EXECUTING);
         const hasCanceling = statuses.includes(GoalStatus.STATUS_CANCELING);
+
+        // Check if Nav2 action server is actively tracking a goal even if we weren't
+        // actively watching (e.g. app reload or mid-navigation session sync).
+        if (!this.moveBaseStatusWatching) {
+            if (hasAccepted || hasExecuting || hasCanceling) {
+                console.log("Nav2 action server has active goal on (re)load; activating watch session");
+                this.moveBaseStatusWatching = true;
+                this.moveBaseStatusSeenActive = true;
+                this.toggleBaseOnlyCollision(false);
+                callback({
+                    state: executingMsg,
+                    alert_type: "info",
+                });
+                this.moveBaseStatusLastEmitted = GoalStatus.STATUS_EXECUTING;
+            }
+            return;
+        }
 
         if (hasAccepted || hasExecuting || hasCanceling) {
             this.moveBaseStatusSeenActive = true;
@@ -1115,39 +1118,7 @@ export class Robot extends React.Component {
         this.createMapFrameTFClient();
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
-            this.maybeCompleteMoveBaseByProximity(transform);
         });
-    }
-
-    /**
-     * Primary AutoNav completion path: emit success when map→base_link stays
-     * within XY tolerance of the goal. Independent of rosbridge action status.
-     */
-    private maybeCompleteMoveBaseByProximity(transform: Transform) {
-        if (!this.moveBaseStatusWatching || !this.moveBaseGoalXY) {
-            return;
-        }
-        const dx = transform.translation.x - this.moveBaseGoalXY.x;
-        const dy = transform.translation.y - this.moveBaseGoalXY.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > MOVE_BASE_GOAL_XY_TOL_M) {
-            this.moveBaseInsideTolStreak = 0;
-            return;
-        }
-        this.moveBaseInsideTolStreak += 1;
-        if (this.moveBaseInsideTolStreak < MOVE_BASE_GOAL_INSIDE_STREAK) {
-            return;
-        }
-        console.log(
-            "Navigation succeeded via pose proximity:",
-            dist.toFixed(3),
-            "m",
-        );
-        this.moveBaseResultCallback({
-            state: "Navigation succeeded!",
-            alert_type: "success",
-        });
-        this.toggleBaseOnlyCollision(true);
     }
 
     setExpandedGripper(toggle: boolean) {
@@ -1165,7 +1136,16 @@ export class Robot extends React.Component {
         );
     }
 
+    /**
+     * Set the software runstop state. If enabled (toggle=true), stops all
+     * active execution on the robot.
+     *
+     * @param toggle True to engage runstop, false to release.
+     */
     setRunStop(toggle: boolean) {
+        if (toggle) {
+            this.stopExecution(true);
+        }
         var request = { data: toggle };
         this.setRunStopService?.callService(request, (response: boolean) => { });
     }
@@ -1772,11 +1752,6 @@ export class Robot extends React.Component {
         this.moveBaseStatusSeenActive = false;
         this.moveBaseStatusLastEmitted = undefined;
         this.moveBaseTerminalBaseline = undefined;
-        this.moveBaseGoalXY = {
-            x: pose.position.x,
-            y: pose.position.y,
-        };
-        this.moveBaseInsideTolStreak = 0;
 
         // Immediately notify operator that navigation has started executing
         this.moveBaseResultCallback({
@@ -1819,7 +1794,7 @@ export class Robot extends React.Component {
 
     executeIncrementalMove(jointName: ValidJoints, increment: number) {
         this.switchToNavigationMode();
-        // this.stopAutonomousClients();
+        this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
         this.trajectoryClient.sendGoal(
@@ -1860,12 +1835,18 @@ export class Robot extends React.Component {
         this.stopAutonomousClients();
     }
 
+    /**
+     * Stop and cancel active autonomous clients, specifically the move base client.
+     */
     stopAutonomousClients() {
         this.stopMoveBaseClient();
     }
 
+    /**
+     * Cancel active trajectory execution on the trajectory action client.
+     */
     stopTrajectoryClient() {
-        if (!this.trajectoryClient) throw "trajectoryClient is undefined";
+        if (!this.trajectoryClient) return;
         if (this.poseGoal) {
             this.trajectoryClient.cancelGoal(this.poseGoalID);
             this.poseGoal = undefined;
@@ -1876,19 +1857,41 @@ export class Robot extends React.Component {
         }
     }
 
+    /**
+     * Cancel active navigation execution on the move_base / navigate_to_pose action client.
+     * Cancels any active goals via rosbridge without throwing if uninitialized,
+     * resets state tracking, and emits a cancellation alert if navigation was active.
+     */
     stopMoveBaseClient() {
-        if (!this.moveBaseClient) throw "moveBaseClient is undefined";
+        if (!this.moveBaseClient) return;
+
+        const hadActiveGoal = this.moveBaseGoalID !== undefined || this.moveBaseStatusWatching;
+        try {
+            this.moveBaseClient.cancelAllGoals();
+        } catch (e) {
+            console.warn("Error calling cancelAllGoals on moveBaseClient:", e);
+        }
+
         if (this.moveBaseGoalID) {
-            this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
-            this.moveBaseGoalID = undefined;
-            this.moveBaseGoal = undefined;
-            // Operator CancelGoal already synthesizes local cancel UI; stop
-            // watching so a later stale SUCCEEDED does not clear/start races.
-            this.moveBaseStatusWatching = false;
-            this.moveBaseStatusSeenActive = false;
-            this.moveBaseTerminalBaseline = undefined;
-            this.moveBaseGoalXY = undefined;
-            this.moveBaseInsideTolStreak = 0;
+            try {
+                this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
+            } catch (e) {
+                console.warn("Error calling cancelGoal on moveBaseClient:", e);
+            }
+        }
+
+        this.moveBaseGoalID = undefined;
+        this.moveBaseGoal = undefined;
+        this.moveBaseStatusWatching = false;
+        this.moveBaseStatusSeenActive = false;
+        this.moveBaseTerminalBaseline = undefined;
+
+        if (hadActiveGoal) {
+            this.moveBaseResultCallback({
+                state: "Navigation canceled!",
+                alert_type: "error",
+            });
+            this.toggleBaseOnlyCollision(true);
         }
     }
 

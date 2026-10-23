@@ -312,6 +312,12 @@ export function executeStopMotionOnProvider(
         } catch {
             //
         }
+    } else {
+        try {
+            FunctionProvider.remoteRobot?.stopMoveBase();
+        } catch {
+            //
+        }
     }
 
     const hadMotion =
