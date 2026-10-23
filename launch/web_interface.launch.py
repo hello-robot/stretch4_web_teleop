@@ -456,4 +456,13 @@ def generate_launch_description():
     )
     ld.add_action(task_space_controller_node)
 
+    # Shutdown Robot Node
+    shutdown_robot_node = Node(
+        package="stretch4_web_teleop",
+        executable="shutdown_robot_node.py",
+        name="shutdown_robot_node",
+        output="screen",
+    )
+    ld.add_action(shutdown_robot_node)
+
     return ld

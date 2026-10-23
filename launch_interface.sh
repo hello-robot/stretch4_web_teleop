@@ -226,6 +226,9 @@ fi
 
 zip -r $logzip $logdir/ >/dev/null
 
+echo "Configure shutdown permissions..."
+./configure_shutdown_permissions.sh || true
+
 echo ""
 echo "#############################################"
 echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
