@@ -138,5 +138,13 @@ module.exports = (webpackEnv, argv) => {
             },
         },
         watch: !isProduction,
+        watchOptions: {
+            ignored: [
+                "**/node_modules/**",
+                "**/.git/**",
+                "**/dist/**",
+                "**/dist-firebase/**",
+            ],
+        },
     };
 };
