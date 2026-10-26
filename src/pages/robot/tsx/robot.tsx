@@ -40,7 +40,8 @@ import {
 import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 const { createRosReconnectGuard } = require("./rosReconnectGuard");
 
-/** Keep asking /map_server/map until a non-empty grid arrives. */
+/** Ask /map_server/map once, then retry a miss up to this many times. */
+const OCCUPANCY_GRID_MAX_RETRIES = 10;
 const OCCUPANCY_GRID_RETRY_MS = 2000;
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
@@ -138,6 +139,8 @@ export class Robot extends React.Component {
     private occupancyGridPollTimerID?: ReturnType<typeof setTimeout>;
     /** Ignores a /map_server/map reply after a newer getOccupancyGrid call. */
     private occupancyGridRequestId = 0;
+    /** Retries already scheduled for the current getOccupancyGrid call. */
+    private occupancyGridRetries = 0;
     private jointVelTopic?: Topic;
     private eeCmdVelTopic?: Topic;
     private useCenterCameraService?: Service;
@@ -717,6 +720,7 @@ export class Robot extends React.Component {
 
     getOccupancyGrid() {
         this.stopOccupancyGridPoll();
+        this.occupancyGridRetries = 0;
         const requestId = ++this.occupancyGridRequestId;
         this.requestOccupancyGrid(requestId);
     }
@@ -752,12 +756,14 @@ export class Robot extends React.Component {
 
     private reportOccupancyGridUnavailable(requestId: number) {
         this.stopOccupancyGridPoll();
+        this.occupancyGridUnavailableCallback();
+        if (this.occupancyGridRetries >= OCCUPANCY_GRID_MAX_RETRIES) return;
+        this.occupancyGridRetries += 1;
         this.occupancyGridPollTimerID = setTimeout(() => {
             this.occupancyGridPollTimerID = undefined;
             if (requestId !== this.occupancyGridRequestId) return;
             this.requestOccupancyGrid(requestId);
         }, OCCUPANCY_GRID_RETRY_MS);
-        this.occupancyGridUnavailableCallback();
     }
 
     private stopOccupancyGridPoll() {
