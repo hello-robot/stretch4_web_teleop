@@ -38,6 +38,7 @@ import { MovementRecorderFunctionProvider } from "./function_providers/MovementR
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
+import { RobotAudioPlayer } from "./utils/robotAudioPlayer";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
 import { StorageHandler } from "./storage_handler/StorageHandler";
@@ -264,7 +265,7 @@ new Promise<void>(async (resolve) => {
 const container = document.getElementById("root");
 root = createRoot(container!);
 
-/** Handle when the WebRTC connection adds a new track on a camera video stream. */
+/** Handle when the WebRTC connection adds a new track on a camera video or audio stream. */
 function handleRemoteTrackAdded(event: RTCTrackEvent) {
     const track = event.track;
     const stream = event.streams[0];
@@ -280,6 +281,11 @@ function handleRemoteTrackAdded(event: RTCTrackEvent) {
     console.log("OPERATOR: adding remote tracks");
 
     allRemoteStreams.set(streamName, { track: track, stream: stream });
+
+    if (streamName === "audio" || track.kind === "audio") {
+        console.log("OPERATOR: Routing robot audio stream to RobotAudioPlayer");
+        RobotAudioPlayer.getInstance().playStream(stream);
+    }
 }
 
 /**
@@ -482,9 +488,7 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
 }
 
 function showOperatorSeatNotice(detail: string) {
-    document.querySelector(".loader-background")?.remove();
-    document.querySelector(".loader")?.remove();
-    document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+    document.querySelectorAll("body > .boot-screen").forEach((node) => node.remove());
     const host = document.getElementById("root");
     if (!host) return;
     host.replaceChildren();
@@ -512,42 +516,90 @@ function showOperatorSeatNotice(detail: string) {
     host.append(notice);
 }
 
+/** Up-chevron used by the Dashboard control on the boot screen. */
+function appendChevronUp(parent: HTMLElement) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "16");
+    svg.setAttribute("height", "16");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M3 10.5 8 5.5 13 10.5");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.6");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.append(path);
+    parent.append(svg);
+}
+
+/**
+ * Same layout as the first-paint screen in operator/html/index.html.
+ * Styled by the inline stylesheet there.
+ */
+function createBootScreen(label: string): HTMLDivElement {
+    const screen = document.createElement("div");
+    screen.className = "boot-screen";
+
+    const dashboard = document.createElement("a");
+    dashboard.className = "boot-screen__dashboard";
+    dashboard.href = "/";
+    dashboard.setAttribute("aria-label", "Dashboard");
+    dashboard.addEventListener("click", (event) => {
+        event.preventDefault();
+        window.history.back();
+    });
+    const icon = document.createElement("span");
+    icon.className = "boot-screen__dashboard-icon";
+    icon.setAttribute("aria-hidden", "true");
+    appendChevronUp(icon);
+    const dashboardLabel = document.createElement("span");
+    dashboardLabel.className = "boot-screen__dashboard-label";
+    dashboardLabel.textContent = "Dashboard";
+    dashboard.append(icon, dashboardLabel);
+
+    const spinner = document.createElement("div");
+    spinner.className = "boot-screen__spinner";
+    spinner.setAttribute("role", "status");
+    const ring = document.createElement("div");
+    ring.className = "boot-screen__spinner-ring";
+    ring.setAttribute("aria-hidden", "true");
+    const spinnerLabel = document.createElement("span");
+    spinnerLabel.className = "boot-screen__spinner-label";
+    spinnerLabel.textContent = label;
+    spinner.append(ring, spinnerLabel);
+
+    const reload = document.createElement("button");
+    reload.className = "boot-screen__reload";
+    reload.type = "button";
+    reload.setAttribute("aria-label", "Reload");
+    reload.textContent = "Reload";
+    reload.addEventListener("click", () => {
+        window.location.reload();
+    });
+
+    screen.append(dashboard, spinner, reload);
+    return screen;
+}
+
 /**
  * Periodic check of the WebRTC connection state.
- * Shows "Reconnecting..." loading spinner if connection drops.
-*/
+ * Shows the boot screen with "Reconnecting" if the connection drops.
+ */
 function initConnectionStateCheck() {
-    // 100%x100% black backdrop
-    var loadingBackground = document.createElement("div");
-    loadingBackground.className = "loader-background";
-
-    // Loading spinner
-    var loader = document.createElement("div");
-    loader.className = "loader";
-
-    // "Reconnecting..." text inside the spinner
-    var loaderText = document.createElement("div");
-    loaderText.className = "loading-text";
-    var text = document.createElement("p");
-    text.textContent = "Reconnecting...";
-    loaderText.appendChild(text);
+    const screen = createBootScreen("Reconnecting");
 
     setInterval(async () => {
         if (yieldedToOtherTab) {
-            document.querySelector(".loader-background")?.remove();
-            document.querySelector(".loader")?.remove();
-            document.querySelectorAll("body > .loading-text").forEach((node) => node.remove());
+            screen.remove();
             return;
         }
-        let connected = await connection.isConnected();
-        if (!connected && !window.document.body.contains(loader)) {
-            window.document.body.appendChild(loaderText);
-            window.document.body.appendChild(loader);
-            window.document.body.appendChild(loadingBackground);
-        } else if (connected && window.document.body.contains(loader)) {
-            window.document.body.removeChild(loaderText);
-            window.document.body.removeChild(loader);
-            window.document.body.removeChild(loadingBackground);
+        const connected = await connection.isConnected();
+        if (!connected && !document.body.contains(screen)) {
+            document.body.appendChild(screen);
+        } else if (connected && document.body.contains(screen)) {
+            screen.remove();
         }
     }, 1000);
 }
@@ -578,7 +630,12 @@ function renderOperator(storageHandler: StorageHandler) {
     initConnectionStateCheck();
 }
 
-function disconnectFromRobot() {
+/**
+ * Disconnects the operator from the robot and cleans up audio and WebRTC sessions.
+ */
+function disconnectFromRobot(): void {
+    RobotAudioPlayer.getInstance().stop();
+
     // @flag voice_control_interface
     configureVoiceTokenRelay(null);
     setOperatorVoiceSvc(false);
@@ -587,11 +644,13 @@ function disconnectFromRobot() {
 }
 
 window.onbeforeunload = () => {
+    RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 };
 
 window.onunload = () => {
+    RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 };
