@@ -10,6 +10,7 @@ import {
     VelocityCommand,
     RobotPoseCommand,
     ToggleCommand,
+    GetRunStopCommand,
     GetOccupancyGrid,
     MoveBaseCommand,
     PlaybackPosesCommand,
@@ -239,6 +240,13 @@ export class RemoteRobot extends React.Component<{}, any> {
         let cmd: ToggleCommand = {
             type: type,
             toggle: toggle,
+        };
+        this.robotChannel(cmd);
+    }
+
+    getRunStop(type: "getRunStop") {
+        let cmd: GetRunStopCommand = {
+            type: type,
         };
         this.robotChannel(cmd);
     }

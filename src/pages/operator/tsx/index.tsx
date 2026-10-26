@@ -416,6 +416,7 @@ function configureRemoteRobot() {
     });
     resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+    remoteRobot.getRunStop("getRunStop");
     // @flag voice_control_interface
     remoteRobot.getVoiceCapability();
     configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
@@ -435,8 +436,18 @@ function configureRemoteRobot() {
     remoteRobot.sensors.setIsHomedFunctionProviderCallback(
         homeTheRobotFunctionProvider.updateIsHomedState
     );
+    runStopFunctionProvider.setOnRunStopEngagedCallback(() => {
+        buttonFunctionProvider.disableActiveButton();
+        flyingGripperFunctionProvider.disableActiveButton();
+    });
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
-        runStopFunctionProvider.updateRunStopState
+        (enabled: boolean) => {
+            if (enabled) {
+                buttonFunctionProvider.disableActiveButton();
+                flyingGripperFunctionProvider.disableActiveButton();
+            }
+            runStopFunctionProvider.updateRunStopState(enabled);
+        }
     );
     remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
         (holder, isDriverHolding) => {

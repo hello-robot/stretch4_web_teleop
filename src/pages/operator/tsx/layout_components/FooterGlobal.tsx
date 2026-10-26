@@ -85,7 +85,12 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     localizeStatusRef.current = localizeStatus;
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
 
-    runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
+    useEffect(() => {
+        runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
+        return () => {
+            runStopFunctionProvider.setRunStopStateChangeCallback(() => {});
+        };
+    }, []);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
 
     // Re-register each render (provider may be created after first mount).

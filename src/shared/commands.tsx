@@ -11,6 +11,7 @@ export type cmd =
     | CameraPerspectiveCommand
     | RobotPoseCommand
     | ToggleCommand
+    | GetRunStopCommand
     | GetOccupancyGrid
     | MoveBaseCommand
     | StopTrajectoryCommand
@@ -99,6 +100,10 @@ export interface CameraPerspectiveCommand {
 export interface ToggleCommand {
     type: "setRunStop";
     toggle: boolean;
+}
+
+export interface GetRunStopCommand {
+    type: "getRunStop";
 }
 
 export interface GetOccupancyGrid {
