@@ -120,14 +120,22 @@ function endOperatorClipSession() {
     setClipSession(null);
 }
 
-const dualMode = process.env.WEB_TELEOP_DUAL === "1";
-const distDir = path.join(__dirname, process.env.WEB_TELEOP_DIST || "dist");
+// "Is the cloud door open" is read from the canonical HOSTING_MODE ("local" or
+// "firebase"), shared across launch_interface.sh,
+// start_web_server_and_robot_browser.sh, and start_robot_browser.js.
+const HOSTING_MODE = process.env.HOSTING_MODE || "local";
 const localDistDir = path.join(__dirname, "dist");
 const firebaseDistDir = path.join(__dirname, "dist-firebase");
-const reloadDistDirs = dualMode ? [localDistDir, firebaseDistDir] : [distDir];
-const teleopLease = dualMode
-    ? require("./scripts/teleopLease").createTeleopLeaseClient(process.env)
-    : null;
+const reloadDistDirs =
+    HOSTING_MODE === "firebase"
+        ? [localDistDir, firebaseDistDir]
+        : [localDistDir];
+// Only needed while both doors are open, to stop a dashboard operator and a LAN
+// operator holding the robot at once. Local-only has a single door to arbitrate.
+const teleopLease =
+    HOSTING_MODE === "firebase"
+        ? require("./scripts/teleopLease").createTeleopLeaseClient(process.env)
+        : null;
 
 teleopLease?.ready.catch((error) => {
     console.error("Firebase teleop lease login failed:", error.message);
@@ -139,16 +147,36 @@ function cacheHashedVideo(res, filePath) {
     }
 }
 
-if (dualMode) {
-    app.use(
-        "/operator/",
-        express.static(path.join(localDistDir, "operator")),
-    );
-    app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }));
-    app.use("/", express.static(firebaseDistDir, { setHeaders: cacheHashedVideo }));
-} else {
-    app.use("/", express.static(distDir, { setHeaders: cacheHashedVideo }));
+// One meaning per URL, in both modes:
+//   /local/operator/  always the LAN bundle, signalling over socket.io
+//   /operator/        always the cloud bundle -- a visible redirect to the LAN
+//                     door when no cloud door was opened
+//   /robot/           the robot's own page, from whichever bundle this mode runs
+//
+// The redirect is registered before the static mounts so it wins over them, and
+// it is a redirect rather than a 404 because the address bar then shows which
+// door the operator actually landed in. Serving a different bundle under one
+// unchanged URL is what previously made it possible to believe you were testing
+// the cloud while driving over the LAN.
+if (HOSTING_MODE !== "firebase") {
+    app.get(/^\/operator(\/.*)?$/, (req, res) => {
+        res.redirect(302, "/local/operator/");
+    });
 }
+app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }));
+// The localstorage bundle is built with publicPath /local/, so its assets
+// resolve through the mount above no matter which path served the HTML. That is
+// what lets local mode serve /robot/ and the home page from the root mount too,
+// which start_robot_browser.js requires: it loads https://localhost/robot.
+app.use(
+    "/",
+    express.static(
+        HOSTING_MODE === "firebase" ? firebaseDistDir : localDistDir,
+        {
+            setHeaders: cacheHashedVideo,
+        },
+    ),
+);
 
 // Webpack watch rewrites dist/. Tell open home/operator tabs to reload.
 const reloadClients = new Set();
@@ -307,19 +335,29 @@ io.on("connection", function (socket) {
             updateRooms();
             return;
         }
-        let leaseClaimed = true;
+        // Reaching Firebase is not a condition of local teleop. A seat whose
+        // lease cannot be read is treated as free: the only thing that could
+        // be holding it is a Firebase operator, who needs the same Firebase
+        // this claim just failed to reach.
+        let leaseOutcome = "claimed";
         try {
-            leaseClaimed =
-                !teleopLease || (await teleopLease.claimLocal(sessionId));
+            if (teleopLease) {
+                leaseOutcome = await teleopLease.claimLocal(sessionId);
+            }
         } catch (error) {
-            leaseClaimed = false;
+            leaseOutcome = "unavailable";
             console.error("join_as_operator lease failure:", error.message);
+        }
+        if (leaseOutcome === "unavailable") {
+            console.warn(
+                "join_as_operator: Firebase lease unreachable, granting the local seat",
+            );
         }
         const decision = localOperatorJoinResult({
             operSession: undefined,
             sessionId,
             connected: socket.connected,
-            leaseCommitted: leaseClaimed,
+            leaseCommitted: leaseOutcome !== "held",
         });
         if (decision === "disconnected") {
             if (!oper_sock) {

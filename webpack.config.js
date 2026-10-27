@@ -14,12 +14,8 @@ const envKeys = webpackPublicEnvDefinitions(env);
 
 module.exports = (webpackEnv, argv) => {
     const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
-    const dualMode = webpackEnv?.dual === true || webpackEnv?.dual === "true";
     const isProduction = argv && argv.mode === "production";
     envKeys["process.env.storage"] = JSON.stringify(storageValue);
-    envKeys["process.env.dual_signaling"] = JSON.stringify(
-        storageValue === "firebase" && dualMode,
-    );
     // Feature flags become boolean literals in the bundle, so `if (FEATURE_X)`
     // guards fold away when the flag is off. See features.json.
     Object.entries(loadFeatures()).forEach(([name, enabled]) => {
@@ -46,8 +42,12 @@ module.exports = (webpackEnv, argv) => {
                 __dirname,
                 storageValue === "firebase" ? "dist-firebase" : "dist",
             ),
-            publicPath:
-                storageValue === "localstorage" && dualMode ? "/local/" : "/",
+            // The localstorage bundle is always served under /local/, in both
+            // hosting modes, so dist/ is identical whichever mode built it and
+            // never has to be rebuilt because the mode changed. server.js keeps
+            // a /local/ mount in both modes for exactly this reason, which also
+            // lets it serve the same bundle at / when no cloud door is open.
+            publicPath: storageValue === "localstorage" ? "/local/" : "/",
             // Incremental watch builds reuse cached HTML/assets. Cleaning on
             // every rebuild can remove those cached files without re-emitting
             // them, leaving the local server with 404s.
