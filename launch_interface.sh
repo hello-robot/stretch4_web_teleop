@@ -13,20 +13,24 @@
 # daemon points a run at a directory it is already tailing.
 set -o pipefail
 
-# Define color variables
+# 1. Define color variables
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
+# 2. Resolve the repo directory and source the shared libraries
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$REPO_DIR/scripts/lib/teleop_env.sh"
 source "$REPO_DIR/scripts/lib/hosting_mode_resolution.sh"
 
+# 3. Export the teleop environment
+#
 # Before validate_installation, which names certificate files after the fleet
 # id. Without this it reads whatever the invoking shell happened to export.
 teleop_setup_env
 
+# 4. Initialize configuration defaults
 MAP=""
 MAP_YAML="<none>"
 MAP_YAML_SOURCE="map-less mode"
@@ -34,6 +38,7 @@ CLI_HOSTING=""
 CLI_HOSTING_FLAG=""
 DRY_RUN=0
 
+# 5. Define the usage text
 usage() {
 	cat <<'USAGE'
 Usage: ./launch_interface.sh [options]
@@ -65,9 +70,10 @@ Operator URLs, once the launch finishes:
 USAGE
 }
 
+# 6. Parse arguments
+#
 # Arguments are parsed before anything else runs: --help and a misspelled flag
-# are answers this script can give without an npm dependency tree, and a broken
-# checkout is no reason to withhold its own usage text.
+# are handled before resolving the npm dependency tree
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-f | --firebase)
@@ -124,6 +130,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+# 7. Resolve the log directory for this run and record where it came from
 if [ -n "${WEB_TELEOP_LOG_DIR:-}" ]; then
 	export WEB_TELEOP_LOG_DIR_SOURCE="env:WEB_TELEOP_LOG_DIR"
 else
@@ -139,6 +146,8 @@ else
 	logzip="$logdir/stretch4_web_teleop_logs.zip"
 fi
 
+# 8. Define the operator URL printer
+#
 # Print the URLs an operator should visit for the mode that started.
 #
 # Both doors are named in both modes, because the point of the split is that a
@@ -196,12 +205,15 @@ function print_interface_urls {
 	echo ""
 }
 
+# 9. Print the banner
 echo ""
 echo "#############################################"
 echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
 echo "#############################################"
 echo ""
 
+# 10. Report the web_teleop log disk usage
+#
 # Voice JSONL logs and audio-snippet clips (when voice_input_recording is
 # enabled) are written under this run's own timestamped $logdir — see
 # voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
@@ -215,6 +227,7 @@ echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
 
+# 11. Print the resolved feature flags
 echo "Feature Flags:"
 while IFS=$'=\t' read -r var value source; do
 	if [[ "$value" -eq 1 ]]; then
@@ -224,6 +237,8 @@ while IFS=$'=\t' read -r var value source; do
 	fi
 done < <(node "$REPO_DIR/feature-flags.js" --all --sources)
 
+# 12. Validate the installation
+#
 # Certificates included, so this gates every mode. It also runs before the
 # Firebase probe on purpose: that probe reports a missing node_modules as its
 # own "set up and broken" code, which would blame Firebase for a broken install.
@@ -233,11 +248,14 @@ else
 	validate_installation || echo_failure_help "$logdir"
 fi
 
-# Resolve HOSTING_MODE across all layers (default < .env < env < CLI).
+# 13. Resolve HOSTING_MODE across all layers (default < .env < env < CLI),
+#     then autodeploy and build mode.
 resolve_hosting_mode "$CLI_HOSTING" "$CLI_HOSTING_FLAG" || exit 1
 teleop_resolve_autodeploy
 teleop_resolve_build_mode
 
+# 14. Check Firebase readiness when hosting through the cloud
+#
 # Only HOSTING_MODE=firebase has anything left to check. HOSTING_MODE=local
 # needs nothing beyond the installation that was just validated.
 fb_status=$STATUS_READY
@@ -250,6 +268,7 @@ if [ "$HOSTING_MODE" = "firebase" ]; then
 	fi
 fi
 
+# 15. Print the launch manifest; --dry-run stops here
 export MAP_YAML MAP_YAML_SOURCE
 if [ "$DRY_RUN" -eq 1 ]; then
 	print_launch_manifest
@@ -258,19 +277,27 @@ fi
 
 print_launch_manifest "$logdir/launch_manifest.txt"
 
+# 16. Resolve the voice control interface feature flag
 FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
 export FEATURE_VOICE_CONTROL_INTERFACE
 
-# Bring up ROS, then the web server and robot browser. These were a separate
-# launch_teleop_stack.sh for as long as a second front door called it; with the
-# daemon coming through this script too, a spine with one caller was indirection
-# for its own sake.
+
+# 17. Start ROS2
 logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 
 cd "$REPO_DIR"
-# set -o pipefail is what makes these statuses the scripts' and not tee's.
+
 ./start_ros2.sh -l "$logdir" $MAP |& tee "$logfile_ros"
+
+# 18. Configure audio
+./configure_audio.sh
+
+# echo ""
+# 19. Start the web server and the robot browser
+cd $HOME/ament_ws/src/stretch4_web_teleop
+./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE |& tee -a $logfile_node
+
 if [ $? -ne 0 ]; then
 	echo_failure_help "$logdir"
 fi
@@ -280,6 +307,7 @@ if [ $? -ne 0 ]; then
 	echo_failure_help "$logdir"
 fi
 
+# 20. Archive this run's logs and print the operator URLs
 zip -r $logzip $logdir/ >/dev/null
 
 print_interface_urls "$HOSTING_MODE"

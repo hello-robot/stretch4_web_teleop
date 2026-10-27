@@ -145,6 +145,17 @@ Then, launch the program normally, and if you see "FAILURE. COULD NOT LAUNCH WEB
 
 To locate the logs, open a file explorer, go into "Home", go into "stretch_user", go into "log", go into "web_teleop", locate the folder with the latest timestamp, and send "stretch4_web_teleop_logs.zip" to the support team.
 
+### Manage PM2 logs
+
+PM2 outputs logs to `~/.pm2/logs`. You can configure log rotation using [pm2-logrotate](https://github.com/keymetrics/pm2-logrotate) so the directory has a set size limit:
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M # Clamps each log file to 10M
+```
+
+The `pm2 flush` command is also available but will delete every log file in `~/.pm2/logs`.
+
 ## Licenses
 
 The following license applies to the contents of this directory written by Vinitha Ranganeni, Noah Ponto, authors associated with the University of Washington, and authors associated with Hello Robot Inc. (the "Contents"). This software is intended for use with Stretch ® mobile manipulators produced and sold by Hello Robot ®.

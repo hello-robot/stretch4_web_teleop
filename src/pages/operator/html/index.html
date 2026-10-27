@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Stretch Web Interface</title>
@@ -37,15 +37,291 @@
             source.onmessage = function () { location.reload(); };
         })();
     </script>
+    <style>
+        /* Boot and reconnect screen. Inline so it paints before the bundle. */
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #000000;
+        }
+
+        .boot-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding:
+                calc(5px + env(safe-area-inset-top, 0px))
+                24px
+                calc(32px + env(safe-area-inset-bottom, 0px));
+            background: #000000;
+            color: hsl(204, 100%, 70%);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            perspective: 480px;
+        }
+
+        .boot-screen__dashboard {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 7px;
+            padding: 10px 20px;
+            color: hsl(204, 100%, 70%);
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            text-decoration: none;
+            border-radius: 12px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .boot-screen__dashboard:hover {
+            background: hsla(204, 100%, 50%, 0.2);
+            color: hsl(204, 100%, 70%);
+        }
+
+        .boot-screen__dashboard-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: hsla(204, 100%, 50%, 0.15);
+            color: hsl(204, 100%, 50%);
+        }
+
+        .boot-screen__dashboard-icon {
+            opacity: 0;
+            transform: translateY(-5px);
+            animation: boot-screen-dashboard-in 350ms ease-out forwards;
+            animation-delay: 10ms;
+        }
+
+        .boot-screen__dashboard-label {
+            opacity: 0;
+            transform: translateY(-10px);
+            animation: boot-screen-dashboard-in 350ms ease-out forwards;
+            animation-delay: 1100ms;
+        }
+
+        .boot-screen__dashboard:hover .boot-screen__dashboard-icon {
+            background: transparent;
+            color: hsl(204, 100%, 50%);
+            outline: 1px solid hsla(204, 100%, 20%, 50%);
+        }
+
+        .boot-screen__spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            translate: -50% -50%;
+            display: grid;
+            place-items: center;
+            width: 180px;
+            height: 180px;
+            animation: boot-screen-reveal 400ms ease-out;
+        }
+
+        .boot-screen__spinner-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            z-index: 0;
+            background: radial-gradient(
+                circle at 50% 50%,
+                hsl(204, 100%, 10%) 0%,
+                hsla(204, 90%, 50%, 10%) 40%,
+                hsla(204, 100%, 50%, 80%) 90%,
+                hsl(204, 100%, 50%) 100%
+            );
+            overflow: hidden;
+            transform: translateZ(0);
+            filter: blur(0px);
+            animation: boot-screen-fade 3000ms ease-in-out infinite alternate;
+        }
+
+        /* Light that washes out from the center. The disc itself stays put. */
+        .boot-screen__spinner-ring::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(
+                circle,
+                hsla(204, 100%, 30%, 0.95) 0%,
+                hsla(204, 100%, 65%, 0.8) 36%,
+                hsla(204, 100%, 50%, 0.1) 95%
+            );
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0);
+            pointer-events: none;
+
+        }
+
+        .boot-screen__spinner-ring.is-pulse::after {
+            animation: boot-screen-pulse var(--pulse-duration, 1s) ease-out;
+        }
+
+        .boot-screen__spinner-label {
+            position: relative;
+            z-index: 1;
+            color: hsl(204, 100%, 70%);
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .boot-screen__reload {
+            appearance: none;
+            margin: 0;
+            border: none;
+            outline: none;
+            border-radius: 12px;
+            background: hsla(204, 100%, 50%, 0.1);
+            color: hsl(204, 100%, 70%);
+            box-shadow: none;
+            padding: 10px 22px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .boot-screen__dashboard:focus-visible {
+            outline: 2px solid #fff;
+            outline-offset: 3px;
+        }
+
+        .boot-screen__reload:focus,
+        .boot-screen__reload:focus-visible {
+            outline: none;
+        }
+
+        .boot-screen__reload:hover {
+            background: hsl(204, 100%, 17%);
+            color: hsl(204, 100%, 70%);
+        }
+
+        .boot-screen__reload:active {
+            transform: translateY(1px);
+        }
+
+        @keyframes boot-screen-reveal {
+            0% {
+                opacity: 0;
+                filter: blur(5px);
+                transform: translateZ(200px);
+            }
+
+            100% {
+                opacity: 1;
+                filter: blur(0px);
+                transform: translateZ(0);
+            }
+        }
+
+        @keyframes boot-screen-dashboard-in {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes boot-screen-fade {
+            0% {
+                opacity: 0.3;
+            }
+
+            100% {
+                opacity: 0.6;
+            }
+        }
+
+        @keyframes boot-screen-pulse {
+            0% {
+                opacity: 0.8;
+                transform: translate(-50%, -50%) scale(0);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(2.5);
+            }
+        }
+    </style>
 </head>
 
 <body>
     <div id="root" aria-relevant="all" aria-live="assertive" tabindex="0">
-        <div class="loader" aria-hidden="true"></div>
-        <div class="loading-text" aria-hidden="true">
-            <p>Loading...</p>
+        <div class="boot-screen">
+            <a class="boot-screen__dashboard" href="/" aria-label="Dashboard" onclick="history.back(); return false;">
+                <span class="boot-screen__dashboard-icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M3 10.5 8 5.5 13 10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                <span class="boot-screen__dashboard-label">Dashboard</span>
+            </a>
+            <div class="boot-screen__spinner" role="status">
+                <div class="boot-screen__spinner-ring" aria-hidden="true"></div>
+                <span class="boot-screen__spinner-label">Loading</span>
+            </div>
+            <button type="button" class="boot-screen__reload" aria-label="Reload" onclick="location.reload()">Reload</button>
         </div>
     </div>
+    <script>
+        // Soft pulse, then a quiet gap. The gap is random so the pulses do
+        // not tick on a beat. Reconnect orbs appended to body pick this up
+        // through the child-list observer.
+        (function () {
+            {{/* Gap between pulses is random between 500 and 3000ms */}}
+            var MIN_GAP_MS = 500;
+            var MAX_GAP_MS = 3000;
+            var seen = new WeakSet();
+
+            function rand(min, max) {
+                return min + Math.random() * (max - min);
+            }
+
+            function blip(ring) {
+                if (!ring.isConnected) return;
+                {{/* Pulse duration is random between 1000 and 1500ms */}}
+                var duration = rand(1500, 2000);
+                ring.classList.remove("is-pulse");
+                ring.style.setProperty("--pulse-duration", Math.round(duration) + "ms");
+                void ring.offsetWidth;
+                ring.classList.add("is-pulse");
+                window.setTimeout(function () {
+                    blip(ring);
+                }, duration + rand(MIN_GAP_MS, MAX_GAP_MS));
+            }
+
+            function watch(ring) {
+                if (seen.has(ring)) return;
+                seen.add(ring);
+                window.setTimeout(function () {
+                    blip(ring);
+                }, rand(200, 700));
+            }
+
+            function scan() {
+                var rings = document.querySelectorAll(".boot-screen__spinner-ring");
+                for (var i = 0; i < rings.length; i++) watch(rings[i]);
+            }
+
+            scan();
+            new MutationObserver(scan).observe(document.body, { childList: true });
+        })();
+    </script>
 </body>
 
 </html>
