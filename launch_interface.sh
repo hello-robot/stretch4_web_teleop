@@ -281,7 +281,6 @@ print_launch_manifest "$logdir/launch_manifest.txt"
 FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
 export FEATURE_VOICE_CONTROL_INTERFACE
 
-
 # 17. Start ROS2
 logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
@@ -295,13 +294,7 @@ cd "$REPO_DIR"
 
 # echo ""
 # 19. Start the web server and the robot browser
-cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE |& tee -a $logfile_node
-
-if [ $? -ne 0 ]; then
-	echo_failure_help "$logdir"
-fi
-
+cd "$REPO_DIR"
 ./start_web_server_and_robot_browser.sh -l "$logdir" -o "$logfile_node" --hosting "$HOSTING_MODE" |& tee -a "$logfile_node"
 if [ $? -ne 0 ]; then
 	echo_failure_help "$logdir"
