@@ -281,7 +281,6 @@ print_launch_manifest "$logdir/launch_manifest.txt"
 FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
 export FEATURE_VOICE_CONTROL_INTERFACE
 
-
 # 17. Start ROS2
 logfile_ros="$logdir/start_ros2.txt"
 logfile_node="$logdir/start_web_server_and_robot_browser.txt"
