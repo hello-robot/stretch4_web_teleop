@@ -6,25 +6,39 @@ export type RunStopFunctions = {
 
 export class RunStopFunctionProvider extends FunctionProvider {
     private enabled: boolean = false;
-    private runStopStateChangeCallback?: (enabled: boolean) => void;
+    private runStopStateChangeCallbacks: Set<(enabled: boolean) => void> = new Set();
     private onRunStopEngaged?: () => void;
 
     constructor() {
         super();
         this.provideFunctions = this.provideFunctions.bind(this);
         this.updateRunStopState = this.updateRunStopState.bind(this);
+        this.getRunStopState = this.getRunStopState.bind(this);
+    }
+
+    /**
+     * Gets the current runstop state.
+     *
+     * @returns True if runstop is active, false otherwise.
+     */
+    public getRunStopState(): boolean {
+        return this.enabled;
     }
 
     /**
      * Registers a callback invoked whenever the runstop state changes.
      *
      * @param callback Callback receiving boolean indicating if runstop is active.
+     * @returns A cleanup function to unsubscribe the callback.
      */
-    public setRunStopStateChangeCallback(callback: (enabled: boolean) => void): void {
-        this.runStopStateChangeCallback = callback;
-        if (callback) {
-            callback(this.enabled);
-        }
+    public setRunStopStateChangeCallback(
+        callback: (enabled: boolean) => void
+    ): () => void {
+        this.runStopStateChangeCallbacks.add(callback);
+        callback(this.enabled);
+        return () => {
+            this.runStopStateChangeCallbacks.delete(callback);
+        };
     }
 
     /**
@@ -46,8 +60,8 @@ export class RunStopFunctionProvider extends FunctionProvider {
         if (enabled && this.onRunStopEngaged) {
             this.onRunStopEngaged();
         }
-        if (this.runStopStateChangeCallback) {
-            this.runStopStateChangeCallback(this.enabled);
+        for (const callback of this.runStopStateChangeCallbacks) {
+            callback(this.enabled);
         }
     }
 

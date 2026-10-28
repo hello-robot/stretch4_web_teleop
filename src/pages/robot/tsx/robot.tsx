@@ -512,6 +512,10 @@ export class Robot extends React.Component {
         runStopTopic.subscribe((msg: any) => {
             const isRunStopped = Boolean(msg.data);
             this.isRunStopped = isRunStopped;
+            if (isRunStopped) {
+                this.stopExecution(true);
+                this.toggleBaseOnlyCollision(true);
+            }
             if (this.isRunStoppedCallback) this.isRunStoppedCallback(isRunStopped);
         });
     }
@@ -1186,6 +1190,10 @@ export class Robot extends React.Component {
             console.error("setRunStopService is undefined");
             return;
         }
+        if (toggle) {
+            this.stopExecution(true);
+            this.toggleBaseOnlyCollision(true);
+        }
         var request = { data: toggle };
         console.log(`Calling /runstop_the_robot with data=${toggle}`);
         this.setRunStopService.callService(
@@ -1326,16 +1334,16 @@ export class Robot extends React.Component {
         );
     }
 
-    executeBaseVelocity = (props: {
+    executeBaseVelocity = async (props: {
         linVelX: number;
         linVelY: number;
         angVel: number;
-    }): void => {
+    }): Promise<void> => {
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring executeBaseVelocity while robot is runstopped");
             return;
         }
-        this.switchToVelocityMode();
+        await this.switchToVelocityMode();
         this.stopExecution();
         let twist = {
             linear: {
@@ -1652,12 +1660,38 @@ export class Robot extends React.Component {
         return true;
     }
 
-    async executePoseGoal(pose: RobotPose) {
+    /**
+     * Executes a single pose goal by switching to navigation mode and sending
+     * the trajectory goal to the ROS action server.
+     *
+     * Args:
+     *     pose: The target RobotPose to move joints toward.
+     *
+     * Returns:
+     *     A promise resolving when execution has been dispatched.
+     */
+    async executePoseGoal(pose: RobotPose): Promise<void> {
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring executePoseGoal while robot is runstopped");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
             return;
         }
         await this.switchToNavigationMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoal while robot is runstopped (after switch mode)");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
 
         /// check if at goal already
         if (this.isAlreadyAtPose(pose)) {
@@ -1731,12 +1765,39 @@ export class Robot extends React.Component {
         );
     }
 
-    async executePoseGoals(poses: RobotPose[], index: number) {
+    /**
+     * Executes a series of pose goals sequentially by switching to navigation mode
+     * and sending the trajectory goals to the ROS action server.
+     *
+     * Args:
+     *     poses: Array of target RobotPose waypoints.
+     *     index: Starting index in the pose list.
+     *
+     * Returns:
+     *     A promise resolving when execution has been dispatched.
+     */
+    async executePoseGoals(poses: RobotPose[], index: number): Promise<void> {
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring executePoseGoals while robot is runstopped");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
             return;
         }
         await this.switchToNavigationMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoals while robot is runstopped (after switch mode)");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
 
         // check if at goal already
         if (poses.length > 0) {
@@ -1885,12 +1946,12 @@ export class Robot extends React.Component {
         );
     }
 
-    executeIncrementalMove(jointName: ValidJoints, increment: number) {
+    async executeIncrementalMove(jointName: ValidJoints, increment: number) {
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring executeIncrementalMove while robot is runstopped");
             return;
         }
-        this.switchToNavigationMode();
+        await this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1936,15 +1997,29 @@ export class Robot extends React.Component {
         this.stopMoveBaseClient();
     }
 
-    stopTrajectoryClient() {
+    /**
+     * Cancels any active trajectory action goal and emits a canceled playback state.
+     *
+     * Args:
+     *     None.
+     *
+     * Returns:
+     *     None.
+     */
+    stopTrajectoryClient(): void {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        if (this.poseGoal) {
-            this.trajectoryClient.cancelGoal(this.poseGoalID);
+        if (this.poseGoal || this.poseGoalID) {
+            if (this.poseGoalID) {
+                this.trajectoryClient.cancelGoal(this.poseGoalID);
+            }
             this.poseGoal = undefined;
-            this.playbackPosesResultCallback({
-                state: MovementState.Cancel,
-                alert_type: "error",
-            });
+            this.poseGoalID = undefined;
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
         }
     }
 
@@ -1961,6 +2036,13 @@ export class Robot extends React.Component {
             this.moveBaseTerminalBaseline = undefined;
             this.moveBaseGoalXY = undefined;
             this.moveBaseInsideTolStreak = 0;
+            this.toggleBaseOnlyCollision(true);
+            if (this.moveBaseResultCallback) {
+                this.moveBaseResultCallback({
+                    state: "Navigation canceled!",
+                    alert_type: "error",
+                });
+            }
         }
     }
 

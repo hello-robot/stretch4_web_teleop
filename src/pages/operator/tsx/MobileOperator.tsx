@@ -15,6 +15,7 @@ import {
     flyingGripperFunctionProvider,
     homeTheRobotFunctionProvider,
     movementRecorderFunctionProvider,
+    runStopFunctionProvider,
     subscribeToolMetadata,
     underMapFunctionProvider,
 } from ".";
@@ -100,6 +101,8 @@ export const MobileOperator = (props: {
 
     // Track homed state in local React state
     const [robotIsHomed, robotIsHomedSet] = useState<boolean>(true);
+    // Track runstop state in local React state
+    const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     // Track tool metadata in local React state so MobileOperator (and its
     // descendants, e.g. ButtonPad) re-render when the attached tool changes
     const [toolMetadata, toolMetadataSet] = useState<ToolMetadata | undefined>(
@@ -113,6 +116,13 @@ export const MobileOperator = (props: {
     // When the robot is homed, update local React state `robotIsHomed` to `true`
     React.useEffect(() => {
         homeTheRobotFunctionProvider.setIsHomedCallback(robotIsHomedSet);
+    }, []);
+
+    // When the robot runstop state changes, update local React state `isRunStopped`
+    React.useEffect(() => {
+        return runStopFunctionProvider.setRunStopStateChangeCallback(
+            isRunStoppedSet
+        );
     }, []);
 
     // State for swipeable views
@@ -427,7 +437,8 @@ export const MobileOperator = (props: {
         buttonStateMap: buttonStateMap.current,
         hideLabels: false,
         toolMetadata: toolMetadata,
-        robotIsHomed: true,
+        robotIsHomed: robotIsHomed,
+        isRunStopped: isRunStopped,
         playbackPosesState: playbackPosesState,
         idxFixedRecordingPlaying: idxFixedRecordingPlaying,
         idxFixedRecordingPlayingSet: idxFixedRecordingPlayingSet,

@@ -439,12 +439,18 @@ function configureRemoteRobot() {
     runStopFunctionProvider.setOnRunStopEngagedCallback(() => {
         buttonFunctionProvider.disableActiveButton();
         flyingGripperFunctionProvider.disableActiveButton();
+        buttonFunctionProvider.stopCurrentAction(true);
+        underMapFunctionProvider?.cancelGoal();
+        movementRecorderFunctionProvider.cancelPlayback();
     });
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
         (enabled: boolean) => {
             if (enabled) {
                 buttonFunctionProvider.disableActiveButton();
                 flyingGripperFunctionProvider.disableActiveButton();
+                buttonFunctionProvider.stopCurrentAction(true);
+                underMapFunctionProvider?.cancelGoal();
+                movementRecorderFunctionProvider.cancelPlayback();
             }
             runStopFunctionProvider.updateRunStopState(enabled);
         }

@@ -86,9 +86,12 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
 
     useEffect(() => {
-        runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
+        const unsubscribe =
+            runStopFunctionProvider.setRunStopStateChangeCallback(
+                isRunStoppedSet
+            );
         return () => {
-            runStopFunctionProvider.setRunStopStateChangeCallback(() => {});
+            unsubscribe();
         };
     }, []);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
