@@ -290,7 +290,8 @@ const MAX_EE_SPEED = 0.2;
  * Joints absent here move the tool only in ways this ceiling cannot measure, so the limiter never
  * scales them: the head is off the tool chain entirely, the gripper is not part of the limiter's
  * joint vector, and wrist roll turns the tool about its own axis, giving the attachment site
- * exactly zero linear velocity. Their velocities come from UNLIMITED_JOINT_VELOCITIES instead.
+ * exactly zero linear velocity. The head and gripper take their velocities from
+ * UNLIMITED_JOINT_VELOCITIES; roll follows the rest of the wrist, see WRIST_VELOCITY.
  */
 const TOOL_SPEED_PER_UNIT: { [key in ValidJoints]?: number } = {
     lift_joint: 1.0,
@@ -302,8 +303,9 @@ const TOOL_SPEED_PER_UNIT: { [key in ValidJoints]?: number } = {
 };
 
 /**
- * Medium-profile velocities for the joints the limiter cannot see, in URDF units/s. Nothing
- * downstream bounds these, so they are the only thing deciding how fast those axes move.
+ * Medium-profile velocities for the head and gripper, in URDF units/s. The limiter cannot see
+ * either of them, so nothing downstream bounds these and they are the only thing deciding how
+ * fast those axes move.
  *
  * The gripper's URDF units depend on the attached tool, so its entry is only nominal; its jog
  * increment is normalized to the tool's travel in updateJointIncrements().
@@ -312,7 +314,6 @@ const UNLIMITED_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
     gripper_joint: 0.075,
-    wrist_roll_joint: 4.0,
 };
 
 /**
@@ -328,14 +329,33 @@ const UNLIMITED_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
  * ceiling at every profile produces the same speed for all three, and the speed setting silently
  * stops working on it.
  */
+const LIMITED_JOINT_VELOCITIES = Object.fromEntries(
+    Object.entries(TOOL_SPEED_PER_UNIT).map(([joint, toolSpeedPerUnit]) => [
+        joint,
+        MAX_EE_SPEED / (PROFILE_SCALES.fast * toolSpeedPerUnit!),
+    ]),
+) as { [key in ValidJoints]?: number };
+
+/**
+ * The wrist turns at one speed across roll, pitch and yaw, taken from whichever of them the
+ * limiter holds slowest.
+ *
+ * Yaw sweeps the tool through the widest arc, so it sets the pace. Matching the other two to it
+ * keeps the wrist predictable to drive, and it is the only thing bounding roll at all: rolling
+ * turns the tool about its own axis, which moves the attachment site nowhere, so the limiter
+ * computes no gain for it and would otherwise let it spin as fast as this table asked.
+ */
+const WRIST_VELOCITY = Math.min(
+    LIMITED_JOINT_VELOCITIES.wrist_pitch_joint!,
+    LIMITED_JOINT_VELOCITIES.wrist_yaw_joint!,
+);
+
 export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     ...UNLIMITED_JOINT_VELOCITIES,
-    ...(Object.fromEntries(
-        Object.entries(TOOL_SPEED_PER_UNIT).map(([joint, toolSpeedPerUnit]) => [
-            joint,
-            MAX_EE_SPEED / (PROFILE_SCALES.fast * toolSpeedPerUnit!),
-        ]),
-    ) as { [key in ValidJoints]?: number }),
+    ...LIMITED_JOINT_VELOCITIES,
+    wrist_roll_joint: WRIST_VELOCITY,
+    wrist_pitch_joint: WRIST_VELOCITY,
+    wrist_yaw_joint: WRIST_VELOCITY,
 };
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
