@@ -293,7 +293,7 @@ export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     wrist_pitch_joint: 4.0,
     wrist_yaw_joint: 4.0,
     translate_mobile_base: 0.1,
-    rotate_mobile_base: 1.0,
+    rotate_mobile_base: 0.34,
 };
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
