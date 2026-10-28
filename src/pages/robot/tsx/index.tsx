@@ -435,6 +435,9 @@ function handleMessage(message: WebRTCMessage) {
         case "getStretchTool":
             robot.getStretchTool();
             break;
+        case "getRunStop":
+            forwardIsRunStopped(robot.getIsRunStopped());
+            break;
         case "getJointVelocity":
             robot.getJointVelocityLimits();
             break;
