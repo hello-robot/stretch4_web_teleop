@@ -15,6 +15,8 @@ import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
+    EE_VELOCITY_LIMITER_NODE,
+    getMaxEeSpeed,
     getPlaybackJointVelocities,
     getPlaybackJointVelocity,
     GRIPPER_INCREMENT_RANGE_FRACTION,
@@ -24,7 +26,9 @@ import {
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
+    ParameterEvent,
     ROSPose,
+    setMaxEeSpeed,
     updateJointIncrements,
     ValidJoints,
     VideoProps,
@@ -157,6 +161,7 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+    private maxEeSpeedCallback: (maxEeSpeed: number) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam?: Param;
     private toolIsActuatedParam?: Param;
@@ -184,6 +189,7 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+        maxEeSpeedCallback: (maxEeSpeed: number) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
@@ -209,6 +215,7 @@ export class Robot extends React.Component {
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
         this.leaseStatusCallback = props.leaseStatusCallback;
+        this.maxEeSpeedCallback = props.maxEeSpeedCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -642,6 +649,57 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
+
+        this.initMaxEeSpeed();
+    }
+
+    /**
+     * Track the velocity limiter's max_ee_speed, which every derived joint velocity scales from.
+     *
+     * The limiter re-reads this parameter on each command, so an operator raising or lowering it
+     * at runtime changes what the robot actually does; the interface has to follow or its speed
+     * profiles stop describing the motion. The parameter is read once at startup and then watched
+     * on /parameter_events. If the limiter is not running the read simply never calls back, and
+     * the compiled-in default stands.
+     */
+    initMaxEeSpeed() {
+        new Param({
+            ros: this.ros,
+            name: `/${EE_VELOCITY_LIMITER_NODE}:max_ee_speed`,
+        }).get((value: number) => this.applyMaxEeSpeed(value));
+
+        const parameterEvents: Topic = new Topic({
+            ros: this.ros,
+            name: "/parameter_events",
+            messageType: "rcl_interfaces/msg/ParameterEvent",
+        });
+        this.subscriptions.push(parameterEvents);
+        parameterEvents.subscribe((message: Message) => {
+            const event = message as ParameterEvent;
+            if (!event?.node?.endsWith(`/${EE_VELOCITY_LIMITER_NODE}`)) return;
+            const changed = [
+                ...(event.new_parameters ?? []),
+                ...(event.changed_parameters ?? []),
+            ].find((parameter) => parameter?.name === "max_ee_speed");
+            if (changed) this.applyMaxEeSpeed(changed.value?.double_value);
+        });
+    }
+
+    /**
+     * Adopt a ceiling reported by ROS and tell the operator, if it is a real change.
+     *
+     * Args:
+     *     speed: Ceiling in m/s, or undefined when the parameter event carried no double value.
+     */
+    private applyMaxEeSpeed(speed: number | undefined) {
+        if (typeof speed !== "number") return;
+        if (!setMaxEeSpeed(speed)) return;
+        this.getMaxEeSpeed();
+    }
+
+    /** Report the ceiling the joint velocity table is derived from to the operator. */
+    getMaxEeSpeed() {
+        if (this.maxEeSpeedCallback) this.maxEeSpeedCallback(getMaxEeSpeed());
     }
 
     isToolActuated(): boolean {

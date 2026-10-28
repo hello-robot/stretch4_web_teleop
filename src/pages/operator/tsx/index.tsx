@@ -14,9 +14,11 @@ import {
 } from "shared/signaling/operatorSeat";
 import {
     delay,
+    MaxEeSpeedMessage,
     parseToolMetadata,
     RemoteStream,
     ROSOccupancyGrid,
+    setMaxEeSpeed,
     ToolMetadata,
     waitUntil,
     WebRTCMessage
@@ -380,6 +382,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "voiceToken":
             resolveVoiceToken(message);
             break;
+        case "maxEeSpeed":
+            setMaxEeSpeed((message as MaxEeSpeedMessage).maxEeSpeed);
+            break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
     }
@@ -414,6 +419,7 @@ function configureRemoteRobot() {
     // @flag voice_control_interface
     remoteRobot.getVoiceCapability();
     configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
+    remoteRobot.getMaxEeSpeed();
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(

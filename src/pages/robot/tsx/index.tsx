@@ -16,6 +16,7 @@ import {
     IsHomedMessage,
     IsRunStoppedMessage,
     LeaseStatusMessage,
+    MaxEeSpeedMessage,
     MapPoseMessage,
     ModeMessage,
     navigationProps,
@@ -53,6 +54,7 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
+    maxEeSpeedCallback: forwardMaxEeSpeed,
 });
 
 export let connection: WebRTCConnection;
@@ -244,6 +246,15 @@ async function forwardVoiceToken() {
     }
 }
 
+function forwardMaxEeSpeed(maxEeSpeed: number) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "maxEeSpeed",
+        maxEeSpeed: maxEeSpeed,
+    } as MaxEeSpeedMessage);
+}
+
 function forwardJointStates(
     robotPose: RobotPose,
     jointValues: ValidJointStateDict,
@@ -422,6 +433,9 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "getStretchTool":
             robot.getStretchTool();
+            break;
+        case "getMaxEeSpeed":
+            robot.getMaxEeSpeed();
             break;
         case "homeTheRobot":
             robot.homeTheRobot();

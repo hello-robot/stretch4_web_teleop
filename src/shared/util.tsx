@@ -102,7 +102,33 @@ export type WebRTCMessage =
     | SeedLocalizationStateMessage
     | VoiceCapabilityMessage
     | VoiceTokenMessage
+    | MaxEeSpeedMessage
     | cmd;
+
+/**
+ * Node name the velocity limiter launches under, as set in web_interface.launch.py. Used to pick
+ * its parameters out of /parameter_events.
+ */
+export const EE_VELOCITY_LIMITER_NODE = "ee_velocity_safety_filter";
+
+/** One entry of rcl_interfaces/msg/ParameterEvent; only the fields this interface reads. */
+export interface ParameterEventValue {
+    name: string;
+    value?: { type?: number; double_value?: number };
+}
+
+/** rcl_interfaces/msg/ParameterEvent, as delivered over rosbridge. */
+export interface ParameterEvent extends Message {
+    node: string;
+    new_parameters?: ParameterEventValue[];
+    changed_parameters?: ParameterEventValue[];
+}
+
+/** Robot -> operator report of the velocity limiter's current max_ee_speed, in m/s. */
+export interface MaxEeSpeedMessage {
+    type: "maxEeSpeed";
+    maxEeSpeed: number;
+}
 
 /** Robot -> operator reply to getVoiceCapability. */
 export interface VoiceCapabilityMessage {
@@ -268,11 +294,18 @@ export const PROFILE_SCALES: Record<SpeedProfile, number> = {
 };
 
 /**
- * End-effector speed ceiling the velocity_limiter enforces, in m/s. Must track the max_ee_speed
- * launch argument in web_interface.launch.py; the two run in separate processes, so nothing
- * detects a mismatch at runtime.
+ * Fallback end-effector speed ceiling, in m/s, matching the max_ee_speed launch argument's own
+ * default. Used until the robot reports the limiter's actual value, and whenever the limiter is
+ * not running at all, so the table is never derived from nothing.
  */
-const MAX_EE_SPEED = 0.2;
+const DEFAULT_MAX_EE_SPEED = 0.2;
+
+/**
+ * Ceiling currently in force, in m/s. Seeded with the launch default and replaced by the robot's
+ * live value once it arrives; the limiter re-reads its own parameter on every command, so an
+ * operator editing it at runtime takes effect immediately on the robot and this has to follow.
+ */
+let maxEeSpeed = DEFAULT_MAX_EE_SPEED;
 
 /**
  * Tool-frame linear speed each joint produces per unit of its own velocity. Measured against the
@@ -329,34 +362,62 @@ const UNLIMITED_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
  * ceiling at every profile produces the same speed for all three, and the speed setting silently
  * stops working on it.
  */
-const LIMITED_JOINT_VELOCITIES = Object.fromEntries(
-    Object.entries(TOOL_SPEED_PER_UNIT).map(([joint, toolSpeedPerUnit]) => [
-        joint,
-        MAX_EE_SPEED / (PROFILE_SCALES.fast * toolSpeedPerUnit!),
-    ]),
-) as { [key in ValidJoints]?: number };
+export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {};
 
 /**
- * The wrist turns at one speed across roll, pitch and yaw, taken from whichever of them the
- * limiter holds slowest.
+ * Rebuild DEFAULT_JOINT_VELOCITIES for the ceiling now in force.
  *
- * Yaw sweeps the tool through the widest arc, so it sets the pace. Matching the other two to it
- * keeps the wrist predictable to drive, and it is the only thing bounding roll at all: rolling
- * turns the tool about its own axis, which moves the attachment site nowhere, so the limiter
- * computes no gain for it and would otherwise let it spin as fast as this table asked.
+ * The object is rewritten in place rather than replaced, so the function providers and anything
+ * else holding a reference see the new values without being told.
+ *
+ * The wrist turns at one speed across roll, pitch and yaw, taken from whichever of them the
+ * limiter holds slowest. Yaw sweeps the tool through the widest arc, so it sets the pace.
+ * Matching the other two to it keeps the wrist predictable to drive, and it is the only thing
+ * bounding roll at all: rolling turns the tool about its own axis, which moves the attachment
+ * site nowhere, so the limiter computes no gain for it and would otherwise let it spin as fast
+ * as this table asked.
  */
-const WRIST_VELOCITY = Math.min(
-    LIMITED_JOINT_VELOCITIES.wrist_pitch_joint!,
-    LIMITED_JOINT_VELOCITIES.wrist_yaw_joint!,
-);
+function rebuildJointVelocities(): void {
+    const limited = Object.fromEntries(
+        Object.entries(TOOL_SPEED_PER_UNIT).map(([joint, toolSpeedPerUnit]) => [
+            joint,
+            maxEeSpeed / (PROFILE_SCALES.fast * toolSpeedPerUnit!),
+        ]),
+    ) as { [key in ValidJoints]?: number };
 
-export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
-    ...UNLIMITED_JOINT_VELOCITIES,
-    ...LIMITED_JOINT_VELOCITIES,
-    wrist_roll_joint: WRIST_VELOCITY,
-    wrist_pitch_joint: WRIST_VELOCITY,
-    wrist_yaw_joint: WRIST_VELOCITY,
-};
+    const wrist = Math.min(limited.wrist_pitch_joint!, limited.wrist_yaw_joint!);
+
+    Object.assign(DEFAULT_JOINT_VELOCITIES, UNLIMITED_JOINT_VELOCITIES, limited, {
+        wrist_roll_joint: wrist,
+        wrist_pitch_joint: wrist,
+        wrist_yaw_joint: wrist,
+    });
+}
+
+rebuildJointVelocities();
+
+/**
+ * Adopt the limiter's end-effector speed ceiling and rescale every joint derived from it.
+ *
+ * Args:
+ *     speed: Ceiling in m/s, as reported by the limiter's max_ee_speed parameter. Values that
+ *         are not finite and positive are ignored, since a zero or missing parameter would
+ *         otherwise pin every derived joint at a standstill.
+ *
+ * Returns:
+ *     True if the ceiling changed and the table was rebuilt.
+ */
+export function setMaxEeSpeed(speed: number): boolean {
+    if (!Number.isFinite(speed) || speed <= 0 || speed === maxEeSpeed) return false;
+    maxEeSpeed = speed;
+    rebuildJointVelocities();
+    return true;
+}
+
+/** Ceiling the joint velocity table is currently derived from, in m/s. */
+export function getMaxEeSpeed(): number {
+    return maxEeSpeed;
+}
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
 export const TASK_SPACE_LINEAR_VEL = 0.04;

@@ -18,6 +18,7 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
+    | GetMaxEeSpeed
     | HomeTheRobotCommand
     | SeedLocalizationCommand
     | GetVoiceCapabilityCommand
@@ -106,6 +107,10 @@ export interface GetOccupancyGrid {
 
 export interface GetStretchTool {
     type: "getStretchTool";
+}
+
+export interface GetMaxEeSpeed {
+    type: "getMaxEeSpeed";
 }
 
 export interface MoveBaseCommand {

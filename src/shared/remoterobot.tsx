@@ -5,6 +5,7 @@ import {
     cmd,
     DriveCommand,
     GetOccupancyGrid,
+    GetMaxEeSpeed,
     GetStretchTool,
     GetVoiceCapabilityCommand,
     HomeTheRobotCommand,
@@ -253,6 +254,18 @@ export class RemoteRobot extends React.Component<{}, any> {
         let cmd: GetStretchTool = {
             type: type,
         };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Ask the robot to report the velocity limiter's current max_ee_speed.
+     *
+     * The robot pushes the ceiling whenever it changes, but a push that lands before this
+     * operator's data channel is open is lost, so a freshly connected operator pulls it instead
+     * of driving at the compiled-in default.
+     */
+    getMaxEeSpeed() {
+        let cmd: GetMaxEeSpeed = { type: "getMaxEeSpeed" };
         this.robotChannel(cmd);
     }
 
