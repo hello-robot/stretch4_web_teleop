@@ -72,21 +72,40 @@ export abstract class FunctionProvider {
     }
 
     /**
-     * Multiplier for the current speed setting. Velocities and jog increments share it, so a
-     * speed profile changes a step action and a held action by the same proportion.
+     * Velocity of a joint at an explicit speed profile, in URDF units/s: the joint's
+     * DEFAULT_JOINT_VELOCITIES entry, which is its medium speed, scaled by that profile.
+     *
+     * Voice commands carry their own speed and are independent of the interface's speedometer, so
+     * they resolve velocities through this rather than through jointVelocity().
+     *
+     * Args:
+     *     jointName: Joint to look up.
+     *     profile: Speed profile to scale by.
+     *
+     * Returns:
+     *     The velocity in URDF units/s, or undefined if the joint has no entry.
      */
-    static get profileScale(): number {
-        return PROFILE_SCALES[this.speedProfile];
+    static jointVelocityAt(
+        jointName: ValidJoints,
+        profile: SpeedProfile,
+    ): number | undefined {
+        const velocity = DEFAULT_JOINT_VELOCITIES[jointName];
+        return velocity === undefined ? undefined : velocity * PROFILE_SCALES[profile];
     }
 
     /**
-     * Velocity of a joint at the current speed setting, in URDF units/s: the joint's
-     * DEFAULT_JOINT_VELOCITIES entry scaled by PROFILE_SCALES. Undefined if the joint has no
-     * entry.
+     * Velocity of a joint at the speedometer's current setting, in URDF units/s. Velocities and
+     * jog increments share that multiplier, so a speed profile changes a step action and a held
+     * action by the same proportion.
+     *
+     * Args:
+     *     jointName: Joint to look up.
+     *
+     * Returns:
+     *     The velocity in URDF units/s, or undefined if the joint has no entry.
      */
     static jointVelocity(jointName: ValidJoints): number | undefined {
-        const velocity = DEFAULT_JOINT_VELOCITIES[jointName];
-        return velocity === undefined ? undefined : velocity * this.profileScale;
+        return this.jointVelocityAt(jointName, this.speedProfile);
     }
 
     /**

@@ -268,32 +268,74 @@ export const PROFILE_SCALES: Record<SpeedProfile, number> = {
 };
 
 /**
- * Joint velocities at the medium speed setting, in URDF units/s; PROFILE_SCALES derives the slow
- * and fast settings from these. The driver's own joint_velocity.* params are its default motion
- * profile, which is far faster than the end-effector limiter allows, so these are set here rather
- * than read from it.
+ * End-effector speed ceiling the velocity_limiter enforces, in m/s. Must track the max_ee_speed
+ * launch argument in web_interface.launch.py; the two run in separate processes, so nothing
+ * detects a mismatch at runtime.
+ */
+const MAX_EE_SPEED = 0.2;
+
+/**
+ * Tool-frame linear speed each joint produces per unit of its own velocity. Measured against the
+ * limiter's own kinematics, forward_velocity() to tool_attachment_site_link.
  *
- * Keep each entry under the limiter's ceiling at the fast profile, or that axis loses its speed
- * settings entirely: the limiter scales a command down to max_ee_speed, so once
- * `velocity * PROFILE_SCALES.fast * toolSpeedPerUnit` exceeds the ceiling, every profile comes out
- * at the same clipped speed. `toolSpeedPerUnit` is 1.0 for the base's translation and for the lift
- * and arm, and about 0.29 m/s per rad/s for the base's rotation with the arm stowed (0.78 with it
- * extended half a metre).
+ * The lift, arm and base translation move the tool one-for-one in every pose. Wrist pitch is
+ * likewise fixed, and wrist yaw's figure is the largest it reaches over the wrist's travel, so
+ * those stay within the ceiling wherever the arm happens to be.
+ *
+ * Base rotation is the exception: its moment arm grows with arm extension, reaching 0.78 with the
+ * arm half a metre out, and the figure here is the stowed one. Sizing it for the extended case
+ * would leave the base crawling in the pose it spends most of its time in, so the faster profiles
+ * are instead allowed to clip once the arm is extended, which is the limiter doing its job.
+ *
+ * Joints absent here move the tool only in ways this ceiling cannot measure, so the limiter never
+ * scales them: the head is off the tool chain entirely, the gripper is not part of the limiter's
+ * joint vector, and wrist roll turns the tool about its own axis, giving the attachment site
+ * exactly zero linear velocity. Their velocities come from UNLIMITED_JOINT_VELOCITIES instead.
+ */
+const TOOL_SPEED_PER_UNIT: { [key in ValidJoints]?: number } = {
+    lift_joint: 1.0,
+    arm_joint: 1.0,
+    translate_mobile_base: 1.0,
+    rotate_mobile_base: 0.2862,
+    wrist_yaw_joint: 0.1065,
+    wrist_pitch_joint: 0.0608,
+};
+
+/**
+ * Medium-profile velocities for the joints the limiter cannot see, in URDF units/s. Nothing
+ * downstream bounds these, so they are the only thing deciding how fast those axes move.
  *
  * The gripper's URDF units depend on the attached tool, so its entry is only nominal; its jog
  * increment is normalized to the tool's travel in updateJointIncrements().
  */
-export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
+const UNLIMITED_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
     head_tilt_joint: 0.3,
     head_pan_joint: 0.3,
     gripper_joint: 0.075,
-    arm_joint: 0.1,
-    lift_joint: 0.15,
     wrist_roll_joint: 4.0,
-    wrist_pitch_joint: 4.0,
-    wrist_yaw_joint: 4.0,
-    translate_mobile_base: 0.1,
-    rotate_mobile_base: 0.34,
+};
+
+/**
+ * Joint velocities at the medium speed setting, in URDF units/s; PROFILE_SCALES derives the slow
+ * and fast settings from these. The driver's own joint_velocity.* params are its default motion
+ * profile, which is far faster than the end-effector limiter allows, so these come from here
+ * rather than from it.
+ *
+ * Every joint the limiter constrains is derived from MAX_EE_SPEED rather than written down, which
+ * puts the fast profile exactly on the ceiling and makes it impossible to set a velocity the
+ * limiter would clip. That matters because a clipped axis does not merely run slower: the limiter
+ * scales a command by a single gain until the tool reaches MAX_EE_SPEED, so an axis over the
+ * ceiling at every profile produces the same speed for all three, and the speed setting silently
+ * stops working on it.
+ */
+export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
+    ...UNLIMITED_JOINT_VELOCITIES,
+    ...(Object.fromEntries(
+        Object.entries(TOOL_SPEED_PER_UNIT).map(([joint, toolSpeedPerUnit]) => [
+            joint,
+            MAX_EE_SPEED / (PROFILE_SCALES.fast * toolSpeedPerUnit!),
+        ]),
+    ) as { [key in ValidJoints]?: number }),
 };
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */

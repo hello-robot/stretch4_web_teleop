@@ -9,7 +9,6 @@ import React, {
 import { buttonFunctionProvider } from "..";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { ActionModeType } from "../utils/component_definitions";
-import { velocityScaleForVoiceSpeed } from "../utils/action-speed-scale";
 import {
     connectOpenAIRealtimeVoice,
     type ActiveRealtimeVoiceSession,
@@ -81,7 +80,6 @@ const clearVoiceUiStatus = () =>
     });
 
 export type VoiceCommandAssistantProps = {
-    onVelocityScaleApplied: (scale: number) => void;
     setActionMode: (mode: ActionModeType) => void;
     addToast: AddToastFn;
     onSwitchScene: (scene: VoiceSceneName) => void;
@@ -104,7 +102,6 @@ export type VoiceCommandAssistantProps = {
 
 /** OpenAI speech-to-speech voice session controller (Realtime WebRTC). */
 export const VoiceCommandAssistant = ({
-    onVelocityScaleApplied,
     setActionMode,
     addToast,
     onSwitchScene,
@@ -161,12 +158,6 @@ export const VoiceCommandAssistant = ({
             void disconnect();
         };
     }, [disconnect]);
-
-    const onVoiceSpeedChange = useCallback(
-        (speed: VoiceSpeed) =>
-            onVelocityScaleApplied(velocityScaleForVoiceSpeed(speed)),
-        [onVelocityScaleApplied],
-    );
 
     const onVoicePressAndHoldRequired = useCallback(
         () => setActionMode(ActionModeType.PressAndHold),
@@ -361,7 +352,6 @@ export const VoiceCommandAssistant = ({
                     ? requestVoiceTokenViaRobot
                     : undefined,
                 voiceMoveExecutionMode: VOICE_MOVE_EXECUTION_MODE,
-                onVoiceSpeedChange,
                 onVoicePressAndHoldRequired,
                 onVoiceMoveFeedback,
                 onSwitchScene: handleSwitchScene,
@@ -438,7 +428,6 @@ export const VoiceCommandAssistant = ({
         }
     }, [
         phase,
-        onVoiceSpeedChange,
         onVoicePressAndHoldRequired,
         onVoiceMoveFeedback,
         handleSwitchScene,
