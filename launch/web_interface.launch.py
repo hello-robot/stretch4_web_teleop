@@ -364,7 +364,7 @@ def generate_launch_description():
     )
     max_ee_speed_arg = DeclareLaunchArgument(
         "max_ee_speed",
-        default_value="0.2",  # m/s
+        default_value="0.15",  # m/s
         description="Maximum allowed end-effector linear speed in m/s",
     )
     target_frame_arg = DeclareLaunchArgument(
@@ -441,6 +441,11 @@ def generate_launch_description():
         ]
     )
 
+    # Task space controller node
+    # publish_base_and_arm_separately=False sends unified full-body 8-DOF JointJog
+    # commands to /teleop/joint_vel. This ensures velocity_limiter scales both base
+    # rotation and wrist yaw with the identical scalar gain, preventing yaw drift
+    # during low-speed Cartesian tool movements.
     task_space_controller_node = Node(
         package="stretch_kinematics",
         executable="task_space_controller",

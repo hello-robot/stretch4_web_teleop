@@ -58,7 +58,8 @@ export class FlyingGripperFunctionProvider extends FunctionProvider {
      *
      * @param button directional translation button
      * @param durationMs how long to apply task-space velocity (defaults to 1000ms)
-     * @param speedMultiplier scalar for task-space velocity (slow=0.5, medium=1.0, fast=1.5)
+     * @param speedMultiplier PROFILE_SCALES entry for the speed the command named; the
+     *   interface's speedometer does not apply to voice moves, so this is the only scaling.
      * @returns false if no robot attached or button is not a translation
      */
     public timedFlyingMove(
@@ -75,10 +76,7 @@ export class FlyingGripperFunctionProvider extends FunctionProvider {
             return false;
         }
 
-        const linScale =
-            TASK_SPACE_LINEAR_VEL *
-            (FunctionProvider.velocityScale || 1.0) *
-            speedMultiplier;
+        const linScale = TASK_SPACE_LINEAR_VEL * speedMultiplier;
         const [x, y, z] = translation;
 
         this.stopCurrentAction(true);
