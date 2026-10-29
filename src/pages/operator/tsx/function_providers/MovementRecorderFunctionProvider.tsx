@@ -47,19 +47,38 @@ export class MovementRecorderFunctionProvider extends FunctionProvider {
         this.storageHandler = storageHandler;
     }
 
-    public setCancelPlaybackHandler(handler?: () => boolean) {
+    /**
+     * Registers a callback handler for cancelling active playback.
+     *
+     * Args:
+     *     handler: Optional function returning true if active playback was cancelled.
+     *
+     * Returns:
+     *     None.
+     */
+    public setCancelPlaybackHandler(handler?: () => boolean): void {
         this.cancelPlaybackHandler = handler;
     }
 
+    /**
+     * Cancels any active pose playback by invoking the UI cancel handler and sending
+     * a stopTrajectory command to the remote robot.
+     *
+     * Args:
+     *     None.
+     *
+     * Returns:
+     *     True if cancellation was dispatched, False otherwise.
+     */
     public cancelPlayback(): boolean {
+        let handled = false;
         if (this.cancelPlaybackHandler) {
-            return this.cancelPlaybackHandler();
+            handled = this.cancelPlaybackHandler();
         }
         if (FunctionProvider.remoteRobot) {
             FunctionProvider.remoteRobot.stopTrajectory();
-            return true;
         }
-        return false;
+        return handled;
     }
 
     public setModalOpenHandler(handler?: (open: boolean) => void) {

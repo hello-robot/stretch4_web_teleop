@@ -214,10 +214,36 @@ export class ButtonFunctionProvider extends FunctionProvider {
         if (this.operatorCallback) this.operatorCallback(this.buttonStateMap);
     }
 
-    //  TEMP FOR ACTION MODAL DISABILING
-    public disableActiveButton() {
+    /**
+     * Stops any currently executing movement action and releases active/latched button states.
+     */
+    public disableActiveButton(): void {
         this.stopCurrentAction(true);
-        this.setButtonInactiveState(this.activeButtonPadFunction);
+        let changed = false;
+
+        if (this.activeButtonPadFunction !== undefined) {
+            const currentState = this.buttonStateMap.get(this.activeButtonPadFunction);
+            if (
+                currentState !== ButtonState.Collision &&
+                currentState !== ButtonState.Limit &&
+                currentState !== ButtonState.Inactive
+            ) {
+                this.buttonStateMap.set(this.activeButtonPadFunction, ButtonState.Inactive);
+                changed = true;
+            }
+            this.activeButtonPadFunction = undefined;
+        }
+
+        this.buttonStateMap.forEach((state, btn) => {
+            if (state === ButtonState.Active) {
+                this.buttonStateMap.set(btn, ButtonState.Inactive);
+                changed = true;
+            }
+        });
+
+        if (changed && this.operatorCallback) {
+            this.operatorCallback(this.buttonStateMap);
+        }
     }
 
     /**

@@ -1,169 +1,179 @@
 #!/bin/bash
+# The launch. Decides which doors to open, then opens them.
+#
+# Both entry points come through here: a person at a terminal, and
+# stretch_firebase_daemon.js, which spawns this with -f on a dashboard claim.
+# There is one launch path, so a change lands on both callers at once -- the
+# daemon pays a redundant Firebase probe for that, which is cheap next to the
+# cost of two paths drifting apart.
+#
+# Usage: ./launch_interface.sh [-f|--firebase] [-m map.yaml]
+#
+# The log directory comes from WEB_TELEOP_LOG_DIR when set, which is how the
+# daemon points a run at a directory it is already tailing.
 set -o pipefail
 
-# Define color variables
+# 1. Define color variables
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
+# 2. Resolve the repo directory and source the shared libraries
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$REPO_DIR/scripts/lib/teleop_env.sh"
+source "$REPO_DIR/scripts/lib/hosting_mode_resolution.sh"
 
-FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
-export FEATURE_VOICE_CONTROL_INTERFACE
+# 3. Export the teleop environment
+#
+# Before validate_installation, which names certificate files after the fleet
+# id. Without this it reads whatever the invoking shell happened to export.
+teleop_setup_env
 
-while getopts m:t:f opt; do
-	case $opt in
-	m)
-		# Usage: ./launch_interface.sh -m $HELLO_FLEET_PATH/maps/<map_name>.yaml
-		if [[ -f $OPTARG ]]; then
-			MAP="-m $OPTARG"
+# 4. Initialize configuration defaults
+MAP=""
+MAP_YAML="<none>"
+MAP_YAML_SOURCE="map-less mode"
+CLI_HOSTING=""
+CLI_HOSTING_FLAG=""
+DRY_RUN=0
+
+# 5. Define the usage text
+usage() {
+	cat <<'USAGE'
+Usage: ./launch_interface.sh [options]
+
+Launch web teleop on this robot.
+
+Options:
+  --hosting [mode]  Set hosting mode: local (default) or firebase.
+  -f, --firebase    Shorthand for --hosting firebase. Serve the operator
+                    interface through Firebase Hosting in addition to the LAN
+                    door at /local/operator/. Firebase must already be set up
+                    on this robot -- the launch reports an error rather than
+                    quietly serving local instead.
+  --local           Shorthand for --hosting local. Overrides a standing
+                    HOSTING_MODE=firebase in .env or the environment.
+  -m <map.yaml>     Map to load. Ignored when the file does not exist.
+  --dry-run         Validate installation, resolve all configuration and
+                    provenance, run preflights, print the manifest, and exit 0
+                    without touching ROS2 or pm2.
+  -h, --help        Show this message.
+
+Without flags or standing HOSTING_MODE configuration, the launch is local only.
+
+Operator URLs, once the launch finishes:
+  https://<host>/local/operator/   the LAN door, over Tailscale or WiFi, in
+                                   both modes. Needs no internet.
+  https://<host>/operator/         the cloud door in firebase mode; in local
+                                   mode it redirects to /local/operator/.
+USAGE
+}
+
+# 6. Parse arguments
+#
+# Arguments are parsed before anything else runs: --help and a misspelled flag
+# are handled before resolving the npm dependency tree
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-f | --firebase)
+		CLI_HOSTING="firebase"
+		CLI_HOSTING_FLAG="$1"
+		;;
+	--local)
+		CLI_HOSTING="local"
+		CLI_HOSTING_FLAG="--local"
+		;;
+	--hosting)
+		if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+			shift
+			CLI_HOSTING="$1"
+			CLI_HOSTING_FLAG="--hosting $1"
+		else
+			CLI_HOSTING="local"
+			CLI_HOSTING_FLAG="--hosting (default: local)"
 		fi
 		;;
-	f)
-		# Usage: ./launch_interface.sh -f
-		FIREBASE="-f"
+	--hosting=*)
+		CLI_HOSTING="${1#--hosting=}"
+		CLI_HOSTING="${CLI_HOSTING:-local}"
+		CLI_HOSTING_FLAG="$1"
+		;;
+	-m)
+		shift
+		if [ $# -eq 0 ]; then
+			echo -e "${RED}ERROR:${NC} -m needs a path to a map .yaml."
+			exit 1
+		fi
+		if [ -f "$1" ]; then
+			MAP="-m $1"
+			MAP_YAML="$1"
+			MAP_YAML_SOURCE="from cli: -m"
+		else
+			MAP_YAML="<none>"
+			MAP_YAML_SOURCE="cli: -m ($1 not found; map-less mode)"
+		fi
+		;;
+	--dry-run)
+		DRY_RUN=1
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo -e "${RED}ERROR:${NC} unknown option: $1"
+		usage >&2
+		exit 1
 		;;
 	esac
+	shift
 done
 
-# Firebase keys in .env mean this robot joins through Firebase. The same
-# launch still serves https://<this-robot>/operator and the Hosting dashboard.
-ENV_FILE="$REPO_DIR/.env"
-env_val() {
-	grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-
-}
-if [ -z "$FIREBASE" ] && [ -f "$ENV_FILE" ]; then
-	if [ -n "$(env_val PUBLIC_FIREBASE_API_KEY)" ] && [ -n "$(env_val PUBLIC_FIREBASE_DATABASE_URL)" ] &&
-		[ -n "$(env_val ROBOT_USERNAME)" ] && [ -n "$(env_val ROBOT_PASSWORD)" ] &&
-		[ -n "$(env_val HELLO_FLEET_ID)" ]; then
-		FIREBASE="-f"
-	fi
-fi
-if [ -z "$WEB_TELEOP_BUILD_MODE" ] && [ -f "$ENV_FILE" ]; then
-	WEB_TELEOP_BUILD_MODE="$(env_val WEB_TELEOP_BUILD_MODE)"
-fi
-export WEB_TELEOP_BUILD_MODE="${WEB_TELEOP_BUILD_MODE:-development}"
-
-# projectId is entered once, in .env. The Firebase CLI can only read it from
-# .firebaserc, so regenerate that before anything shells out to the CLI.
-if [ "$FIREBASE" = "-f" ]; then
-	node "$REPO_DIR/scripts/syncFirebaseRc.js" || exit 1
+# 7. Resolve the log directory for this run and record where it came from
+if [ -n "${WEB_TELEOP_LOG_DIR:-}" ]; then
+	export WEB_TELEOP_LOG_DIR_SOURCE="env:WEB_TELEOP_LOG_DIR"
+else
+	export WEB_TELEOP_LOG_DIR_SOURCE="default"
 fi
 
-timestamp='stretch4_web_teleop_'$(date '+%Y%m%d%H%M')
-logdir="$HOME/stretch_user/log/web_teleop/$timestamp"
-logfile_ros="$logdir/start_ros2.txt"
-logfile_node="$logdir/start_web_server_and_robot_browser.txt"
-logzip="$logdir/stretch4_web_teleop_logs.zip"
-mkdir -p $logdir
-# Stable pointer at this run's timestamped $logdir (mirrors ROS's own
-# ~/.ros/log/latest convention) so tools started outside this script — e.g.
-# `terminator -g tools/terminator/config`'s watch-* panes, which have no
-# REDIRECT_LOGDIR of their own — tail the current run instead of a stale one.
-ln -sfn "$logdir" "$HOME/stretch_user/log/web_teleop/latest_run"
+if [ "$DRY_RUN" -eq 1 ]; then
+	RESOLVED_LOG_DIR="${WEB_TELEOP_LOG_DIR:-$TELEOP_LOG_ROOT/stretch4_web_teleop_$(date '+%Y%m%d%H%M')}"
+	export RESOLVED_LOG_DIR
+else
+	logdir="$(teleop_log_dir)"
+	export RESOLVED_LOG_DIR="$logdir"
+	logzip="$logdir/stretch4_web_teleop_logs.zip"
+fi
 
-echo ""
-echo "#############################################"
-echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
-echo "#############################################"
-echo ""
-
-# Voice JSONL logs and audio-snippet clips (when voice_input_recording is
-# enabled) are written under this run's own timestamped $logdir — see
-# voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
-# in a separate persistent directory across runs, so there is no pre-run disk
-# usage to report here.
-web_teleop_du=$(du -sh "$HOME/stretch_user/log/web_teleop" 2>/dev/null | awk '{print $1}')
-echo -e "${BLUE}web_teleop logs total size:${NC} ${web_teleop_du:-0} in $HOME/stretch_user/log/web_teleop (not auto-purged; purge old run folders manually if desired)"
-
-# Validate web teleop installation
-function validate_installation {
-	local cert_dir="$HOME/ament_ws/src/stretch4_web_teleop/certificates"
-	local env_file="$HOME/ament_ws/src/stretch4_web_teleop/.env"
-
-	echo -e "Validating web teleop installation..."
-
-	# Check certificates folder exists
-	if [ ! -d "$cert_dir" ]; then
-		echo -e "${RED}ERROR:${NC} Certificates folder not found at $cert_dir"
-		echo "       Update your ROS workspace: https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	# Check .env file exists
-	if [ ! -f "$env_file" ]; then
-		echo -e "${RED}ERROR:${NC} .env file not found at $env_file"
-		echo "       Update your ROS workspace: https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	# Check certificate files exist with correct naming
-	local certfile_name="${HELLO_FLEET_ID}+6.pem"
-	local keyfile_name="${HELLO_FLEET_ID}+6-key.pem"
-
-	if [ ! -f "$cert_dir/$certfile_name" ]; then
-		echo -e "${RED}ERROR:${NC} Certificate file not found at $cert_dir/$certfile_name"
-		echo "       Update your ROS workspace: https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	if [ ! -f "$cert_dir/$keyfile_name" ]; then
-		echo -e "${RED}ERROR:${NC} Key file not found at $cert_dir/$keyfile_name"
-		echo "       Update your ROS workspace: https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	# Validate .env file contains correct paths
-	local env_certfile=$(grep '^certfile=' "$env_file" | cut -d'=' -f2)
-	local env_keyfile=$(grep '^keyfile=' "$env_file" | cut -d'=' -f2)
-
-	if [ "$env_certfile" != "$certfile_name" ]; then
-		echo -e "${RED}ERROR:${NC} .env certfile is set to '$env_certfile' but should be '$certfile_name'"
-		echo "       Update your ROS workspace: https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	if [ "$env_keyfile" != "$keyfile_name" ]; then
-		echo -e "${RED}ERROR:${NC} .env keyfile is set to '$env_keyfile' but should be '$keyfile_name'"
-		echo "       Update your ROS workspace: https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	# Check node_modules folder exists
-	local node_modules_dir="$HOME/ament_ws/src/stretch4_web_teleop/node_modules"
-	if [ ! -d "$node_modules_dir" ]; then
-		echo -e "${RED}ERROR:${NC} node_modules folder not found at $node_modules_dir"
-		echo "       Run 'npm install --force' to install dependencies OR update your ROS workspace https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	# Check npm dependencies have no errors
-	cd "$HOME/ament_ws/src/stretch4_web_teleop"
-	npm list --depth=0 >/dev/null 2>&1
-	if [ $? -ne 0 ]; then
-		echo -e "${RED}ERROR:${NC} npm dependencies have errors. "
-		echo "       Run 'npm install --force' to fix OR update your ROS workspace https://docs.hello-robot.com/0.3/installation/ros_workspace/"
-		return 1
-	fi
-
-	echo -e "${GREEN}✓ Installation validation passed${NC}"
-	return 0
-}
-
-function echo_failure_help {
-	zip -r $logzip $logdir/ >/dev/null
-	echo ""
-	echo "#############################################"
-	echo -e "${RED}FAILURE. COULD NOT LAUNCH WEB TELEOP.${NC}"
-	echo "Look at the troubleshooting guide for solutions to common issues: https://docs.hello-robot.com/0.3/getting_started/demos_web_teleop/#troubleshooting"
-	echo "or contact Hello Robot support and include $logzip"
-	echo "#############################################"
-	echo ""
-	exit 1
-}
-
+# 8. Define the operator URL printer
+#
+# Print the URLs an operator should visit for the mode that started.
+#
+# Both doors are named in both modes, because the point of the split is that a
+# URL means one thing: /local/operator/ is always the LAN bundle over socket.io,
+# and /operator/ is always the cloud bundle -- a redirect to the former when no
+# cloud door was opened.
+#
+# Args:
+#   $1: hosting mode: local or firebase.
 function print_interface_urls {
+	local mode="$1"
+	local project_id
+
+	echo ""
+	echo "#############################################"
+	echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
+	echo ""
+
+	echo -e "${BLUE}Hosting Mode:${NC} $HOSTING_MODE ($HOSTING_MODE_SOURCE)"
+	echo "  Robot: https://localhost/local/operator/"
+	if [ "$mode" = "firebase" ]; then
+		project_id="$(teleop_env_val PUBLIC_FIREBASE_PROJECT_ID)"
+		if [ -n "$project_id" ]; then
+			echo "  Dashboard: https://${project_id}.web.app/"
+		fi
+	fi
 	ifconfig | awk '
 	  /^[^ \t]/ {
 	    iface=$1
@@ -181,68 +191,116 @@ function print_interface_urls {
 	    if (ip == "" || ip == "127.0.0.1") next
 
 	    if (iface == "tailscale0") {
-	      print "Tailscale: https://" ip "/operator"
+	      print "  Tailscale: https://" ip "/local/operator/"
 	    } else if (iface ~ /^(wlan|wl)/) {
-	      print "WiFi: https://" ip "/operator"
+	      print "  WiFi: https://" ip "/local/operator/"
 	    } else if (iface ~ /^(eth|en)/) {
-	      print "Ethernet: https://" ip "/operator"
+	      print "  Ethernet: https://" ip "/local/operator/"
 	    } else {
-	      print iface ": https://" ip "/operator"
+	      print "  " iface ": https://" ip "/local/operator/"
 	    }
 	  }'
+
+	echo "#############################################"
+	echo ""
 }
+
+# 9. Print the banner
+echo ""
+echo "#############################################"
+echo -e "${GREEN}STRETCH VOICE CONTROL (SVC)${NC}"
+echo "#############################################"
+echo ""
+
+# 10. Report the web_teleop log disk usage
+#
+# Voice JSONL logs and audio-snippet clips (when voice_input_recording is
+# enabled) are written under this run's own timestamped $logdir — see
+# voiceInteractionLogger.js's getLogDir/getVoiceAudioDir. Nothing accumulates
+# in a separate persistent directory across runs, so there is no pre-run disk
+# usage to report here.
+web_teleop_du=$(du -sh "$HOME/stretch_user/log/web_teleop" 2>/dev/null | awk '{print $1}')
+echo -e "${BLUE}web_teleop logs total size:${NC} ${web_teleop_du:-0} in $HOME/stretch_user/log/web_teleop (not auto-purged; purge old run folders manually if desired)"
 
 echo ""
 echo "#############################################"
 echo "LAUNCHING WEB TELEOP"
 echo "#############################################"
 
+# 11. Print the resolved feature flags
 echo "Feature Flags:"
-while IFS='=' read -r var value; do
+while IFS=$'=\t' read -r var value source; do
 	if [[ "$value" -eq 1 ]]; then
-		echo -e "  ${GREEN}$var=$value${NC}"
+		echo -e "  ${GREEN}$var=$value${NC} (from $source)"
 	else
-		echo -e "  ${RED}$var=$value${NC}"
+		echo -e "  ${RED}$var=$value${NC} (from $source)"
 	fi
-done < <(node "$REPO_DIR/feature-flags.js" --all)
+done < <(node "$REPO_DIR/feature-flags.js" --all --sources)
 
-validate_installation
-if [ $? -ne 0 ]; then
-	echo_failure_help
+# 12. Validate the installation
+#
+# Certificates included, so this gates every mode. It also runs before the
+# Firebase probe on purpose: that probe reports a missing node_modules as its
+# own "set up and broken" code, which would blame Firebase for a broken install.
+if [ "$DRY_RUN" -eq 1 ]; then
+	validate_installation || exit 1
+else
+	validate_installation || echo_failure_help "$logdir"
 fi
 
-cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_ros2.sh -l $logdir $MAP |& tee $logfile_ros
-if [ $? -ne 0 ]; then
-	echo_failure_help
+# 13. Resolve HOSTING_MODE across all layers (default < .env < env < CLI),
+#     then autodeploy and build mode.
+resolve_hosting_mode "$CLI_HOSTING" "$CLI_HOSTING_FLAG" || exit 1
+teleop_resolve_autodeploy
+teleop_resolve_build_mode
+
+# 14. Check Firebase readiness when hosting through the cloud
+#
+# Only HOSTING_MODE=firebase has anything left to check. HOSTING_MODE=local
+# needs nothing beyond the installation that was just validated.
+fb_status=$STATUS_READY
+firebase_error=""
+if [ "$HOSTING_MODE" = "firebase" ]; then
+	check_firebase_readiness
+	if [ "$fb_status" -ne "$STATUS_READY" ]; then
+		echo -e "${RED}ERROR${NC} $firebase_error"
+		exit 1
+	fi
 fi
 
-cd $HOME/ament_ws/src/stretch4_web_teleop
+# 15. Print the launch manifest; --dry-run stops here
+export MAP_YAML MAP_YAML_SOURCE
+if [ "$DRY_RUN" -eq 1 ]; then
+	print_launch_manifest
+	exit 0
+fi
+
+print_launch_manifest "$logdir/launch_manifest.txt"
+
+# 16. Resolve the voice control interface feature flag
+FEATURE_VOICE_CONTROL_INTERFACE="$(node "$REPO_DIR/feature-flags.js" voice_control_interface)" || exit 1
+export FEATURE_VOICE_CONTROL_INTERFACE
+
+# 17. Start ROS2
+logfile_ros="$logdir/start_ros2.txt"
+logfile_node="$logdir/start_web_server_and_robot_browser.txt"
+
+cd "$REPO_DIR"
+
+./start_ros2.sh -l "$logdir" $MAP |& tee "$logfile_ros"
+
+# 18. Configure audio
 ./configure_audio.sh
 
 # echo ""
-cd $HOME/ament_ws/src/stretch4_web_teleop
-./start_web_server_and_robot_browser.sh -l $logdir -o $logfile_node $FIREBASE |& tee -a $logfile_node
+# 19. Start the web server and the robot browser
+cd "$REPO_DIR"
+./start_web_server_and_robot_browser.sh -l "$logdir" -o "$logfile_node" --hosting "$HOSTING_MODE" |& tee -a "$logfile_node"
 if [ $? -ne 0 ]; then
-	echo_failure_help
+	echo_failure_help "$logdir"
 fi
 
+# 20. Archive this run's logs and print the operator URLs
 zip -r $logzip $logdir/ >/dev/null
 
-echo ""
-echo "#############################################"
-echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
-echo "Visit the appropriate URL(s) below to see web teleop:"
-if [ "$FIREBASE" = "-f" ]; then
-	PROJECT_ID="$(env_val PUBLIC_FIREBASE_PROJECT_ID)"
-	if [ -n "$PROJECT_ID" ]; then
-		echo "Dashboard: https://${PROJECT_ID}.web.app/"
-	fi
-	echo "Localhost: https://localhost/operator"
-	print_interface_urls
-else
-	echo "Localhost: https://localhost/operator"
-	print_interface_urls
-fi
-echo "#############################################"
-echo ""
+print_interface_urls "$HOSTING_MODE"
