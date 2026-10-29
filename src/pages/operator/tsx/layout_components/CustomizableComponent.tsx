@@ -28,6 +28,8 @@ export type SharedState = {
     toolMetadata?: ToolMetadata;
     /** Whether or not robot has been homed */
     robotIsHomed: boolean;
+    /** Whether or not robot is currently runstopped */
+    isRunStopped?: boolean;
     /** Movement recorder's playback state  */
     playbackPosesState?: undefined | {
         state: string;

@@ -182,7 +182,8 @@ const FlyingGripperPad: React.FC<FlyingGripperPadProps> = ({
     sharedState,
 }) => {
     const robotIsHomed = sharedState?.robotIsHomed ?? true;
-    const motionDisabled = !robotIsHomed;
+    const isRunStopped = sharedState?.isRunStopped ?? false;
+    const motionDisabled = !robotIsHomed || isRunStopped;
     const gripperDisabled =
         motionDisabled || sharedState?.toolMetadata?.isActuated === false;
 

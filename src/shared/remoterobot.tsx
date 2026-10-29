@@ -4,8 +4,9 @@ import {
     CameraPerspectiveCommand,
     cmd,
     DriveCommand,
-    GetOccupancyGrid,
     GetMaxEeSpeed,
+    GetOccupancyGrid,
+    GetRunStopCommand,
     GetStretchTool,
     GetVoiceCapabilityCommand,
     HomeTheRobotCommand,
@@ -19,7 +20,7 @@ import {
     setRobotModeCommand,
     SetTaskSpaceVelocityCommand,
     ToggleCommand,
-    VelocityCommand,
+    VelocityCommand
 } from "shared/commands";
 import {
     RobotPose,
@@ -238,6 +239,13 @@ export class RemoteRobot extends React.Component<{}, any> {
         let cmd: ToggleCommand = {
             type: type,
             toggle: toggle,
+        };
+        this.robotChannel(cmd);
+    }
+
+    getRunStop(type: "getRunStop") {
+        let cmd: GetRunStopCommand = {
+            type: type,
         };
         this.robotChannel(cmd);
     }

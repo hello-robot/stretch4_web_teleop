@@ -311,8 +311,9 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
     const isGripperBtn = props.funct === ButtonPadButton.GripperOpen || props.funct === ButtonPadButton.GripperClose;
     const toolMetadata: ToolMetadata | undefined = props.sharedState.toolMetadata;
     const gripperDisabled = isGripperBtn && toolMetadata?.isActuated === false;
+    const isRunStopped = Boolean(props.sharedState.isRunStopped);
 
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled;
+    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled || isRunStopped;
 
     const clickProps = isDisabled
         ? {}
@@ -596,8 +597,9 @@ const SingleButton = (props: SingleButtonProps) => {
     const isGripperBtn = props.funct === ButtonPadButton.GripperOpen || props.funct === ButtonPadButton.GripperClose;
     const toolMetadata: ToolMetadata | undefined = props.sharedState.toolMetadata;
     const gripperDisabled = isGripperBtn && toolMetadata?.isActuated === false;
+    const isRunStopped = Boolean(props.sharedState.isRunStopped);
 
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled;
+    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled || isRunStopped;
 
     const clickProps = isDisabled
         ? {}

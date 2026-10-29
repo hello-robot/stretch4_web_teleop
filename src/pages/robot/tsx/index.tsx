@@ -16,8 +16,8 @@ import {
     IsHomedMessage,
     IsRunStoppedMessage,
     LeaseStatusMessage,
-    MaxEeSpeedMessage,
     MapPoseMessage,
+    MaxEeSpeedMessage,
     ModeMessage,
     navigationProps,
     OccupancyGridMessage,
@@ -436,6 +436,8 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "getMaxEeSpeed":
             robot.getMaxEeSpeed();
+        case "getRunStop":
+            forwardIsRunStopped(robot.getIsRunStopped());
             break;
         case "homeTheRobot":
             robot.homeTheRobot();
