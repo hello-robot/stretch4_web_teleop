@@ -1,0 +1,13 @@
+# Python dependency declarations for stretch4_web_teleop.
+
+[dependency-groups]
+
+robot = [
+    "hello-robot-stretch4-body>=2026.10.21",
+    "hello-robot-stretch4-urdf>=2026.10.20",
+    "numpy>=2.0.0",
+]
+
+tools = [
+    "pillow",
+]

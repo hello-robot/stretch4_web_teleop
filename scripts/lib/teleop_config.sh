@@ -1,7 +1,5 @@
 # shellcheck shell=bash
 # Configuration and logging shared by every launch path.
-#
-# Source this; do not execute it.
 
 TELEOP_REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TELEOP_ENV_FILE="$TELEOP_REPO_DIR/.env"
@@ -133,7 +131,7 @@ EOF
 # missing node_modules as its own "set up and broken" code; probing first would
 # report a broken installation as broken Firebase.
 #
-# About 0.75s, dominated by npm list --depth=0. Needs HELLO_FLEET_ID, so call it
+# About 1s, dominated by npm list --depth=0. Needs HELLO_FLEET_ID, so call it
 # after teleop_setup_env.
 #
 # Returns 0 when the installation can serve, 1 otherwise, printing the reason.
@@ -196,6 +194,11 @@ function validate_installation {
 		echo "$workspace_hint"
 		return 1
 	fi
+
+	# Advisory. An installed distribution below the floors in pyproject.toml
+	# is reported in red and does not stop the launch, so its exit status is
+	# discarded. version_check prints its own pip hint.
+	(cd "$TELEOP_REPO_DIR" && python3 -m stretch4_web_teleop_helpers.version_check) || true
 
 	echo -e "${GREEN}✓ Installation validation passed${NC}"
 	return 0
