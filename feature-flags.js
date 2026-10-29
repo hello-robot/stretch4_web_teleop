@@ -45,6 +45,26 @@ function parseOverride(name, raw) {
 }
 
 /**
+ * Every declared flag with environment overrides and provenance applied.
+ *
+ * @returns {Record<string, { enabled: boolean, source: string }>} flag name -> state and source
+ */
+function loadFeaturesWithSources() {
+    const registry = JSON.parse(fs.readFileSync(FEATURES_PATH, "utf8"));
+    const features = {};
+    for (const [name, entry] of Object.entries(registry)) {
+        const envVar = envVarName(name);
+        const override = process.env[envVar];
+        const fromEnv = override !== undefined && override !== "";
+        features[name] = {
+            enabled: fromEnv ? parseOverride(name, override) : Boolean(entry.enabled),
+            source: fromEnv ? `env:${envVar}` : "features.json",
+        };
+    }
+    return features;
+}
+
+/**
  * Every declared flag with environment overrides applied. Read fresh on each
  * call so a long-lived process sees an edited features.json on restart only,
  * not a stale require cache.
@@ -52,14 +72,10 @@ function parseOverride(name, raw) {
  * @returns {Record<string, boolean>} flag name -> enabled
  */
 function loadFeatures() {
-    const registry = JSON.parse(fs.readFileSync(FEATURES_PATH, "utf8"));
+    const withSources = loadFeaturesWithSources();
     const features = {};
-    for (const [name, entry] of Object.entries(registry)) {
-        const override = process.env[envVarName(name)];
-        features[name] =
-            override === undefined || override === ""
-                ? Boolean(entry.enabled)
-                : parseOverride(name, override);
+    for (const [name, entry] of Object.entries(withSources)) {
+        features[name] = entry.enabled;
     }
     return features;
 }
@@ -78,21 +94,30 @@ function isEnabled(name) {
     return features[name];
 }
 
-module.exports = { envVarName, isEnabled, loadFeatures, FEATURES_PATH };
+module.exports = {
+    envVarName,
+    isEnabled,
+    loadFeatures,
+    loadFeaturesWithSources,
+    FEATURES_PATH,
+};
 
 if (require.main === module) {
     const arg = process.argv[2];
+    const includeSources = process.argv.includes("--sources");
     if (arg === "--all") {
-        // Usage: node feature-flags.js --all
-        // Prints every declared flag as NAME=1/0, one per line -- for launch-script logging.
-        const features = loadFeatures();
-        for (const [name, enabled] of Object.entries(features)) {
-            process.stdout.write(`${envVarName(name)}=${enabled ? "1" : "0"}\n`);
+        // Usage: node feature-flags.js --all [--sources]
+        // Prints every declared flag as NAME=1/0 (with optional tab-separated source), one per line.
+        const features = loadFeaturesWithSources();
+        for (const [name, { enabled, source }] of Object.entries(features)) {
+            const val = enabled ? "1" : "0";
+            const suffix = includeSources ? `\t${source}` : "";
+            process.stdout.write(`${envVarName(name)}=${val}${suffix}\n`);
         }
         process.exit(0);
     }
     if (!arg) {
-        process.stderr.write("Usage: node feature-flags.js <feature-name>|--all\n");
+        process.stderr.write("Usage: node feature-flags.js <feature-name>|--all [--sources]\n");
         process.exit(2);
     }
     try {

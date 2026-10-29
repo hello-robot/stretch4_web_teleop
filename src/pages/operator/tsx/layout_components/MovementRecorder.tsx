@@ -228,6 +228,13 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         functions.SavedRecordingNames(),
     );
     const [isModalOpen, isModalOpenSet] = React.useState<boolean>(false);
+    const activeRecordingNameRef = useRef<string>("Pose");
+
+    useEffect(() => {
+        if (idxFixedRecordingPlaying >= 0 && recordings[idxFixedRecordingPlaying]) {
+            activeRecordingNameRef.current = recordings[idxFixedRecordingPlaying];
+        }
+    }, [idxFixedRecordingPlaying, recordings]);
 
     useEffect(() => {
         movementRecorderFunctionProvider.setModalOpenHandler((open) => {
@@ -823,7 +830,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
 
     const handlePlaybackCancel = useCallback(() => {
 
-        const recordingName = recordings[idxFixedRecordingPlaying] ?? "Pose";
+        const recordingName = activeRecordingNameRef.current;
 
         childrenPlaybackStatusbarSet(
             <div className="mrecord-statusbar-row mrecord-statusbar-row--loose">
@@ -835,8 +842,12 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         hideStatusBar();
         idxFixedRecordingPlayingSet(-1);
         functions.Cancel();
+        movementRecorderFunctionProvider.setPlaybackPosesState({
+            state: MovementState.Cancel,
+            alert_type: "error",
+        });
         return true;
-    }, [recordings, idxFixedRecordingPlaying, idxFixedRecordingPlayingSet, functions, hideStatusBar]);
+    }, [functions, hideStatusBar, idxFixedRecordingPlayingSet]);
 
     useEffect(() => {
         movementRecorderFunctionProvider.setCancelPlaybackHandler(() => {
@@ -853,7 +864,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
 
     useEffect(() => {
 
-        const recordingName = recordings[idxFixedRecordingPlaying];
+        const recordingName = activeRecordingNameRef.current;
 
         // Playback failed
         if (playbackPosesState?.state === MovementState.Fail) {
@@ -866,9 +877,19 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
             setTimeout(() => {
                 isPlaybackStatusbarVisibleSet(false);
                 showButtonPadWithDelay();
-            }, DELAYMS_STATUSBAR_BEFORE_HIDE * 4)
+            }, DELAYMS_STATUSBAR_BEFORE_HIDE * 4);
+            idxFixedRecordingPlayingSet(-1);
+        } else if (playbackPosesState?.state === MovementState.Cancel) {
+            childrenPlaybackStatusbarSet(
+                <div className="mrecord-statusbar-row mrecord-statusbar-row--loose">
+                    {recordingName} <span className="mrecord-statusbar-muted">canceled</span>
+                </div>
+            );
+            typePlaybackStatusbarSet('warning');
+            hideStatusBar();
+            idxFixedRecordingPlayingSet(-1);
         }
-    }, [playbackPosesState?.state]);
+    }, [playbackPosesState?.state, hideStatusBar, showButtonPadWithDelay, idxFixedRecordingPlayingSet]);
 
     // Stop recording
     const handleStopRecording = useCallback(() => {

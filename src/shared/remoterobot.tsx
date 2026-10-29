@@ -1,34 +1,34 @@
 import React from "react";
-import { Transform, Vector3, Quaternion } from "roslib";
+import { Quaternion, Transform, Vector3 } from "roslib";
 import {
+    CameraPerspectiveCommand,
     cmd,
     DriveCommand,
-    CameraPerspectiveCommand,
-    IncrementalMove,
-    SetTaskSpaceVelocityCommand,
-    setRobotModeCommand,
-    VelocityCommand,
-    RobotPoseCommand,
-    ToggleCommand,
+    GetMaxEeSpeed,
     GetOccupancyGrid,
+    GetRunStopCommand,
+    GetStretchTool,
+    GetVoiceCapabilityCommand,
+    HomeTheRobotCommand,
+    IncrementalMove,
     MoveBaseCommand,
     PlaybackPosesCommand,
-    HomeTheRobotCommand,
-    GetStretchTool,
-    GetJointVelocity,
-    SetJointVelocityCommand,
-    SeedLocalizationCommand,
-    ShutdownCommand,
-    GetVoiceCapabilityCommand,
     RequestVoiceTokenCommand,
+    RobotPoseCommand,
+    SeedLocalizationCommand,
+    SetJointVelocityCommand,
+    setRobotModeCommand,
+    SetTaskSpaceVelocityCommand,
+    ShutdownCommand,
+    ToggleCommand,
+    VelocityCommand
 } from "shared/commands";
 import {
-    ValidJointStateDict,
     RobotPose,
-    ValidJoints,
-    ROSPose,
-    waitUntil,
     ROSOdometry,
+    ROSPose,
+    ValidJoints,
+    ValidJointStateDict
 } from "shared/util";
 export type robotMessageChannel = (message: cmd) => void;
 
@@ -38,7 +38,6 @@ export class RemoteRobot extends React.Component<{}, any> {
     isRunStopped: boolean;
     batteryVoltage: number;
     mapPose: Transform;
-    moveBaseGoalReached: boolean;
     moveBaseState?: string;
     private mapPoseListeners: Set<(pose: Transform) => void> = new Set();
 
@@ -61,15 +60,6 @@ export class RemoteRobot extends React.Component<{}, any> {
                 w: 0,
             } as Quaternion,
         } as Transform;
-        this.moveBaseGoalReached = false;
-    }
-
-    setGoalReached(reached: boolean) {
-        this.moveBaseGoalReached = reached;
-    }
-
-    isGoalReached() {
-        return this.moveBaseGoalReached;
     }
 
     driveBase(
@@ -224,7 +214,6 @@ export class RemoteRobot extends React.Component<{}, any> {
     }
 
     moveBase(pose: ROSPose) {
-        this.setGoalReached(false);
         let cmd: MoveBaseCommand = {
             type: "moveBase",
             pose: pose,
@@ -244,6 +233,13 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
+    getRunStop(type: "getRunStop") {
+        let cmd: GetRunStopCommand = {
+            type: type,
+        };
+        this.robotChannel(cmd);
+    }
+
 
     getOccupancyGrid(type: "getOccupancyGrid") {
         let cmd: GetOccupancyGrid = {
@@ -259,10 +255,15 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
-    getJointVelocity(type: "getJointVelocity") {
-        let cmd: GetJointVelocity = {
-            type: type,
-        };
+    /**
+     * Ask the robot to report the velocity limiter's current max_ee_speed.
+     *
+     * The robot pushes the ceiling whenever it changes, but a push that lands before this
+     * operator's data channel is open is lost, so a freshly connected operator pulls it instead
+     * of driving at the compiled-in default.
+     */
+    getMaxEeSpeed() {
+        let cmd: GetMaxEeSpeed = { type: "getMaxEeSpeed" };
         this.robotChannel(cmd);
     }
 

@@ -11,6 +11,37 @@ const {
     update,
 } = require("firebase/database");
 
+/**
+ * Deadline on every lease call. An unreachable Realtime Database queues work
+ * instead of failing it, so without this a local operator would wait on
+ * Firebase for as long as Firebase stayed away.
+ */
+const LEASE_TIMEOUT_MS = Number(
+    process.env.WEB_TELEOP_LEASE_TIMEOUT_MS || 8000,
+);
+
+/**
+ * Race a lease call against the deadline above.
+ *
+ * @param {Promise<any>} promise Firebase call to bound.
+ * @param {string} label Name used in the timeout message.
+ *
+ * @returns {Promise<any>} The call's result, or a rejection at the deadline.
+ */
+function withLeaseTimeout(promise, label) {
+    let timer;
+    const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(
+            () =>
+                reject(
+                    new Error(`${label} timed out after ${LEASE_TIMEOUT_MS}ms`),
+                ),
+            LEASE_TIMEOUT_MS,
+        );
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function localSeat(sessionId, active, now = Date.now()) {
     return {
         active,
@@ -100,46 +131,92 @@ function createTeleopLeaseClient(env = process.env) {
         return currentOperatorRef();
     };
 
+    /**
+     * Claim the operator seat for a local (Tailscale) session.
+     *
+     * @param {string} sessionId Local operator session claiming the seat.
+     *
+     * @returns {Promise<"claimed"|"held"|"unavailable">} claimed when this
+     *     session now holds the seat, held when a Firebase operator holds it,
+     *     and unavailable when Firebase could not be reached to find out.
+     */
     async function claimLocal(sessionId) {
-        const result = await runTransaction(
-            await operatorRef(),
-            (current) => claimLocalSeat(current, sessionId),
-        );
-        if (result.committed) {
-            try {
-                await update(ref(db, `robots/${fleetId}`), {
-                    status: "occupied",
-                });
-            } catch (error) {
-                console.error(
-                    "Local teleop lease status update failed:",
-                    error.message,
-                );
-            }
+        let result;
+        try {
+            result = await withLeaseTimeout(
+                operatorRef().then((seatRef) =>
+                    runTransaction(seatRef, (current) =>
+                        claimLocalSeat(current, sessionId),
+                    ),
+                ),
+                "local teleop lease claim",
+            );
+        } catch (error) {
+            console.error("Local teleop lease unreachable:", error.message);
+            return "unavailable";
         }
-        return result.committed;
+        if (!result.committed) {
+            return "held";
+        }
+        try {
+            await withLeaseTimeout(
+                update(ref(db, `robots/${fleetId}`), {
+                    status: "occupied",
+                }),
+                "local teleop status update",
+            );
+        } catch (error) {
+            console.error(
+                "Local teleop lease status update failed:",
+                error.message,
+            );
+        }
+        return "claimed";
     }
 
+    /**
+     * Release the operator seat held by a local session.
+     *
+     * @param {string} sessionId Local operator session releasing the seat.
+     *
+     * @returns {Promise<boolean>} True when the seat was released. False when
+     *     this session did not hold it, or when Firebase was unreachable --
+     *     the seat's onDisconnect handler clears it in that case.
+     */
     async function releaseLocal(sessionId) {
-        const seatRef = await operatorRef();
-        const current = (await get(seatRef)).val();
-        if (
-            current?.transport !== "local" ||
-            current.sessionId !== sessionId
-        ) {
+        try {
+            const seatRef = await withLeaseTimeout(
+                operatorRef(),
+                "local teleop lease release",
+            );
+            const current = (
+                await withLeaseTimeout(get(seatRef), "local teleop seat read")
+            ).val();
+            if (
+                current?.transport !== "local" ||
+                current.sessionId !== sessionId
+            ) {
+                return false;
+            }
+            const result = await withLeaseTimeout(
+                runTransaction(seatRef, (current) =>
+                    releaseLocalSeatTransaction(current, sessionId),
+                ),
+                "local teleop lease release",
+            );
+            if (result.committed) {
+                await withLeaseTimeout(
+                    update(ref(db, `robots/${fleetId}`), {
+                        status: "online",
+                    }),
+                    "local teleop status update",
+                );
+            }
+            return result.committed;
+        } catch (error) {
+            console.error("Local teleop lease release failed:", error.message);
             return false;
         }
-        const result = await runTransaction(
-            seatRef,
-            (current) =>
-                releaseLocalSeatTransaction(current, sessionId),
-        );
-        if (result.committed) {
-            await update(ref(db, `robots/${fleetId}`), {
-                status: "online",
-            });
-        }
-        return result.committed;
     }
 
     return {

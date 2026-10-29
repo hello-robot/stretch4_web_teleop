@@ -10,25 +10,26 @@ import {
     Topic,
     Transform,
 } from "roslib";
+import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
+    EE_VELOCITY_LIMITER_NODE,
+    getMaxEeSpeed,
     getPlaybackJointVelocities,
     getPlaybackJointVelocity,
+    GRIPPER_INCREMENT_RANGE_FRACTION,
+    JOINT_VELOCITY_HEARTBEAT_MS,
+    ParameterEvent,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
     ROSPose,
-    JointVelocityLimits,
-    SPEED_PROFILES,
-    SpeedProfile,
-    updateJointVelocities,
+    setMaxEeSpeed,
     updateJointIncrements,
-    JOINT_VELOCITY_HEARTBEAT_MS,
-    GRIPPER_INCREMENT_RANGE_FRACTION,
     ValidJoints,
     VideoProps,
 } from "shared/util";
@@ -37,8 +38,11 @@ import {
     rosJointStatetoRobotPose,
     ValidJointStateDict
 } from "../../../shared/util";
-import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 const { createRosReconnectGuard } = require("./rosReconnectGuard");
+
+/** Ask /map_server/map once, then retry a miss up to this many times. */
+const OCCUPANCY_GRID_MAX_RETRIES = 10;
+const OCCUPANCY_GRID_RETRY_MS = 2000;
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
 export var rosConnected = false;
@@ -76,11 +80,6 @@ export enum GoalStatus {
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
-
-// Pose-proximity arrival (primary completion when rosbridge action status/result fail).
-// Slightly above Nav2 xy_goal_tolerance (0.25m); streak avoids a single noisy TF sample.
-const MOVE_BASE_GOAL_XY_TOL_M = 0.35;
-const MOVE_BASE_GOAL_INSIDE_STREAK = 5;
 
 export class Robot extends React.Component {
     private ros: Ros;
@@ -120,9 +119,6 @@ export class Robot extends React.Component {
     private moveBaseStatusLastEmitted?: number;
     /** Count of terminal statuses when this goal session began (stale SUCCEEDED pile). */
     private moveBaseTerminalBaseline?: number;
-    /** Goal XY for pose-proximity arrival detection. */
-    private moveBaseGoalXY?: { x: number; y: number };
-    private moveBaseInsideTolStreak = 0;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
     /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
@@ -132,6 +128,11 @@ export class Robot extends React.Component {
     private collisionMonitorStateService?: Service;
     private collisionMonitorActive = false;
     private collisionMonitorPollTimerID?: ReturnType<typeof setInterval>;
+    private occupancyGridPollTimerID?: ReturnType<typeof setTimeout>;
+    /** Ignores a /map_server/map reply after a newer getOccupancyGrid call. */
+    private occupancyGridRequestId = 0;
+    /** Retries already scheduled for the current getOccupancyGrid call. */
+    private occupancyGridRetries = 0;
     private jointVelTopic?: Topic;
     private eeCmdVelTopic?: Topic;
     private useCenterCameraService?: Service;
@@ -152,6 +153,7 @@ export class Robot extends React.Component {
     ) => void;
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+    private occupancyGridUnavailableCallback: () => void;
     private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
@@ -161,7 +163,7 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-    private jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
+    private maxEeSpeedCallback: (maxEeSpeed: number) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam?: Param;
     private toolIsActuatedParam?: Param;
@@ -172,7 +174,6 @@ export class Robot extends React.Component {
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
-    private jointVelocityLimits: JointVelocityLimits = {};
 
     constructor(props: {
         jointStateCallback: (
@@ -182,6 +183,7 @@ export class Robot extends React.Component {
         ) => void;
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+        occupancyGridUnavailableCallback: () => void;
         odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
@@ -191,12 +193,14 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-        jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
+        maxEeSpeedCallback: (maxEeSpeed: number) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
+        this.occupancyGridUnavailableCallback =
+            props.occupancyGridUnavailableCallback;
         this.odomCallback = props.odomCallback;
         this.moveBaseResultCallback = (goalState) => {
             if (goalState.state !== "Navigation executing!") {
@@ -205,8 +209,6 @@ export class Robot extends React.Component {
                 this.moveBaseStatusWatching = false;
                 this.moveBaseStatusSeenActive = false;
                 this.moveBaseTerminalBaseline = undefined;
-                this.moveBaseGoalXY = undefined;
-                this.moveBaseInsideTolStreak = 0;
             }
             props.moveBaseResultCallback(goalState);
         };
@@ -217,7 +219,7 @@ export class Robot extends React.Component {
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
         this.leaseStatusCallback = props.leaseStatusCallback;
-        this.jointVelocityLimitsCallback = props.jointVelocityLimitsCallback;
+        this.maxEeSpeedCallback = props.maxEeSpeedCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -360,6 +362,7 @@ export class Robot extends React.Component {
         this.subscribeToBatteryState();
         this.subscribeToOdom();
         this.subscribeToMode();
+        this.subscribeToIsRunStopped();
         this.subscribetoJointStateDiagnostics();
         this.subscribeToLeaseHolder();
         this.createTrajectoryClient();
@@ -502,6 +505,29 @@ export class Robot extends React.Component {
         });
     }
 
+    subscribeToIsRunStopped() {
+        const runStopTopic: Topic = new Topic({
+            ros: this.ros,
+            name: "/is_runstopped",
+            messageType: "std_msgs/msg/Bool",
+        });
+        this.subscriptions.push(runStopTopic);
+
+        runStopTopic.subscribe((msg: any) => {
+            const isRunStopped = Boolean(msg.data);
+            this.isRunStopped = isRunStopped;
+            if (isRunStopped) {
+                this.stopExecution(true);
+                this.toggleBaseOnlyCollision(true);
+            }
+            if (this.isRunStoppedCallback) this.isRunStoppedCallback(isRunStopped);
+        });
+    }
+
+    getIsRunStopped(): boolean {
+        return Boolean(this.isRunStopped);
+    }
+
     subscribeToLeaseHolder() {
         const leaseHolderTopic: Topic = new Topic({
             ros: this.ros,
@@ -541,10 +567,6 @@ export class Robot extends React.Component {
         jointStateDiagnosticsTopic.subscribe((message: Message) => {
             let msg = message as DiagnosticArray;
             msg.status.forEach((status) => {
-                if (status.name == "is_runstopped") {
-                    let isRunStopped = status.values.every((v) => v.value == 'True');
-                    if (this.isRunStoppedCallback) this.isRunStoppedCallback(isRunStopped);
-                }
                 if (status.name == "is_homed") {
                     let isHomed = status.values.every((v) => v.value == 'True');
                     if (this.isHomedCallback) this.isHomedCallback(isHomed);
@@ -653,33 +675,56 @@ export class Robot extends React.Component {
             name: "/stretch_driver:mode"
         });
 
-        // Gripper velocity for each speed profile; its units depend on the attached tool
-        const JOINT_VELOCITY_PARAM_PREFIXES: Record<SpeedProfile, string> = {
-            slow: "joint_velocity.slow",
-            medium: "joint_velocity",
-            fast: "joint_velocity.fast",
-        };
-        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
-            gripper_joint: "gripper",
-        };
-        for (const profile of SPEED_PROFILES) {
-            const prefix = JOINT_VELOCITY_PARAM_PREFIXES[profile];
-            for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
-                new Param({
-                    ros: this.ros,
-                    name: `/stretch_driver:${prefix}.${paramKey}`,
-                }).get((value: number) => {
-                    if (typeof value === "number" && value > 0) {
-                        this.jointVelocityLimits[profile] = {
-                            ...this.jointVelocityLimits[profile],
-                            [rosJointName]: value,
-                        };
-                        updateJointVelocities({ [profile]: { [rosJointName]: value } });
-                        this.getJointVelocityLimits();
-                    }
-                });
-            }
-        }
+        this.initMaxEeSpeed();
+    }
+
+    /**
+     * Track the velocity limiter's max_ee_speed, which every derived joint velocity scales from.
+     *
+     * The limiter re-reads this parameter on each command, so an operator raising or lowering it
+     * at runtime changes what the robot actually does; the interface has to follow or its speed
+     * profiles stop describing the motion. The parameter is read once at startup and then watched
+     * on /parameter_events. If the limiter is not running the read simply never calls back, and
+     * the compiled-in default stands.
+     */
+    initMaxEeSpeed() {
+        new Param({
+            ros: this.ros,
+            name: `/${EE_VELOCITY_LIMITER_NODE}:max_ee_speed`,
+        }).get((value: number) => this.applyMaxEeSpeed(value));
+
+        const parameterEvents: Topic = new Topic({
+            ros: this.ros,
+            name: "/parameter_events",
+            messageType: "rcl_interfaces/msg/ParameterEvent",
+        });
+        this.subscriptions.push(parameterEvents);
+        parameterEvents.subscribe((message: Message) => {
+            const event = message as ParameterEvent;
+            if (!event?.node?.endsWith(`/${EE_VELOCITY_LIMITER_NODE}`)) return;
+            const changed = [
+                ...(event.new_parameters ?? []),
+                ...(event.changed_parameters ?? []),
+            ].find((parameter) => parameter?.name === "max_ee_speed");
+            if (changed) this.applyMaxEeSpeed(changed.value?.double_value);
+        });
+    }
+
+    /**
+     * Adopt a ceiling reported by ROS and tell the operator, if it is a real change.
+     *
+     * Args:
+     *     speed: Ceiling in m/s, or undefined when the parameter event carried no double value.
+     */
+    private applyMaxEeSpeed(speed: number | undefined) {
+        if (typeof speed !== "number") return;
+        if (!setMaxEeSpeed(speed)) return;
+        this.getMaxEeSpeed();
+    }
+
+    /** Report the ceiling the joint velocity table is derived from to the operator. */
+    getMaxEeSpeed() {
+        if (this.maxEeSpeedCallback) this.maxEeSpeedCallback(getMaxEeSpeed());
     }
 
     isToolActuated(): boolean {
@@ -695,34 +740,59 @@ export class Robot extends React.Component {
             this.stretchToolCallback(this.stretchToolName);
     }
 
-    /**
-     * Returns the joint velocity limits fetched so far from ROS params, on
-     * demand. This lets a newly (re)connected operator pull the current
-     * values instead of relying solely on the one-time push that fires when
-     * each param resolves, which can be missed if it happens before the
-     * operator's WebRTC data channel is open.
-     */
-    getJointVelocityLimits() {
-        if (this.jointVelocityLimitsCallback)
-            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+    getOccupancyGrid() {
+        this.stopOccupancyGridPoll();
+        this.occupancyGridRetries = 0;
+        const requestId = ++this.occupancyGridRequestId;
+        this.requestOccupancyGrid(requestId);
     }
 
-    getOccupancyGrid() {
-        let getMapService = new Service({
+    private requestOccupancyGrid(requestId: number) {
+        const getMapService = new Service({
             ros: this.ros,
             name: "/map_server/map",
             serviceType: "nav2_msgs/srv/GetMap",
         });
 
-        var request = {};
-        getMapService?.callService(
-            request,
-            (response: { map: ROSOccupancyGrid }) => {
+        getMapService.callService(
+            {},
+            (response: { map?: ROSOccupancyGrid }) => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                const map = response?.map;
+                const cells =
+                    (map?.info?.width ?? 0) * (map?.info?.height ?? 0);
+                if (!map || cells <= 0) {
+                    this.reportOccupancyGridUnavailable(requestId);
+                    return;
+                }
+                this.stopOccupancyGridPoll();
                 this.subscribeToMapTF();
-                if (this.occupancyGridCallback)
-                    this.occupancyGridCallback(response.map);
-            }
+                this.occupancyGridCallback(map);
+            },
+            () => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                this.reportOccupancyGridUnavailable(requestId);
+            },
         );
+    }
+
+    private reportOccupancyGridUnavailable(requestId: number) {
+        this.stopOccupancyGridPoll();
+        this.occupancyGridUnavailableCallback();
+        if (this.occupancyGridRetries >= OCCUPANCY_GRID_MAX_RETRIES) return;
+        this.occupancyGridRetries += 1;
+        this.occupancyGridPollTimerID = setTimeout(() => {
+            this.occupancyGridPollTimerID = undefined;
+            if (requestId !== this.occupancyGridRequestId) return;
+            this.requestOccupancyGrid(requestId);
+        }, OCCUPANCY_GRID_RETRY_MS);
+    }
+
+    private stopOccupancyGridPoll() {
+        if (this.occupancyGridPollTimerID !== undefined) {
+            clearTimeout(this.occupancyGridPollTimerID);
+            this.occupancyGridPollTimerID = undefined;
+        }
     }
 
 
@@ -817,10 +887,6 @@ export class Robot extends React.Component {
         successMsg: string,
         failureMsg: string,
     ) {
-        if (!this.moveBaseStatusWatching) {
-            return;
-        }
-
         // rosbridge may deliver status as string; coerce before compares.
         const statuses = statusList.map((entry) => Number(entry.status));
         const terminalCount = statuses.filter(
@@ -836,6 +902,23 @@ export class Robot extends React.Component {
         const hasAccepted = statuses.includes(GoalStatus.STATUS_ACCEPTED);
         const hasExecuting = statuses.includes(GoalStatus.STATUS_EXECUTING);
         const hasCanceling = statuses.includes(GoalStatus.STATUS_CANCELING);
+
+        // Check if Nav2 action server is actively tracking a goal even if we weren't
+        // actively watching (e.g. app reload or mid-navigation session sync).
+        if (!this.moveBaseStatusWatching) {
+            if (hasAccepted || hasExecuting || hasCanceling) {
+                console.log("Nav2 action server has active goal on (re)load; activating watch session");
+                this.moveBaseStatusWatching = true;
+                this.moveBaseStatusSeenActive = true;
+                this.toggleBaseOnlyCollision(false);
+                callback({
+                    state: executingMsg,
+                    alert_type: "info",
+                });
+                this.moveBaseStatusLastEmitted = GoalStatus.STATUS_EXECUTING;
+            }
+            return;
+        }
 
         if (hasAccepted || hasExecuting || hasCanceling) {
             this.moveBaseStatusSeenActive = true;
@@ -1125,39 +1208,7 @@ export class Robot extends React.Component {
         this.createMapFrameTFClient();
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
-            this.maybeCompleteMoveBaseByProximity(transform);
         });
-    }
-
-    /**
-     * Primary AutoNav completion path: emit success when map→base_link stays
-     * within XY tolerance of the goal. Independent of rosbridge action status.
-     */
-    private maybeCompleteMoveBaseByProximity(transform: Transform) {
-        if (!this.moveBaseStatusWatching || !this.moveBaseGoalXY) {
-            return;
-        }
-        const dx = transform.translation.x - this.moveBaseGoalXY.x;
-        const dy = transform.translation.y - this.moveBaseGoalXY.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > MOVE_BASE_GOAL_XY_TOL_M) {
-            this.moveBaseInsideTolStreak = 0;
-            return;
-        }
-        this.moveBaseInsideTolStreak += 1;
-        if (this.moveBaseInsideTolStreak < MOVE_BASE_GOAL_INSIDE_STREAK) {
-            return;
-        }
-        console.log(
-            "Navigation succeeded via pose proximity:",
-            dist.toFixed(3),
-            "m",
-        );
-        this.moveBaseResultCallback({
-            state: "Navigation succeeded!",
-            alert_type: "success",
-        });
-        this.toggleBaseOnlyCollision(true);
     }
 
     setExpandedGripper(toggle: boolean) {
@@ -1175,9 +1226,32 @@ export class Robot extends React.Component {
         );
     }
 
+    /**
+     * Set the software runstop state. If enabled (toggle=true), stops all
+     * active execution on the robot.
+     *
+     * @param toggle True to engage runstop, false to release.
+     */
     setRunStop(toggle: boolean) {
+        if (!this.setRunStopService) {
+            console.error("setRunStopService is undefined");
+            return;
+        }
+        if (toggle) {
+            this.stopExecution(true);
+            this.toggleBaseOnlyCollision(true);
+        }
         var request = { data: toggle };
-        this.setRunStopService?.callService(request, (response: boolean) => { });
+        console.log(`Calling /runstop_the_robot with data=${toggle}`);
+        this.setRunStopService.callService(
+            request,
+            (response: { success?: boolean; message?: string }) => {
+                console.log("setRunStop service response:", response);
+            },
+            (error: any) => {
+                console.error("setRunStop service call failed:", error);
+            }
+        );
     }
 
     toggleBaseOnlyCollision(bool: boolean) {
@@ -1219,6 +1293,11 @@ export class Robot extends React.Component {
      */
     switchToNavigationMode(): Promise<void> {
         return new Promise((resolve) => {
+            if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+                console.warn("Cannot switch mode while robot is runstopped");
+                resolve();
+                return;
+            }
             if (robotMode === "navigation") {
                 resolve();
                 return;
@@ -1237,6 +1316,11 @@ export class Robot extends React.Component {
      */
     switchToPositionMode = (): Promise<void> => {
         return new Promise((resolve) => {
+            if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+                console.warn("Cannot switch mode while robot is runstopped");
+                resolve();
+                return;
+            }
             if (robotMode === "position") {
                 resolve();
                 return;
@@ -1254,6 +1338,11 @@ export class Robot extends React.Component {
      */
     switchToVelocityMode = (): Promise<void> => {
         return new Promise((resolve) => {
+            if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+                console.warn("Cannot switch mode while robot is runstopped");
+                resolve();
+                return;
+            }
             if (robotMode === "velocity") {
                 resolve();
                 return;
@@ -1308,12 +1397,16 @@ export class Robot extends React.Component {
         );
     }
 
-    executeBaseVelocity = (props: {
+    executeBaseVelocity = async (props: {
         linVelX: number;
         linVelY: number;
         angVel: number;
-    }): void => {
-        this.switchToVelocityMode();
+    }): Promise<void> => {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executeBaseVelocity while robot is runstopped");
+            return;
+        }
+        await this.switchToVelocityMode();
         this.stopExecution();
         let twist = {
             linear: {
@@ -1334,6 +1427,10 @@ export class Robot extends React.Component {
     };
 
     async setTaskSpaceVelocity(linear_X: number, linear_Y: number, linear_Z: number) {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring setTaskSpaceVelocity while robot is runstopped");
+            return;
+        }
         await this.switchToVelocityMode();
         this.stopExecution();
         const twist = {
@@ -1353,6 +1450,10 @@ export class Robot extends React.Component {
     }
 
     async setJointVelocity(jointName: ValidJoints, velocity: number) {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring setJointVelocity while robot is runstopped");
+            return;
+        }
         await this.switchToVelocityMode();
         this.stopExecution();
         let jointVelocities = {
@@ -1622,8 +1723,38 @@ export class Robot extends React.Component {
         return true;
     }
 
-    async executePoseGoal(pose: RobotPose) {
+    /**
+     * Executes a single pose goal by switching to navigation mode and sending
+     * the trajectory goal to the ROS action server.
+     *
+     * Args:
+     *     pose: The target RobotPose to move joints toward.
+     *
+     * Returns:
+     *     A promise resolving when execution has been dispatched.
+     */
+    async executePoseGoal(pose: RobotPose): Promise<void> {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoal while robot is runstopped");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
         await this.switchToNavigationMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoal while robot is runstopped (after switch mode)");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
 
         /// check if at goal already
         if (this.isAlreadyAtPose(pose)) {
@@ -1697,8 +1828,39 @@ export class Robot extends React.Component {
         );
     }
 
-    async executePoseGoals(poses: RobotPose[], index: number) {
+    /**
+     * Executes a series of pose goals sequentially by switching to navigation mode
+     * and sending the trajectory goals to the ROS action server.
+     *
+     * Args:
+     *     poses: Array of target RobotPose waypoints.
+     *     index: Starting index in the pose list.
+     *
+     * Returns:
+     *     A promise resolving when execution has been dispatched.
+     */
+    async executePoseGoals(poses: RobotPose[], index: number): Promise<void> {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoals while robot is runstopped");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
         await this.switchToNavigationMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoals while robot is runstopped (after switch mode)");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
 
         // check if at goal already
         if (poses.length > 0) {
@@ -1784,6 +1946,10 @@ export class Robot extends React.Component {
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executeMoveBaseGoal while robot is runstopped");
+            return;
+        }
         // this.switchToNavigationMode();
         // this.stopExecution()
 
@@ -1798,11 +1964,6 @@ export class Robot extends React.Component {
         this.moveBaseStatusSeenActive = false;
         this.moveBaseStatusLastEmitted = undefined;
         this.moveBaseTerminalBaseline = undefined;
-        this.moveBaseGoalXY = {
-            x: pose.position.x,
-            y: pose.position.y,
-        };
-        this.moveBaseInsideTolStreak = 0;
 
         // Immediately notify operator that navigation has started executing
         this.moveBaseResultCallback({
@@ -1843,8 +2004,12 @@ export class Robot extends React.Component {
         );
     }
 
-    executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        this.switchToNavigationMode();
+    async executeIncrementalMove(jointName: ValidJoints, increment: number) {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executeIncrementalMove while robot is runstopped");
+            return;
+        }
+        await this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1886,24 +2051,54 @@ export class Robot extends React.Component {
         this.stopAutonomousClients();
     }
 
+    /**
+     * Stop and cancel active autonomous clients, specifically the move base client.
+     */
     stopAutonomousClients() {
         this.stopMoveBaseClient();
     }
 
-    stopTrajectoryClient() {
+    /**
+     * Cancels any active trajectory action goal and emits a canceled playback state.
+     *
+     * Args:
+     *     None.
+     *
+     * Returns:
+     *     None.
+     */
+    stopTrajectoryClient(): void {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        if (this.poseGoal) {
-            this.trajectoryClient.cancelGoal(this.poseGoalID);
+        if (this.poseGoal || this.poseGoalID) {
+            if (this.poseGoalID) {
+                this.trajectoryClient.cancelGoal(this.poseGoalID);
+            }
             this.poseGoal = undefined;
-            this.playbackPosesResultCallback({
-                state: MovementState.Cancel,
-                alert_type: "error",
-            });
+            this.poseGoalID = undefined;
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
         }
     }
 
+    /**
+     * Cancel active navigation execution on the move_base / navigate_to_pose action client.
+     * Cancels any active goals via rosbridge without throwing if uninitialized,
+     * resets state tracking, and emits a cancellation alert if navigation was active.
+     */
     stopMoveBaseClient() {
-        if (!this.moveBaseClient) throw "moveBaseClient is undefined";
+        if (!this.moveBaseClient) return;
+
+        const hadActiveGoal = this.moveBaseGoalID !== undefined || this.moveBaseStatusWatching;
+        try {
+            this.moveBaseClient.cancelAllGoals();
+        } catch (e) {
+            console.warn("Error calling cancelAllGoals on moveBaseClient:", e);
+        }
+
         if (this.moveBaseGoalID) {
             this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
             this.moveBaseGoalID = undefined;
@@ -1915,6 +2110,13 @@ export class Robot extends React.Component {
             this.moveBaseTerminalBaseline = undefined;
             this.moveBaseGoalXY = undefined;
             this.moveBaseInsideTolStreak = 0;
+            this.toggleBaseOnlyCollision(true);
+            if (this.moveBaseResultCallback) {
+                this.moveBaseResultCallback({
+                    state: "Navigation canceled!",
+                    alert_type: "error",
+                });
+            }
         }
     }
 

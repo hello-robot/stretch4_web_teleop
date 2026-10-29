@@ -48,9 +48,9 @@ type JointActionMeta = {
  * Signs verified against `negativeButtonPadFunctions` in ButtonFunctionProvider.tsx:
  *   ArmLower, ArmRetract, GripperClose, WristRollLeft, WristPitchUp, WristRotateOut → negative.
  *
- * Velocity magnitudes come from `FunctionProvider.jointVelocity()`: `JOINT_VELOCITIES` in
- * shared/util.tsx times the velocity scale, or for gripper_joint the driver's
- * joint_velocity.* param for the current speed profile; GRIPPER_FALLBACK_VEL if unset.
+ * Velocity magnitudes come from `FunctionProvider.jointVelocityAt()`: `DEFAULT_JOINT_VELOCITIES`
+ * in shared/util.tsx times the `PROFILE_SCALES` entry for the speed named in the command, not the
+ * one the interface's speedometer is set to; GRIPPER_FALLBACK_VEL if unset.
  */
 const JOINT_ACTION_MAP: Record<JointMoveAction, JointActionMeta> = {
     // Lift (m) — ArmLower is in negativeButtonPadFunctions
@@ -148,8 +148,9 @@ class JointMoveExecutor extends VoiceMoveExecutor {
         return { action: action as JointMoveAction, speed, duration_ms, distance };
     }
 
-    static velocityForAction(meta: JointActionMeta): number {
-        const jointVel = FunctionProvider.jointVelocity(meta.jointName) ?? GRIPPER_FALLBACK_VEL;
+    static velocityForAction(meta: JointActionMeta, speed: VoiceSpeed): number {
+        const jointVel =
+            FunctionProvider.jointVelocityAt(meta.jointName, speed) ?? GRIPPER_FALLBACK_VEL;
         return meta.sign * jointVel;
     }
 
@@ -182,10 +183,10 @@ class JointMoveExecutor extends VoiceMoveExecutor {
             };
         }
 
-        JointMoveExecutor.prepareUi(speed);
+        JointMoveExecutor.prepareUi();
 
         const meta = JOINT_ACTION_MAP[action];
-        const velocity = JointMoveExecutor.velocityForAction(meta);
+        const velocity = JointMoveExecutor.velocityForAction(meta, speed);
 
         // ── Distance-based path ───────────────────────────────────────────────
         if (distance !== undefined && meta.unit !== "duration") {
@@ -309,6 +310,12 @@ export function executeStopMotionOnProvider(
         try {
             const navRes = extraStopOpts.cancelAutoNav();
             hadAutoNav = navRes?.ok === true;
+        } catch {
+            //
+        }
+    } else {
+        try {
+            FunctionProvider.remoteRobot?.stopMoveBase();
         } catch {
             //
         }

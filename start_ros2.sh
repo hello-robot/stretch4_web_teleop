@@ -7,9 +7,15 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$REPO_DIR/scripts/lib/teleop_env.sh"
+
 REDIRECT_LOGDIR="$HOME/stretch_user/log/web_teleop"
 mkdir -p $REDIRECT_LOGDIR
-while getopts l:m:t: opt; do
+# -t was declared here for years with no case arm to receive it, so the mode
+# flag the other launch scripts take was silently swallowed. Unknown flags now
+# stop the script rather than scroll past.
+while getopts l:m: opt; do
 	case $opt in
 	l)
 		# Usage: ./start_ros2.sh -l /tmp/some_folder
@@ -24,6 +30,10 @@ while getopts l:m:t: opt; do
 			MAP_ARG="map_yaml:=$OPTARG"
 		fi
 		;;
+	*)
+		echo "Usage: $0 [-l logdir] [-m map.yaml]"
+		exit 1
+		;;
 	esac
 done
 REDIRECT_LOGFILE="$REDIRECT_LOGDIR/start_ros2.$(date '+%Y%m%d%H%M')_redirected.txt"
@@ -33,6 +43,12 @@ echo "-m $MAP_ARG" &>>$REDIRECT_LOGFILE
 
 echo ""
 echo "Setup environment..."
+if [ -n "$VIRTUAL_ENV" ]; then
+	unset VIRTUAL_ENV
+fi
+unset PYTHONHOME
+# Strip any virtualenv bin directories from PATH
+export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v -E '/(\.?[a-zA-Z0-9_-]*venv|env)/bin' | paste -sd:)
 export PATH="$HOME/.local/bin:$PATH"
 . /etc/hello-robot/hello-robot.conf
 export HELLO_FLEET_ID HELLO_FLEET_ID
@@ -41,17 +57,25 @@ export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 source /opt/ros/jazzy/setup.bash &>>$REDIRECT_LOGFILE
 source ~/ament_ws/install/setup.bash &>>$REDIRECT_LOGFILE
 source /usr/share/colcon_cd/function/colcon_cd.sh &>>$REDIRECT_LOGFILE
+teleop_setup_env
 
 echo "Stopping previous instances..."
-./stop_interface.sh &>>$REDIRECT_LOGFILE
+"$REPO_DIR/stop_interface.sh" &>>$REDIRECT_LOGFILE || true
 
 echo "Reload USB bus..."
-sudo udevadm control --reload-rules && sudo udevadm trigger &>>$REDIRECT_LOGFILE
+# Needs root. The daemon reaches this script as an unprivileged user, so skip
+# the reload there rather than block on a password prompt nothing can answer.
+if sudo -n true 2>/dev/null; then
+	sudo -n udevadm control --reload-rules &>>$REDIRECT_LOGFILE || true
+	sudo -n udevadm trigger &>>$REDIRECT_LOGFILE || true
+else
+	echo "Skipping USB bus reload (no passwordless sudo)."
+fi
 
 echo "Check rmw_zenohd..."
 if ! pgrep -x rmw_zenohd >/dev/null; then
 	echo "rmw_zenohd not running, starting it..."
-	screen -dm -S "rmw_zenohd" bash -c "export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $REDIRECT_LOGDIR/rmw_zenohd.txt"
+	screen -dm -S "rmw_zenohd" bash -c "unset VIRTUAL_ENV PYTHONHOME && export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 run rmw_zenoh_cpp rmw_zenohd &>> $REDIRECT_LOGDIR/rmw_zenohd.txt"
 	sleep 2
 	if ! pgrep -x rmw_zenohd >/dev/null; then
 		echo "ERROR: Failed to start rmw_zenohd. See logs: $REDIRECT_LOGDIR/rmw_zenohd.txt"
@@ -62,7 +86,6 @@ else
 	echo "rmw_zenohd already running."
 fi
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FEATURE_LOCAL_COLLISION_AVOIDANCE="$(node "$REPO_DIR/feature-flags.js" local_collision_avoidance)" || exit 1
 export FEATURE_LOCAL_COLLISION_AVOIDANCE
 
@@ -72,7 +95,7 @@ export FEATURE_EE_VELOCITY_LIMITER
 LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
 echo "Start ROS2..."
 echo "ROS2 launch output: $LAUNCH_LOGFILE"
-screen -dm -S "web_teleop_ros" bash -c "export RMW_IMPLEMENTATION=rmw_zenoh_cpp && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
+screen -dm -S "web_teleop_ros" bash -c "unset VIRTUAL_ENV PYTHONHOME && export PATH=\$(echo \"\$PATH\" | tr ':' '\n' | grep -v -E '/(\.?[a-zA-Z0-9_-]*venv|env)/bin' | paste -sd:) && export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
 sleep 8
 
 # Check if the launch log contains any errors

@@ -15,13 +15,13 @@ import {
     gripperProps,
     IsHomedMessage,
     IsRunStoppedMessage,
-    JointVelocityLimits,
     LeaseStatusMessage,
-    JointVelocityLimitsMessage,
     MapPoseMessage,
+    MaxEeSpeedMessage,
     ModeMessage,
     navigationProps,
     OccupancyGridMessage,
+    OccupancyGridUnavailableMessage,
     OdomMessage,
     parseToolMetadata,
     RobotPose,
@@ -44,6 +44,7 @@ export const robot = new Robot({
     jointStateCallback: forwardJointStates,
     batteryStateCallback: forwardBatteryState,
     occupancyGridCallback: forwardOccupancyGrid,
+    occupancyGridUnavailableCallback: forwardOccupancyGridUnavailable,
     odomCallback: forwardOdom,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
@@ -55,7 +56,7 @@ export const robot = new Robot({
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
     leaseStatusCallback: forwardLeaseStatus,
-    jointVelocityLimitsCallback: forwardJointVelocityLimits,
+    maxEeSpeedCallback: forwardMaxEeSpeed,
 });
 
 export let connection: WebRTCConnection;
@@ -84,7 +85,9 @@ robot.setOnRosConnectCallback(async () => {
     });
     gripperStream.start();
 
-    audioStream.start();
+    await audioStream.start().catch((err) => {
+        console.error("AudioStream start failed:", err);
+    });
 
     robot.getOccupancyGrid();
 
@@ -109,7 +112,12 @@ robot.setOnRosConnectCallback(async () => {
 });
 robot.connect();
 
-function handleSessionStart() {
+/**
+ * Handles WebRTC session start when an operator joins the robot room.
+ * Removes existing tracks, attaches navigation, gripper, and robot audio tracks,
+ * and opens the bidirectional data channels.
+ */
+function handleSessionStart(): void {
     connection.removeTracks();
 
     console.log("adding local media stream to peer connection");
@@ -124,10 +132,18 @@ function handleSessionStart() {
         .getTracks()
         .forEach((track) => connection.addTrack(track, stream, "gripper"));
 
-    stream = audioStream.outputAudioStream!;
-    stream
-        .getTracks()
-        .forEach((track) => connection.addTrack(track, stream, "audio"));
+    if (audioStream.outputAudioStream) {
+        stream = audioStream.outputAudioStream;
+        const audioTracks = stream.getTracks();
+        if (audioTracks.length > 0) {
+            audioTracks.forEach((track) =>
+                connection.addTrack(track, stream, "audio")
+            );
+            console.log("Added robot audio track to peer connection");
+        } else {
+            console.warn("No audio tracks found on robot outputAudioStream");
+        }
+    }
 
     connection.openDataChannels();
 }
@@ -232,13 +248,13 @@ async function forwardVoiceToken() {
     }
 }
 
-function forwardJointVelocityLimits(limits: JointVelocityLimits) {
+function forwardMaxEeSpeed(maxEeSpeed: number) {
     if (!connection) throw "WebRTC connection undefined!";
 
     connection.sendData({
-        type: "jointVelocityLimits",
-        jointVelocities: limits,
-    } as JointVelocityLimitsMessage);
+        type: "maxEeSpeed",
+        maxEeSpeed: maxEeSpeed,
+    } as MaxEeSpeedMessage);
 }
 
 function forwardJointStates(
@@ -272,6 +288,14 @@ function forwardOdom(odom: ROSOdometry) {
         type: "odom",
         message: odom,
     } as OdomMessage);
+}
+
+function forwardOccupancyGridUnavailable() {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "occupancyGridUnavailable",
+    } as OccupancyGridUnavailableMessage);
 }
 
 function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {
@@ -420,8 +444,10 @@ function handleMessage(message: WebRTCMessage) {
         case "getStretchTool":
             robot.getStretchTool();
             break;
-        case "getJointVelocity":
-            robot.getJointVelocityLimits();
+        case "getMaxEeSpeed":
+            robot.getMaxEeSpeed();
+        case "getRunStop":
+            forwardIsRunStopped(robot.getIsRunStopped());
             break;
         case "homeTheRobot":
             robot.homeTheRobot();

@@ -2,19 +2,19 @@ import { Transform } from "roslib";
 import { VelocityCommand } from "shared/commands";
 import { RemoteRobot } from "shared/remoterobot";
 import {
-    JOINT_VELOCITIES,
+    DEFAULT_JOINT_VELOCITIES,
     JOINT_VELOCITY_HEARTBEAT_MS,
-    PROFILE_JOINT_VELOCITIES,
+    PROFILE_SCALES,
     RobotPose,
     SpeedProfile,
     ValidJoints,
 } from "shared/util";
 import { PilotButtonPads } from "../static_components/PilotControlsToggle";
+import { getLabelBySpeed } from "../utils/action-speed-scale";
 import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
-import { getLabelBySpeed } from "../utils/action-speed-scale";
 import { clampTimedMoveMs } from "../utils/timed-move";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
 
@@ -26,7 +26,7 @@ const x = PilotButtonPads;
  */
 export abstract class FunctionProvider {
     protected static remoteRobot?: RemoteRobot;
-    public static velocityScale: number;
+    public static speedProfile: SpeedProfile = "medium";
     public static actionMode: ActionModeType;
     public static pilotControlsCurrent: PilotButtonPadType;
     public activeButtonPadFunction: ButtonPadButton;
@@ -66,21 +66,61 @@ export abstract class FunctionProvider {
         return FunctionProvider.remoteRobot?.getMapPose();
     }
 
-    /** Speed profile for the current velocity scale. */
-    static get speedProfile(): SpeedProfile {
-        return getLabelBySpeed(this.velocityScale) ?? "medium";
+    /**
+     * Multiplier for the current speed setting.
+     *
+     * Returns:
+     *     The current profile's PROFILE_SCALES entry.
+     */
+    static get velocityScale(): number {
+        return PROFILE_SCALES[this.speedProfile];
     }
 
     /**
-     * Velocity of a joint at the current speed setting, in URDF units/s: the joint's
-     * PROFILE_JOINT_VELOCITIES entry if it has one, otherwise JOINT_VELOCITIES times the velocity
-     * scale. Undefined if the joint has neither.
+     * Select the speed profile carrying this multiplier.
+     *
+     * Args:
+     *     scale: A multiplier from PROFILE_SCALES. Any other value selects medium.
+     */
+    static set velocityScale(scale: number) {
+        this.speedProfile = getLabelBySpeed(scale) ?? "medium";
+    }
+
+    /**
+     * Velocity of a joint at an explicit speed profile, in URDF units/s: the joint's
+     * DEFAULT_JOINT_VELOCITIES entry, which is its medium speed, scaled by that profile.
+     *
+     * Voice commands carry their own speed and are independent of the interface's speedometer, so
+     * they resolve velocities through this rather than through jointVelocity().
+     *
+     * Args:
+     *     jointName: Joint to look up.
+     *     profile: Speed profile to scale by.
+     *
+     * Returns:
+     *     The velocity in URDF units/s, or undefined if the joint has no entry.
+     */
+    static jointVelocityAt(
+        jointName: ValidJoints,
+        profile: SpeedProfile,
+    ): number | undefined {
+        const velocity = DEFAULT_JOINT_VELOCITIES[jointName];
+        return velocity === undefined ? undefined : velocity * PROFILE_SCALES[profile];
+    }
+
+    /**
+     * Velocity of a joint at the speedometer's current setting, in URDF units/s. Velocities and
+     * jog increments share that multiplier, so a speed profile changes a step action and a held
+     * action by the same proportion.
+     *
+     * Args:
+     *     jointName: Joint to look up.
+     *
+     * Returns:
+     *     The velocity in URDF units/s, or undefined if the joint has no entry.
      */
     static jointVelocity(jointName: ValidJoints): number | undefined {
-        const profileVelocity = PROFILE_JOINT_VELOCITIES[this.speedProfile][jointName];
-        if (profileVelocity !== undefined) return profileVelocity;
-        const velocity = JOINT_VELOCITIES[jointName];
-        return velocity === undefined ? undefined : velocity * this.velocityScale;
+        return this.jointVelocityAt(jointName, this.speedProfile);
     }
 
     /**
