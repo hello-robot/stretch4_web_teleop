@@ -37,6 +37,7 @@ MAP_YAML_SOURCE="map-less mode"
 CLI_HOSTING=""
 CLI_HOSTING_FLAG=""
 DRY_RUN=0
+OVERWRITE_VOLUME=""
 
 # 5. Define the usage text
 usage() {
@@ -58,6 +59,8 @@ Options:
   --dry-run         Validate installation, resolve all configuration and
                     provenance, run preflights, print the manifest, and exit 0
                     without touching ROS2 or pm2.
+  --overwrite-volume [0.0-1.0]
+                    Overwrite system volume (default: 0.8 when flag has no arg).
   -h, --help        Show this message.
 
 Without flags or standing HOSTING_MODE configuration, the launch is local only.
@@ -116,6 +119,27 @@ while [ $# -gt 0 ]; do
 		;;
 	--dry-run)
 		DRY_RUN=1
+		;;
+	--overwrite-volume)
+		raw_vol="0.8"
+		if [ $# -gt 1 ] && [[ "$2" =~ ^-?[0-9]*\.?[0-9]+$ ]]; then
+			shift
+			raw_vol="$1"
+		fi
+		OVERWRITE_VOLUME="$(awk -v v="$raw_vol" 'BEGIN {
+			if (v < 0.0) v = 0.0;
+			if (v > 1.0) v = 1.0;
+			printf "%d%%", int(v * 100 + 0.5);
+		}')"
+		;;
+	--overwrite-volume=*)
+		raw_vol="${1#--overwrite-volume=}"
+		OVERWRITE_VOLUME="$(awk -v v="$raw_vol" 'BEGIN {
+			if (v == "" || v !~ /^-?[0-9]*\.?[0-9]+$/) v = 0.8;
+			if (v < 0.0) v = 0.0;
+			if (v > 1.0) v = 1.0;
+			printf "%d%%", int(v * 100 + 0.5);
+		}')"
 		;;
 	-h | --help)
 		usage
@@ -290,7 +314,11 @@ cd "$REPO_DIR"
 ./start_ros2.sh -l "$logdir" $MAP |& tee "$logfile_ros"
 
 # 18. Configure audio
-./configure_audio.sh
+if [ -n "$OVERWRITE_VOLUME" ]; then
+	./configure_audio.sh -v "$OVERWRITE_VOLUME"
+else
+	./configure_audio.sh
+fi
 
 # echo ""
 # 19. Start the web server and the robot browser

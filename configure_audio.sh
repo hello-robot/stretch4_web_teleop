@@ -15,7 +15,8 @@
 SPEAKER_NAME="alsa_output.pci-0000_00_1f.3.analog-stereo"
 MIC_NAME=""
 SPEAKER_OVERRIDDEN=false
-while getopts ":s:m:" opt; do
+TARGET_VOLUME=""
+while getopts ":s:m:v:" opt; do
 	case $opt in
 	s)
 		SPEAKER_NAME="$OPTARG"
@@ -23,6 +24,9 @@ while getopts ":s:m:" opt; do
 		;;
 	m)
 		MIC_NAME="$OPTARG"
+		;;
+	v)
+		TARGET_VOLUME="$OPTARG"
 		;;
 	esac
 done
@@ -83,7 +87,9 @@ if [[ -n "$SPEAKER_NAME" && $sinks == *"$SPEAKER_NAME"* ]]; then
 	echo "    Setting speaker to $SPEAKER_NAME"
 	pactl set-default-sink "$SPEAKER_NAME"
 	pactl set-sink-mute "$SPEAKER_NAME" 0 2>/dev/null || true
-	pactl set-sink-volume "$SPEAKER_NAME" 100% 2>/dev/null || true
+	if [ -n "$TARGET_VOLUME" ]; then
+		pactl set-sink-volume "$SPEAKER_NAME" "$TARGET_VOLUME" 2>/dev/null || true
+	fi
 else
 	echo "    Speaker name '$SPEAKER_NAME' is invalid or unavailable"
 	echo "    To get valid speaker names, run:"
@@ -110,7 +116,9 @@ if [ ${#MIC_NAME} -gt 0 ]; then
 		echo "    Setting microphone to $MIC_NAME"
 		pactl set-default-source "$MIC_NAME"
 		pactl set-source-mute "$MIC_NAME" 0 2>/dev/null || true
-		pactl set-source-volume "$MIC_NAME" 100% 2>/dev/null || true
+		if [ -n "$TARGET_VOLUME" ]; then
+			pactl set-source-volume "$MIC_NAME" "$TARGET_VOLUME" 2>/dev/null || true
+		fi
 	else
 		echo "    Microphone name '$MIC_NAME' is invalid"
 		echo "    To get valid microphone names, run:"
@@ -121,7 +129,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 4. Unmute and set volume to 100% across ALL hardware ALSA cards (PCI & USB)
+# 4. Unmute and set volume across ALL hardware ALSA cards (PCI & USB)
 # ------------------------------------------------------------------------------
 amixer_devices=('Master' 'PCM' 'Speaker' 'Capture' 'Mic' 'Digital')
 
@@ -140,10 +148,12 @@ for card_num in $(awk '/^ *[0-9]+ \[/ {print $1}' /proc/asound/cards 2>/dev/null
 				fi
 			fi
 
-			echo "    Setting '$device' on ALSA card $card_num to 100%"
-			amixer -c "$card_num" sset "$device" 100% unmute -q 2>/dev/null ||
-				amixer -c "$card_num" sset "$device" 100% cap -q 2>/dev/null ||
-				amixer -c "$card_num" sset "$device" 100% -q 2>/dev/null || true
+			if [ -n "$TARGET_VOLUME" ]; then
+				echo "    Setting '$device' on ALSA card $card_num to $TARGET_VOLUME"
+				amixer -c "$card_num" sset "$device" "$TARGET_VOLUME" unmute -q 2>/dev/null ||
+					amixer -c "$card_num" sset "$device" "$TARGET_VOLUME" cap -q 2>/dev/null ||
+					amixer -c "$card_num" sset "$device" "$TARGET_VOLUME" -q 2>/dev/null || true
+			fi
 		fi
 	done
 done
