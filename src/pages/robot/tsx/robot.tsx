@@ -21,12 +21,12 @@ import {
     getPlaybackJointVelocity,
     GRIPPER_INCREMENT_RANGE_FRACTION,
     JOINT_VELOCITY_HEARTBEAT_MS,
+    ParameterEvent,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
-    ParameterEvent,
     ROSPose,
     setMaxEeSpeed,
     updateJointIncrements,
@@ -1978,11 +1978,6 @@ export class Robot extends React.Component {
         );
     }
 
-<<<<<<< HEAD
-    executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        this.switchToNavigationMode();
-        this.stopAutonomousClients();
-=======
     async executeIncrementalMove(jointName: ValidJoints, increment: number) {
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring executeIncrementalMove while robot is runstopped");
@@ -1990,7 +1985,6 @@ export class Robot extends React.Component {
         }
         await this.switchToNavigationMode();
         // this.stopAutonomousClients();
->>>>>>> c3e6fed2cfa6b4b2a752f45e960d48e32fc19a6b
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
         this.trajectoryClient.sendGoal(
@@ -2039,14 +2033,6 @@ export class Robot extends React.Component {
     }
 
     /**
-<<<<<<< HEAD
-     * Cancel active trajectory execution on the trajectory action client.
-     */
-    stopTrajectoryClient() {
-        if (!this.trajectoryClient) return;
-        if (this.poseGoal) {
-            this.trajectoryClient.cancelGoal(this.poseGoalID);
-=======
      * Cancels any active trajectory action goal and emits a canceled playback state.
      *
      * Args:
@@ -2061,7 +2047,6 @@ export class Robot extends React.Component {
             if (this.poseGoalID) {
                 this.trajectoryClient.cancelGoal(this.poseGoalID);
             }
->>>>>>> c3e6fed2cfa6b4b2a752f45e960d48e32fc19a6b
             this.poseGoal = undefined;
             this.poseGoalID = undefined;
             if (this.playbackPosesResultCallback) {
@@ -2089,27 +2074,6 @@ export class Robot extends React.Component {
         }
 
         if (this.moveBaseGoalID) {
-<<<<<<< HEAD
-            try {
-                this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
-            } catch (e) {
-                console.warn("Error calling cancelGoal on moveBaseClient:", e);
-            }
-        }
-
-        this.moveBaseGoalID = undefined;
-        this.moveBaseGoal = undefined;
-        this.moveBaseStatusWatching = false;
-        this.moveBaseStatusSeenActive = false;
-        this.moveBaseTerminalBaseline = undefined;
-
-        if (hadActiveGoal) {
-            this.moveBaseResultCallback({
-                state: "Navigation canceled!",
-                alert_type: "error",
-            });
-            this.toggleBaseOnlyCollision(true);
-=======
             this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
             this.moveBaseGoalID = undefined;
             this.moveBaseGoal = undefined;
@@ -2127,7 +2091,6 @@ export class Robot extends React.Component {
                     alert_type: "error",
                 });
             }
->>>>>>> c3e6fed2cfa6b4b2a752f45e960d48e32fc19a6b
         }
     }
 
