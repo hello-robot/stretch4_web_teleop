@@ -298,7 +298,7 @@ export const PROFILE_SCALES: Record<SpeedProfile, number> = {
  * default. Used until the robot reports the limiter's actual value, and whenever the limiter is
  * not running at all, so the table is never derived from nothing.
  */
-const DEFAULT_MAX_EE_SPEED = 0.2;
+const DEFAULT_MAX_EE_SPEED = 0.15;
 
 /**
  * Ceiling currently in force, in m/s. Seeded with the launch default and replaced by the robot's

@@ -364,7 +364,7 @@ def generate_launch_description():
     )
     max_ee_speed_arg = DeclareLaunchArgument(
         "max_ee_speed",
-        default_value="0.2",  # m/s
+        default_value="0.15",  # m/s
         description="Maximum allowed end-effector linear speed in m/s",
     )
     target_frame_arg = DeclareLaunchArgument(
