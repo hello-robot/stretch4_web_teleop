@@ -11,6 +11,7 @@ export type cmd =
     | CameraPerspectiveCommand
     | RobotPoseCommand
     | ToggleCommand
+    | GetRunStopCommand
     | GetOccupancyGrid
     | MoveBaseCommand
     | StopTrajectoryCommand
@@ -18,7 +19,7 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
-    | GetJointVelocity
+    | GetMaxEeSpeed
     | HomeTheRobotCommand
     | SeedLocalizationCommand
     | GetVoiceCapabilityCommand
@@ -101,6 +102,10 @@ export interface ToggleCommand {
     toggle: boolean;
 }
 
+export interface GetRunStopCommand {
+    type: "getRunStop";
+}
+
 export interface GetOccupancyGrid {
     type: "getOccupancyGrid";
 }
@@ -109,8 +114,8 @@ export interface GetStretchTool {
     type: "getStretchTool";
 }
 
-export interface GetJointVelocity {
-    type: "getJointVelocity";
+export interface GetMaxEeSpeed {
+    type: "getMaxEeSpeed";
 }
 
 export interface MoveBaseCommand {

@@ -7,9 +7,15 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$REPO_DIR/scripts/lib/teleop_env.sh"
+
 REDIRECT_LOGDIR="$HOME/stretch_user/log/web_teleop"
 mkdir -p $REDIRECT_LOGDIR
-while getopts l:m:t: opt; do
+# -t was declared here for years with no case arm to receive it, so the mode
+# flag the other launch scripts take was silently swallowed. Unknown flags now
+# stop the script rather than scroll past.
+while getopts l:m: opt; do
 	case $opt in
 	l)
 		# Usage: ./start_ros2.sh -l /tmp/some_folder
@@ -23,6 +29,10 @@ while getopts l:m:t: opt; do
 			echo "Setting map..."
 			MAP_ARG="map_yaml:=$OPTARG"
 		fi
+		;;
+	*)
+		echo "Usage: $0 [-l logdir] [-m map.yaml]"
+		exit 1
 		;;
 	esac
 done
@@ -47,12 +57,20 @@ export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 source /opt/ros/jazzy/setup.bash &>>$REDIRECT_LOGFILE
 source ~/ament_ws/install/setup.bash &>>$REDIRECT_LOGFILE
 source /usr/share/colcon_cd/function/colcon_cd.sh &>>$REDIRECT_LOGFILE
+teleop_setup_env
 
 echo "Stopping previous instances..."
-./stop_interface.sh &>>$REDIRECT_LOGFILE
+"$REPO_DIR/stop_interface.sh" &>>$REDIRECT_LOGFILE || true
 
 echo "Reload USB bus..."
-sudo udevadm control --reload-rules && sudo udevadm trigger &>>$REDIRECT_LOGFILE
+# Needs root. The daemon reaches this script as an unprivileged user, so skip
+# the reload there rather than block on a password prompt nothing can answer.
+if sudo -n true 2>/dev/null; then
+	sudo -n udevadm control --reload-rules &>>$REDIRECT_LOGFILE || true
+	sudo -n udevadm trigger &>>$REDIRECT_LOGFILE || true
+else
+	echo "Skipping USB bus reload (no passwordless sudo)."
+fi
 
 echo "Check rmw_zenohd..."
 if ! pgrep -x rmw_zenohd >/dev/null; then
@@ -68,7 +86,6 @@ else
 	echo "rmw_zenohd already running."
 fi
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FEATURE_LOCAL_COLLISION_AVOIDANCE="$(node "$REPO_DIR/feature-flags.js" local_collision_avoidance)" || exit 1
 export FEATURE_LOCAL_COLLISION_AVOIDANCE
 

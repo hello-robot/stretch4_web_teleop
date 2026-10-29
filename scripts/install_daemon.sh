@@ -8,8 +8,9 @@ fi
 
 # Determine the user who ran sudo, fallback to current user
 TARGET_USER=${SUDO_USER:-$(whoami)}
-TARGET_HOME=$(eval echo "~$TARGET_USER")
-WORKSPACE_DIR="$TARGET_HOME/ament_ws/src/stretch4_web_teleop"
+# Derived from this installer's own location rather than a canonical path, so a
+# checkout anywhere on disk installs a unit that points back at itself.
+WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_PATH="/etc/systemd/system/stretch-web-teleop-daemon.service"
 
 echo "Installing service for user: $TARGET_USER"

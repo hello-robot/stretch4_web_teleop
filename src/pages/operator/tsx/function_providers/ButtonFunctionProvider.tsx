@@ -1,5 +1,6 @@
 import {
     JOINT_INCREMENTS,
+    SpeedProfile,
     ValidJoints,
     ValidJointStateDict,
 } from "shared/util";
@@ -214,10 +215,36 @@ export class ButtonFunctionProvider extends FunctionProvider {
         if (this.operatorCallback) this.operatorCallback(this.buttonStateMap);
     }
 
-    //  TEMP FOR ACTION MODAL DISABILING
-    public disableActiveButton() {
+    /**
+     * Stops any currently executing movement action and releases active/latched button states.
+     */
+    public disableActiveButton(): void {
         this.stopCurrentAction(true);
-        this.setButtonInactiveState(this.activeButtonPadFunction);
+        let changed = false;
+
+        if (this.activeButtonPadFunction !== undefined) {
+            const currentState = this.buttonStateMap.get(this.activeButtonPadFunction);
+            if (
+                currentState !== ButtonState.Collision &&
+                currentState !== ButtonState.Limit &&
+                currentState !== ButtonState.Inactive
+            ) {
+                this.buttonStateMap.set(this.activeButtonPadFunction, ButtonState.Inactive);
+                changed = true;
+            }
+            this.activeButtonPadFunction = undefined;
+        }
+
+        this.buttonStateMap.forEach((state, btn) => {
+            if (state === ButtonState.Active) {
+                this.buttonStateMap.set(btn, ButtonState.Inactive);
+                changed = true;
+            }
+        });
+
+        if (changed && this.operatorCallback) {
+            this.operatorCallback(this.buttonStateMap);
+        }
     }
 
     /**
@@ -227,6 +254,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
     public timedButtonPadPress(
         buttonPadButton: ButtonPadButton,
         durationMs: number,
+        speedProfile?: SpeedProfile,
     ): boolean {
         if (!FunctionProvider.remoteRobot) {
             return false;
@@ -237,7 +265,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
         this.timedVoiceMoveActive = true;
         this.activeButtonPadFunction = buttonPadButton;
 
-        const functs = this.provideFunctions(buttonPadButton);
+        const functs = this.provideFunctions(buttonPadButton, speedProfile);
         functs.onClick();
 
         this.timedVoiceMoveTimer = setTimeout(() => {
@@ -256,10 +284,14 @@ export class ButtonFunctionProvider extends FunctionProvider {
      * the user interacts with the button.
      *
      * @param buttonPadFunction the {@link ButtonPadButton}
+     * @param speedProfile speed to resolve the joint velocity at; defaults to the
+     *      interface's current setting. Voice moves pass the speed their command
+     *      named, which leaves the speedometer untouched.
      * @returns the {@link ButtonFunctions} for the button
      */
     public provideFunctions(
-        buttonPadFunction: ButtonPadButton
+        buttonPadFunction: ButtonPadButton,
+        speedProfile?: SpeedProfile,
     ): ButtonFunctions {
         let action: () => void;
         const onLeave = () => {
@@ -274,7 +306,10 @@ export class ButtonFunctionProvider extends FunctionProvider {
         )
             ? -1
             : 1;
-        const jointVelocity = FunctionProvider.jointVelocity(jointName);
+        const jointVelocity = FunctionProvider.jointVelocityAt(
+            jointName,
+            speedProfile ?? FunctionProvider.speedProfile,
+        );
         if (jointVelocity === undefined) {
             throw new Error(`ButtonFunctionProvider::provideFunctions: Velocity for joint ${jointName} is undefined!`);
         }

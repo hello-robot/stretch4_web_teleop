@@ -41,9 +41,15 @@ import {
 import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
 import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
 import { MapFunction } from "./AutoNav";
+import { RobotAudioPlayer } from "../utils/robotAudioPlayer";
 
 /** Menu tiles that run an action without changing the selected scene/footer label. */
-const ACTION_TILE_IDS = new Set(["mic-mute", "localize-aruco", "reload-app"]);
+const ACTION_TILE_IDS = new Set([
+    "mic-mute",
+    "robot-mic-mute",
+    "localize-aruco",
+    "reload-app",
+]);
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
 
 // @flag voice_control_interface
@@ -69,6 +75,9 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     isMainMenuOpenSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
+    const [isRobotAudioMuted, isRobotAudioMutedSet] = useState<boolean>(
+        RobotAudioPlayer.getInstance().getMuted()
+    );
     // @flag voice_control_interface
     const voiceSvc = useSyncExternalStore(
         subscribeOperatorVoiceSvc,
@@ -82,7 +91,15 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     localizeStatusRef.current = localizeStatus;
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
 
-    runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
+    useEffect(() => {
+        const unsubscribe =
+            runStopFunctionProvider.setRunStopStateChangeCallback(
+                isRunStoppedSet
+            );
+        return () => {
+            unsubscribe();
+        };
+    }, []);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
 
     // Re-register each render (provider may be created after first mount).
@@ -106,7 +123,11 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     });
 
     useEffect(() => {
+        const unsubscribe = RobotAudioPlayer.getInstance().addMuteListener(
+            (muted) => isRobotAudioMutedSet(muted)
+        );
         return () => {
+            unsubscribe();
             if (localizeSuccessTimeoutRef.current) {
                 clearTimeout(localizeSuccessTimeoutRef.current);
             }
@@ -160,12 +181,28 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 enabled: localizeStatus !== "loading",
                 status: localizeStatus,
             },
+            {
+                id: "robot-mic-mute",
+                name: isRobotAudioMuted ? "Unmute Robot Mic" : "Mute Robot Mic",
+                description: "Toggle robot microphone audio stream playback",
+                onClick: () => {
+                    const player = RobotAudioPlayer.getInstance();
+                    if (player.getMuted()) {
+                        player.unlockFromUserGesture();
+                    }
+                    player.toggleMuted();
+                },
+                icon: isRobotAudioMuted ? <MicOffIcon /> : <MicIcon />,
+                enabled: true,
+            },
             // @flag voice_control_interface
             ...(voiceSvc
                 ? [
                     {
                         id: "mic-mute",
-                        name: micMuted ? "Unmute" : "Mute",
+                        name: micMuted
+                            ? "Enable Voice Control"
+                            : "Disable Voice Control",
                         description: "Toggle microphone uplink to OpenAI",
                         onClick: () => {
                             const nextMuted =
@@ -241,6 +278,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             swipeableViewsIdxSet,
             micMuted,
             voiceConnected,
+            isRobotAudioMuted,
         ]
     );
 
@@ -253,7 +291,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             scene.onClick?.();
             return;
         }
-        if (scene.id === "mic-mute") {
+        if (scene.id === "robot-mic-mute" || scene.id === "mic-mute") {
             scene.onClick?.();
             isMainMenuOpenSet(false);
             return;

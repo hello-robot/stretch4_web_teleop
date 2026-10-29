@@ -27,7 +27,6 @@ import type { VoiceMoveFeedback } from "./voiceMoveFeedback";
  */
 export type VoiceMoveExecutionContext = {
     mode: VoiceMoveExecutionMode;
-    onSpeedChange: (speed: VoiceSpeed) => void;
     onPressAndHoldRequired: () => void;
     onVoiceMoveFeedback?: (feedback: VoiceMoveFeedback) => void;
 };
@@ -59,12 +58,14 @@ export abstract class VoiceMoveExecutor {
     // ── Shared helpers ────────────────────────────────────────────────────────
 
     /**
-     * Trigger UI speed sync and press-and-hold gate before a voice move.
-     * Called by every concrete executor immediately before dispatching motion.
+     * Open the press-and-hold gate before a voice move.
+     *
+     * The speed a command names scales that command only; it deliberately leaves the
+     * interface's speedometer alone, so a spoken "slow" cannot quietly slow down the manual
+     * controls afterwards. Executors resolve their own velocities from the named speed.
      */
-    protected static prepareUi(speed: VoiceSpeed): void {
+    protected static prepareUi(): void {
         VoiceMoveExecutor._context?.onPressAndHoldRequired();
-        VoiceMoveExecutor._context?.onSpeedChange(speed);
     }
 
     /** Emit structured feedback for operator toasts (also used by stop/macro free helpers). */

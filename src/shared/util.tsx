@@ -89,6 +89,7 @@ export interface SignallingMessage {
 export type WebRTCMessage =
     | ValidJointStateMessage
     | OccupancyGridMessage
+    | OccupancyGridUnavailableMessage
     | MapPoseMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
@@ -102,8 +103,33 @@ export type WebRTCMessage =
     | SeedLocalizationStateMessage
     | VoiceCapabilityMessage
     | VoiceTokenMessage
-    | JointVelocityLimitsMessage
+    | MaxEeSpeedMessage
     | cmd;
+
+/**
+ * Node name the velocity limiter launches under, as set in web_interface.launch.py. Used to pick
+ * its parameters out of /parameter_events.
+ */
+export const EE_VELOCITY_LIMITER_NODE = "ee_velocity_safety_filter";
+
+/** One entry of rcl_interfaces/msg/ParameterEvent; only the fields this interface reads. */
+export interface ParameterEventValue {
+    name: string;
+    value?: { type?: number; double_value?: number };
+}
+
+/** rcl_interfaces/msg/ParameterEvent, as delivered over rosbridge. */
+export interface ParameterEvent extends Message {
+    node: string;
+    new_parameters?: ParameterEventValue[];
+    changed_parameters?: ParameterEventValue[];
+}
+
+/** Robot -> operator report of the velocity limiter's current max_ee_speed, in m/s. */
+export interface MaxEeSpeedMessage {
+    type: "maxEeSpeed";
+    maxEeSpeed: number;
+}
 
 /** Robot -> operator reply to getVoiceCapability. */
 export interface VoiceCapabilityMessage {
@@ -167,16 +193,6 @@ export interface StretchToolMessage {
     toolMetadata?: ToolMetadata;
 }
 
-/** Per-profile joint velocities, keyed by joint name. */
-export type JointVelocityLimits = Partial<Record<SpeedProfile, Record<string, number>>>;
-
-export interface JointVelocityLimitsMessage {
-    type: "jointVelocityLimits";
-    jointVelocities: JointVelocityLimits;
-}
-
-
-
 export interface ActionState {
     state: string;
     alert_type: string;
@@ -199,6 +215,11 @@ export interface ActionStatusList {
 export interface OccupancyGridMessage {
     type: "occupancyGrid";
     message: ROSOccupancyGrid;
+}
+
+/** Robot -> operator: /map_server/map is missing or returned an empty grid. */
+export interface OccupancyGridUnavailableMessage {
+    type: "occupancyGridUnavailable";
 }
 
 export interface MapPoseMessage {
@@ -268,45 +289,144 @@ export interface ROSOdometry extends Message {
 /** Speed setting, matching the driver's slow / default / fast motion profiles. */
 export type SpeedProfile = "slow" | "medium" | "fast";
 
-export const SPEED_PROFILES: SpeedProfile[] = ["slow", "medium", "fast"];
-
-/** Joint velocities at a velocity scale of 1, in m/s or rad/s. */
-export const JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
-    head_tilt_joint: 0.3,
-    head_pan_joint: 0.3,
-    gripper_joint: 0.1,
-    arm_joint: 0.04,
-    lift_joint: 0.04,
-    wrist_roll_joint: 0.5,
-    wrist_pitch_joint: 0.5,
-    wrist_yaw_joint: 1.0,
-    translate_mobile_base: 0.2,
-    rotate_mobile_base: 0.3,
+/**
+ * Web teleop speed multipliers, applied to both DEFAULT_JOINT_VELOCITIES and JOINT_INCREMENTS so
+ * a speed profile changes held and step actions by the same proportion.
+ */
+export const PROFILE_SCALES: Record<SpeedProfile, number> = {
+    slow: 0.75,
+    medium: 1.0,
+    fast: 2.0,
 };
 
 /**
- * Joint velocities per speed profile, in URDF units/s, used instead of JOINT_VELOCITIES and the
- * velocity scale. Holds the gripper, whose units depend on the attached tool; populated at runtime
- * from the driver's joint_velocity.{slow,fast}.gripper and joint_velocity.gripper params.
+ * Fallback end-effector speed ceiling, in m/s, matching the max_ee_speed launch argument's own
+ * default. Used until the robot reports the limiter's actual value, and whenever the limiter is
+ * not running at all, so the table is never derived from nothing.
  */
-export const PROFILE_JOINT_VELOCITIES: Record<SpeedProfile, { [key in ValidJoints]?: number }> = {
-    slow: { gripper_joint: 0.075 },
-    medium: { gripper_joint: 0.125 },
-    fast: { gripper_joint: 0.2 },
+const DEFAULT_MAX_EE_SPEED = 0.15;
+
+/**
+ * Ceiling currently in force, in m/s. Seeded with the launch default and replaced by the robot's
+ * live value once it arrives; the limiter re-reads its own parameter on every command, so an
+ * operator editing it at runtime takes effect immediately on the robot and this has to follow.
+ */
+let maxEeSpeed = DEFAULT_MAX_EE_SPEED;
+
+/**
+ * Tool-frame linear speed each joint produces per unit of its own velocity. Measured against the
+ * limiter's own kinematics, forward_velocity() to tool_attachment_site_link.
+ *
+ * The lift, arm and base translation move the tool one-for-one in every pose. Wrist pitch is
+ * likewise fixed, and wrist yaw's figure is the largest it reaches over the wrist's travel, so
+ * those stay within the ceiling wherever the arm happens to be.
+ *
+ * Base rotation is the exception: its moment arm grows with arm extension, reaching 0.78 with the
+ * arm half a metre out, and the figure here is the stowed one. Sizing it for the extended case
+ * would leave the base crawling in the pose it spends most of its time in, so the faster profiles
+ * are instead allowed to clip once the arm is extended, which is the limiter doing its job.
+ *
+ * Joints absent here move the tool only in ways this ceiling cannot measure, so the limiter never
+ * scales them: the head is off the tool chain entirely, the gripper is not part of the limiter's
+ * joint vector, and wrist roll turns the tool about its own axis, giving the attachment site
+ * exactly zero linear velocity. The head and gripper take their velocities from
+ * UNLIMITED_JOINT_VELOCITIES; roll follows the rest of the wrist, see WRIST_VELOCITY.
+ */
+const TOOL_SPEED_PER_UNIT: { [key in ValidJoints]?: number } = {
+    lift_joint: 1.0,
+    arm_joint: 1.0,
+    translate_mobile_base: 1.0,
+    rotate_mobile_base: 0.2862,
+    wrist_yaw_joint: 0.1065,
+    wrist_pitch_joint: 0.0608,
 };
+
+/**
+ * Medium-profile velocities for the head and gripper, in URDF units/s. The limiter cannot see
+ * either of them, so nothing downstream bounds these and they are the only thing deciding how
+ * fast those axes move.
+ *
+ * The gripper's URDF units depend on the attached tool, so its entry is only nominal; its jog
+ * increment is normalized to the tool's travel in updateJointIncrements().
+ */
+const UNLIMITED_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
+    head_tilt_joint: 0.3,
+    head_pan_joint: 0.3,
+    gripper_joint: 0.075,
+};
+
+/**
+ * Joint velocities at the medium speed setting, in URDF units/s; PROFILE_SCALES derives the slow
+ * and fast settings from these. The driver's own joint_velocity.* params are its default motion
+ * profile, which is far faster than the end-effector limiter allows, so these come from here
+ * rather than from it.
+ *
+ * Every joint the limiter constrains is derived from MAX_EE_SPEED rather than written down, which
+ * puts the fast profile exactly on the ceiling and makes it impossible to set a velocity the
+ * limiter would clip. That matters because a clipped axis does not merely run slower: the limiter
+ * scales a command by a single gain until the tool reaches MAX_EE_SPEED, so an axis over the
+ * ceiling at every profile produces the same speed for all three, and the speed setting silently
+ * stops working on it.
+ */
+export const DEFAULT_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {};
+
+/**
+ * Rebuild DEFAULT_JOINT_VELOCITIES for the ceiling now in force.
+ *
+ * The object is rewritten in place rather than replaced, so the function providers and anything
+ * else holding a reference see the new values without being told.
+ *
+ * The wrist turns at one speed across roll, pitch and yaw, taken from whichever of them the
+ * limiter holds slowest. Yaw sweeps the tool through the widest arc, so it sets the pace.
+ * Matching the other two to it keeps the wrist predictable to drive, and it is the only thing
+ * bounding roll at all: rolling turns the tool about its own axis, which moves the attachment
+ * site nowhere, so the limiter computes no gain for it and would otherwise let it spin as fast
+ * as this table asked.
+ */
+function rebuildJointVelocities(): void {
+    const limited = Object.fromEntries(
+        Object.entries(TOOL_SPEED_PER_UNIT).map(([joint, toolSpeedPerUnit]) => [
+            joint,
+            maxEeSpeed / (PROFILE_SCALES.fast * toolSpeedPerUnit!),
+        ]),
+    ) as { [key in ValidJoints]?: number };
+
+    const wrist = Math.min(limited.wrist_pitch_joint!, limited.wrist_yaw_joint!);
+
+    Object.assign(DEFAULT_JOINT_VELOCITIES, UNLIMITED_JOINT_VELOCITIES, limited, {
+        wrist_roll_joint: wrist,
+        wrist_pitch_joint: wrist,
+        wrist_yaw_joint: wrist,
+    });
+}
+
+rebuildJointVelocities();
+
+/**
+ * Adopt the limiter's end-effector speed ceiling and rescale every joint derived from it.
+ *
+ * Args:
+ *     speed: Ceiling in m/s, as reported by the limiter's max_ee_speed parameter. Values that
+ *         are not finite and positive are ignored, since a zero or missing parameter would
+ *         otherwise pin every derived joint at a standstill.
+ *
+ * Returns:
+ *     True if the ceiling changed and the table was rebuilt.
+ */
+export function setMaxEeSpeed(speed: number): boolean {
+    if (!Number.isFinite(speed) || speed <= 0 || speed === maxEeSpeed) return false;
+    maxEeSpeed = speed;
+    rebuildJointVelocities();
+    return true;
+}
+
+/** Ceiling the joint velocity table is currently derived from, in m/s. */
+export function getMaxEeSpeed(): number {
+    return maxEeSpeed;
+}
 
 /** Tool-frame linear speed for flying gripper (m/s), scaled by velocityScale. */
 export const TASK_SPACE_LINEAR_VEL = 0.04;
-
-export function updateJointVelocities(newVelocities: JointVelocityLimits) {
-    for (const profile of SPEED_PROFILES) {
-        for (const [key, val] of Object.entries(newVelocities[profile] ?? {})) {
-            if (typeof val === "number" && val > 0) {
-                (PROFILE_JOINT_VELOCITIES[profile] as Record<string, number>)[key] = val;
-            }
-        }
-    }
-}
 
 /**
  * Default fallback jog increments. The gripper's is refreshed at runtime from the driver's
@@ -370,10 +490,7 @@ export function getPlaybackJointVelocity(jointName: ValidJoints): number {
     }
 
     const velocity =
-        PROFILE_JOINT_VELOCITIES.medium[resolvedJoint] ??
-        JOINT_VELOCITIES[resolvedJoint] ??
-        PROFILE_JOINT_VELOCITIES.medium[jointName] ??
-        JOINT_VELOCITIES[jointName];
+        DEFAULT_JOINT_VELOCITIES[resolvedJoint] ?? DEFAULT_JOINT_VELOCITIES[jointName];
     return (velocity || 0.1) * MOVE_TO_POSE_PLAYBACK_GAIN;
 }
 

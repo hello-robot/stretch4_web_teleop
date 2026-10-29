@@ -35,6 +35,17 @@ export class UnderMapFunctionProvider extends FunctionProvider {
         if (this.operatorCallback) this.operatorCallback(state);
     }
 
+    /**
+     * Cancels the current navigation goal and notifies remote robot and operator listeners.
+     */
+    public cancelGoal(): void {
+        this.setMoveBaseState({
+            state: "Navigation canceled!",
+            alert_type: "error",
+        });
+        FunctionProvider.remoteRobot?.stopMoveBase();
+    }
+
     public provideFunctions(button: UnderMapButton) {
         switch (button) {
             case UnderMapButton.SelectGoal:
@@ -43,11 +54,7 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                 };
             case UnderMapButton.CancelGoal:
                 return () => {
-                    this.setMoveBaseState({
-                        state: "Navigation canceled!",
-                        alert_type: "error",
-                    });
-                    FunctionProvider.remoteRobot?.stopMoveBase();
+                    this.cancelGoal();
                 };
 
             case UnderMapButton.DeleteGoal:

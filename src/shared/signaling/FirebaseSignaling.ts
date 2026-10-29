@@ -48,6 +48,13 @@ function isObject(object) {
 }
 
 export class FirebaseSignaling extends BaseSignaling {
+    /**
+     * Deadline for configure(). An unreachable Realtime Database queues work
+     * instead of failing, and an unauthenticated page never reaches the branch
+     * that resolves, so without this the call waits for the life of the tab.
+     */
+    private static readonly CONFIGURE_TIMEOUT_MS = 20000;
+
     private auth: Auth;
     private _loginState: string;
     private db: Database;
@@ -173,7 +180,17 @@ export class FirebaseSignaling extends BaseSignaling {
 
     public configure(room_name: string): Promise<void> {
         console.log("FirebaseSignaling: configure() called with room_name:", room_name);
-        return new Promise<void>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const configured = new Promise<void>((resolve, reject) => {
+            timer = setTimeout(() => {
+                reject(
+                    new Error(
+                        "FirebaseSignaling: configure timed out after " +
+                            FirebaseSignaling.CONFIGURE_TIMEOUT_MS +
+                            "ms",
+                    ),
+                );
+            }, FirebaseSignaling.CONFIGURE_TIMEOUT_MS);
             // wait to be authenticated
             onAuthStateChanged(this.auth, (user) => {
                 console.log("FirebaseSignaling: onAuthStateChanged event triggered. User UID:", user ? user.uid : "null");
@@ -342,6 +359,17 @@ export class FirebaseSignaling extends BaseSignaling {
                 }
             });
         });
+        const clear = () => clearTimeout(timer);
+        return configured.then(
+            (value) => {
+                clear();
+                return value;
+            },
+            (error) => {
+                clear();
+                throw error;
+            },
+        );
     }
 
     private claimRoomSlot(): Promise<void> {
@@ -363,12 +391,22 @@ export class FirebaseSignaling extends BaseSignaling {
         return new Promise<boolean>((resolve) => {
             // onwindowunload is flaky. is_active might stay true when the robot
             // browser exits, so we always reclaim this seat.
-            this.claimRoomSlot().then(() => {
-                update(ref(this.db, "robots/" + this.robot_key), {
-                    status: "online",
+            this.claimRoomSlot()
+                .then(() => {
+                    update(ref(this.db, "robots/" + this.robot_key), {
+                        status: "online",
+                    });
+                    resolve(true);
+                })
+                .catch((error) => {
+                    // Resolving false leaves the retry to the caller. Hanging
+                    // here would strand a robot that still has local signaling.
+                    console.error(
+                        "FirebaseSignaling: robot seat claim failed:",
+                        error,
+                    );
+                    resolve(false);
                 });
-                resolve(true);
-            });
         });
     }
 
