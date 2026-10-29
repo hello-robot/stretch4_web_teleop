@@ -133,7 +133,7 @@ EOF
 # missing node_modules as its own "set up and broken" code; probing first would
 # report a broken installation as broken Firebase.
 #
-# About 0.75s, dominated by npm list --depth=0. Needs HELLO_FLEET_ID, so call it
+# About 1s, dominated by npm list --depth=0. Needs HELLO_FLEET_ID, so call it
 # after teleop_setup_env.
 #
 # Returns 0 when the installation can serve, 1 otherwise, printing the reason.
@@ -194,6 +194,13 @@ function validate_installation {
 	if [ "$env_keyfile" != "$keyfile_name" ]; then
 		echo -e "${RED}ERROR:${NC} .env keyfile is set to '$env_keyfile' but should be '$keyfile_name'"
 		echo "$workspace_hint"
+		return 1
+	fi
+
+	# The launch file imports stretch4_body at module scope, so a Python
+	# environment below the floors in pyproject.toml fails the launch before
+	# any node starts. version_check prints its own pip hint.
+	if ! (cd "$TELEOP_REPO_DIR" && python3 -m stretch4_web_teleop_helpers.version_check); then
 		return 1
 	fi
 

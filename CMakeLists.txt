@@ -53,4 +53,8 @@ install(DIRECTORY rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(FILES pyproject.toml
+  DESTINATION share/${PROJECT_NAME}
+)
+
 ament_package()

@@ -14,7 +14,8 @@
 # Usage: ./scripts/validate_installation.sh
 #
 # Exits 0 when this robot can serve web teleop, 1 otherwise, printing the
-# reason. Checks .env, node_modules, npm dependencies and the SSL certificates.
+# reason. Checks .env, node_modules, npm dependencies, the SSL certificates
+# and the Python dependency floors declared in pyproject.toml.
 set -o pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
