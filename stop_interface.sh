@@ -8,10 +8,8 @@ screen -S "web_teleop_ros" -X stuff '^C' 2>/dev/null || true
 screen -S "rmw_zenohd" -X stuff '^C' 2>/dev/null || true
 sleep 3
 
-# Whatever ignored the interrupt, or was started outside a screen. Scoped to
-# this user, so it needs no sudo and cannot touch anyone else's processes.
+# Whatever ignored the interrupt, or was started outside a screen.
 pkill -u "$USER" -f web_interface.launch.py 2>/dev/null || true
-pkill -u "$USER" -f rmw_zenohd 2>/dev/null || true
 
 pm2 kill 2>/dev/null || true
 exit 0
