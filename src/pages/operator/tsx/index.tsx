@@ -439,18 +439,14 @@ function configureRemoteRobot() {
         homeTheRobotFunctionProvider.updateIsHomedState
     );
     runStopFunctionProvider.setOnRunStopEngagedCallback(() => {
-        buttonFunctionProvider.disableActiveButton();
-        flyingGripperFunctionProvider.disableActiveButton();
-        buttonFunctionProvider.stopCurrentAction(true);
+        FunctionProvider.stopAllActions(true);
         underMapFunctionProvider?.cancelGoal();
         movementRecorderFunctionProvider.cancelPlayback();
     });
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
         (enabled: boolean) => {
             if (enabled) {
-                buttonFunctionProvider.disableActiveButton();
-                flyingGripperFunctionProvider.disableActiveButton();
-                buttonFunctionProvider.stopCurrentAction(true);
+                FunctionProvider.stopAllActions(true);
                 underMapFunctionProvider?.cancelGoal();
                 movementRecorderFunctionProvider.cancelPlayback();
             }
@@ -460,7 +456,7 @@ function configureRemoteRobot() {
     remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
         (holder, isDriverHolding) => {
             if (!isDriverHolding) {
-                buttonFunctionProvider.stopCurrentAction(true);
+                FunctionProvider.stopAllActions(true);
             }
         }
     );

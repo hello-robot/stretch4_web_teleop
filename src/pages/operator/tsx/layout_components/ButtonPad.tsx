@@ -466,7 +466,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     type="button"
                     tabIndex={0}
-                    {...clickProps}
                 >
                     <img
                         src={getRotateIcon(pilotControlsCurrent, props.direction)}
@@ -496,7 +495,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     tabIndex={0}
                     disabled={isDisabled}
-                    {...clickProps}
                 >
                     <img
                         src={chevronIcon}
@@ -529,7 +527,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     tabIndex={0}
                     disabled={isDisabled}
-                    {...clickProps}
                 >
                     <img
                         src={armGripperIconCalc(props.direction)}
@@ -559,7 +556,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     tabIndex={0}
                     disabled={isDisabled}
-                    {...clickProps}
                 >
                     <img
                         src={wristIconCalc(props.direction)}

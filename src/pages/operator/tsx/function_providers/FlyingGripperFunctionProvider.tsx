@@ -42,25 +42,61 @@ const GRIPPER_JOINT = "gripper_joint" as const;
 export class FlyingGripperFunctionProvider extends FunctionProvider {
     private activeFlyingButton?: FlyingGripperButton;
 
+    /**
+     * Initializes the flying gripper function provider and binds handler methods.
+     */
     constructor() {
         super();
         this.provideFunctions = this.provideFunctions.bind(this);
         this.disableActiveButton = this.disableActiveButton.bind(this);
     }
 
+    /**
+     * Clears the latched flying gripper button state whenever an action stops.
+     */
+    protected onActionStopped(): void {
+        this.activeFlyingButton = undefined;
+    }
+
+    /**
+     * Stops any active flying gripper movement and clears the latched button state.
+     */
     public disableActiveButton() {
         this.stopCurrentAction(true);
-        this.activeFlyingButton = undefined;
+    }
+
+    /**
+     * Stops an active gripper open or close command if the corresponding gripper direction reaches a limit or collision.
+     *
+     * Args:
+     *     isOpenBlocked: True if gripper opening is in collision or at its upper limit.
+     *     isCloseBlocked: True if gripper closing is in collision or at its lower limit.
+     */
+    public updateGripperLimitState(
+        isOpenBlocked: boolean,
+        isCloseBlocked: boolean,
+    ): void {
+        if (
+            (isOpenBlocked &&
+                this.activeFlyingButton === FlyingGripperButton.GripperOpen) ||
+            (isCloseBlocked &&
+                this.activeFlyingButton === FlyingGripperButton.GripperClose)
+        ) {
+            this.stopCurrentAction(true);
+        }
     }
 
     /**
      * Move the gripper in task-space / camera frame for durationMs then stop.
      *
-     * @param button directional translation button
-     * @param durationMs how long to apply task-space velocity (defaults to 1000ms)
-     * @param speedMultiplier PROFILE_SCALES entry for the speed the command named; the
-     *   interface's speedometer does not apply to voice moves, so this is the only scaling.
-     * @returns false if no robot attached or button is not a translation
+     * Args:
+     *     button: Directional translation button.
+     *     durationMs: How long to apply task-space velocity (defaults to 1000ms).
+     *     speedMultiplier: PROFILE_SCALES entry for the speed the command named; the
+     *         interface's speedometer does not apply to voice moves, so this is the only scaling.
+     *
+     * Returns:
+     *     False if no robot is attached or button is not a translation, true otherwise.
      */
     public timedFlyingMove(
         button: FlyingGripperButton,
@@ -79,31 +115,38 @@ export class FlyingGripperFunctionProvider extends FunctionProvider {
         const linScale = TASK_SPACE_LINEAR_VEL * speedMultiplier;
         const [x, y, z] = translation;
 
-        this.stopCurrentAction(true);
-        this.timedVoiceMoveActive = true;
-        this.activeFlyingButton = button;
+        FunctionProvider.stopAllActions(true);
         this.continuousTaskSpaceMovement(
             x * linScale,
             y * linScale,
             z * linScale,
         );
+        this.timedVoiceMoveActive = true;
+        this.activeFlyingButton = button;
 
         this.timedVoiceMoveTimer = setTimeout(() => {
             this.timedVoiceMoveTimer = undefined;
             this.timedVoiceMoveActive = false;
-            this.activeFlyingButton = undefined;
             this.stopCurrentAction(true);
         }, durationMs);
 
         return true;
     }
 
+    /**
+     * Returns pointer event callbacks for a flying gripper button according to the active action mode.
+     *
+     * Args:
+     *     button: The flying gripper button to bind.
+     *
+     * Returns:
+     *     The {@link ButtonFunctions} for the given button.
+     */
     public provideFunctions(
         button: FlyingGripperButton,
     ): ButtonFunctions {
         const onLeave = () => {
             this.stopCurrentAction(true);
-            this.activeFlyingButton = undefined;
         };
 
         const translation = TRANSLATION[button];
@@ -137,7 +180,6 @@ export class FlyingGripperFunctionProvider extends FunctionProvider {
                             startAction();
                             setTimeout(() => {
                                 this.stopCurrentAction(true);
-                                this.activeFlyingButton = undefined;
                             }, 1000);
                         } else {
                             this.incrementalJointMove(
@@ -156,19 +198,17 @@ export class FlyingGripperFunctionProvider extends FunctionProvider {
                     },
                     onRelease: () => {
                         this.stopCurrentAction(true);
-                        this.activeFlyingButton = undefined;
                     },
                     onLeave,
                 };
             case ActionModeType.ClickClick:
                 return {
                     onClick: () => {
-                        if (!this.activeVelocityAction) {
+                        if (!this.isVelocityHeartbeatActive()) {
                             startAction();
                             this.activeFlyingButton = button;
                         } else if (this.activeFlyingButton === button) {
                             this.stopCurrentAction(true);
-                            this.activeFlyingButton = undefined;
                         } else {
                             this.stopCurrentAction(true);
                             startAction();

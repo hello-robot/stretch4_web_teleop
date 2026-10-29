@@ -6,8 +6,13 @@ import gripperOpenIcon from "operator/icons/GripperOpen.svg";
 import gripperCloseIcon from "operator/icons/GripperClose.svg";
 import { flyingGripperFunctionProvider } from "operator/tsx/index";
 import {
+    ButtonPadButton,
+    ButtonState,
+} from "../function_providers/ButtonFunctionProvider";
+import {
     FlyingGripperButton,
 } from "../function_providers/FlyingGripperFunctionProvider";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { SharedState } from "../layout_components/CustomizableComponent";
 import {
     fgpadRatioVars,
@@ -186,6 +191,31 @@ const FlyingGripperPad: React.FC<FlyingGripperPadProps> = ({
     const motionDisabled = !robotIsHomed || isRunStopped;
     const gripperDisabled =
         motionDisabled || sharedState?.toolMetadata?.isActuated === false;
+    const gripperOpenState = sharedState?.buttonStateMap?.get(
+        ButtonPadButton.GripperOpen,
+    );
+    const gripperCloseState = sharedState?.buttonStateMap?.get(
+        ButtonPadButton.GripperClose,
+    );
+    const gripperOpenBlocked =
+        gripperOpenState === ButtonState.Limit ||
+        gripperOpenState === ButtonState.Collision;
+    const gripperCloseBlocked =
+        gripperCloseState === ButtonState.Limit ||
+        gripperCloseState === ButtonState.Collision;
+
+    React.useEffect(() => {
+        flyingGripperFunctionProvider.updateGripperLimitState(
+            gripperOpenBlocked,
+            gripperCloseBlocked,
+        );
+    }, [gripperOpenBlocked, gripperCloseBlocked]);
+
+    React.useEffect(() => {
+        return () => {
+            FunctionProvider.stopAllActions(true);
+        };
+    }, []);
 
     return (
         <div
@@ -198,14 +228,20 @@ const FlyingGripperPad: React.FC<FlyingGripperPadProps> = ({
             <PadButtonEl
                 button={BAR_LEFT}
                 className="fgpad-panel fgpad-panel--left"
-                disabled={gripperDisabled}
+                disabled={gripperDisabled || gripperOpenBlocked}
             >
                 <PanelOutline side="left" />
             </PadButtonEl>
             <button
                 type="button"
                 className="fgpad-close"
-                onPointerDown={onClose}
+                onPointerDown={() => {
+                    FunctionProvider.stopAllActions(true);
+                }}
+                onClick={() => {
+                    FunctionProvider.stopAllActions(true);
+                    onClose();
+                }}
                 aria-label="Close flying gripper"
             >
                 Close
@@ -213,7 +249,7 @@ const FlyingGripperPad: React.FC<FlyingGripperPadProps> = ({
             <PadButtonEl
                 button={BAR_RIGHT}
                 className="fgpad-panel fgpad-panel--right"
-                disabled={gripperDisabled}
+                disabled={gripperDisabled || gripperCloseBlocked}
             >
                 <PanelOutline side="right" />
             </PadButtonEl>

@@ -4,7 +4,7 @@ import { useDismissTimeout } from "../react_hooks/useDismissTimeout";
 import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionSpeed.css";
-import { buttonFunctionProvider } from "..";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import speedSlowIcon from "operator/icons/Speed_Slow.svg";
 import speedMediumIcon from "operator/icons/Speed_Medium.svg";
 import speedFastIcon from "operator/icons/Speed_Fast.svg";
@@ -94,9 +94,12 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
                 <button
                     className="button-action-speed"
                     onPointerDown={() => {
+                        FunctionProvider.stopAllActions(true);
+                    }}
+                    onClick={() => {
+                        FunctionProvider.stopAllActions(true);
                         setIsModalOpen(!isModalOpen);
                         props.setCameraVeilCallback(!isModalOpen);
-                        buttonFunctionProvider.disableActiveButton();
                     }}
                     aria-label="Change action speed"
                     aria-hidden={props.isCameraVeilVisible}
@@ -143,6 +146,7 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
     }));
 
     const handleSpeedSelection = (speed: string) => {
+        FunctionProvider.stopAllActions(true);
         setSelectedSpeed(speed);
         onSelect(speed);
         scheduleClose(handleClose);
@@ -171,7 +175,7 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
                             className={`${opt.value} ${selectedSpeed === opt.value ? "selected" : ""}`}
                             aria-label={ariaLabel}
                             aria-hidden={!isOpen}
-                            onPointerDown={() =>
+                            onClick={() =>
                                 handleSpeedSelection(opt.value)
                             }
                         >
