@@ -288,15 +288,9 @@ export function executeStopMotionOnProvider(
         cancelAutoNav?: () => { ok: boolean };
     },
 ): ExecuteToolResult {
-    const hadVelocityMotion =
-        provider.timedVoiceMoveActive ||
-        provider.activeVelocityAction !== undefined;
-    provider.disableActiveButton();
-
-    const hadFlyingMotion =
-        flyingGripperFunctionProvider.timedVoiceMoveActive ||
-        flyingGripperFunctionProvider.activeVelocityAction !== undefined;
-    flyingGripperFunctionProvider.disableActiveButton();
+    const hadVelocityMotion = provider.isMotionActive();
+    const hadFlyingMotion = flyingGripperFunctionProvider.isMotionActive();
+    FunctionProvider.stopAllActions(true);
 
     let hadTrajectoryMotion = false;
     try {

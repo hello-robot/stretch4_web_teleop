@@ -4,7 +4,7 @@ import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionMode.css";
 import { ActionModeType } from "../utils/component_definitions";
-import { buttonFunctionProvider } from "operator/tsx/index";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 
 /**Details of the action modes */
 type ActionModeDetails = {
@@ -68,10 +68,13 @@ export const ActionMode = (props: ActionModeProps) => {
             <MagneticWrapper>
                 <button
                     className="button-action-mode"
+                    onPointerDown={() => {
+                        FunctionProvider.stopAllActions(true);
+                    }}
                     onClick={() => {
+                        FunctionProvider.stopAllActions(true);
                         setIsModalOpen(!isModalOpen);
                         props.setCameraVeilCallback(!isModalOpen);
-                        buttonFunctionProvider.disableActiveButton();
                     }}
                     aria-label="Change action mode"
                     aria-hidden={props.isCameraVeilVisible}
@@ -100,6 +103,10 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({
 }) => {
     const [selectedMode, setSelectedMode] = useState<ActionModeType>(mode);
     const [loading, setLoading] = useState<boolean>(false);
+
+    React.useEffect(() => {
+        setSelectedMode(mode);
+    }, [mode, isOpen]);
 
     const options: ActionModeDetails[] = [
         {
@@ -132,7 +139,7 @@ const ModalActionMode: React.FC<ModalActionModeProps> = ({
         <MagneticWrapper>
             <button
                 className="btn btn-primary" // Style from ModalActionMode.css
-                onPointerDown={handleConfirm}
+                onClick={handleConfirm}
                 disabled={loading}
             >
                 {loading ? <span className="spinner" /> : "Confirm"}

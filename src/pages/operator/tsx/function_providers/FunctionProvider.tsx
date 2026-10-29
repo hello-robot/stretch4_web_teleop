@@ -25,6 +25,7 @@ const x = PilotButtonPads;
  * interface
  */
 export abstract class FunctionProvider {
+    private static instances = new Set<FunctionProvider>();
     protected static remoteRobot?: RemoteRobot;
     public static speedProfile: SpeedProfile = "medium";
     public static actionMode: ActionModeType;
@@ -37,6 +38,32 @@ export abstract class FunctionProvider {
     // needed in order to measure movement / stopped.
     public timedVoiceMoveActive = false;
     protected timedVoiceMoveTimer?: ReturnType<typeof setTimeout>;
+
+    /**
+     * Registers this function provider instance so global stop actions can reach it.
+     */
+    constructor() {
+        FunctionProvider.instances.add(this);
+    }
+
+    /**
+     * Stops active motion and clears latched UI state across all registered function providers.
+     *
+     * Args:
+     *     send_stop_command: Whether to transmit an explicit stop command to the robot.
+     */
+    public static stopAllActions(send_stop_command: boolean = true): void {
+        FunctionProvider.instances.forEach((instance) => {
+            instance.stopCurrentAction(send_stop_command);
+        });
+    }
+
+    /**
+     * Subclass hook invoked whenever {@link stopCurrentAction} completes so provider-owned
+     * active or latched button state is cleared alongside motion cancellation.
+     */
+    protected onActionStopped(): void {}
+
     /**
      * Adds a remote robot instance to this function provider. This must be called
      * before any components of the interface will be able to execute functions
@@ -157,21 +184,50 @@ export abstract class FunctionProvider {
     }
 
     /**
+     * Checks whether a continuous velocity command or heartbeat interval is currently active.
+     *
+     * Returns:
+     *     True if a velocity heartbeat interval or velocity action is active.
+     */
+    public isVelocityHeartbeatActive(): boolean {
+        return (
+            this.velocityExecutionHeartbeat !== undefined ||
+            this.activeVelocityAction !== undefined
+        );
+    }
+
+    /**
      * Move the robot to an absolute pose (e.g. a voice macro).
      * Stops any ongoing velocity or timed move, then sends a setRobotPose command.
      *
-     * @param pose  Partial RobotPose mapping joint names to absolute target positions.
-     * @returns false if no robot is connected.
+     * Args:
+     *     pose: Partial RobotPose mapping joint names to absolute target positions.
+     *
+     * Returns:
+     *     False if no robot is connected, true otherwise.
      */
     public executeAbsolutePose(pose: RobotPose): boolean {
         if (!FunctionProvider.remoteRobot) return false;
-        this.stopCurrentAction(true);
+        FunctionProvider.stopAllActions(true);
         FunctionProvider.remoteRobot.setRobotPose(pose);
         return true;
     }
 
+    /**
+     * Starts a 25 ms heartbeat streaming base velocity commands after stopping any prior motion.
+     *
+     * Args:
+     *     linVelX: Forward/backward linear velocity in m/s.
+     *     linVelY: Left/right strafe velocity in m/s.
+     *     angVel: Yaw angular velocity in rad/s.
+     */
     public setBaseVelocity(linVelX: number, linVelY: number, angVel: number) {
-        this.stopCurrentAction();
+        FunctionProvider.stopAllActions(true);
+        this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
+            linVelX,
+            linVelY,
+            angVel
+        );
         this.velocityExecutionHeartbeat = window.setInterval(() => {
             this.activeVelocityAction = FunctionProvider.remoteRobot?.driveBase(
                 linVelX,
@@ -183,8 +239,16 @@ export abstract class FunctionProvider {
 
     /**
      * Drive base continuously for durationMs then stop sending velocity.
-    * Supersedes any active timed voice move so a new command can interrupt.
-     * @returns false if no RemoteRobot attached
+     * Supersedes any active timed voice move so a new command can interrupt.
+     *
+     * Args:
+     *     linVelX: Forward/backward linear velocity in m/s.
+     *     linVelY: Left/right strafe velocity in m/s.
+     *     durationMs: Duration in milliseconds to apply velocity.
+     *     angVel: Yaw angular velocity in rad/s.
+     *
+     * Returns:
+     *     False if no RemoteRobot is attached, true otherwise.
      */
     public timedBaseDrive(
         linVelX: number,
@@ -198,13 +262,13 @@ export abstract class FunctionProvider {
 
         const clampedMs = clampTimedMoveMs(durationMs);
 
-        this.stopCurrentAction(true);
-        this.timedVoiceMoveActive = true;
+        FunctionProvider.stopAllActions(true);
         this.setBaseVelocity(
             linVelX,
             linVelY,
             angVel
         );
+        this.timedVoiceMoveActive = true;
         this.timedVoiceMoveTimer = setTimeout(() => {
             this.timedVoiceMoveTimer = undefined;
             this.timedVoiceMoveActive = false;
@@ -213,14 +277,33 @@ export abstract class FunctionProvider {
         return true;
     }
 
+    /**
+     * Sends a single joint velocity command after stopping any active motion.
+     *
+     * Args:
+     *     jointName: The joint to actuate.
+     *     velocity: Signed velocity in joint units/s.
+     */
     public incrementalJointMovement(jointName: ValidJoints, velocity: number) {
-        this.stopCurrentAction(true);
+        FunctionProvider.stopAllActions(true);
         this.activeVelocityAction =
             FunctionProvider.remoteRobot?.setJointVelocity(jointName, velocity);
     }
 
+    /**
+     * Starts a heartbeat streaming joint velocity commands after stopping any prior motion.
+     *
+     * Args:
+     *     jointName: The joint to actuate.
+     *     velocity: Signed velocity in joint units/s.
+     */
     public continuousJointMovement(jointName: ValidJoints, velocity: number) {
-        this.stopCurrentAction();
+        FunctionProvider.stopAllActions(true);
+        this.activeVelocityAction =
+            FunctionProvider.remoteRobot?.setJointVelocity(
+                jointName,
+                velocity
+            );
         this.velocityExecutionHeartbeat = window.setInterval(() => {
             this.activeVelocityAction =
                 FunctionProvider.remoteRobot?.setJointVelocity(
@@ -230,13 +313,26 @@ export abstract class FunctionProvider {
         }, JOINT_VELOCITY_HEARTBEAT_MS);
     }
 
-    /** Heartbeat tool-frame twist to /ee_cmd_vel (watchdog is 0.4s). */
+    /**
+     * Starts a 50 ms heartbeat streaming tool-frame twist commands to /ee_cmd_vel.
+     *
+     * Args:
+     *     linear_X: Tool-frame forward linear velocity in m/s.
+     *     linear_Y: Tool-frame left linear velocity in m/s.
+     *     linear_Z: Tool-frame up linear velocity in m/s.
+     */
     public continuousTaskSpaceMovement(
         linear_X: number,
         linear_Y: number,
         linear_Z: number,
     ) {
-        this.stopCurrentAction();
+        FunctionProvider.stopAllActions(true);
+        this.activeVelocityAction =
+            FunctionProvider.remoteRobot?.setTaskSpaceVelocity(
+                linear_X,
+                linear_Y,
+                linear_Z,
+            );
         this.velocityExecutionHeartbeat = window.setInterval(() => {
             this.activeVelocityAction =
                 FunctionProvider.remoteRobot?.setTaskSpaceVelocity(
@@ -252,10 +348,13 @@ export abstract class FunctionProvider {
      * Uses the same timedVoiceMoveActive guard as timedBaseDrive so base and
      * joint timed moves are mutually exclusive.
      *
-     * @param jointName the joint to actuate
-     * @param velocity  signed velocity in joint units/s (m/s for linear, rad/s for rotary)
-     * @param durationMs how long to apply velocity (clamped internally)
-     * @returns false if no robot attached
+     * Args:
+     *     jointName: The joint to actuate.
+     *     velocity: Signed velocity in joint units/s (m/s for linear, rad/s for rotary).
+     *     durationMs: How long to apply velocity (clamped internally).
+     *
+     * Returns:
+     *     False if no robot is attached, true otherwise.
      */
     public timedJointMove(
         jointName: ValidJoints,
@@ -268,9 +367,9 @@ export abstract class FunctionProvider {
 
         const clampedMs = clampTimedMoveMs(durationMs);
 
-        this.stopCurrentAction(true);
-        this.timedVoiceMoveActive = true;
+        FunctionProvider.stopAllActions(true);
         this.continuousJointMovement(jointName, velocity);
+        this.timedVoiceMoveActive = true;
         this.timedVoiceMoveTimer = setTimeout(() => {
             this.timedVoiceMoveTimer = undefined;
             this.timedVoiceMoveActive = false;
@@ -283,9 +382,12 @@ export abstract class FunctionProvider {
      * Move a joint incrementally using the trajectory action server.
      * Stops any ongoing velocity or trajectory action first.
      *
-     * @param jointName the joint to actuate
-     * @param increment the incremental distance/rotation (m or rad)
-     * @returns false if no robot attached
+     * Args:
+     *     jointName: The joint to actuate.
+     *     increment: The incremental distance/rotation (m or rad).
+     *
+     * Returns:
+     *     False if no robot is attached, true otherwise.
      */
     public incrementalJointMove(
         jointName: ValidJoints,
@@ -295,12 +397,18 @@ export abstract class FunctionProvider {
             return false;
         }
 
-        this.stopCurrentAction(true);
+        FunctionProvider.stopAllActions(true);
         this.activeVelocityAction =
             FunctionProvider.remoteRobot.incrementalMove(jointName, increment);
         return true;
     }
 
+    /**
+     * Cancels any active velocity stream or timed move on this provider and clears its latched UI state.
+     *
+     * Args:
+     *     send_stop_command: Whether to transmit an explicit stop command to the robot.
+     */
     // NOTE: When we undo this temp fix (of not stopping the
     // trajectory client) we also need to undo it in robot.jsx
     // `stopExecution()`.
@@ -328,5 +436,6 @@ export abstract class FunctionProvider {
             this.timedVoiceMoveTimer = undefined;
         }
         this.timedVoiceMoveActive = false;
+        this.onActionStopped();
     }
 }
