@@ -28,4 +28,3 @@ export function getSpeedByLabel(label: string): number | undefined {
 export function getLabelBySpeed(speed: number): ActionSpeedLabel | undefined {
     return VELOCITY_SCALE.find((item) => item.speed === speed)?.label;
 }
-
