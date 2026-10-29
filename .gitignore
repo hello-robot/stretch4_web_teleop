@@ -29,9 +29,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Dep locks
-package-lock.json
-
 # individual certificates
 # Individual certificates
 certificates/*
