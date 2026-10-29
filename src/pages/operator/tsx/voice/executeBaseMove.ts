@@ -208,7 +208,11 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
 
             if (mode === "button_provider") {
                 const button = VOICE_ACTION_TO_BUTTON[action];
-                const started = provider.timedButtonPadPress(button, clampedMs);
+                const started = provider.timedButtonPadPress(
+                    button,
+                    clampedMs,
+                    speed,
+                );
                 if (!started) {
                     const result = BaseMoveExecutor.busyOrDisconnected(
                         "timedButtonPadPress",
@@ -271,7 +275,11 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         // ── Duration-based path ───────────────────────────────────────────────
         if (mode === "button_provider") {
             const button = VOICE_ACTION_TO_BUTTON[action];
-            const started = provider.timedButtonPadPress(button, duration_ms);
+            const started = provider.timedButtonPadPress(
+                button,
+                duration_ms,
+                speed,
+            );
             if (!started) {
                 const result = BaseMoveExecutor.busyOrDisconnected("timedButtonPadPress");
                 BaseMoveExecutor.emitVoiceMoveFeedback({
