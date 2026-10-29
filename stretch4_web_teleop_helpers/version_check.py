@@ -1,11 +1,5 @@
 """
-Check the robot's installed Python distributions against the declared floors.
-
-The floors are the requirement strings in the [dependency-groups] table of
-pyproject.toml, which CMakeLists.txt installs into the package share directory.
-Versions are read from installed metadata, which for an editable install
-records the version at the time of installation rather than the current state
-of the source tree.
+Check the robot's installed Python distributions against the declared dependencies in pyproject.toml
 """
 
 import argparse
@@ -17,7 +11,7 @@ from pathlib import Path
 from packaging.requirements import Requirement
 
 DEFAULT_GROUP = "robot"
-INSTALL_HINT = "pip install --break-system-packages --group pyproject.toml:robot"
+INSTALL_HINT = "pip install --group pyproject.toml:robot"
 PACKAGE_NAME = "stretch4_web_teleop"
 
 
