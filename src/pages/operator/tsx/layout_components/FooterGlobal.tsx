@@ -1,4 +1,5 @@
 import React, {
+    useCallback,
     useEffect,
     useMemo,
     useRef,
@@ -20,8 +21,13 @@ import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
-import { mapFunctionProvider, runStopFunctionProvider } from "..";
+import {
+    mapFunctionProvider,
+    runStopFunctionProvider,
+    underMapFunctionProvider,
+} from "..";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { UnderMapButton } from "../function_providers/UnderMapFunctionProvider";
 import {
     isVoiceControlEnabled,
     subscribeOperatorVoiceSvc,
@@ -218,7 +224,17 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 name: "Reload App",
                 description: "Reload the operator page",
                 onClick: () => {
-                    window.location.reload();
+                    try {
+                        const cancelFn = underMapFunctionProvider?.provideFunctions(
+                            UnderMapButton.CancelGoal,
+                        ) as (() => void) | undefined;
+                        cancelFn?.();
+                    } catch (e) {
+                        console.warn("Failed to cancel navigation on reload:", e);
+                    }
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 150);
                 },
                 enabled: true,
             },

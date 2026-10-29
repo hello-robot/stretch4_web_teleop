@@ -37,7 +37,6 @@ export class RemoteRobot extends React.Component<{}, any> {
     isRunStopped: boolean;
     batteryVoltage: number;
     mapPose: Transform;
-    moveBaseGoalReached: boolean;
     moveBaseState?: string;
     private mapPoseListeners: Set<(pose: Transform) => void> = new Set();
 
@@ -60,15 +59,6 @@ export class RemoteRobot extends React.Component<{}, any> {
                 w: 0,
             } as Quaternion,
         } as Transform;
-        this.moveBaseGoalReached = false;
-    }
-
-    setGoalReached(reached: boolean) {
-        this.moveBaseGoalReached = reached;
-    }
-
-    isGoalReached() {
-        return this.moveBaseGoalReached;
     }
 
     driveBase(
@@ -223,7 +213,6 @@ export class RemoteRobot extends React.Component<{}, any> {
     }
 
     moveBase(pose: ROSPose) {
-        this.setGoalReached(false);
         let cmd: MoveBaseCommand = {
             type: "moveBase",
             pose: pose,

@@ -15,14 +15,12 @@ export enum UnderMapButton {
     GetSavedPoseNames,
     GetSavedPoseTypes,
     GetSavedPoses,
-    GoalReached,
     RenamePose,
 }
 
 export class UnderMapFunctionProvider extends FunctionProvider {
     private selectGoal: boolean;
     private storageHandler: StorageHandler;
-    private navigationSuccess?: boolean;
     private mapPoseCallback?: (pose: Vector3) => void = undefined;
     private operatorCallback?: (state: ActionState) => void = undefined;
 
@@ -34,7 +32,6 @@ export class UnderMapFunctionProvider extends FunctionProvider {
     }
 
     public setMoveBaseState(state: ActionState) {
-        if (state.alert_type == "success") this.navigationSuccess = true;
         if (this.operatorCallback) this.operatorCallback(state);
     }
 
@@ -79,7 +76,6 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                 };
             case UnderMapButton.LoadGoal:
                 return (poseName: string) => {
-                    this.navigationSuccess = undefined;
                     let pose = this.storageHandler.getMapPose(poseName);
                     return pose;
                 };
@@ -119,21 +115,6 @@ export class UnderMapFunctionProvider extends FunctionProvider {
             case UnderMapButton.GetSavedPoses:
                 return () => {
                     return this.storageHandler.getMapPoses();
-                };
-            case UnderMapButton.GoalReached:
-                return () => {
-                    const promise = new Promise((resolve, reject) => {
-                        let interval = setInterval(() => {
-                            let goalReached =
-                                FunctionProvider.remoteRobot?.isGoalReached();
-                            if (goalReached) {
-                                clearInterval(interval);
-                                FunctionProvider.remoteRobot?.setGoalReached(false);
-                                resolve(true);
-                            }
-                        });
-                    });
-                    return promise;
                 };
             case UnderMapButton.RenamePose:
                 return (poseNameOld: string, poseNameNew: string) => {

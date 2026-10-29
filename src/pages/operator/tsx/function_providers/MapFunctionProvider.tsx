@@ -37,16 +37,6 @@ export class MapFunctionProvider extends FunctionProvider {
                     // FunctionProvider.remoteRobot?.stopExecution()
                     FunctionProvider.remoteRobot?.moveBase(pose);
                 };
-            case MapFunction.GoalReached:
-                return () => {
-                    let goalReached =
-                        FunctionProvider.remoteRobot?.isGoalReached();
-                    if (goalReached) {
-                        FunctionProvider.remoteRobot?.setGoalReached(false);
-                        return true;
-                    }
-                    return false;
-                };
             case MapFunction.SeedLocalization:
                 return () => {
                     FunctionProvider.remoteRobot?.seedLocalization();

@@ -13,6 +13,15 @@
 # daemon points a run at a directory it is already tailing.
 set -o pipefail
 
+# Sanitize environment from external Python virtualenvs
+if [ -n "$VIRTUAL_ENV" ]; then
+	unset VIRTUAL_ENV
+fi
+unset PYTHONHOME
+# Strip any virtualenv bin directories from PATH
+export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v -E '/(\.?[a-zA-Z0-9_-]*venv|env)/bin' | paste -sd:)
+
+# Define color variables
 # 1. Define color variables
 RED='\033[0;31m'
 GREEN='\033[0;32m'
