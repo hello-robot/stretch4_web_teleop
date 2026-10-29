@@ -38,6 +38,7 @@ import { MovementRecorderFunctionProvider } from "./function_providers/MovementR
 import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
 import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
 import { MobileOperator } from "./MobileOperator";
+import { notifyRemoteStreams } from "./remoteStreamStore";
 import { RobotAudioPlayer } from "./utils/robotAudioPlayer";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
@@ -47,6 +48,11 @@ import {
     configureVoiceTokenRelay,
     resolveVoiceToken,
 } from "./voice/voiceTokenRelay";
+import {
+    advanceRecoveryWatchdog,
+    canAttemptOperatorRecovery,
+    shouldScheduleForegroundRecovery,
+} from "shared/webrtcRecovery";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -156,7 +162,6 @@ connection = new WebRTCConnection({
     onMessage: handleWebRTCMessage,
     onTrackAdded: handleRemoteTrackAdded,
     onMessageChannelOpen: configureRemoteRobot,
-    onConnectionEnd: disconnectFromRobot,
     onOperatorDisplaced: () => {
         yieldedToOtherTab = true;
         showOperatorSeatNotice(
@@ -281,6 +286,9 @@ function handleRemoteTrackAdded(event: RTCTrackEvent) {
     console.log("OPERATOR: adding remote tracks");
 
     allRemoteStreams.set(streamName, { track: track, stream: stream });
+    if (streamName === "overhead" || streamName === "gripper") {
+        notifyRemoteStreams();
+    }
 
     if (streamName === "audio" || track.kind === "audio") {
         console.log("OPERATOR: Routing robot audio stream to RobotAudioPlayer");
@@ -413,6 +421,9 @@ function initializeOperator() {
  * WebRTC connection.
  */
 function configureRemoteRobot() {
+    // Stop a held drive or joint before this channel is used.
+    buttonFunctionProvider.disableActiveButton();
+    flyingGripperFunctionProvider.disableActiveButton();
     remoteRobot = new RemoteRobot({
         robotChannel: (message: cmd) => connection.sendData(message),
     });
@@ -597,22 +608,99 @@ function createBootScreen(label: string): HTMLDivElement {
 
 /**
  * Periodic check of the WebRTC connection state.
- * Shows the boot screen with "Reconnecting" if the connection drops.
+ * Shows the "Reconnecting" boot screen when the link drops, and rebuilds
+ * the link after a few visible seconds down or when the page comes back.
  */
 function initConnectionStateCheck() {
     const screen = createBootScreen("Reconnecting");
+    // Visible seconds the link has been down.
+    let downTicks = 0;
+    // The page went to the background.
+    let sawHidden = false;
+    // Shared timer for visibilitychange and pageshow.
+    let foregroundTimer: number | undefined;
 
+    // Rebuild the link. Yield the seat when another tab holds it.
+    const recoverConnection = async () => {
+        if (
+            !canAttemptOperatorRecovery({
+                yielded: yieldedToOtherTab,
+                hidden: document.hidden,
+            })
+        ) {
+            return;
+        }
+        const recovered = await connection.recover();
+        if (recovered || yieldedToOtherTab) return;
+        const block = connection.operatorJoinBlock();
+        if (!block) return;
+        yieldedToOtherTab = true;
+        showOperatorSeatNotice(
+            block === "same-account"
+                ? "Your account is teleoperating this robot from another browser tab."
+                : "Another account is teleoperating this robot.",
+        );
+    };
+
+    // 2 second wait. Another foreground event restarts this timer.
+    const scheduleForegroundRecovery = () => {
+        if (foregroundTimer !== undefined) {
+            window.clearTimeout(foregroundTimer);
+        }
+        foregroundTimer = window.setTimeout(() => {
+            foregroundTimer = undefined;
+            void recoverConnection();
+        }, 2000);
+    };
+
+    // Record a hide. Schedule a rebuild when the page is visible again.
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            sawHidden = true;
+            return;
+        }
+        if (
+            shouldScheduleForegroundRecovery({
+                persisted: false,
+                sawHidden,
+            })
+        ) {
+            sawHidden = false;
+            scheduleForegroundRecovery();
+        }
+    });
+    // Back-forward cache restore.
+    window.addEventListener("pageshow", (event) => {
+        if (
+            shouldScheduleForegroundRecovery({
+                persisted: event.persisted,
+                sawHidden,
+            })
+        ) {
+            sawHidden = false;
+            scheduleForegroundRecovery();
+        }
+    });
+
+    // Update the reconnecting screen once a second.
     setInterval(async () => {
         if (yieldedToOtherTab) {
             screen.remove();
             return;
         }
         const connected = await connection.isConnected();
-        if (!connected && !document.body.contains(screen)) {
-            document.body.appendChild(screen);
-        } else if (connected && document.body.contains(screen)) {
-            screen.remove();
+        const watchdog = advanceRecoveryWatchdog({
+            linkUp: connected,
+            visible: document.visibilityState === "visible",
+            downTicks,
+        });
+        downTicks = watchdog.downTicks;
+        if (connected) {
+            if (document.body.contains(screen)) screen.remove();
+            return;
         }
+        if (!document.body.contains(screen)) document.body.appendChild(screen);
+        if (watchdog.recover) void recoverConnection();
     }, 1000);
 }
 

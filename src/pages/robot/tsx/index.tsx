@@ -70,7 +70,6 @@ connection = new WebRTCConnection({
     polite: false,
     onRobotConnectionStart: handleSessionStart,
     onMessage: handleMessage,
-    onConnectionEnd: disconnectFromRobot,
 });
 robot.setOnRosConnectCallback(async () => {
     robot.subscribeToVideo({
@@ -474,6 +473,7 @@ function handleMessage(message: WebRTCMessage) {
     }
 }
 
+<<<<<<< HEAD
 /**
  * Stops active robot execution and closes the ROS and WebRTC connections.
  */
@@ -483,6 +483,8 @@ function disconnectFromRobot(): void {
     connection.hangup();
 }
 
+=======
+>>>>>>> main
 window.onbeforeunload = () => {
     robot.stopExecution(true);
     robot.closeROSConnection();
