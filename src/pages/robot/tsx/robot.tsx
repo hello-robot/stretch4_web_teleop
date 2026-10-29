@@ -1371,16 +1371,35 @@ export class Robot extends React.Component {
         );
     }
 
+    /**
+     * Publishes a planar velocity twist command to the base velocity topic.
+     *
+     * Args:
+     *     props: Linear X/Y and angular Z velocity targets.
+     */
     executeBaseVelocity = async (props: {
         linVelX: number;
         linVelY: number;
         angVel: number;
     }): Promise<void> => {
+        const isZeroStop =
+            props.linVelX === 0 && props.linVelY === 0 && props.angVel === 0;
+        if (isZeroStop) {
+            if (!this.cmdVelTopic) return;
+            this.cmdVelTopic.publish({
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: 0 },
+            });
+            return;
+        }
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring executeBaseVelocity while robot is runstopped");
             return;
         }
         await this.switchToVelocityMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            return;
+        }
         this.stopExecution();
         let twist = {
             linear: {
@@ -1400,12 +1419,33 @@ export class Robot extends React.Component {
         this.cmdVelTopic.publish(twist);
     };
 
+    /**
+     * Publishes a linear velocity command in end-effector task space.
+     *
+     * Args:
+     *     linear_X: Forward velocity component in m/s.
+     *     linear_Y: Lateral velocity component in m/s.
+     *     linear_Z: Vertical velocity component in m/s.
+     */
     async setTaskSpaceVelocity(linear_X: number, linear_Y: number, linear_Z: number) {
+        const isZeroStop =
+            linear_X === 0 && linear_Y === 0 && linear_Z === 0;
+        if (isZeroStop) {
+            if (!this.eeCmdVelTopic) return;
+            this.eeCmdVelTopic.publish({
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: 0 },
+            });
+            return;
+        }
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring setTaskSpaceVelocity while robot is runstopped");
             return;
         }
         await this.switchToVelocityMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            return;
+        }
         this.stopExecution();
         const twist = {
             linear: {
@@ -1423,12 +1463,31 @@ export class Robot extends React.Component {
         this.eeCmdVelTopic.publish(twist);
     }
 
+    /**
+     * Publishes a single-joint velocity command with a short heartbeat duration.
+     *
+     * Args:
+     *     jointName: Target joint identifier.
+     *     velocity: Commanded joint velocity in rad/s or m/s.
+     */
     async setJointVelocity(jointName: ValidJoints, velocity: number) {
+        if (velocity === 0) {
+            if (!this.jointVelTopic) return;
+            this.jointVelTopic.publish({
+                joint_names: [jointName],
+                velocities: [0],
+                duration: JOINT_VELOCITY_HEARTBEAT_MS / 1000,
+            });
+            return;
+        }
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring setJointVelocity while robot is runstopped");
             return;
         }
         await this.switchToVelocityMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            return;
+        }
         this.stopExecution();
         let jointVelocities = {
             joint_names: [jointName],
@@ -2020,8 +2079,22 @@ export class Robot extends React.Component {
         );
     }
 
+    /**
+     * Stops active autonomous navigation clients and optionally halts trajectory and velocity topics.
+     *
+     * Args:
+     *     stop_trajectory_client: When true, cancels active trajectory goals and publishes zero velocity twists.
+     */
     stopExecution(stop_trajectory_client: boolean = false) {
-        if (stop_trajectory_client) this.stopTrajectoryClient();
+        if (stop_trajectory_client) {
+            this.stopTrajectoryClient();
+            const zeroTwist = {
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: 0 },
+            };
+            this.cmdVelTopic?.publish(zeroTwist);
+            this.eeCmdVelTopic?.publish(zeroTwist);
+        }
         this.stopAutonomousClients();
     }
 
@@ -2063,7 +2136,7 @@ export class Robot extends React.Component {
      * Cancels any active goals via rosbridge without throwing if uninitialized,
      * resets state tracking, and emits a cancellation alert if navigation was active.
      */
-    stopMoveBaseClient() {
+    stopMoveBaseClient(): void {
         if (!this.moveBaseClient) return;
 
         const hadActiveGoal = this.moveBaseGoalID !== undefined || this.moveBaseStatusWatching;
@@ -2075,6 +2148,9 @@ export class Robot extends React.Component {
 
         if (this.moveBaseGoalID) {
             this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
+        }
+
+        if (hadActiveGoal) {
             this.moveBaseGoalID = undefined;
             this.moveBaseGoal = undefined;
             // Operator CancelGoal already synthesizes local cancel UI; stop

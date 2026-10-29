@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import "operator/css/PilotControlsToggle.css";
-import { buttonFunctionProvider } from "..";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { PilotButtonPadType } from "../utils/component_definitions";
 
 // Button icons (small, for main button)
@@ -62,7 +62,7 @@ export const PilotControlsToggle: React.FC<PilotControlsToggleProps> = ({
     const isDrive = pilotControlsCurrent === PilotButtonPadType.BaseDrive;
 
     const handleToggle = () => {
-        buttonFunctionProvider.disableActiveButton();
+        FunctionProvider.stopAllActions(true);
         if (isDrive) {
             onChange(lastArmPadRef.current);
         } else {
@@ -71,7 +71,7 @@ export const PilotControlsToggle: React.FC<PilotControlsToggleProps> = ({
     };
 
     const handleArmTab = (pad: PilotButtonPadType.ArmGripper | PilotButtonPadType.Wrist) => {
-        buttonFunctionProvider.disableActiveButton();
+        FunctionProvider.stopAllActions(true);
         lastArmPadRef.current = pad;
         onChange(pad);
     };

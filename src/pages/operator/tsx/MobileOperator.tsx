@@ -12,7 +12,6 @@ import {
 } from "shared/util";
 import {
     buttonFunctionProvider,
-    flyingGripperFunctionProvider,
     homeTheRobotFunctionProvider,
     movementRecorderFunctionProvider,
     runStopFunctionProvider,
@@ -86,8 +85,8 @@ export const MobileOperator = (props: {
         FunctionProvider.velocityScale
     );
     const applyVelocityScale = React.useCallback((scale: number) => {
-        setVelocityScale(scale);
         FunctionProvider.velocityScale = scale;
+        setVelocityScale(FunctionProvider.velocityScale);
     }, []);
     const [activeMainGroupTab, setActiveMainGroupTab] =
         React.useState<number>(0);
@@ -150,6 +149,12 @@ export const MobileOperator = (props: {
         isModalLocationsMenuVisibleSet(false),
     );
 
+    React.useEffect(() => {
+        if (isMainMenuOpen || isCameraVeilVisible) {
+            FunctionProvider.stopAllActions(true);
+        }
+    }, [isMainMenuOpen, isCameraVeilVisible]);
+
     /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
     const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
     const registerAutoNavNavControls = React.useCallback(
@@ -168,8 +173,7 @@ export const MobileOperator = (props: {
     const [isFlyingGripper, isFlyingGripperSet] = useState(false);
     const setFlyingGripper = React.useCallback((flying: boolean) => {
         // Never carry an in-flight press across a pad swap.
-        buttonFunctionProvider.disableActiveButton();
-        flyingGripperFunctionProvider.disableActiveButton();
+        FunctionProvider.stopAllActions(true);
         isFlyingGripperSet(flying);
     }, []);
     const enterFlyingGripper = React.useCallback(
@@ -204,9 +208,10 @@ export const MobileOperator = (props: {
         [setFlyingGripper, swipeableViewsIdx],
     );
 
-    // Leaving Pilot (scene or slide) always drops flying gripper so AutoNav
-    // never sits on top of it.
+    // Leaving Pilot (scene or slide) stops any active motion and drops flying
+    // gripper so AutoNav never sits on top of it.
     React.useEffect(() => {
+        FunctionProvider.stopAllActions(true);
         if (
             isFlyingGripper &&
             (sceneSelected !== "pilot-mode" || swipeableViewsIdx !== 0)
@@ -226,6 +231,9 @@ export const MobileOperator = (props: {
 
     const handleSetMainMenu = React.useCallback(
         (action: MainMenuAction): SetMainMenuResult => {
+            if (action === "open") {
+                FunctionProvider.stopAllActions(true);
+            }
             isMainMenuOpenSet(action === "open");
             return {
                 ok: true,
@@ -240,6 +248,9 @@ export const MobileOperator = (props: {
 
     const handleSetSavedPosesModal = React.useCallback(
         (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (action === "open") {
+                FunctionProvider.stopAllActions(true);
+            }
             movementRecorderFunctionProvider.setModalOpen(action === "open");
             return {
                 ok: true,
@@ -366,7 +377,16 @@ export const MobileOperator = (props: {
     buttonFunctionProvider.setOperatorCallback(operatorCallback);
 
     const layout = React.useRef<LayoutDefinition>(props.layout);
-    FunctionProvider.actionMode = layout.current.actionMode;
+    const [actionMode, actionModeSet] = React.useState<ActionModeType>(
+        props.layout.actionMode ??
+            FunctionProvider.actionMode ??
+            ActionModeType.PressAndHold,
+    );
+    const [pilotControlsCurrent, pilotControlsCurrentSet] =
+        React.useState<PilotButtonPadType>(
+            (props.layout.pilotControlsCurrent as PilotButtonPadType) ??
+                FunctionProvider.pilotControlsCurrent,
+        );
 
     /** Rerenders the operator */
     function updateLayout() {
@@ -377,20 +397,28 @@ export const MobileOperator = (props: {
      * Updates the action mode in the layout (visually) and in the function
      * provider (functionally).
      */
-    const setActionMode = React.useCallback((actionMode: ActionModeType) => {
-        layout.current.actionMode = actionMode;
-        FunctionProvider.actionMode = actionMode;
-        props.storageHandler.saveCurrentLayout(layout.current);
-        setButtonStateMapRerender((r) => !r);
-    }, [props.storageHandler]);
+    const setActionMode = React.useCallback(
+        (nextActionMode: ActionModeType) => {
+            FunctionProvider.stopAllActions(true);
+            layout.current.actionMode = nextActionMode;
+            FunctionProvider.actionMode = nextActionMode;
+            actionModeSet(nextActionMode);
+            props.storageHandler.saveCurrentLayout(layout.current);
+        },
+        [props.storageHandler],
+    );
 
-    function setPilotControlsCurrent(pilotControlsCurrent: string) {
-        layout.current.pilotControlsCurrent = pilotControlsCurrent;
-        FunctionProvider.pilotControlsCurrent =
-            pilotControlsCurrent as PilotButtonPadType;
-        setButtonStateMapRerender((rerender) => !rerender);
-        props.storageHandler.saveCurrentLayout(layout.current);
-    }
+    const setPilotControlsCurrent = React.useCallback(
+        (nextPilotControls: string) => {
+            FunctionProvider.stopAllActions(true);
+            const nextPad = nextPilotControls as PilotButtonPadType;
+            layout.current.pilotControlsCurrent = nextPad;
+            FunctionProvider.pilotControlsCurrent = nextPad;
+            pilotControlsCurrentSet(nextPad);
+            props.storageHandler.saveCurrentLayout(layout.current);
+        },
+        [props.storageHandler],
+    );
 
     function moveBaseStateCallback(state: MoveBaseState) {
         setMoveBaseState(state);
@@ -458,8 +486,7 @@ export const MobileOperator = (props: {
                         overlay: false,
                         aspectRatio: 3.35,
                         isCameraVeilVisible: isCameraVeilVisible,
-                        pilotControlsCurrent:
-                            FunctionProvider.pilotControlsCurrent,
+                        pilotControlsCurrent: pilotControlsCurrent,
                     }}
                 />
             </React.Fragment>
@@ -468,23 +495,19 @@ export const MobileOperator = (props: {
         );
     };
 
-    const ControlModes = () => {
-        return (
-            <>
-                <TabGroup
-                    tabLabels={[""]}
-                    tabContent={[buttonPad]}
-                    startIdx={activeControlTab}
-                    onChange={(index: number) => setActiveControlTab(index)}
-                    pill={true}
-                    key={"controls-group"}
-                />
-            </>
-        );
-    };
-
     const controlModes = (show: boolean) => {
-        return show ? <ControlModes key={"control-modes"} /> : <></>;
+        return show ? (
+            <TabGroup
+                tabLabels={[""]}
+                tabContent={[buttonPad]}
+                startIdx={activeControlTab}
+                onChange={(index: number) => setActiveControlTab(index)}
+                pill={true}
+                key={"controls-group"}
+            />
+        ) : (
+            <></>
+        );
     };
 
     // @flag voice_control_interface
@@ -503,6 +526,7 @@ export const MobileOperator = (props: {
                         setActionMode={setActionMode}
                         addToast={addToast}
                         onSwitchScene={(scene) => {
+                            FunctionProvider.stopAllActions(true);
                             if (scene === "pilot") {
                                 swipeableViewsIdxSet(0);
                                 setSceneSelected("pilot-mode");
@@ -594,8 +618,11 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
+                            velocityScale={velocityScale}
                             onVelocityScaleChange={applyVelocityScale}
+                            actionMode={actionMode}
                             setActionMode={setActionMode}
+                            pilotControlsCurrent={pilotControlsCurrent}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
