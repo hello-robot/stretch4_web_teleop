@@ -10,25 +10,26 @@ import {
     Topic,
     Transform,
 } from "roslib";
+import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 import {
     ActionState,
     ActionStatusList,
     DiagnosticArray,
+    EE_VELOCITY_LIMITER_NODE,
+    getMaxEeSpeed,
     getPlaybackJointVelocities,
     getPlaybackJointVelocity,
+    GRIPPER_INCREMENT_RANGE_FRACTION,
+    JOINT_VELOCITY_HEARTBEAT_MS,
     ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
+    ParameterEvent,
     ROSPose,
-    JointVelocityLimits,
-    SPEED_PROFILES,
-    SpeedProfile,
-    updateJointVelocities,
+    setMaxEeSpeed,
     updateJointIncrements,
-    JOINT_VELOCITY_HEARTBEAT_MS,
-    GRIPPER_INCREMENT_RANGE_FRACTION,
     ValidJoints,
     VideoProps,
 } from "shared/util";
@@ -37,8 +38,11 @@ import {
     rosJointStatetoRobotPose,
     ValidJointStateDict
 } from "../../../shared/util";
-import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 const { createRosReconnectGuard } = require("./rosReconnectGuard");
+
+/** Ask /map_server/map once, then retry a miss up to this many times. */
+const OCCUPANCY_GRID_MAX_RETRIES = 10;
+const OCCUPANCY_GRID_RETRY_MS = 2000;
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
 export var rosConnected = false;
@@ -132,6 +136,11 @@ export class Robot extends React.Component {
     private collisionMonitorStateService?: Service;
     private collisionMonitorActive = false;
     private collisionMonitorPollTimerID?: ReturnType<typeof setInterval>;
+    private occupancyGridPollTimerID?: ReturnType<typeof setTimeout>;
+    /** Ignores a /map_server/map reply after a newer getOccupancyGrid call. */
+    private occupancyGridRequestId = 0;
+    /** Retries already scheduled for the current getOccupancyGrid call. */
+    private occupancyGridRetries = 0;
     private jointVelTopic?: Topic;
     private eeCmdVelTopic?: Topic;
     private useCenterCameraService?: Service;
@@ -152,6 +161,7 @@ export class Robot extends React.Component {
     ) => void;
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+    private occupancyGridUnavailableCallback: () => void;
     private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
@@ -161,7 +171,7 @@ export class Robot extends React.Component {
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
     private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-    private jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
+    private maxEeSpeedCallback: (maxEeSpeed: number) => void;
     private subscriptions: Topic[] = [];
     private stretchToolParam?: Param;
     private toolIsActuatedParam?: Param;
@@ -171,7 +181,6 @@ export class Robot extends React.Component {
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
-    private jointVelocityLimits: JointVelocityLimits = {};
 
     constructor(props: {
         jointStateCallback: (
@@ -181,6 +190,7 @@ export class Robot extends React.Component {
         ) => void;
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+        occupancyGridUnavailableCallback: () => void;
         odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
@@ -190,12 +200,14 @@ export class Robot extends React.Component {
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
         leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
-        jointVelocityLimitsCallback: (limits: JointVelocityLimits) => void;
+        maxEeSpeedCallback: (maxEeSpeed: number) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
+        this.occupancyGridUnavailableCallback =
+            props.occupancyGridUnavailableCallback;
         this.odomCallback = props.odomCallback;
         this.moveBaseResultCallback = (goalState) => {
             if (goalState.state !== "Navigation executing!") {
@@ -216,7 +228,7 @@ export class Robot extends React.Component {
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
         this.leaseStatusCallback = props.leaseStatusCallback;
-        this.jointVelocityLimitsCallback = props.jointVelocityLimitsCallback;
+        this.maxEeSpeedCallback = props.maxEeSpeedCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -671,33 +683,56 @@ export class Robot extends React.Component {
             name: "/stretch_driver:mode"
         });
 
-        // Gripper velocity for each speed profile; its units depend on the attached tool
-        const JOINT_VELOCITY_PARAM_PREFIXES: Record<SpeedProfile, string> = {
-            slow: "joint_velocity.slow",
-            medium: "joint_velocity",
-            fast: "joint_velocity.fast",
-        };
-        const JOINT_VELOCITY_PARAM_KEYS: Record<string, string> = {
-            gripper_joint: "gripper",
-        };
-        for (const profile of SPEED_PROFILES) {
-            const prefix = JOINT_VELOCITY_PARAM_PREFIXES[profile];
-            for (const [rosJointName, paramKey] of Object.entries(JOINT_VELOCITY_PARAM_KEYS)) {
-                new Param({
-                    ros: this.ros,
-                    name: `/stretch_driver:${prefix}.${paramKey}`,
-                }).get((value: number) => {
-                    if (typeof value === "number" && value > 0) {
-                        this.jointVelocityLimits[profile] = {
-                            ...this.jointVelocityLimits[profile],
-                            [rosJointName]: value,
-                        };
-                        updateJointVelocities({ [profile]: { [rosJointName]: value } });
-                        this.getJointVelocityLimits();
-                    }
-                });
-            }
-        }
+        this.initMaxEeSpeed();
+    }
+
+    /**
+     * Track the velocity limiter's max_ee_speed, which every derived joint velocity scales from.
+     *
+     * The limiter re-reads this parameter on each command, so an operator raising or lowering it
+     * at runtime changes what the robot actually does; the interface has to follow or its speed
+     * profiles stop describing the motion. The parameter is read once at startup and then watched
+     * on /parameter_events. If the limiter is not running the read simply never calls back, and
+     * the compiled-in default stands.
+     */
+    initMaxEeSpeed() {
+        new Param({
+            ros: this.ros,
+            name: `/${EE_VELOCITY_LIMITER_NODE}:max_ee_speed`,
+        }).get((value: number) => this.applyMaxEeSpeed(value));
+
+        const parameterEvents: Topic = new Topic({
+            ros: this.ros,
+            name: "/parameter_events",
+            messageType: "rcl_interfaces/msg/ParameterEvent",
+        });
+        this.subscriptions.push(parameterEvents);
+        parameterEvents.subscribe((message: Message) => {
+            const event = message as ParameterEvent;
+            if (!event?.node?.endsWith(`/${EE_VELOCITY_LIMITER_NODE}`)) return;
+            const changed = [
+                ...(event.new_parameters ?? []),
+                ...(event.changed_parameters ?? []),
+            ].find((parameter) => parameter?.name === "max_ee_speed");
+            if (changed) this.applyMaxEeSpeed(changed.value?.double_value);
+        });
+    }
+
+    /**
+     * Adopt a ceiling reported by ROS and tell the operator, if it is a real change.
+     *
+     * Args:
+     *     speed: Ceiling in m/s, or undefined when the parameter event carried no double value.
+     */
+    private applyMaxEeSpeed(speed: number | undefined) {
+        if (typeof speed !== "number") return;
+        if (!setMaxEeSpeed(speed)) return;
+        this.getMaxEeSpeed();
+    }
+
+    /** Report the ceiling the joint velocity table is derived from to the operator. */
+    getMaxEeSpeed() {
+        if (this.maxEeSpeedCallback) this.maxEeSpeedCallback(getMaxEeSpeed());
     }
 
     isToolActuated(): boolean {
@@ -713,34 +748,59 @@ export class Robot extends React.Component {
             this.stretchToolCallback(this.stretchToolName);
     }
 
-    /**
-     * Returns the joint velocity limits fetched so far from ROS params, on
-     * demand. This lets a newly (re)connected operator pull the current
-     * values instead of relying solely on the one-time push that fires when
-     * each param resolves, which can be missed if it happens before the
-     * operator's WebRTC data channel is open.
-     */
-    getJointVelocityLimits() {
-        if (this.jointVelocityLimitsCallback)
-            this.jointVelocityLimitsCallback({ ...this.jointVelocityLimits });
+    getOccupancyGrid() {
+        this.stopOccupancyGridPoll();
+        this.occupancyGridRetries = 0;
+        const requestId = ++this.occupancyGridRequestId;
+        this.requestOccupancyGrid(requestId);
     }
 
-    getOccupancyGrid() {
-        let getMapService = new Service({
+    private requestOccupancyGrid(requestId: number) {
+        const getMapService = new Service({
             ros: this.ros,
             name: "/map_server/map",
             serviceType: "nav2_msgs/srv/GetMap",
         });
 
-        var request = {};
-        getMapService?.callService(
-            request,
-            (response: { map: ROSOccupancyGrid }) => {
+        getMapService.callService(
+            {},
+            (response: { map?: ROSOccupancyGrid }) => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                const map = response?.map;
+                const cells =
+                    (map?.info?.width ?? 0) * (map?.info?.height ?? 0);
+                if (!map || cells <= 0) {
+                    this.reportOccupancyGridUnavailable(requestId);
+                    return;
+                }
+                this.stopOccupancyGridPoll();
                 this.subscribeToMapTF();
-                if (this.occupancyGridCallback)
-                    this.occupancyGridCallback(response.map);
-            }
+                this.occupancyGridCallback(map);
+            },
+            () => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                this.reportOccupancyGridUnavailable(requestId);
+            },
         );
+    }
+
+    private reportOccupancyGridUnavailable(requestId: number) {
+        this.stopOccupancyGridPoll();
+        this.occupancyGridUnavailableCallback();
+        if (this.occupancyGridRetries >= OCCUPANCY_GRID_MAX_RETRIES) return;
+        this.occupancyGridRetries += 1;
+        this.occupancyGridPollTimerID = setTimeout(() => {
+            this.occupancyGridPollTimerID = undefined;
+            if (requestId !== this.occupancyGridRequestId) return;
+            this.requestOccupancyGrid(requestId);
+        }, OCCUPANCY_GRID_RETRY_MS);
+    }
+
+    private stopOccupancyGridPoll() {
+        if (this.occupancyGridPollTimerID !== undefined) {
+            clearTimeout(this.occupancyGridPollTimerID);
+            this.occupancyGridPollTimerID = undefined;
+        }
     }
 
 

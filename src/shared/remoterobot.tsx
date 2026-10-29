@@ -1,34 +1,33 @@
 import React from "react";
-import { Transform, Vector3, Quaternion } from "roslib";
+import { Quaternion, Transform, Vector3 } from "roslib";
 import {
+    CameraPerspectiveCommand,
     cmd,
     DriveCommand,
-    CameraPerspectiveCommand,
-    IncrementalMove,
-    SetTaskSpaceVelocityCommand,
-    setRobotModeCommand,
-    VelocityCommand,
-    RobotPoseCommand,
-    ToggleCommand,
-    GetRunStopCommand,
+    GetMaxEeSpeed,
     GetOccupancyGrid,
+    GetRunStopCommand,
+    GetStretchTool,
+    GetVoiceCapabilityCommand,
+    HomeTheRobotCommand,
+    IncrementalMove,
     MoveBaseCommand,
     PlaybackPosesCommand,
-    HomeTheRobotCommand,
-    GetStretchTool,
-    GetJointVelocity,
-    SetJointVelocityCommand,
-    SeedLocalizationCommand,
-    GetVoiceCapabilityCommand,
     RequestVoiceTokenCommand,
+    RobotPoseCommand,
+    SeedLocalizationCommand,
+    SetJointVelocityCommand,
+    setRobotModeCommand,
+    SetTaskSpaceVelocityCommand,
+    ToggleCommand,
+    VelocityCommand
 } from "shared/commands";
 import {
-    ValidJointStateDict,
     RobotPose,
-    ValidJoints,
-    ROSPose,
-    waitUntil,
     ROSOdometry,
+    ROSPose,
+    ValidJoints,
+    ValidJointStateDict
 } from "shared/util";
 export type robotMessageChannel = (message: cmd) => void;
 
@@ -266,10 +265,15 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.robotChannel(cmd);
     }
 
-    getJointVelocity(type: "getJointVelocity") {
-        let cmd: GetJointVelocity = {
-            type: type,
-        };
+    /**
+     * Ask the robot to report the velocity limiter's current max_ee_speed.
+     *
+     * The robot pushes the ceiling whenever it changes, but a push that lands before this
+     * operator's data channel is open is lost, so a freshly connected operator pulls it instead
+     * of driving at the compiled-in default.
+     */
+    getMaxEeSpeed() {
+        let cmd: GetMaxEeSpeed = { type: "getMaxEeSpeed" };
         this.robotChannel(cmd);
     }
 

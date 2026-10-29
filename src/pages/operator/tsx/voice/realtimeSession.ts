@@ -14,7 +14,7 @@ import {
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { flyingGripperFunctionProvider } from "../index";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
-import { TASK_SPACE_LINEAR_VEL } from "shared/util";
+import { PROFILE_SCALES, TASK_SPACE_LINEAR_VEL } from "shared/util";
 import { isIosLike } from "../utils/isIosLike";
 import { RobotAudioPlayer } from "../utils/robotAudioPlayer";
 import {
@@ -691,8 +691,6 @@ export type RealtimeVoiceConnectOptions = {
     onMicSafeReset?: () => void;
     /** Temporary POC: direct timedBaseDrive vs directional pad button path */
     voiceMoveExecutionMode?: VoiceMoveExecutionMode;
-    /** Sync Action Speed UI + FunctionProvider.velocityScale from voice `speed` arg */
-    onVoiceSpeedChange?: (speed: VoiceSpeed) => void;
     /** Switch operator to Press-Hold before each voice move */
     onVoicePressAndHoldRequired?: () => void;
     /** Structured feedback when a voice move is accepted or rejected (toast UX). */
@@ -986,14 +984,10 @@ export async function connectOpenAIRealtimeVoice(
 
     micGate = await createMicLevelGate(inputStream, micGateOptions());
 
-    if (
-        opts.onVoiceSpeedChange &&
-        opts.onVoicePressAndHoldRequired
-    ) {
+    if (opts.onVoicePressAndHoldRequired) {
         const baseFeedback = opts.onVoiceMoveFeedback;
         setVoiceMoveExecutionContext({
             mode: opts.voiceMoveExecutionMode ?? "button_provider",
-            onSpeedChange: opts.onVoiceSpeedChange,
             onPressAndHoldRequired: opts.onVoicePressAndHoldRequired,
             onVoiceMoveFeedback: (feedback) => {
                 if (
@@ -1537,11 +1531,9 @@ export async function connectOpenAIRealtimeVoice(
                     ? (rawArgs.speed as VoiceSpeed)
                     : VOICE_SPEED_DEFAULT;
 
-            opts.onVoiceSpeedChange?.(speed);
             opts.onVoicePressAndHoldRequired?.();
 
-            const speedMultiplier =
-                speed === "slow" ? 0.5 : speed === "fast" ? 1.5 : 1.0;
+            const speedMultiplier = PROFILE_SCALES[speed];
 
             let distance_m: number | undefined;
             if (
@@ -1554,10 +1546,7 @@ export async function connectOpenAIRealtimeVoice(
 
             let durationMs = 1000;
             if (distance_m !== undefined) {
-                const vel =
-                    TASK_SPACE_LINEAR_VEL *
-                    (FunctionProvider.velocityScale || 1.0) *
-                    speedMultiplier;
+                const vel = TASK_SPACE_LINEAR_VEL * speedMultiplier;
                 durationMs = Math.max(
                     100,
                     Math.min(10000, Math.round((distance_m / vel) * 1000)),

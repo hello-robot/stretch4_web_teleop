@@ -25,6 +25,27 @@
     border-radius: 16px;
 }
 
+.map-loading-overlay .map-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.map-loading-overlay .map-empty-icon {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    background-color: currentColor;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+    mask-mode: alpha;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+}
+
 #map {
     border-radius: 20px;
     background: hsl(171deg 25.64% 69.41%);

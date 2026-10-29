@@ -19,7 +19,7 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryVoltageCommand
     | GetStretchTool
-    | GetJointVelocity
+    | GetMaxEeSpeed
     | HomeTheRobotCommand
     | SeedLocalizationCommand
     | GetVoiceCapabilityCommand
@@ -114,8 +114,8 @@ export interface GetStretchTool {
     type: "getStretchTool";
 }
 
-export interface GetJointVelocity {
-    type: "getJointVelocity";
+export interface GetMaxEeSpeed {
+    type: "getMaxEeSpeed";
 }
 
 export interface MoveBaseCommand {

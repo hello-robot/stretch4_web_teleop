@@ -1,9 +1,11 @@
 import {
-    isOccupancyGridReady,
+    getOccupancyGridStatus,
     mapFunctionProvider,
-    subscribeOccupancyGridReady,
+    subscribeOccupancyGridStatus,
     underMapFunctionProvider,
 } from 'operator/tsx/index';
+import type { OccupancyGridStatus } from 'operator/tsx/index';
+import mapMarkerIcon from 'home/public/icons/map-marker.svg';
 import React, {
     Dispatch,
     SetStateAction,
@@ -120,9 +122,12 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     // OccupancyGrid instance for map and marker operations
     const [occupancyGrid, occupancyGridSet] = useState<OccupancyGrid>();
-    // Full WebRTC map reassembly (chunked for large grids)
-    const [mapReady, mapReadySet] = useState<boolean>(() => isOccupancyGridReady());
-    // Paint the canvas once per browser session (AutoNav stays mounted across scenes)
+    // loading until the map arrives; unavailable when /map_server/map reports none
+    const [mapStatus, mapStatusSet] = useState<OccupancyGridStatus>(
+        () => getOccupancyGridStatus(),
+    );
+    const mapReady = mapStatus === "ready";
+    // Skip a second paint while this map stays ready (scene switches do not reset it).
     const mapInitializedRef = useRef(false);
 
     // Subscribe to goal position updates from the OccupancyGrid
@@ -139,9 +144,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
     }, [occupancyGrid]);
 
     useEffect(() => {
-        return subscribeOccupancyGridReady(() => {
-            mapReadySet(true);
-        });
+        return subscribeOccupancyGridStatus(mapStatusSet);
     }, []);
 
     /**
@@ -302,8 +305,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
 
     /**
      * Create the canvas and OccupancyGrid once the full map has arrived.
-     * AutoNav stays mounted across Pilot/AutoNav switches, so this runs once
-     * per browser session (not on every visit to AutoNav).
+     * AutoNav stays mounted across Pilot/AutoNav switches, so this does not
+     * rerun on every visit. A reconnect clears the map and paints again.
      */
     useEffect(() => {
         if (!mapReady || mapInitializedRef.current) return;
@@ -330,30 +333,46 @@ const AutoNav: React.FC<AutoNavProps> = ({
         grid.refreshMarkerScales();
         occupancyGridSet(grid);
         return () => {
+            mapInitializedRef.current = false;
             grid.dispose();
         };
     }, [mapReady]);
 
     // Show friendly, helpful toast when
-    // user dives into the AutoNav UX
+    // user dives into the AutoNav UX with a map on screen
     useEffect(() => {
-        // Synthetic lag
-        setTimeout(() => {
-            if (swipeableViewsIdx === 1) {
-                addToast('info', 'Click on the map to navigate');
-            }
-        }, 500)
-    }, [swipeableViewsIdx])
+        if (swipeableViewsIdx !== 1 || !mapReady) return;
+        const timer = window.setTimeout(() => {
+            addToast('info', 'Click on the map to navigate');
+        }, 500);
+        return () => window.clearTimeout(timer);
+    }, [swipeableViewsIdx, mapReady, addToast])
 
     return (
         <div className='auto-nav'>
             <div className="map-wrapper">
                 <Map />
-                {!mapReady && (
-                    // Loading spinner
-                    <div className="map-loading-overlay" aria-busy="true">
-                        <div className="loader" aria-hidden="true" />
-                        <div className="loading-text"></div>
+                {mapStatus !== "ready" && (
+                    <div
+                        className="map-loading-overlay"
+                        role="status"
+                        aria-busy={mapStatus === "loading"}
+                    >
+                        {mapStatus === "loading" ? (
+                            <div className="loader" aria-hidden="true" />
+                        ) : (
+                            <div className="loading-text map-empty">
+                                <span
+                                    className="map-empty-icon"
+                                    aria-hidden="true"
+                                    style={{
+                                        maskImage: `url("${mapMarkerIcon}")`,
+                                        WebkitMaskImage: `url("${mapMarkerIcon}")`,
+                                    }}
+                                />
+                                <span>No map selected</span>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

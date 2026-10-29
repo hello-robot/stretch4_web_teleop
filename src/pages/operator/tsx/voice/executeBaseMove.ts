@@ -94,13 +94,15 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         );
     }
 
-    static velocitiesForAction(action: BaseMoveAction): {
+    static velocitiesForAction(action: BaseMoveAction, speed: VoiceSpeed): {
         linear_X: number;
         linear_Y: number;
         angVel: number;
     } {
-        const linVel = FunctionProvider.jointVelocity("translate_mobile_base") ?? 0.1;
-        const angVelMag = FunctionProvider.jointVelocity("rotate_mobile_base") ?? 0.1;
+        const linVel =
+            FunctionProvider.jointVelocityAt("translate_mobile_base", speed) ?? 0.1;
+        const angVelMag =
+            FunctionProvider.jointVelocityAt("rotate_mobile_base", speed) ?? 0.1;
         switch (action) {
             case "rotate_left":
                 return { linear_X: 0, linear_Y: 0, angVel: ROTATE_ACTION_SIGN.rotate_left * angVelMag };
@@ -187,12 +189,12 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         }
 
         const mode = BaseMoveExecutor.executionMode;
-        BaseMoveExecutor.prepareUi(speed);
+        BaseMoveExecutor.prepareUi();
 
         // ── Distance/Rotation-based path ───────────────────────────────────────────────
         if (distance_m !== undefined || rotation_rad !== undefined) {
             const isRotation = action === "rotate_left" || action === "rotate_right";
-            const { linear_X, linear_Y, angVel } = BaseMoveExecutor.velocitiesForAction(action);
+            const { linear_X, linear_Y, angVel } = BaseMoveExecutor.velocitiesForAction(action, speed);
 
             // For rotation we use rotation_rad (radians); for translation we use distance_m (meters).
             const targetNative = isRotation ? (rotation_rad ?? 0) : distance_m!;
@@ -206,7 +208,11 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
 
             if (mode === "button_provider") {
                 const button = VOICE_ACTION_TO_BUTTON[action];
-                const started = provider.timedButtonPadPress(button, clampedMs);
+                const started = provider.timedButtonPadPress(
+                    button,
+                    clampedMs,
+                    speed,
+                );
                 if (!started) {
                     const result = BaseMoveExecutor.busyOrDisconnected(
                         "timedButtonPadPress",
@@ -269,7 +275,11 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
         // ── Duration-based path ───────────────────────────────────────────────
         if (mode === "button_provider") {
             const button = VOICE_ACTION_TO_BUTTON[action];
-            const started = provider.timedButtonPadPress(button, duration_ms);
+            const started = provider.timedButtonPadPress(
+                button,
+                duration_ms,
+                speed,
+            );
             if (!started) {
                 const result = BaseMoveExecutor.busyOrDisconnected("timedButtonPadPress");
                 BaseMoveExecutor.emitVoiceMoveFeedback({
@@ -295,7 +305,7 @@ class BaseMoveExecutor extends VoiceMoveExecutor {
             };
         }
 
-        const { linear_X, linear_Y, angVel } = BaseMoveExecutor.velocitiesForAction(action);
+        const { linear_X, linear_Y, angVel } = BaseMoveExecutor.velocitiesForAction(action, speed);
         const started = provider.timedBaseDrive(linear_X, linear_Y, duration_ms, angVel);
         if (!started) {
             const result = BaseMoveExecutor.busyOrDisconnected("timedBaseDrive");

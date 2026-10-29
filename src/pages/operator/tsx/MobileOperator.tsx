@@ -500,7 +500,6 @@ export const MobileOperator = (props: {
             {voiceSvc ? (
                 <React.Suspense fallback={null}>
                     <VoiceCommandAssistant
-                        onVelocityScaleApplied={applyVelocityScale}
                         setActionMode={setActionMode}
                         addToast={addToast}
                         onSwitchScene={(scene) => {
