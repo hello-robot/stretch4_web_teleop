@@ -40,6 +40,10 @@ import {
 import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 const { createRosReconnectGuard } = require("./rosReconnectGuard");
 
+/** Ask /map_server/map once, then retry a miss up to this many times. */
+const OCCUPANCY_GRID_MAX_RETRIES = 10;
+const OCCUPANCY_GRID_RETRY_MS = 2000;
+
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
 export var rosConnected = false;
 
@@ -132,6 +136,11 @@ export class Robot extends React.Component {
     private collisionMonitorStateService?: Service;
     private collisionMonitorActive = false;
     private collisionMonitorPollTimerID?: ReturnType<typeof setInterval>;
+    private occupancyGridPollTimerID?: ReturnType<typeof setTimeout>;
+    /** Ignores a /map_server/map reply after a newer getOccupancyGrid call. */
+    private occupancyGridRequestId = 0;
+    /** Retries already scheduled for the current getOccupancyGrid call. */
+    private occupancyGridRetries = 0;
     private jointVelTopic?: Topic;
     private eeCmdVelTopic?: Topic;
     private useCenterCameraService?: Service;
@@ -152,6 +161,7 @@ export class Robot extends React.Component {
     ) => void;
     private batteryStateCallback: (batteryState: ROSBatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+    private occupancyGridUnavailableCallback: () => void;
     private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
@@ -181,6 +191,7 @@ export class Robot extends React.Component {
         ) => void;
         batteryStateCallback: (batteryState: ROSBatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+        occupancyGridUnavailableCallback: () => void;
         odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
@@ -196,6 +207,8 @@ export class Robot extends React.Component {
         this.jointStateCallback = props.jointStateCallback;
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
+        this.occupancyGridUnavailableCallback =
+            props.occupancyGridUnavailableCallback;
         this.odomCallback = props.odomCallback;
         this.moveBaseResultCallback = (goalState) => {
             if (goalState.state !== "Navigation executing!") {
@@ -726,21 +739,58 @@ export class Robot extends React.Component {
     }
 
     getOccupancyGrid() {
-        let getMapService = new Service({
+        this.stopOccupancyGridPoll();
+        this.occupancyGridRetries = 0;
+        const requestId = ++this.occupancyGridRequestId;
+        this.requestOccupancyGrid(requestId);
+    }
+
+    private requestOccupancyGrid(requestId: number) {
+        const getMapService = new Service({
             ros: this.ros,
             name: "/map_server/map",
             serviceType: "nav2_msgs/srv/GetMap",
         });
 
-        var request = {};
-        getMapService?.callService(
-            request,
-            (response: { map: ROSOccupancyGrid }) => {
+        getMapService.callService(
+            {},
+            (response: { map?: ROSOccupancyGrid }) => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                const map = response?.map;
+                const cells =
+                    (map?.info?.width ?? 0) * (map?.info?.height ?? 0);
+                if (!map || cells <= 0) {
+                    this.reportOccupancyGridUnavailable(requestId);
+                    return;
+                }
+                this.stopOccupancyGridPoll();
                 this.subscribeToMapTF();
-                if (this.occupancyGridCallback)
-                    this.occupancyGridCallback(response.map);
-            }
+                this.occupancyGridCallback(map);
+            },
+            () => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                this.reportOccupancyGridUnavailable(requestId);
+            },
         );
+    }
+
+    private reportOccupancyGridUnavailable(requestId: number) {
+        this.stopOccupancyGridPoll();
+        this.occupancyGridUnavailableCallback();
+        if (this.occupancyGridRetries >= OCCUPANCY_GRID_MAX_RETRIES) return;
+        this.occupancyGridRetries += 1;
+        this.occupancyGridPollTimerID = setTimeout(() => {
+            this.occupancyGridPollTimerID = undefined;
+            if (requestId !== this.occupancyGridRequestId) return;
+            this.requestOccupancyGrid(requestId);
+        }, OCCUPANCY_GRID_RETRY_MS);
+    }
+
+    private stopOccupancyGridPoll() {
+        if (this.occupancyGridPollTimerID !== undefined) {
+            clearTimeout(this.occupancyGridPollTimerID);
+            this.occupancyGridPollTimerID = undefined;
+        }
     }
 
 
