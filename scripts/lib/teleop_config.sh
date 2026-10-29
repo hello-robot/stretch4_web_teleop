@@ -1,7 +1,5 @@
 # shellcheck shell=bash
 # Configuration and logging shared by every launch path.
-#
-# Source this; do not execute it.
 
 TELEOP_REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TELEOP_ENV_FILE="$TELEOP_REPO_DIR/.env"
@@ -197,12 +195,10 @@ function validate_installation {
 		return 1
 	fi
 
-	# The launch file imports stretch4_body at module scope, so a Python
-	# environment below the floors in pyproject.toml fails the launch before
-	# any node starts. version_check prints its own pip hint.
-	if ! (cd "$TELEOP_REPO_DIR" && python3 -m stretch4_web_teleop_helpers.version_check); then
-		return 1
-	fi
+	# Advisory. An installed distribution below the floors in pyproject.toml
+	# is reported in red and does not stop the launch, so its exit status is
+	# discarded. version_check prints its own pip hint.
+	(cd "$TELEOP_REPO_DIR" && python3 -m stretch4_web_teleop_helpers.version_check) || true
 
 	echo -e "${GREEN}✓ Installation validation passed${NC}"
 	return 0

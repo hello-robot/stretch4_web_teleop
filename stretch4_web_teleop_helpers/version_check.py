@@ -14,6 +14,10 @@ DEFAULT_GROUP = "robot"
 INSTALL_HINT = "pip install --group pyproject.toml:robot"
 PACKAGE_NAME = "stretch4_web_teleop"
 
+# Define color variables
+RED = "\033[0;31m"
+NC = "\033[0m"  # No Color (Reset)
+
 
 def find_pyproject() -> Path:
     """
@@ -86,10 +90,15 @@ def check_group(group: str = DEFAULT_GROUP) -> list[str]:
 
 def main() -> int:
     """
-    Report unsatisfied requirements on stderr and return a shell exit status.
+    Warn about unsatisfied requirements on stderr and return a shell exit
+    status.
+
+    The status reports the finding and does not impose a policy; the launch
+    path ignores it, while a caller that wants a gate can act on it.
 
     Returns:
-        0 when every requirement in the chosen group is satisfied, 1 otherwise.
+        0 when every requirement in the chosen group is satisfied, 1 when any
+        is unsatisfied or the check could not run.
     """
     parser = argparse.ArgumentParser(
         description="Check declared Python dependency floors."
@@ -104,13 +113,13 @@ def main() -> int:
     try:
         problems = check_group(arguments.group)
     except (FileNotFoundError, KeyError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+        print(f"{RED}ERROR:{NC} {error}", file=sys.stderr)
         return 1
 
     for problem in problems:
-        print(f"ERROR: {problem}", file=sys.stderr)
+        print(f"{RED}WARNING:{NC} {problem}", file=sys.stderr)
     if problems:
-        print(f"       {INSTALL_HINT}", file=sys.stderr)
+        print(f"         {INSTALL_HINT}", file=sys.stderr)
     return 1 if problems else 0
 
 
