@@ -10,11 +10,11 @@ import {
     ValidJoints,
 } from "shared/util";
 import { PilotButtonPads } from "../static_components/PilotControlsToggle";
+import { getLabelBySpeed } from "../utils/action-speed-scale";
 import {
     ActionModeType,
     PilotButtonPadType,
 } from "../utils/component_definitions";
-import { getLabelBySpeed } from "../utils/action-speed-scale";
 import { clampTimedMoveMs } from "../utils/timed-move";
 import { ButtonPadButton } from "./ButtonFunctionProvider";
 
@@ -26,7 +26,7 @@ const x = PilotButtonPads;
  */
 export abstract class FunctionProvider {
     protected static remoteRobot?: RemoteRobot;
-    public static velocityScale: number;
+    public static speedProfile: SpeedProfile = "medium";
     public static actionMode: ActionModeType;
     public static pilotControlsCurrent: PilotButtonPadType;
     public activeButtonPadFunction: ButtonPadButton;
@@ -66,9 +66,24 @@ export abstract class FunctionProvider {
         return FunctionProvider.remoteRobot?.getMapPose();
     }
 
-    /** Speed profile for the current velocity scale. */
-    static get speedProfile(): SpeedProfile {
-        return getLabelBySpeed(this.velocityScale) ?? "medium";
+    /**
+     * Multiplier for the current speed setting.
+     *
+     * Returns:
+     *     The current profile's PROFILE_SCALES entry.
+     */
+    static get velocityScale(): number {
+        return PROFILE_SCALES[this.speedProfile];
+    }
+
+    /**
+     * Select the speed profile carrying this multiplier.
+     *
+     * Args:
+     *     scale: A multiplier from PROFILE_SCALES. Any other value selects medium.
+     */
+    static set velocityScale(scale: number) {
+        this.speedProfile = getLabelBySpeed(scale) ?? "medium";
     }
 
     /**

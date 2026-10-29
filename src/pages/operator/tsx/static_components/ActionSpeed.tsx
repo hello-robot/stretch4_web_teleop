@@ -13,18 +13,11 @@ import speedMediumIconWithoutText from "operator/icons/Speed_Medium_Without_Text
 import speedFastIconWithoutText from "operator/icons/Speed_Fast_Without_Text.svg";
 
 import {
+    DEFAULT_SPEED_PROFILE,
     getLabelBySpeed,
     getSpeedByLabel,
     VELOCITY_SCALE,
 } from "../utils/action-speed-scale";
-
-/**Details of a velocity setting */
-type ActionSpeedDetails = {
-    /**Name of the setting to display on the button */
-    label: string;
-    /**The speed of this setting */
-    speed: number;
-};
 
 /**Props for {@link ActionSpeed} */
 type ActionSpeedProps = {
@@ -49,8 +42,6 @@ type ActionSpeedProps = {
     setCameraVeilCallback: (enable: boolean) => void;
 };
 
-const VELOCITY_SCALE_UI: ActionSpeedDetails[] = VELOCITY_SCALE;
-
 const SPEED_ICONS: Record<string, string> = {
     slow: speedSlowIcon,
     medium: speedMediumIcon,
@@ -70,7 +61,7 @@ const getIconBySpeed = (speed: number): string => {
 
 /**
  * Set of buttons so the user can control the scaling of the speed for all controls.
- * @param props see {@link SpeedControlProps}
+ * @param props see {@link ActionSpeedProps}
  */
 export const ActionSpeed = (props: ActionSpeedProps) => {
     const [isModalOpen, setIsModalOpen] = React.useState<boolean>(false);
@@ -84,7 +75,7 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
         { restoreVeil: props.setCameraVeilCallback },
     );
     const speedLabel =
-        getLabelBySpeed(props.speed) ?? VELOCITY_SCALE_UI[1].label;
+        getLabelBySpeed(props.speed) ?? DEFAULT_SPEED_PROFILE;
 
     return (
         <div className="action-speed">
@@ -147,7 +138,7 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
         setSelectedSpeed(speedLabel);
     }, [speedLabel, isOpen]);
 
-    const options: OptionItem[] = VELOCITY_SCALE_UI.map((item) => ({
+    const options: OptionItem[] = VELOCITY_SCALE.map((item) => ({
         value: item.label,
     }));
 
