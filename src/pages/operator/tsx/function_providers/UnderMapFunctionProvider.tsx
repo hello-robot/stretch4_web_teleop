@@ -20,6 +20,7 @@ export enum UnderMapButton {
 
 export class UnderMapFunctionProvider extends FunctionProvider {
     private selectGoal: boolean;
+    private isMoveBaseActive: boolean = false;
     private storageHandler: StorageHandler;
     private mapPoseCallback?: (pose: Vector3) => void = undefined;
     private operatorCallback?: (state: ActionState) => void = undefined;
@@ -31,18 +32,34 @@ export class UnderMapFunctionProvider extends FunctionProvider {
         this.storageHandler = storageHandler;
     }
 
-    public setMoveBaseState(state: ActionState) {
+    /**
+     * Updates the current move_base execution state and notifies registered operator listeners.
+     *
+     * Args:
+     *     state: Action state returned by or synthesized for move_base.
+     */
+    public setMoveBaseState(state: ActionState): void {
+        this.isMoveBaseActive =
+            state.alert_type === "info" && state.state === "Navigation executing!";
         if (this.operatorCallback) this.operatorCallback(state);
     }
 
     /**
      * Cancels the current navigation goal and notifies remote robot and operator listeners.
+     *
+     * Args:
+     *     onlyIfActive: When true, always sends a stop command to the robot but only
+     *         emits the UI cancellation alert when navigation is actively executing.
      */
-    public cancelGoal(): void {
-        this.setMoveBaseState({
-            state: "Navigation canceled!",
-            alert_type: "error",
-        });
+    public cancelGoal(onlyIfActive: boolean = false): void {
+        const shouldNotifyUi = !onlyIfActive || this.isMoveBaseActive;
+        this.isMoveBaseActive = false;
+        if (shouldNotifyUi) {
+            this.setMoveBaseState({
+                state: "Navigation canceled!",
+                alert_type: "error",
+            });
+        }
         FunctionProvider.remoteRobot?.stopMoveBase();
     }
 

@@ -439,16 +439,12 @@ function configureRemoteRobot() {
         homeTheRobotFunctionProvider.updateIsHomedState
     );
     runStopFunctionProvider.setOnRunStopEngagedCallback(() => {
-        FunctionProvider.stopAllActions(true);
-        underMapFunctionProvider?.cancelGoal();
-        movementRecorderFunctionProvider.cancelPlayback();
+        stopAllRobotMovement(false);
     });
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
         (enabled: boolean) => {
             if (enabled) {
-                FunctionProvider.stopAllActions(true);
-                underMapFunctionProvider?.cancelGoal();
-                movementRecorderFunctionProvider.cancelPlayback();
+                stopAllRobotMovement(false);
             }
             runStopFunctionProvider.updateRunStopState(enabled);
         }
@@ -456,10 +452,24 @@ function configureRemoteRobot() {
     remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
         (holder, isDriverHolding) => {
             if (!isDriverHolding) {
-                FunctionProvider.stopAllActions(true);
+                stopAllRobotMovement(true);
             }
         }
     );
+}
+
+/**
+ * Stops all active robot motions including teleop actions, autonomous navigation,
+ * and saved trajectory playback.
+ *
+ * Args:
+ *     onlyCancelActiveGoalUi: Whether to suppress the AutoNav cancellation UI reset
+ *         when no navigation goal is actively executing on the operator.
+ */
+function stopAllRobotMovement(onlyCancelActiveGoalUi: boolean = true): void {
+    FunctionProvider.stopAllActions(true);
+    underMapFunctionProvider?.cancelGoal(onlyCancelActiveGoalUi);
+    movementRecorderFunctionProvider?.cancelPlayback();
 }
 
 /**
@@ -636,6 +646,7 @@ function renderOperator(storageHandler: StorageHandler) {
  * Disconnects the operator from the robot and cleans up audio and WebRTC sessions.
  */
 function disconnectFromRobot(): void {
+    stopAllRobotMovement(true);
     RobotAudioPlayer.getInstance().stop();
 
     // @flag voice_control_interface
@@ -645,13 +656,29 @@ function disconnectFromRobot(): void {
     connection.stop();
 }
 
+window.addEventListener("blur", () => {
+    stopAllRobotMovement(true);
+});
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" || document.hidden) {
+        stopAllRobotMovement(true);
+    }
+});
+
+window.addEventListener("pagehide", () => {
+    stopAllRobotMovement(true);
+});
+
 window.onbeforeunload = () => {
+    stopAllRobotMovement(true);
     RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 };
 
 window.onunload = () => {
+    stopAllRobotMovement(true);
     RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();

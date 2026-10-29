@@ -2136,7 +2136,7 @@ export class Robot extends React.Component {
      * Cancels any active goals via rosbridge without throwing if uninitialized,
      * resets state tracking, and emits a cancellation alert if navigation was active.
      */
-    stopMoveBaseClient() {
+    stopMoveBaseClient(): void {
         if (!this.moveBaseClient) return;
 
         const hadActiveGoal = this.moveBaseGoalID !== undefined || this.moveBaseStatusWatching;
@@ -2148,6 +2148,9 @@ export class Robot extends React.Component {
 
         if (this.moveBaseGoalID) {
             this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
+        }
+
+        if (hadActiveGoal) {
             this.moveBaseGoalID = undefined;
             this.moveBaseGoal = undefined;
             // Operator CancelGoal already synthesizes local cancel UI; stop
