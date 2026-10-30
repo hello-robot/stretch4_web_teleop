@@ -462,6 +462,11 @@ function handleMessage(message: WebRTCMessage) {
                 );
             });
             break;
+        case "shutdown":
+            robot.shutdown((response) => {
+                console.log("Shutdown initiated:", response);
+            });
+            break;
         // @flag voice_control_interface
         case "getVoiceCapability":
             forwardVoiceCapability();
