@@ -556,7 +556,12 @@ def apply_gripper_cam_depth_overlay(
     z_min_bound = DEPTH_HEATMAP_Z_MIN_BOUND_M
     z_thresh2 = z_thresh1 + far_offset
 
-    if depth_img is None or depth_img.size == 0 or image_bgr is None or image_bgr.size == 0:
+    if (
+        depth_img is None
+        or depth_img.size == 0
+        or image_bgr is None
+        or image_bgr.size == 0
+    ):
         return image_bgr
 
     vis_h, vis_w = image_bgr.shape[:2]
@@ -595,18 +600,26 @@ def apply_gripper_cam_depth_overlay(
         depth_u8 = np.clip((1.0 - norm_depth) * 255.0, 0, 255).astype(np.uint8)
         jet_bgr = cv2.applyColorMap(depth_u8, cv2.COLORMAP_JET).astype(np.float32)
 
-        out_frame[near_mask] = (1.0 - alpha) * out_frame[near_mask] + alpha * jet_bgr[near_mask]
+        out_frame[near_mask] = (1.0 - alpha) * out_frame[near_mask] + alpha * jet_bgr[
+            near_mask
+        ]
 
     # 2. Process Transition Zone: jet(0) with linearly decreasing alpha
     if np.any(trans_mask):
         depth_trans = depth_m[trans_mask]
-        alpha_ratio = 1.0 - (depth_trans - z_thresh1) / max(z_thresh2 - z_thresh1, 0.001)
+        alpha_ratio = 1.0 - (depth_trans - z_thresh1) / max(
+            z_thresh2 - z_thresh1, 0.001
+        )
         alpha_trans = np.clip(alpha * alpha_ratio, 0.0, alpha)[:, np.newaxis]
 
         orig_pixels = out_frame[trans_mask]
-        color_target = np.array([128.0, 0.0, 0.0], dtype=np.float32)[np.newaxis, :]  # JET(0) BGR
+        color_target = np.array([128.0, 0.0, 0.0], dtype=np.float32)[
+            np.newaxis, :
+        ]  # JET(0) BGR
 
-        out_frame[trans_mask] = (1.0 - alpha_trans) * orig_pixels + alpha_trans * color_target
+        out_frame[trans_mask] = (
+            1.0 - alpha_trans
+        ) * orig_pixels + alpha_trans * color_target
 
     return np.clip(out_frame, 0, 255).astype(np.uint8)
 

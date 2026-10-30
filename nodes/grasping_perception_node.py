@@ -20,7 +20,6 @@ import sys
 import threading
 from typing import Any
 
-import cv2
 import numpy as np
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -38,14 +37,8 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from overlay_utils import (
-    COLOR_BLACK,
-    COLOR_GREEN,
     COLOR_MANIFOLD,
-    COLOR_ORANGE,
-    COLOR_RED,
     COLOR_WHITE,
-    COLOR_WIREFRAME,
-    COLOR_YELLOW,
     DEFAULT_ARM_LIMITS,
     DEFAULT_ICON_SCALE,
     DEFAULT_KEEPOUT_SLICE_DEG,
@@ -58,9 +51,7 @@ from overlay_utils import (
     N_POINTS_MIN_GREEN,
     N_POINTS_MIN_YELLOW,
     RETICLE_RADIUS_M,
-    STATE_GREEN,
     STATE_RED,
-    STATE_YELLOW,
     WINDOW_HALF_WIDTH_M,
     Z_NEAR_M,
     apply_gripper_cam_depth_overlay,
@@ -73,9 +64,9 @@ from overlay_utils import (
     evaluate_reticle_depth_state,
     project_point_to_pixel,
     project_points_to_pixels,
-    render_depth_heatmap_overlay,
     render_swept_volume_manifold,
 )
+
 from stretch4_web_teleop_helpers.conversions import (
     cv2_image_to_ros_msg,
     ros_msg_to_cv2_image,
@@ -150,9 +141,9 @@ class GraspingPerceptionNode(Node):
             "roll": 0.0,
             "gripper": 0.0,
         }
-        self.joint_limits: dict[str, tuple[float, float]] = (
-            self._load_urdf_joint_limits()
-        )
+        self.joint_limits: dict[
+            str, tuple[float, float]
+        ] = self._load_urdf_joint_limits()
 
         # Camera calibration intrinsics (populated exclusively via /cameras_gripper/right/camera_info subscription)
         self.camera_matrix: np.ndarray | None = None
@@ -692,7 +683,9 @@ class GraspingPerceptionNode(Node):
         """
         self.show_horizon = not self.show_horizon
         res.success = True
-        res.message = f"Horizon line overlay {'enabled' if self.show_horizon else 'disabled'}."
+        res.message = (
+            f"Horizon line overlay {'enabled' if self.show_horizon else 'disabled'}."
+        )
         self.get_logger().info(res.message)
         return res
 

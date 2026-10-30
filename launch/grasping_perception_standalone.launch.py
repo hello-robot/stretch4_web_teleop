@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Launch description for standalone grasping perception with robot driver and camera."""
 
 from ament_index_python.packages import get_package_share_path
