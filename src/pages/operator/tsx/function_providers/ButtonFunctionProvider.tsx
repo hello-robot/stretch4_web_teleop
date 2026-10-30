@@ -93,10 +93,13 @@ export class ButtonFunctionProvider extends FunctionProvider {
 
     /**
      * Takes joint states and updates the button state map based on which joints
-     * are in collision or at their limit.
+     * are in collision or at their limit. If the currently active button enters
+     * a limit or collision state, its motion is stopped immediately while
+     * preserving the limit or collision indicator on the button.
      *
-     * @param inJointLimit dictionary of joints whose limit booleans have changed
-     * @param inCollision dictionary of joints whose collision booleans have changed
+     * Args:
+     *     inJointLimit: Dictionary of joints whose limit booleans have changed.
+     *     inCollision: Dictionary of joints whose collision booleans have changed.
      */
     public updateJointStates(
         inJointLimit: ValidJointStateDict,
@@ -145,6 +148,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
             )
         ]);
 
+        let shouldStopActive = false;
         buttonsToUpdate.forEach(btn => {
             const targetState = targetButtonStates.get(btn) || ButtonState.Inactive;
             const currentState = this.buttonStateMap.get(btn) || ButtonState.Inactive;
@@ -154,12 +158,19 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     console.log(`[ButtonProvider] Setting ${btn} to state: ${targetState}`);
                     this.buttonStateMap.set(btn, targetState);
                 }
+                if (this.activeButtonPadFunction === btn) {
+                    shouldStopActive = true;
+                }
             } else {
                 if (currentState === ButtonState.Collision || currentState === ButtonState.Limit) {
                     this.buttonStateMap.set(btn, ButtonState.Inactive);
                 }
             }
         });
+
+        if (shouldStopActive) {
+            this.stopCurrentAction(true);
+        }
 
         if (this.operatorCallback) this.operatorCallback(this.buttonStateMap);
     }
@@ -216,10 +227,10 @@ export class ButtonFunctionProvider extends FunctionProvider {
     }
 
     /**
-     * Stops any currently executing movement action and releases active/latched button states.
+     * Releases any active or latched button states in {@link buttonStateMap} while preserving
+     * {@link ButtonState.Collision} and {@link ButtonState.Limit} entries.
      */
-    public disableActiveButton(): void {
-        this.stopCurrentAction(true);
+    protected onActionStopped(): void {
         let changed = false;
 
         if (this.activeButtonPadFunction !== undefined) {
@@ -248,8 +259,23 @@ export class ButtonFunctionProvider extends FunctionProvider {
     }
 
     /**
+     * Stops any currently executing movement action and releases active or latched button states.
+     */
+    public disableActiveButton(): void {
+        this.stopCurrentAction(true);
+    }
+
+    /**
      * Simulates press-and-hold on a ButtonPad for durationMs.
      * Also, VC automatically sets ActionMode to PressAndHold.
+     *
+     * Args:
+     *     buttonPadButton: The button pad action to execute.
+     *     durationMs: Duration in milliseconds to hold the action.
+     *     speedProfile: Optional speed profile override for voice commands.
+     *
+     * Returns:
+     *     True if the action was started, false if the robot is disconnected.
      */
     public timedButtonPadPress(
         buttonPadButton: ButtonPadButton,
@@ -261,18 +287,16 @@ export class ButtonFunctionProvider extends FunctionProvider {
         }
 
         const clampedMs = clampTimedMoveMs(durationMs);
-        this.stopCurrentAction(true);
-        this.timedVoiceMoveActive = true;
-        this.activeButtonPadFunction = buttonPadButton;
-
+        FunctionProvider.stopAllActions(true);
         const functs = this.provideFunctions(buttonPadButton, speedProfile);
         functs.onClick();
+        this.timedVoiceMoveActive = true;
+        this.activeButtonPadFunction = buttonPadButton;
 
         this.timedVoiceMoveTimer = setTimeout(() => {
             this.timedVoiceMoveTimer = undefined;
             this.timedVoiceMoveActive = false;
             functs.onRelease?.();
-            this.setButtonInactiveState(buttonPadButton);
             this.stopCurrentAction(true);
         }, clampedMs);
         return true;
@@ -283,17 +307,24 @@ export class ButtonFunctionProvider extends FunctionProvider {
      * base forward, lift arm), and returns a set of functions to execute when
      * the user interacts with the button.
      *
-     * @param buttonPadFunction the {@link ButtonPadButton}
-     * @param speedProfile speed to resolve the joint velocity at; defaults to the
-     *      interface's current setting. Voice moves pass the speed their command
-     *      named, which leaves the speedometer untouched.
-     * @returns the {@link ButtonFunctions} for the button
+     * Args:
+     *     buttonPadFunction: The {@link ButtonPadButton} to bind.
+     *     speedProfile: Speed to resolve the joint velocity at; defaults to the
+     *         interface's current setting. Voice moves pass the speed their command
+     *         named, which leaves the speedometer untouched.
+     *
+     * Returns:
+     *     The {@link ButtonFunctions} for the button.
      */
     public provideFunctions(
         buttonPadFunction: ButtonPadButton,
         speedProfile?: SpeedProfile,
     ): ButtonFunctions {
         let action: () => void;
+        const isAtLimitOrCollision = () => {
+            const state = this.buttonStateMap.get(buttonPadFunction);
+            return state === ButtonState.Collision || state === ButtonState.Limit;
+        };
         const onLeave = () => {
             this.stopCurrentAction(true);
             this.setButtonInactiveState(buttonPadFunction);
@@ -357,6 +388,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                 }
                 return {
                     onClick: () => {
+                        if (isAtLimitOrCollision()) return;
                         action();
                         this.setButtonActiveState(buttonPadFunction);
                         // Set button state inactive after 1 second
@@ -406,6 +438,7 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     ActionModeType.PressAndHold
                     ? {
                         onClick: () => {
+                            if (isAtLimitOrCollision()) return;
                             action();
                             this.setButtonActiveState(buttonPadFunction);
                         },
@@ -419,49 +452,33 @@ export class ButtonFunctionProvider extends FunctionProvider {
                     : {
                         // For click-click, stop if button already active
                         onClick: () => {
-                            // If the robot is not moving, start moving and set button to active
-                            if (!this.activeVelocityAction) {
-                                action();
-                                this.activeButtonPadFunction =
-                                    buttonPadFunction;
-                                this.setButtonActiveState(
-                                    this.activeButtonPadFunction
-                                );
-                            }
+                            const isMoving = this.isVelocityHeartbeatActive();
+                            const isSameButton =
+                                this.activeButtonPadFunction === buttonPadFunction;
 
-                            // If the robot is moving, and same button pressed
-                            // stop and set the button to inactive
-                            else if (
-                                this.activeButtonPadFunction ==
-                                buttonPadFunction &&
-                                this.activeVelocityAction
-                            ) {
+                            // If the robot is moving and the same button is pressed,
+                            // stop and set the button to inactive.
+                            if (isMoving && isSameButton) {
                                 this.stopCurrentAction(true);
-                                this.setButtonInactiveState(
-                                    this.activeButtonPadFunction
-                                );
-                                this.activeButtonPadFunction = undefined;
+                                return;
                             }
 
-                            // The button pressed is not the active button, stop current action
-                            //  and execute the new function
-                            else if (
-                                this.activeButtonPadFunction !==
-                                buttonPadFunction &&
-                                this.activeVelocityAction
-                            ) {
+                            // If the target button is in collision or at its limit,
+                            // stop any existing motion and do not start moving into the limit.
+                            if (isAtLimitOrCollision()) {
+                                if (isMoving) {
+                                    this.stopCurrentAction(true);
+                                }
+                                return;
+                            }
+
+                            // Stop any previous active button and start the newly tapped button.
+                            if (isMoving) {
                                 this.stopCurrentAction(true);
-                                this.setButtonInactiveState(
-                                    this.activeButtonPadFunction
-                                );
-
-                                action();
-                                this.activeButtonPadFunction =
-                                    buttonPadFunction;
-                                this.setButtonActiveState(
-                                    this.activeButtonPadFunction
-                                );
                             }
+                            action();
+                            this.activeButtonPadFunction = buttonPadFunction;
+                            this.setButtonActiveState(buttonPadFunction);
                         },
                         // onLeave: onLeave,
                     };

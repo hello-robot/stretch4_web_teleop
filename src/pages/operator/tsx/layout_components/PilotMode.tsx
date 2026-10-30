@@ -2,8 +2,11 @@ import React, { useCallback } from "react";
 import { SimpleCameraView } from "./SimpleCameraView";
 import { TabGroup } from "../basic_components/TabGroup";
 import FooterPilotMode from "./FooterPilotMode";
-import { FunctionProvider } from "../function_providers/FunctionProvider";
-import { CameraViewId } from "../utils/component_definitions";
+import {
+    ActionModeType,
+    CameraViewId,
+    PilotButtonPadType,
+} from "../utils/component_definitions";
 import { AnimatePresence, motion } from "framer-motion";
 import { MovementRecorder } from "./MovementRecorder";
 import { SharedState } from "./CustomizableComponent";
@@ -21,8 +24,11 @@ interface PilotModeProps {
     tabContent: ((active: boolean) => React.JSX.Element)[];
     activeMainGroupTab: number;
     setActiveMainGroupTab: (index: number) => void;
+    velocityScale: number;
     onVelocityScaleChange: (scale: number) => void;
-    setActionMode: (mode: string) => void;
+    actionMode: ActionModeType;
+    setActionMode: (mode: ActionModeType) => void;
+    pilotControlsCurrent: PilotButtonPadType;
     setPilotControlsCurrent: (pilotControlsCurrent: string) => void;
     swipeableViewsIdxSet: (idx: number) => void;
     setCameraID: (id: CameraViewId) => void;
@@ -42,8 +48,11 @@ const PilotMode: React.FC<PilotModeProps> = ({
     tabContent,
     activeMainGroupTab,
     setActiveMainGroupTab,
+    velocityScale,
     onVelocityScaleChange,
+    actionMode,
     setActionMode,
+    pilotControlsCurrent,
     setPilotControlsCurrent,
     swipeableViewsIdxSet,
     setCameraID,
@@ -164,19 +173,17 @@ const PilotMode: React.FC<PilotModeProps> = ({
                 <PilotControlsToggle
                     onChange={setPilotControlsCurrent}
                     isCameraVeilVisible={isCameraVeilVisible || isFlyingGripper}
-                    pilotControlsCurrent={
-                        FunctionProvider.pilotControlsCurrent
-                    }
+                    pilotControlsCurrent={pilotControlsCurrent}
                 />
             </div>
             <FooterPilotMode
                 cameraID={cameraID}
                 setCameraID={setCameraID}
                 // Action Speed
-                actionSpeedCurrent={FunctionProvider.velocityScale}
+                actionSpeedCurrent={velocityScale}
                 onActionSpeedChange={onVelocityScaleChange}
                 // Action Mode
-                actionModeCurrent={FunctionProvider.actionMode}
+                actionModeCurrent={actionMode}
                 onActionModeChange={setActionMode}
                 // Camera Veil
                 isCameraVeilVisible={isCameraVeilVisible}

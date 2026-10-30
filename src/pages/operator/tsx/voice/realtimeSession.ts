@@ -1522,8 +1522,7 @@ export async function connectOpenAIRealtimeVoice(
                 };
             }
 
-            voiceProvider.disableActiveButton();
-            flyingGripperFunctionProvider.disableActiveButton();
+            FunctionProvider.stopAllActions(true);
 
             const speed =
                 typeof rawArgs.speed === "string" &&

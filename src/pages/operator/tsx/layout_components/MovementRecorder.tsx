@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useCallback, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { movementRecorderFunctionProvider } from "operator/tsx/index";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked";
 import IconRecord from "operator/icons/Record.svg";
 import IconRecordPressed from "operator/icons/Record_Pressed.svg";
@@ -238,6 +239,9 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
 
     useEffect(() => {
         movementRecorderFunctionProvider.setModalOpenHandler((open) => {
+            if (open) {
+                FunctionProvider.stopAllActions(true);
+            }
             isModalOpenSet(open);
             props.setCameraVeilCallback?.(open);
         });
@@ -817,6 +821,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
     );
 
     const handleToggleModal = useCallback(() => {
+        FunctionProvider.stopAllActions(true);
         const newModalState = !isModalOpen;
         isModalOpenSet(newModalState);
         props.setCameraVeilCallback?.(newModalState);

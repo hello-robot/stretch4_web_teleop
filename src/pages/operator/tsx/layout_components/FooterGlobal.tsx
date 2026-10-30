@@ -26,6 +26,7 @@ import {
     runStopFunctionProvider,
     underMapFunctionProvider,
 } from "..";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
 import { UnderMapButton } from "../function_providers/UnderMapFunctionProvider";
 import {
@@ -110,6 +111,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 clearTimeout(localizeSuccessTimeoutRef.current);
             }
             localizeSuccessTimeoutRef.current = setTimeout(() => {
+                FunctionProvider.stopAllActions(true);
                 onSceneSelectedChange("autonav");
                 swipeableViewsIdxSet(1);
                 isMainMenuOpenSet(false);
@@ -138,6 +140,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         if (localizeStatusRef.current === "loading") {
             return;
         }
+        FunctionProvider.stopAllActions(true);
         if (localizeSuccessTimeoutRef.current) {
             clearTimeout(localizeSuccessTimeoutRef.current);
         }
@@ -283,6 +286,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
+        FunctionProvider.stopAllActions(true);
         // Action-only items run their handler without switching the active scene.
         if (scene.id === "localize-aruco") {
             if (localizeStatus === "loading") {
@@ -313,7 +317,13 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             <div className="scene-menu-button-container">
                 <button
                     className="scene-menu-button"
-                    onPointerDown={() => isMainMenuOpenSet(true)}
+                    onPointerDown={() => {
+                        FunctionProvider.stopAllActions(true);
+                    }}
+                    onClick={() => {
+                        FunctionProvider.stopAllActions(true);
+                        isMainMenuOpenSet(true);
+                    }}
                 >
                     {/* @flag voice_control_interface */}
                     {voiceSvc ? (

@@ -96,9 +96,7 @@ export async function executeSavePose(
     }
 
     // 1. Stop any ongoing robot motion first
-    if (voiceProvider?.buttonFunctionProvider) {
-        voiceProvider.buttonFunctionProvider.stopCurrentAction(true);
-    }
+    FunctionProvider.stopAllActions(true);
     FunctionProvider.remoteRobot?.stopTrajectory();
 
     const recordFn = movementRecorderFunctionProvider.provideFunctions(
