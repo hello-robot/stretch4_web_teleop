@@ -120,7 +120,7 @@
     padding: 21px 25px 25px;
     display: flex;
     flex-direction: column;
-    gap: 30px;
+    gap: 28px;
     border-radius: 10px;
     border: 1px solid transparent;
     transition:
@@ -283,10 +283,21 @@
 /* Status pill ------------------------------------------------------------ */
 
 .hr-pill {
+    position: relative;
+    right: -4px;
     display: flex;
     align-items: center;
     gap: 7px;
+    margin: 0;
+    padding: 9px 13px 9px 11px;
+    border: 0;
     border-radius: 100px;
+    outline: 1.3px solid hsl(204, 51%, 18%);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    appearance: none;
+    cursor: pointer;
 }
 
 .hr-pill__dot {
@@ -309,8 +320,8 @@
 .hr-pill__dot-flat {
     position: absolute;
     inset: 0;
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
 }
 
 .hr-pill__text {
@@ -368,6 +379,7 @@
     align-items: center;
     justify-content: space-between;
     height: 19px;
+    padding-right: 9px;
 }
 
 .hr-row__main {
@@ -381,6 +393,7 @@
     flex-shrink: 0;
     width: 16px;
     height: 16px;
+    opacity: 65%;
 }
 
 .hr-row__label {

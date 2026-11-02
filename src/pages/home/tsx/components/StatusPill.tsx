@@ -37,11 +37,11 @@ const PILLS: Record<RobotPresence, PillSpec> = {
 export const StatusPill = ({ presence }: { presence: RobotPresence }) => {
     const spec = PILLS[presence];
     return (
-        <div className="hr-pill">
+        <button type="button" className="hr-pill">
             <span className="hr-pill__dot">
                 <img alt="" className={spec.dotClass} src={spec.dot} />
             </span>
             <span className={`hr-pill__text ${spec.textClass}`}>{spec.label}</span>
-        </div>
+        </button>
     );
 };
