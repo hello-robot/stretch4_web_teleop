@@ -12,6 +12,7 @@ import batteryIconCharging5 from "../../icons/battery-5-charging.svg";
 
 export type BatteryStateFunctions = {
     getBatteryIcon: () => string;
+    getBatteryColor: () => string;
     getPercentage: () => number;
 };
 
@@ -48,6 +49,32 @@ export class BatteryStateFunctionProvider extends FunctionProvider {
             return this.isCharging ? batteryIconCharging1 : batteryIcon1;
         }
     }
+
+    /**
+     * Determines the display color for the battery percentage text matching the icon colors.
+     *
+     * Returns:
+     *     Light blue (#4abaff) for >40%, yellow (#ffd42a) for 20-40%, and red (#ff0000) for 0-20%.
+     */
+    public getBatteryColor(): string {
+        if (this.percentage > 0.4) {
+            return "#4abaff";
+        } else if (this.percentage > 0.2) {
+            return "#ffd42a";
+        } else {
+            return "#ff0000";
+        }
+    }
+
+    /**
+     * Returns the battery charge level as an integer percentage from 0 to 100.
+     *
+     * Returns:
+     *     Battery percentage clamped between 0 and 100.
+     */
+    public getPercentage(): number {
+        return Math.min(100, Math.max(0, Math.round(this.percentage * 100)));
+    }
     /**
      * Records a callback from the function provider. The callback is called
      * whenever the battery voltage changes.
@@ -65,7 +92,8 @@ export class BatteryStateFunctionProvider extends FunctionProvider {
     public provideFunctions(): BatteryStateFunctions {
         return {
             getBatteryIcon: () => this.getBatteryIcon(),
-            getPercentage: () => Math.round(this.percentage * 100)
+            getBatteryColor: () => this.getBatteryColor(),
+            getPercentage: () => this.getPercentage()
         };
     }
 }

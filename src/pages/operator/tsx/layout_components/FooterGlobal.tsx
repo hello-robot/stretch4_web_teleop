@@ -319,7 +319,17 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     return (
         <div className="footer-global">
             <div className="battery-container">
-                <img src={batteryFuncts.getBatteryIcon()} alt="Battery" className="battery" />
+                <span
+                    className="battery-percentage"
+                    style={{ color: batteryFuncts.getBatteryColor() }}
+                >
+                    {batteryFuncts.getPercentage()}%
+                </span>
+                <img
+                    src={batteryFuncts.getBatteryIcon()}
+                    alt="Battery"
+                    className="battery"
+                />
             </div>
             <div className="scene-menu-button-container">
                 <button
