@@ -94,6 +94,10 @@ export abstract class LoginHandler {
         return Promise.resolve();
     }
 
+    public requestRobotShutdown(robo_uid: string): Promise<void> {
+        return Promise.resolve();
+    }
+
     /** Persist the map the robot should load on its next launch. */
     public setRobotMap(robo_uid: string, mapId: string | null): Promise<void> {
         return Promise.resolve();

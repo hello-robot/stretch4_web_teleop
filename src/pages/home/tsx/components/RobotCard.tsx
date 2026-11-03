@@ -101,6 +101,12 @@ const glowFor = (status: RobotStatus, beat: boolean): CardGlow | null => {
     return null;
 };
 
+/** A busy control node rejects the write. Say that, not "permission denied". */
+const controlError = (what: string, message: string) =>
+    /PERMISSION_DENIED/i.test(message)
+        ? `${what} failed: the robot is handling another launch or stop, or you are not assigned to it. Try again in a moment.`
+        : `${what} failed: ${message}`;
+
 export const RobotCard = ({
     uid,
     robot,
@@ -244,12 +250,17 @@ export const RobotCard = ({
             // queued. That arrives as PERMISSION_DENIED, which otherwise reads
             // as an access problem on a robot the user can plainly see.
             const message = err instanceof Error ? err.message : String(err);
-            onError(
-                /PERMISSION_DENIED/i.test(message)
-                    ? `${what} failed: the robot is handling another launch or stop, or you are not assigned to it. Try again in a moment.`
-                    : `${what} failed: ${message}`
-            );
+            onError(controlError(what, message));
         }
+    };
+
+    const confirmShutdown = () => {
+        pillPhaseSet("shutting-down");
+        loginHandler.requestRobotShutdown(uid).catch((err) => {
+            pillPhaseSet((phase) => (phase === "shutting-down" ? "shutdown" : phase));
+            const message = err instanceof Error ? err.message : String(err);
+            onError(controlError("Shutdown", message));
+        });
     };
 
     useEffect(() => {
@@ -313,7 +324,7 @@ export const RobotCard = ({
                     phase={pillPhase}
                     reduceMotion={reduceMotion}
                     onArm={() => pillPhaseSet("shutdown")}
-                    onConfirm={() => pillPhaseSet("shutting-down")}
+                    onConfirm={confirmShutdown}
                     pillRef={pillRef}
                 />
             </header>
