@@ -141,10 +141,33 @@ export const isUnreleasedBuild = (robot: RobotRecord): boolean =>
     Boolean(robot.build) && !(robot.build?.rail && RAIL.test(robot.build.rail));
 
 /**
+ * The line the card shows about an unreleased checkout, or null for silence.
+ *
+ * Names the destination, which differs by deployment: a rail when a stable
+ * release is set, and the unversioned page when it is not.
+ *
+ * @param robot Record the card was rendered from.
+ * @param rail Rail the card resolved, from railFor.
+ */
+export const buildWarning = (
+    robot: RobotRecord,
+    rail: string | null
+): string | null => {
+    if (!isUnreleasedBuild(robot)) return null;
+    const tail =
+        "which may not match what the robot is running — test this branch on" +
+        " its preview channel instead.";
+    return rail
+        ? `This checkout is not a release. This card opens the stable interface (${rail}), ${tail}`
+        : `This checkout is not a release. This card opens the default interface, ${tail}`;
+};
+
+/**
  * Where the Connect control sends the operator.
  *
- * A robot reporting no rail keeps the unversioned page, which is every robot
- * until it publishes a build naming a release tag.
+ * A card that resolves no rail keeps the unversioned page, which is every card
+ * until a stable release is set, and every card on an origin that serves no
+ * rails at all.
  */
 export const operatorHref = (robot: RobotRecord, name: string): string => {
     const query = `?robot=${encodeURIComponent(name)}`;

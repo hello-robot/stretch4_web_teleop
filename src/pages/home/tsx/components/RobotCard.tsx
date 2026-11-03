@@ -10,7 +10,7 @@ import { loginHandler } from "../index";
 import {
     buildLabel,
     buildTitle,
-    isUnreleasedBuild,
+    buildWarning,
     CardTone,
     holdsOperatorSeat,
     MapIndex,
@@ -142,7 +142,7 @@ export const RobotCard = ({
 
     const name = robot.name || uid;
     const rail = railFor(robot);
-    const unreleasedBuild = isUnreleasedBuild(robot);
+    const warning = buildWarning(robot, rail);
     const railAvailable = useRailAvailable(rail);
     const status = normalizeStatus(robot.status);
     const presence = presenceFor(status, seat !== null);
@@ -386,14 +386,8 @@ export const RobotCard = ({
                                 });
                         }}
                     />
-                    {unreleasedBuild && (
-                        <p className="hr-card__build-warning">
-                            This checkout is not a release. Opening the stable
-                            interface
-                            {rail ? ` (${rail})` : ""}, which may not match what
-                            the robot is running — test this branch on its
-                            preview channel instead.
-                        </p>
+                    {warning && (
+                        <p className="hr-card__build-warning">{warning}</p>
                     )}
                     <BranchTag
                         branch={buildLabel(robot)}
