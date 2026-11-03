@@ -56,7 +56,7 @@
         "firebase:login": "firebase login --reauth",
         "test:p1-p2": "node --test test/p1-p2-regressions.test.js",
         "test:security:source": "node --test test/security/source-security.test.js",
-        "test:firebase-rules": "firebase emulators:exec --only database --project demo-stretch4-rules \"node --test test/security/firebase-database-rules.test.mjs\"",
+        "test:firebase-rules": "firebase emulators:exec --only database --project demo-interface-rules \"node --test test/security/firebase-database-rules.test.mjs\"",
         "test:security": "npm run test:security:source && npm run test:firebase-rules",
         "watch-transcribe-model": "node scripts/watch_transcribe_model.js",
         "watch-realtime-model": "node scripts/watch_realtime_model.js",
