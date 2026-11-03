@@ -5,8 +5,16 @@ RULE_FILE="/etc/sudoers.d/stretch_poweroff"
 # Use ALL to allow any user, or %users / %sudo to restrict to a group
 RULE_CONTENT="ALL ALL=(root) NOPASSWD: /bin/systemctl poweroff, /usr/bin/systemctl poweroff"
 
-# 1. Check if the specific command is already permitted without a password
-if sudo -n -l /usr/bin/systemctl poweroff &>/dev/null || sudo -n -l /bin/systemctl poweroff &>/dev/null; then
+# `sudo -n -l systemctl poweroff` only means the command is allowed. On a
+# robot that still needs a password, that check passes and the rule is never
+# written. Only a NOPASSWD / !authenticate entry counts.
+if sudo -n -ll 2>/dev/null | awk '
+	/^Sudoers entry:/ { noauth = 0 }
+	/Options:.*!authenticate/ || /NOPASSWD:/ { noauth = 1 }
+	noauth && /systemctl poweroff/ { found = 1 }
+	END { exit found ? 0 : 1 }
+'; then
+	echo "Shutdown permissions already configured."
 	exit 0
 fi
 
