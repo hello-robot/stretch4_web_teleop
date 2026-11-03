@@ -12,12 +12,25 @@ const PUBLIC_WEBPACK_ENV_KEYS = Object.freeze([
     "HELLO_FLEET_ID",
 ]);
 
+/**
+ * DefinePlugin entries for the keys a browser bundle may see.
+ *
+ * .env wins, and the process environment answers for anything it does not
+ * define, so a release job can export a value for one build without rewriting
+ * the file every robot also reads.
+ *
+ * @param {Record<string, string>} env Parsed .env contents.
+ * @returns {Record<string, string>} DefinePlugin replacements.
+ */
 function webpackPublicEnvDefinitions(env) {
     return Object.fromEntries(
-        PUBLIC_WEBPACK_ENV_KEYS.map((key) => [
-            `process.env.${key}`,
-            env[key] === undefined ? "undefined" : JSON.stringify(env[key]),
-        ]),
+        PUBLIC_WEBPACK_ENV_KEYS.map((key) => {
+            const value = env[key] ?? process.env[key];
+            return [
+                `process.env.${key}`,
+                value === undefined ? "undefined" : JSON.stringify(value),
+            ];
+        }),
     );
 }
 

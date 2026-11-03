@@ -51,6 +51,8 @@
         "styleguide": "styleguidist server",
         "firebase": "webpack --mode development --progress --env storage='firebase'",
         "build:firebase": "webpack --mode production --progress --env storage='firebase'",
+        "build:lobby": "webpack --mode production --progress --env storage='firebase' --env pages=home",
+        "build:rail": "webpack --mode production --progress --env storage='firebase' --env pages=operator",
         "deploy:firebase-preview-channel": "node scripts/syncFirebaseRc.js && npm run build:firebase && ./node_modules/.bin/firebase deploy --only database && node scripts/deployPreviewChannel.js",
         "deploy:firebase": "node scripts/deployLive.js",
         "firebase:login": "firebase login --reauth",

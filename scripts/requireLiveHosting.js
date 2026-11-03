@@ -15,6 +15,7 @@
 const fs = require("fs");
 const path = require("path");
 const { hostingChannel } = require("./hostingChannel");
+const { isReleaseTag } = require("./releaseTag");
 const { envProjectId } = require("./syncFirebaseRc");
 
 const repoRoot = path.join(__dirname, "..");
@@ -74,10 +75,41 @@ function ancestorCommand() {
     return lines.join("\n");
 }
 
+/**
+ * Whether this checkout is a clean tree sitting exactly on a release tag.
+ *
+ * @param {string} repoRoot Directory to inspect.
+ * @returns {string|null} The tag, or null when this is not a release checkout.
+ */
+function releaseCheckout(repoRoot) {
+    const { execFileSync } = require("child_process");
+    const git = (args) => {
+        try {
+            return execFileSync("git", args, {
+                cwd: repoRoot,
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "ignore"],
+            }).trim();
+        } catch {
+            return null;
+        }
+    };
+    if (git(["status", "--porcelain"]) !== "") return null;
+    const tag = git(["describe", "--tags", "--exact-match", "--match", "v*"]);
+    return isReleaseTag(tag) ? tag : null;
+}
+
 requireMatchingProject();
 
 const ancestors = ancestorCommand();
 if (ancestors.includes("hosting:channel:deploy")) {
+    process.exit(0);
+}
+
+// A release deploy runs from a tag, so HEAD is detached and hostingChannel()
+// below would refuse it. A clean checkout sitting exactly on a release tag
+// names a commit anyone can check out, which is what the gate is protecting.
+if (releaseCheckout(repoRoot)) {
     process.exit(0);
 }
 

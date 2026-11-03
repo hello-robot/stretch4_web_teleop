@@ -17,6 +17,7 @@ const {
     spawnProcessGroup,
     terminateProcessGroup,
 } = require('./launchProcessGroup');
+const { isReleaseTag } = require('./releaseTag');
 
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
@@ -294,9 +295,6 @@ function publishBranch() {
         .catch((err) => console.error('[DAEMON] Error updating branch:', err.message));
 }
 
-/** Release tags only. Mirrors the .validate on robots/<fleetId>/build/rail. */
-const RELEASE_TAG = /^v\d+\.\d+\.\d+(-(alpha|beta|rc)\d+)?$/;
-
 /**
  * Read the build identity of the checkout the interface launches from.
  *
@@ -318,7 +316,7 @@ function readGitBuild() {
                 const describe = stdout.trim();
                 if (!describe) return resolve(null);
                 return resolve(
-                    RELEASE_TAG.test(describe)
+                    isReleaseTag(describe)
                         ? { describe, rail: describe }
                         : { describe },
                 );

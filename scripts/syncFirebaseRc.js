@@ -29,7 +29,12 @@ const rcPath = path.join(repoRoot, ".firebaserc");
 function envProjectId() {
     const parsed =
         dotenv.config({ path: path.join(repoRoot, ".env") }).parsed || {};
-    return (parsed.PUBLIC_FIREBASE_PROJECT_ID || "").trim();
+    // A release runner has no .env; its values arrive as environment entries.
+    const value =
+        parsed.PUBLIC_FIREBASE_PROJECT_ID ||
+        process.env.PUBLIC_FIREBASE_PROJECT_ID ||
+        "";
+    return value.trim();
 }
 
 /**
