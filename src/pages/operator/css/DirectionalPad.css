@@ -5,11 +5,12 @@
     /* This defines the size of ButtonPad */
     --size: 17vh;
 
+    /* Surface tokens are shared with FlyingGripperPad via :root --pad-* (index.css) */
     /* This defines the width of ButtonPad's borders */
-    --border-width: 4px;
+    --border-width: var(--pad-border-width);
 
     /* This defines the style of ButtonPad's borders */
-    --border-style: ridge;
+    --border-style: var(--pad-border-style);
 
     /* Size of the icon */
     --size-icon: calc(var(--size) * 0.25);
@@ -21,13 +22,11 @@
     --width-turn-button: calc(var(--size) / 2);
     --height-turn-button: var(--size);
 
-    /* Border-color's opacity */
-    --border-color-opacity: 75%;
     /* This is the border-color */
-    --border-color: hsl(0deg 0% 100% / var(--border-color-opacity));
+    --border-color: var(--pad-border-color);
 
     /* This provides the "glow" effect around the edges of the buttons*/
-    --box-shadow: 0px 0px calc(var(--size) / 10) 0px hsl(204deg 100% 98% / 30%);
+    --box-shadow: 0px 0px calc(var(--size) / 10) 0px var(--pad-glow-color);
 }
 
 /* START More fine-grained control for buttonpad positioning */
@@ -129,7 +128,7 @@
 
 /* START <button> active */
 .button-wrapper div.button-cardinal.active {
-    box-shadow: 0px 0px 10px 0px hsl(204deg 100% 50%);
+    box-shadow: var(--pad-active-glow);
 }
 
 .button-wrapper div.button-cardinal.active,
@@ -140,6 +139,81 @@
 }
 
 /* END <button> active */
+
+/* Collision and Limit button state styles */
+.button-wrapper div.button-cardinal.collision,
+.button-wrapper.collision div.button-cardinal,
+.button-turn-wrapper.collision {
+    mix-blend-mode: normal !important;
+    cursor: not-allowed !important;
+    filter: none !important;
+    border-style: double;
+    box-shadow: inset 0px 0px 30px 0px hsl(34deg 100% 50% / 100%) !important;
+    border-color: hsl(34deg 100% 50% / 50%) !important;
+}
+
+.button-wrapper div.button-cardinal.limit,
+.button-wrapper.limit div.button-cardinal,
+.button-turn-wrapper.limit {
+    mix-blend-mode: normal !important;
+    cursor: not-allowed !important;
+    filter: none !important;
+    box-shadow: inset 0px 0px 50px 0px hsl(0deg 100% 50% / 50%) !important;
+    border-style: none !important;
+    opacity: 1 !important;
+}
+
+.button-cardinal.collision span.synthetic-bottom-border {
+    box-shadow: 0px 0px 30px -10px hsl(34deg 100% 50% / 100%) !important;
+    border-color: hsl(34deg 100% 50% / 50%) !important;
+    border-style: double;
+}
+
+.button-cardinal.limit span.synthetic-bottom-border {
+    box-shadow: 0px 0px 30px 0px hsl(0deg 100% 50% / 50%) !important;
+    border-color: hsl(34deg 100% 50% / 75%) !important;
+}
+
+/* Ensure foreground icon buttons stay transparent so brightness filter does not
+ wash out red/orange background */
+.button-wrapper button.button-arm-gripper.collision,
+.button-wrapper button.button-arm-gripper.limit,
+.button-wrapper button.button-wrist.collision,
+.button-wrapper button.button-wrist.limit,
+.button-wrapper button.button-chevron.collision,
+.button-wrapper button.button-chevron.limit,
+.button-wrapper.collision button,
+.button-wrapper.limit button,
+.button-turn-wrapper.collision button,
+.button-turn-wrapper.limit button,
+.button-turn-wrapper.limit button:disabled,
+.button-turn-wrapper.collision button:disabled {
+    background-color: transparent !important;
+    background: transparent !important;
+    filter: none !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    z-index: 10 !important;
+}
+
+/* Crisp white icon image sitting on top of the red/orange button background */
+.button-wrapper.limit img,
+.button-wrapper.collision img,
+.button-turn-wrapper.limit img,
+.button-turn-wrapper.collision img,
+button.limit img,
+button.collision img {
+    filter: var(--pad-icon-filter-idle) !important;
+    z-index: 11 !important;
+    position: relative !important;
+    opacity: 1 !important;
+}
+
+/* Grey out icons for disabled buttons */
+.base-movement-controls button:disabled img {
+    filter: saturate(0) brightness(1.5) !important;
+    opacity: 0.3 !important;
+}
 
 .button-wrapper div.button-cardinal span.synthetic-bottom-border {
     position: absolute;
@@ -184,7 +258,7 @@
     padding: 0px;
     height: var(--size-icon);
     width: var(--size-icon);
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
     background-color: transparent;
     box-shadow: none;
@@ -201,7 +275,7 @@
 }
 
 .button-wrapper.active button.button-chevron {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .button-wrapper.east button.button-chevron {
@@ -236,7 +310,7 @@
     position: absolute;
     transform: translate(-50%, -50%);
     padding: 0px;
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
     background-color: transparent;
     box-shadow: none;
@@ -248,7 +322,7 @@
 
 /* Emulated :active */
 .button-wrapper.active button.button-arm-gripper {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .button-wrapper button.button-arm-gripper img {
@@ -295,7 +369,7 @@ button.Arm.\+.Gripper.button-turn img {
     position: absolute;
     transform: translate(-50%, -50%);
     padding: 0px;
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
     background-color: transparent;
     box-shadow: none;
@@ -307,7 +381,7 @@ button.Arm.\+.Gripper.button-turn img {
 
 /* Emulated :active */
 .button-wrapper.active button.button-wrist {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .button-wrapper button.button-wrist img {
@@ -366,7 +440,7 @@ button.Arm.\+.Gripper.button-turn img {
     padding: 0px;
     cursor: pointer;
     box-shadow: inset var(--box-shadow);
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
 }
 
@@ -376,8 +450,8 @@ button.Arm.\+.Gripper.button-turn img {
 
 .base-movement-controls .rbutton-pad .button-turn-wrapper.active {
     mix-blend-mode: screen;
-    border: 1px solid hsla(204, 100%, 50%, 1);
-    filter: saturate(1) brightness(1);
+    border: var(--pad-active-border);
+    filter: var(--pad-icon-filter-active);
 }
 
 .base-movement-controls .rbutton-pad .button-turn-wrapper.rotate-left {
@@ -410,7 +484,7 @@ button.Arm.\+.Gripper.button-turn img {
     background-color: transparent;
     box-shadow: none;
     outline: none;
-    filter: saturate(0) brightness(3);
+    filter: var(--pad-icon-filter-idle);
     transition: filter 300ms ease-out;
 }
 .base-movement-controls
@@ -427,7 +501,7 @@ button.Arm.\+.Gripper.button-turn img {
     .rbutton-pad
     .button-turn-wrapper.active
     button.button-turn {
-    filter: saturate(1) brightness(1);
+    filter: var(--pad-icon-filter-active);
 }
 
 .base-movement-controls

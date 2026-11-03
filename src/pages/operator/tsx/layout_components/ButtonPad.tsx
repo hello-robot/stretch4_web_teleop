@@ -1,17 +1,35 @@
+import "operator/css/ButtonPad.css";
+import armDownIcon from "operator/icons/ArmDown.svg";
+import armExtendIcon from "operator/icons/ArmExtend.svg";
+import armRetractIcon from "operator/icons/ArmRetract.svg";
+import armUpIcon from "operator/icons/ArmUp.svg";
+import chevronIcon from "operator/icons/Chevron.svg";
+import gripperCloseIcon from "operator/icons/GripperClose.svg";
+import gripperOpenIcon from "operator/icons/GripperOpen.svg";
+import rotateLeftIcon from "operator/icons/RotateLeft.svg";
+import rotateRightIcon from "operator/icons/RotateRight.svg";
+import wristPitchDownIcon from "operator/icons/WristPitchDown.svg";
+import wristPitchUpIcon from "operator/icons/WristPitchUp.svg";
+import wristRollLeftIcon from "operator/icons/WristRollLeft.svg";
+import wristRollRightIcon from "operator/icons/WristRollRight.svg";
+import wristYawLeftIcon from "operator/icons/WristYawLeft.svg";
+import wristYawRightIcon from "operator/icons/WristYawRight.svg";
+import { buttonFunctionProvider } from "operator/tsx/index";
 import React from "react";
+import { isMobile } from "react-device-detect";
+import { className, ToolMetadata } from "shared/util";
 import {
-    CustomizableComponentProps,
-    SharedState,
-    isSelected,
-} from "./CustomizableComponent";
+    ButtonFunctions,
+    ButtonPadButton,
+    ButtonState,
+} from "../function_providers/ButtonFunctionProvider";
+import DirectionalPad from "../static_components/DirectionalPad";
 import {
     ButtonPadDefinition,
     ButtonPadId,
     ButtonPadIdMobile,
     PilotButtonPadType,
 } from "../utils/component_definitions";
-import { className } from "shared/util";
-import { buttonFunctionProvider } from "operator/tsx/index";
 import {
     ButtonPadShape,
     getIcon,
@@ -19,28 +37,10 @@ import {
     SVG_RESOLUTION,
 } from "../utils/svg";
 import {
-    ButtonFunctions,
-    ButtonPadButton,
-    ButtonState,
-} from "../function_providers/ButtonFunctionProvider";
-import { isMobile } from "react-device-detect";
-import "operator/css/ButtonPad.css";
-import DirectionalPad from "../static_components/DirectionalPad";
-import chevronIcon from "operator/icons/Chevron.svg";
-import rotateLeftIcon from "operator/icons/RotateLeft.svg";
-import rotateRightIcon from "operator/icons/RotateRight.svg";
-import gripperCloseIcon from "operator/icons/GripperClose.svg";
-import gripperOpenIcon from "operator/icons/GripperOpen.svg";
-import armUpIcon from "operator/icons/ArmUp.svg";
-import armDownIcon from "operator/icons/ArmDown.svg";
-import armExtendIcon from "operator/icons/ArmExtend.svg";
-import armRetractIcon from "operator/icons/ArmRetract.svg";
-import wristPitchUpIcon from "operator/icons/WristPitchUp.svg";
-import wristPitchDownIcon from "operator/icons/WristPitchDown.svg";
-import wristYawLeftIcon from "operator/icons/WristYawLeft.svg";
-import wristYawRightIcon from "operator/icons/WristYawRight.svg";
-import wristRollLeftIcon from "operator/icons/WristRollLeft.svg";
-import wristRollRightIcon from "operator/icons/WristRollRight.svg";
+    CustomizableComponentProps,
+    isSelected,
+    SharedState,
+} from "./CustomizableComponent";
 
 /** Properties for {@link ButtonPad} */
 type ButtonPadProps = CustomizableComponentProps & {
@@ -305,7 +305,17 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
     const functs: ButtonFunctions = buttonFunctionProvider.provideFunctions(
         props.funct
     );
-    const clickProps = props.sharedState.customizing
+    const disabledDueToNotHomed =
+        !props.sharedState.robotIsHomed &&
+        notHomedDisabledFunctions.has(props.funct);
+    const isGripperBtn = props.funct === ButtonPadButton.GripperOpen || props.funct === ButtonPadButton.GripperClose;
+    const toolMetadata: ToolMetadata | undefined = props.sharedState.toolMetadata;
+    const gripperDisabled = isGripperBtn && toolMetadata?.isActuated === false;
+    const isRunStopped = Boolean(props.sharedState.isRunStopped);
+
+    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled || isRunStopped;
+
+    const clickProps = isDisabled
         ? {}
         : {
             onPointerDown: functs.onClick,
@@ -313,16 +323,10 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
             onPointerCancel: functs.onRelease,
             onPointerLeave: functs.onLeave,
         };
+
     const buttonState: ButtonState =
         props.sharedState.buttonStateMap?.get(props.funct) ||
         ButtonState.Inactive;
-    const disabledDueToNotHomed =
-        props.sharedState.robotIsHomed &&
-        notHomedDisabledFunctions.has(props.funct);
-    // Handle the case where the button
-    // is disabled due to not being homed
-    // but remember: it's distinct from aria-hidden!
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed;
     const cardinalDirections = ["north", "south", "west", "east"];
     const rotateDirections = ["rotate-left", "rotate-right"];
     const getAriaLabel = (direction: string): string => {
@@ -430,7 +434,7 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
         }
     }
 
-     const wristIconCalc = (direction: string): string => {
+    const wristIconCalc = (direction: string): string => {
         switch (direction) {
             case "north":
                 return wristPitchUpIcon;
@@ -462,7 +466,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     type="button"
                     tabIndex={0}
-                    {...clickProps}
                 >
                     <img
                         src={getRotateIcon(pilotControlsCurrent, props.direction)}
@@ -492,7 +495,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     tabIndex={0}
                     disabled={isDisabled}
-                    {...clickProps}
                 >
                     <img
                         src={chevronIcon}
@@ -507,7 +509,7 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
         );
         // Both of the buttons in the center of dpad
 
-    // Arm + Hand
+        // Arm + Hand
     } else if (isArmGripperButtons) {
         return (
             <div
@@ -525,7 +527,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     tabIndex={0}
                     disabled={isDisabled}
-                    {...clickProps}
                 >
                     <img
                         src={armGripperIconCalc(props.direction)}
@@ -537,7 +538,7 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                 </button>
             </div>
         );
-    // Both of the buttons in the center of dpad
+        // Both of the buttons in the center of dpad
     } else if (isWristButtons) {
         return (
             <div
@@ -555,7 +556,6 @@ const DirectionalButton = (props: DirectionalButtonProps) => {
                     aria-label={ariaLabel}
                     tabIndex={0}
                     disabled={isDisabled}
-                    {...clickProps}
                 >
                     <img
                         src={wristIconCalc(props.direction)}
@@ -587,7 +587,17 @@ const SingleButton = (props: SingleButtonProps) => {
     const functs: ButtonFunctions = buttonFunctionProvider.provideFunctions(
         props.funct
     );
-    const clickProps = props.sharedState.customizing
+    const disabledDueToNotHomed =
+        !props.sharedState.robotIsHomed &&
+        notHomedDisabledFunctions.has(props.funct);
+    const isGripperBtn = props.funct === ButtonPadButton.GripperOpen || props.funct === ButtonPadButton.GripperClose;
+    const toolMetadata: ToolMetadata | undefined = props.sharedState.toolMetadata;
+    const gripperDisabled = isGripperBtn && toolMetadata?.isActuated === false;
+    const isRunStopped = Boolean(props.sharedState.isRunStopped);
+
+    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed || gripperDisabled || isRunStopped;
+
+    const clickProps = isDisabled
         ? {}
         : {
             onMouseDown: functs.onClick,
@@ -603,10 +613,6 @@ const SingleButton = (props: SingleButtonProps) => {
     const width = isMobile ? 75 : 85;
     const x = props.iconPosition.x - width / 2;
     const y = props.iconPosition.y - height / 2;
-    const disabledDueToNotHomed =
-        props.sharedState.robotIsHomed &&
-        notHomedDisabledFunctions.has(props.funct);
-    const isDisabled = props.sharedState.customizing || disabledDueToNotHomed;
 
     return (
         <React.Fragment>

@@ -1,38 +1,51 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 import "robot/css/index.css";
-import { Robot } from "../../robot/tsx/robot";
-import { WebRTCConnection } from "../../../shared/webrtcconnections";
+import { Transform } from "roslib";
 import {
-    navigationProps,
-    gripperProps,
-    audioProps,
-    WebRTCMessage,
-    ValidJointStateDict,
-    ValidJointStateMessage,
-    ModeMessage,
-    IsHomedMessage,
-    IsRunStoppedMessage,
-    RobotPose,
-    ROSOccupancyGrid,
-    OccupancyGridMessage,
-    MapPoseMessage,
+    FEATURE_VOICE_CONTROL_INTERFACE,
+    FEATURE_VOICE_INPUT_RECORDING,
+} from "shared/featureFlags";
+import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
+import {
     ActionState,
     ActionStateMessage,
+    audioProps,
     BatteryState,
     BatteryStateMessage,
     delay,
+    gripperProps,
+    IsHomedMessage,
+    IsRunStoppedMessage,
+    LeaseStatusMessage,
+    MapPoseMessage,
+    MaxEeSpeedMessage,
+    ModeMessage,
+    navigationProps,
+    OccupancyGridMessage,
+    OccupancyGridUnavailableMessage,
+    OdomMessage,
+    parseToolMetadata,
+    RobotPose,
+    ROSOccupancyGrid,
+    ROSOdometry,
+    ValidJointStateDict,
+    ValidJointStateMessage,
+    VoiceCapabilityMessage,
+    VoiceTokenMessage,
+    WebRTCMessage,
 } from "shared/util";
-import { AllVideoStreamComponent, VideoStream } from "./videostreams";
-import { AudioStream } from "./audiostreams";
-import ROSLIB from "roslib";
 import { StretchToolMessage } from "../../../shared/util";
-import { loginFirebaseSignalerAsRobot } from "shared/signaling/get_signaler";
+import { WebRTCConnection } from "../../../shared/webrtcconnections";
+import { Robot } from "../../robot/tsx/robot";
+import { AudioStream } from "./audiostreams";
+import { AllVideoStreamComponent, VideoStream } from "./videostreams";
 
 export const robot = new Robot({
     jointStateCallback: forwardJointStates,
     batteryStateCallback: forwardBatteryState,
     occupancyGridCallback: forwardOccupancyGrid,
+    occupancyGridUnavailableCallback: forwardOccupancyGridUnavailable,
+    odomCallback: forwardOdom,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
     playbackPosesResultCallback: (goalState: ActionState) =>
@@ -42,6 +55,8 @@ export const robot = new Robot({
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
     stretchToolCallback: forwardStretchTool,
+    leaseStatusCallback: forwardLeaseStatus,
+    maxEeSpeedCallback: forwardMaxEeSpeed,
 });
 
 export let connection: WebRTCConnection;
@@ -55,7 +70,6 @@ connection = new WebRTCConnection({
     polite: false,
     onRobotConnectionStart: handleSessionStart,
     onMessage: handleMessage,
-    onConnectionEnd: disconnectFromRobot,
 });
 robot.setOnRosConnectCallback(async () => {
     robot.subscribeToVideo({
@@ -70,15 +84,21 @@ robot.setOnRosConnectCallback(async () => {
     });
     gripperStream.start();
 
-    audioStream.start();
+    await audioStream.start().catch((err) => {
+        console.error("AudioStream start failed:", err);
+    });
 
     robot.getOccupancyGrid();
-    robot.getJointLimits();
 
     console.log(
         "Waiting for configured signaler (i.e. logging in if using Firebase)"
     );
-    await loginFirebaseSignalerAsRobot();
+    try {
+        await loginFirebaseSignalerAsRobot();
+        console.log("Firebase login successful!");
+    } catch (e) {
+        console.error("Firebase login FAILED:", e);
+    }
     await connection.configure_signaler("");
     console.log("Signaler ready! Joining room.");
     let joinedRobotRoom = await connection.joinRobotRoom();
@@ -91,7 +111,12 @@ robot.setOnRosConnectCallback(async () => {
 });
 robot.connect();
 
-function handleSessionStart() {
+/**
+ * Handles WebRTC session start when an operator joins the robot room.
+ * Removes existing tracks, attaches navigation, gripper, and robot audio tracks,
+ * and opens the bidirectional data channels.
+ */
+function handleSessionStart(): void {
     connection.removeTracks();
 
     console.log("adding local media stream to peer connection");
@@ -106,10 +131,18 @@ function handleSessionStart() {
         .getTracks()
         .forEach((track) => connection.addTrack(track, stream, "gripper"));
 
-    stream = audioStream.outputAudioStream!;
-    stream
-        .getTracks()
-        .forEach((track) => connection.addTrack(track, stream, "audio"));
+    if (audioStream.outputAudioStream) {
+        stream = audioStream.outputAudioStream;
+        const audioTracks = stream.getTracks();
+        if (audioTracks.length > 0) {
+            audioTracks.forEach((track) =>
+                connection.addTrack(track, stream, "audio")
+            );
+            console.log("Added robot audio track to peer connection");
+        } else {
+            console.warn("No audio tracks found on robot outputAudioStream");
+        }
+    }
 
     connection.openDataChannels();
 }
@@ -150,13 +183,77 @@ function forwardIsRunStopped(isRunStopped: boolean) {
     } as IsRunStoppedMessage);
 }
 
-function forwardStretchTool(value: string) {
+function forwardLeaseStatus(holder: string, isDriverHolding: boolean) {
     if (!connection) throw "WebRTC connection undefined!";
 
     connection.sendData({
+        type: "leaseStatus",
+        holder: holder,
+        isDriverHolding: isDriverHolding,
+    } as LeaseStatusMessage);
+}
+
+function forwardStretchTool(value: string) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    const isActuated = robot.isToolActuated();
+    connection.sendData({
         type: "stretchTool",
         value: value,
+        toolMetadata: parseToolMetadata(value, isActuated),
     } as StretchToolMessage);
+}
+
+// @flag voice_control_interface
+function forwardVoiceCapability() {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "voiceCapability",
+        enabled: FEATURE_VOICE_CONTROL_INTERFACE,
+        voiceInputRecording:
+            FEATURE_VOICE_CONTROL_INTERFACE && FEATURE_VOICE_INPUT_RECORDING,
+    } as VoiceCapabilityMessage);
+}
+
+/**
+ * Mint an OpenAI Realtime credential from the local server and relay it to
+ * the operator. The robot browser runs on the robot itself, so the server
+ * accepts this loopback request without an operator voice session token.
+ */
+// @flag voice_control_interface
+async function forwardVoiceToken() {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    const reply = (message: Omit<VoiceTokenMessage, "type">) =>
+        connection.sendData({ type: "voiceToken", ...message } as VoiceTokenMessage);
+
+    if (!FEATURE_VOICE_CONTROL_INTERFACE) {
+        reply({ error: "Voice control is not enabled on this robot" });
+        return;
+    }
+    try {
+        const r = await fetch("/openai-realtime/token", {
+            method: "GET",
+            credentials: "same-origin",
+        });
+        if (!r.ok) {
+            reply({ error: `Token endpoint HTTP ${r.status}: ${(await r.text()).slice(0, 200)}` });
+            return;
+        }
+        reply({ credential: (await r.json()) as Record<string, unknown> });
+    } catch (err) {
+        reply({ error: err instanceof Error ? err.message : String(err) });
+    }
+}
+
+function forwardMaxEeSpeed(maxEeSpeed: number) {
+    if (!connection) throw "WebRTC connection undefined!";
+
+    connection.sendData({
+        type: "maxEeSpeed",
+        maxEeSpeed: maxEeSpeed,
+    } as MaxEeSpeedMessage);
 }
 
 function forwardJointStates(
@@ -182,6 +279,23 @@ function forwardBatteryState(batteryState: BatteryState) {
         percentage: batteryState.percentage,
         isCharging: batteryState.power_supply_status === 1,
     } as BatteryStateMessage);
+}
+
+function forwardOdom(odom: ROSOdometry) {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "odom",
+        message: odom,
+    } as OdomMessage);
+}
+
+function forwardOccupancyGridUnavailable() {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "occupancyGridUnavailable",
+    } as OccupancyGridUnavailableMessage);
 }
 
 function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {
@@ -211,9 +325,63 @@ function forwardOccupancyGrid(occupancyGrid: ROSOccupancyGrid) {
     // } as OccupancyGridMessage);
 }
 
-function forwardAMCLPose(transform: ROSLIB.Transform) {
+// Keep amclPose on the data channel during nav (joint state is chatty).
+const AMCL_POSE_MIN_INTERVAL_MS = 500; // ~2 Hz max
+const AMCL_POSE_HEARTBEAT_MS = 1000; // refresh even if nearly static
+const AMCL_POSE_MIN_TRANSLATION_M = 0.02;
+const AMCL_POSE_MIN_YAW_RAD = 0.03;
+let lastAmclPoseSentAt = 0;
+let lastAmclPoseSent: Transform | undefined;
+
+function yawFromQuaternion(rotation: {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+}): number {
+    const sinyCosp = 2 * (rotation.w * rotation.z + rotation.x * rotation.y);
+    const cosyCosp =
+        1 - 2 * (rotation.y * rotation.y + rotation.z * rotation.z);
+    return Math.atan2(sinyCosp, cosyCosp);
+}
+
+function amclPoseMovedEnough(transform: Transform): boolean {
+    if (!lastAmclPoseSent) {
+        return true;
+    }
+    const dx = transform.translation.x - lastAmclPoseSent.translation.x;
+    const dy = transform.translation.y - lastAmclPoseSent.translation.y;
+    const dist = Math.hypot(dx, dy);
+    let dyaw = Math.abs(
+        yawFromQuaternion(transform.rotation) -
+            yawFromQuaternion(lastAmclPoseSent.rotation),
+    );
+    if (dyaw > Math.PI) {
+        dyaw = 2 * Math.PI - dyaw;
+    }
+    return (
+        dist >= AMCL_POSE_MIN_TRANSLATION_M || dyaw >= AMCL_POSE_MIN_YAW_RAD
+    );
+}
+
+function forwardAMCLPose(transform: Transform) {
     if (!connection) throw "WebRTC connection undefined";
 
+    const now = Date.now();
+    const elapsed = now - lastAmclPoseSentAt;
+    if (elapsed < AMCL_POSE_MIN_INTERVAL_MS) {
+        return;
+    }
+    if (
+        lastAmclPoseSent &&
+        !amclPoseMovedEnough(transform) &&
+        elapsed < AMCL_POSE_HEARTBEAT_MS
+    ) {
+        return;
+    }
+
+    lastAmclPoseSentAt = now;
+    lastAmclPoseSent = transform;
     connection.sendData({
         type: "amclPose",
         message: transform,
@@ -232,6 +400,9 @@ function handleMessage(message: WebRTCMessage) {
             break;
         case "setJointVelocity":
             robot.setJointVelocity(message.jointName, message.velocity);
+            break;
+        case "setTaskSpaceVelocity":
+            robot.setTaskSpaceVelocity(message.linear_X, message.linear_Y, message.linear_Z);
             break;
         case "incrementalMove":
             robot.executeIncrementalMove(message.jointName, message.increment);
@@ -273,18 +444,47 @@ function handleMessage(message: WebRTCMessage) {
         case "getStretchTool":
             robot.getStretchTool();
             break;
+        case "getMaxEeSpeed":
+            robot.getMaxEeSpeed();
+        case "getRunStop":
+            forwardIsRunStopped(robot.getIsRunStopped());
+            break;
         case "homeTheRobot":
             robot.homeTheRobot();
+            break;
+        case "seedLocalization":
+            robot.seedLocalization((response) => {
+                forwardActionState(
+                    {
+                        state: response.message,
+                        alert_type: response.success ? "success" : "error",
+                    },
+                    "seedLocalizationState"
+                );
+            });
+            break;
+        // @flag voice_control_interface
+        case "getVoiceCapability":
+            forwardVoiceCapability();
+            break;
+        // @flag voice_control_interface
+        case "requestVoiceToken":
+            void forwardVoiceToken();
             break;
     }
 }
 
-function disconnectFromRobot() {
+/**
+ * Stops active robot execution and closes the ROS and WebRTC connections.
+ */
+function disconnectFromRobot(): void {
+    robot.stopExecution(true);
     robot.closeROSConnection();
     connection.hangup();
 }
 
 window.onbeforeunload = () => {
+    robot.stopExecution(true);
     robot.closeROSConnection();
     connection.hangup();
 };

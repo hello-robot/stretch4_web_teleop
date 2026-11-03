@@ -1,53 +1,251 @@
-var fs = require('fs');
-require('dotenv').config();
+var fs = require("fs");
+const { isEnabled } = require("./feature-flags");
+
+const crypto = require("crypto");
+const { initVoiceInteractionLogger, setClipSession } = require("./voiceInteractionLogger");
+
+require("dotenv").config();
 
 var options = {
     key: fs.readFileSync(`certificates/${process.env.keyfile}`),
     cert: fs.readFileSync(`certificates/${process.env.certfile}`),
 };
 
-const socket = require('socket.io');
-var express = require('express');
+const socket = require("socket.io");
+var express = require("express");
 var app = express();
-app.all('*', ensureSecure); // at top of routing calls
+app.all("*", ensureSecure); // at top of routing calls
 
 function ensureSecure(req, res, next) {
     if (!req.secure) {
         // handle port numbers if you need non defaults
-        console.log('redirecting insecure request');
-        return res.redirect('https://' + req.hostname + req.url);
+        console.log("redirecting insecure request");
+        return res.redirect("https://" + req.hostname + req.url);
         // res.redirect(`https://${req.hostname}${process.env.NGROK_URL}`);
     }
 
     return next();
 }
 
-var server = require('http').Server(app);
-var secure_server = require('https').Server(options, app);
+var server = require("http").Server(app);
+var secure_server = require("https").Server(options, app);
 const io = socket(secure_server, {
     allowEIO3: true,
 });
-app.enable('trust proxy');
-app.set('port', 443);
+app.enable("trust proxy");
+app.set("port", 443);
 server.listen(80);
 secure_server.listen(443);
 
-var path = require('path');
-app.use('/', express.static(path.join(__dirname, 'dist')));
+var path = require("path");
 
 app.listen(process.env.port);
 
-io.on('connect_error', (err) => {
+io.on("connect_error", (err) => {
     console.log(`connect_error due to ${err.message}`);
 });
 
-const ROOM = 'default';
+const ROOM = "default";
+const { localOperatorJoinResult } = require("./scripts/teleopLease");
 let robo_sock = undefined;
 let oper_sock = undefined;
+let oper_session = undefined;
 let protocol = undefined; // TODO(binit): ensure robot/operator protocol match
-let status = 'offline'; // ["online", "offline", "occupied"]
+let status = "offline"; // ["online", "offline", "occupied"]
+
+// @flag voice_control_interface
+// Read once: the OpenAI Realtime routes are registered here at startup, so the
+// socket handlers below must agree with the decision made at this point.
+const isVoiceControlEnabled = isEnabled("voice_control_interface");
+/** Set only when SVC is enabled; guard every use with isVoiceControlEnabled. */
+let voiceSessionAuth;
+
+// @flag voice_input_recording
+// Read once, same rationale as isVoiceControlEnabled. Gates only the
+// operator's Opus (mp3-style) audio-snippet clip session — voice JSONL
+// logging always runs whenever SVC is enabled.
+const isVoiceInputRecordingEnabled =
+    isVoiceControlEnabled && isEnabled("voice_input_recording");
+
+if (isVoiceControlEnabled) {
+    // Required lazily so the OpenAI Realtime client and the voice session
+    // token store never load when the flag is off.
+    const {
+        registerOpenAiRealtimeRoutes,
+    } = require("./ai-gateway/openai-realtime-api");
+    voiceSessionAuth = require("./ai-gateway/voice-session-auth");
+
+    if (!process.env.OPENAI_API_KEY) {
+        console.warn(
+            "SVC is enabled but OPENAI_API_KEY is unset in .env; voice session tokens will fail to mint."
+        );
+    }
+
+    /**
+     * Validate the voice session token.
+     *
+     * Only the one operator holding the socket.io session may mint, except
+     * for the robot's own browser on loopback, which mints on behalf of a
+     * Firebase-hosted operator and relays the credential over the WebRTC
+     * data channel (see robot/tsx/index.tsx forwardVoiceToken).
+     */
+    const validateVoiceSession = (req) =>
+        voiceSessionAuth.validate(
+            req.get("X-Voice-Session-Token"),
+            oper_sock,
+            io
+        ) || voiceSessionAuth.isLocalRobotRequest(req);
+
+    registerOpenAiRealtimeRoutes(app, {
+        validateVoiceSession,
+    });
+
+    initVoiceInteractionLogger(app, io, {
+        getOperatorSocketId: () => oper_sock,
+        validateVoiceSession,
+    });
+}
+
+function beginOperatorClipSession() {
+    if (!isVoiceInputRecordingEnabled) {
+        return;
+    }
+    setClipSession(crypto.randomBytes(16).toString("hex"));
+}
+
+function endOperatorClipSession() {
+    if (!isVoiceControlEnabled) {
+        return;
+    }
+    setClipSession(null);
+}
+
+// "Is the cloud door open" is read from the canonical HOSTING_MODE ("local" or
+// "firebase"), shared across launch_interface.sh,
+// start_web_server_and_robot_browser.sh, and start_robot_browser.js.
+const HOSTING_MODE = process.env.HOSTING_MODE || "local";
+const localDistDir = path.join(__dirname, "dist");
+const firebaseDistDir = path.join(__dirname, "dist-firebase");
+const reloadDistDirs =
+    HOSTING_MODE === "firebase"
+        ? [localDistDir, firebaseDistDir]
+        : [localDistDir];
+// Only needed while both doors are open, to stop a dashboard operator and a LAN
+// operator holding the robot at once. Local-only has a single door to arbitrate.
+const teleopLease =
+    HOSTING_MODE === "firebase"
+        ? require("./scripts/teleopLease").createTeleopLeaseClient(process.env)
+        : null;
+
+teleopLease?.ready.catch((error) => {
+    console.error("Firebase teleop lease login failed:", error.message);
+});
+
+function cacheHashedVideo(res, filePath) {
+    if (filePath.endsWith(".mp4")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+}
+
+// One meaning per URL, in both modes:
+//   /local/operator/  always the LAN bundle, signalling over socket.io
+//   /operator/        always the cloud bundle -- a visible redirect to the LAN
+//                     door when no cloud door was opened
+//   /robot/           the robot's own page, from whichever bundle this mode runs
+//
+// The redirect is registered before the static mounts so it wins over them, and
+// it is a redirect rather than a 404 because the address bar then shows which
+// door the operator actually landed in. Serving a different bundle under one
+// unchanged URL is what previously made it possible to believe you were testing
+// the cloud while driving over the LAN.
+if (HOSTING_MODE !== "firebase") {
+    app.get(/^\/operator(\/.*)?$/, (req, res) => {
+        res.redirect(302, "/local/operator/");
+    });
+}
+app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }));
+// The localstorage bundle is built with publicPath /local/, so its assets
+// resolve through the mount above no matter which path served the HTML. That is
+// what lets local mode serve /robot/ and the home page from the root mount too,
+// which start_robot_browser.js requires: it loads https://localhost/robot.
+app.use(
+    "/",
+    express.static(
+        HOSTING_MODE === "firebase" ? firebaseDistDir : localDistDir,
+        {
+            setHeaders: cacheHashedVideo,
+        },
+    ),
+);
+
+// Webpack watch rewrites dist/. Tell open home/operator tabs to reload.
+const reloadClients = new Set();
+app.get("/dev-reload", (req, res) => {
+    res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+    });
+    res.write("\n");
+    reloadClients.add(res);
+    req.on("close", () => reloadClients.delete(res));
+});
+
+let reloadTimer = null;
+function notifyReload() {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+        for (const client of reloadClients) {
+            client.write("data: reload\n\n");
+        }
+    }, 800);
+}
+
+const watchedDistDirs = new Set();
+let watchRetryTimer = null;
+function scheduleWatchRetry() {
+    if (watchRetryTimer) return;
+    watchRetryTimer = setTimeout(() => {
+        watchRetryTimer = null;
+        watchDist();
+    }, 500);
+}
+
+function watchDist() {
+    let waiting = false;
+    for (const dir of reloadDistDirs) {
+        if (watchedDistDirs.has(dir)) continue;
+        if (!fs.existsSync(dir)) {
+            waiting = true;
+            continue;
+        }
+        try {
+            const watcher = fs.watch(
+                dir,
+                { recursive: true },
+                (_event, filename) => {
+                    if (!filename || String(filename).endsWith(".map")) return;
+                    notifyReload();
+                },
+            );
+            watcher.on("error", (error) => {
+                console.warn("Bundle watcher restarting:", error.message);
+                watcher.close();
+                watchedDistDirs.delete(dir);
+                scheduleWatchRetry();
+            });
+            watchedDistDirs.add(dir);
+        } catch (error) {
+            console.warn("Bundle watcher waiting:", error.message);
+            waiting = true;
+        }
+    }
+    if (waiting) scheduleWatchRetry();
+}
+watchDist();
+
 function updateRooms() {
-    io.emit('update_rooms', {
+    io.emit("update_rooms", {
         robot_id: {
             name: process.env.HELLO_FLEET_ID,
             protocol: protocol,
@@ -56,58 +254,154 @@ function updateRooms() {
     });
 }
 
-io.on('connection', function (socket) {
-    console.log('new socket.io connection');
+function releaseLocalLease(sessionId, reason) {
+    console.log(`Releasing local lease ${sessionId}: ${reason}`);
+    if (!teleopLease || !sessionId) return Promise.resolve();
+    return teleopLease.releaseLocal(sessionId).catch((error) => {
+        console.error("Local teleop lease release failed:", error.message);
+    });
+}
+
+function finishOperator(socketId, reason) {
+    if (socketId != oper_sock) return Promise.resolve();
+    const sessionId = oper_session;
+    status = "online";
+    if (isVoiceControlEnabled) {
+        voiceSessionAuth.revokeBySocket(socketId);
+        endOperatorClipSession();
+    }
+    oper_sock = undefined;
+    oper_session = undefined;
+    console.log("Operator disconnected");
+    return releaseLocalLease(sessionId, reason);
+}
+
+io.on("connection", function (socket) {
+    console.log("new socket.io connection");
     // console.log('socket.handshake = ');
     // console.log(socket.handshake);
 
-    socket.on('join_as_robot', (callback) => {
-        console.log('Received join_as_robot request');
-        if (!robo_sock) {
+    socket.on("join_as_robot", (callback) => {
+        console.log("Received join_as_robot request");
+        const previous = robo_sock && io.sockets.sockets.get(robo_sock);
+        const previousLive =
+            previous && previous.connected && previous.id !== socket.id;
+        if (!previousLive) {
+            if (previous && previous.id !== socket.id) previous.leave(ROOM);
             socket.join(ROOM);
             robo_sock = socket.id;
-            status = 'online';
-            console.log('join_as_robot SUCCESS');
+            if (!oper_sock) status = "online";
+            console.log("join_as_robot SUCCESS");
             callback({ success: true });
         } else {
-            status = 'occupied';
-            console.log('join_as_robot FAILURE');
+            status = "occupied";
+            console.log("join_as_robot FAILURE");
             callback({ success: false });
         }
         updateRooms();
     });
 
-    socket.on('list_rooms', () => {
+    socket.on("list_rooms", () => {
         updateRooms();
     });
 
-    socket.on('join_as_operator', (callback) => {
-        console.log('Received join_as_operator request');
-        if (robo_sock) {
-            status = 'occupied';
-            if (!oper_sock) {
-                socket.join(ROOM);
-                socket.in(ROOM).emit('joined');
-                oper_sock = socket.id;
-                console.log('join_as_operator SUCCESS');
-                callback({ success: true });
-            } else {
-                console.log(
-                    'join_as_operator FAILURE: occupied by another operator'
-                );
-                callback({ success: false });
+    socket.on("join_as_operator", async (sessionId, callback) => {
+        console.log(`Received join_as_operator request from ${socket.id}`);
+        if (typeof sessionId !== "string" || sessionId.length === 0) {
+            callback({ success: false });
+            updateRooms();
+            return;
+        }
+        if (!robo_sock) {
+            status = "offline";
+            console.log("join_as_operator FAILURE: robot is not available");
+            callback({ success: false });
+            updateRooms();
+            return;
+        }
+        if (
+            localOperatorJoinResult({
+                operSession: oper_session,
+                sessionId,
+                connected: true,
+                leaseCommitted: true,
+            }) === "occupied"
+        ) {
+            status = "occupied";
+            console.log(
+                "join_as_operator FAILURE: occupied by another operator",
+            );
+            callback({ success: false });
+            updateRooms();
+            return;
+        }
+        // Reaching Firebase is not a condition of local teleop. A seat whose
+        // lease cannot be read is treated as free: the only thing that could
+        // be holding it is a Firebase operator, who needs the same Firebase
+        // this claim just failed to reach.
+        let leaseOutcome = "claimed";
+        try {
+            if (teleopLease) {
+                leaseOutcome = await teleopLease.claimLocal(sessionId);
             }
-        } else {
-            status = 'offline';
-            console.log('join_as_operator FAILURE: robot is not available');
+        } catch (error) {
+            leaseOutcome = "unavailable";
+            console.error("join_as_operator lease failure:", error.message);
+        }
+        if (leaseOutcome === "unavailable") {
+            console.warn(
+                "join_as_operator: Firebase lease unreachable, granting the local seat",
+            );
+        }
+        const decision = localOperatorJoinResult({
+            operSession: undefined,
+            sessionId,
+            connected: socket.connected,
+            leaseCommitted: leaseOutcome !== "held",
+        });
+        if (decision === "disconnected") {
+            if (!oper_sock) {
+                await releaseLocalLease(sessionId, "socket dropped during claim");
+            }
             callback({ success: false });
+            updateRooms();
+            return;
+        }
+        if (decision !== "accepted") {
+            status = "occupied";
+            console.log(
+                "join_as_operator FAILURE: Firebase operator holds the lease",
+            );
+            callback({ success: false });
+            updateRooms();
+            return;
+        }
+        const takingOver = Boolean(oper_sock);
+        status = "occupied";
+        socket.join(ROOM);
+        if (!takingOver) socket.in(ROOM).emit("joined");
+        oper_sock = socket.id;
+        oper_session = sessionId;
+        console.log(`join_as_operator SUCCESS: ${socket.id}`);
+        if (isVoiceControlEnabled) {
+            if (!takingOver) beginOperatorClipSession();
+            callback({
+                success: true,
+                voiceSvc: true,
+                voiceSessionToken: voiceSessionAuth.issueToken(socket.id),
+                // @flag voice_input_recording
+                // Opus (mp3-style) audio-snippet clip recording for this operator session.
+                voiceInputRecording: isVoiceInputRecordingEnabled,
+            });
+        } else {
+            callback({ success: true });
         }
         updateRooms();
     });
 
-    socket.on('signalling', (message) => {
+    socket.on("signalling", (message) => {
         if (robo_sock && oper_sock && io.sockets.adapter.rooms.get(ROOM)) {
-            socket.to(ROOM).emit('signalling', message);
+            socket.to(ROOM).emit("signalling", message);
         } else {
             console.log(
                 `signaling FAILURE: robo_sock=${robo_sock} oper_sock=${oper_sock} room=${io.sockets.adapter.rooms.get(ROOM)}`
@@ -115,35 +409,31 @@ io.on('connection', function (socket) {
         }
     });
 
-    socket.on('bye', (role) => {
-        console.log(`Received bye from ${role}`);
+    socket.on("bye", async (role) => {
+        console.log(`Received bye from ${role} (${socket.id})`);
         if (socket.rooms.has(ROOM)) {
-            socket.to(ROOM).emit('bye');
+            socket.to(ROOM).emit("bye");
             if (socket.id == robo_sock) {
-                status = 'offline';
+                status = "offline";
                 robo_sock = undefined;
-                console.log('Robot disconnected');
+                console.log("Robot disconnected");
             }
             if (socket.id == oper_sock) {
-                status = 'online';
-                oper_sock = undefined;
-                console.log('Operator disconnected');
+                await finishOperator(socket.id, "bye");
             }
             socket.leave(ROOM);
         }
         updateRooms();
     });
 
-    socket.on('disconnect', () => {
+    socket.on("disconnect", async () => {
         if (socket.id == robo_sock) {
-            status = 'offline';
+            status = "offline";
             robo_sock = undefined;
-            console.log('Robot disconnected');
+            console.log("Robot disconnected");
         }
         if (socket.id == oper_sock) {
-            status = 'online';
-            oper_sock = undefined;
-            console.log('Operator disconnected');
+            await finishOperator(socket.id, "socket disconnect");
         }
         updateRooms();
     });

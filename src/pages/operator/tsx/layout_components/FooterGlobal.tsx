@@ -1,55 +1,175 @@
-import React, { useMemo, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from "react";
 
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import MicIcon from "@mui/icons-material/Mic";
+import MicOffIcon from "@mui/icons-material/MicOff";
 
 import MainMenu from "../basic_components/MainMenu";
 import SceneCarousel, {
     SceneItem,
+    SceneItemStatus,
 } from "../basic_components/SceneCarousel";
 import MagneticWrapper from "../static_components/MagneticWrapper";
-import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
-import { runStopFunctionProvider, batteryStateFunctionProvider } from "..";
-import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import {
+    batteryStateFunctionProvider,
+    mapFunctionProvider,
+    runStopFunctionProvider,
+    underMapFunctionProvider,
+} from "..";
 import { BatteryStateFunctions } from "../function_providers/BatteryStateFunctionProvider";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
+import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
+import { UnderMapButton } from "../function_providers/UnderMapFunctionProvider";
+import {
+    isVoiceControlEnabled,
+    subscribeOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
+import { ActionState } from "shared/util";
+import {
+    getVoiceStatusSnapshot,
+    setVoiceStatus,
+    useVoiceStatus,
+} from "../voice/voiceStatusStore";
+import { bumpVoiceCommandActivity } from "../voice/voiceCommandActivity";
+import { recoverVoiceMicFromUserGesture } from "../voice/voiceMicRecoverBridge";
+import { MapFunction } from "./AutoNav";
+import { RobotAudioPlayer } from "../utils/robotAudioPlayer";
+
+/** Menu tiles that run an action without changing the selected scene/footer label. */
+const ACTION_TILE_IDS = new Set([
+    "mic-mute",
+    "robot-mic-mute",
+    "localize-aruco",
+    "reload-app",
+]);
+const LOCALIZE_SUCCESS_HOLD_MS = 1500;
+
+// @flag voice_control_interface
+// Loaded lazily so the animated voice chrome is fetched only once
+// isVoiceControlEnabled() is true.
+const VoicePilotSceneChrome = React.lazy(
+    () => import("../static_components/VoicePilotSceneChrome")
+);
 
 interface FooterGlobalProps {
     swipeableViewsIdxSet: React.Dispatch<React.SetStateAction<number>>;
     sceneSelected: string;
     onSceneSelectedChange: React.Dispatch<React.SetStateAction<string>>;
+    isMainMenuOpen: boolean;
+    isMainMenuOpenSet: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const FooterGlobal: React.FC<FooterGlobalProps> = ({
     swipeableViewsIdxSet,
     sceneSelected,
     onSceneSelectedChange,
+    isMainMenuOpen,
+    isMainMenuOpenSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
-    const [isMainMenuOpen, isMainMenuOpenSet] = useState<boolean>(false);
     const [batteryPercentage, batteryPercentageSet] = useState<number>(0);
     const [isCharging, isChargingSet] = useState<boolean>(false);
+    const [isRobotAudioMuted, isRobotAudioMutedSet] = useState<boolean>(
+        RobotAudioPlayer.getInstance().getMuted()
+    );
+    // @flag voice_control_interface
+    const voiceSvc = useSyncExternalStore(
+        subscribeOperatorVoiceSvc,
+        isVoiceControlEnabled,
+    );
+    const [localizeStatus, localizeStatusSet] =
+        useState<SceneItemStatus>("idle");
+    const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
+    const localizeSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-    runStopFunctionProvider.setRunStopStateChangeCallback(isRunStoppedSet);
+    localizeStatusRef.current = localizeStatus;
+    const { connected: voiceConnected, micMuted } = useVoiceStatus();
+
+    useEffect(() => {
+        const unsubscribe =
+            runStopFunctionProvider.setRunStopStateChangeCallback(
+                isRunStoppedSet
+            );
+        return () => {
+            unsubscribe();
+        };
+    }, []);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
 
     batteryStateFunctionProvider.setPercentageChangeCallback(batteryPercentageSet);
     batteryStateFunctionProvider.setChargeStateChangeCallback(isChargingSet);
     const batteryFuncts: BatteryStateFunctions = batteryStateFunctionProvider.provideFunctions();
 
+    // Re-register each render (provider may be created after first mount).
+    mapFunctionProvider?.setOperatorCallback((state: ActionState) => {
+        if (state.alert_type === "success") {
+            localizeStatusSet("success");
+            if (localizeSuccessTimeoutRef.current) {
+                clearTimeout(localizeSuccessTimeoutRef.current);
+            }
+            localizeSuccessTimeoutRef.current = setTimeout(() => {
+                FunctionProvider.stopAllActions(true);
+                onSceneSelectedChange("autonav");
+                swipeableViewsIdxSet(1);
+                isMainMenuOpenSet(false);
+                localizeStatusSet("idle");
+            }, LOCALIZE_SUCCESS_HOLD_MS);
+            return;
+        }
+        if (state.alert_type === "error") {
+            localizeStatusSet("error");
+        }
+    });
+
+    useEffect(() => {
+        const unsubscribe = RobotAudioPlayer.getInstance().addMuteListener(
+            (muted) => isRobotAudioMutedSet(muted)
+        );
+        return () => {
+            unsubscribe();
+            if (localizeSuccessTimeoutRef.current) {
+                clearTimeout(localizeSuccessTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const startLocalizeAruco = () => {
+        if (localizeStatusRef.current === "loading") {
+            return;
+        }
+        FunctionProvider.stopAllActions(true);
+        if (localizeSuccessTimeoutRef.current) {
+            clearTimeout(localizeSuccessTimeoutRef.current);
+        }
+        localizeStatusSet("loading");
+        const seedLocalization = mapFunctionProvider?.provideFunctions(
+            MapFunction.SeedLocalization
+        ) as (() => void) | undefined;
+        seedLocalization?.();
+    };
+
     const scenes: SceneItem[] = useMemo(
         () => [
             {
                 id: "pilot-mode",
-                name: "Pilot Mode",
+                name: "Pilot",
                 description: "TextDescription",
                 onClick: () => {
                     swipeableViewsIdxSet(0);
                     onSceneSelectedChange("pilot-mode");
                 },
                 icon: <CheckCircleIcon />,
-                enabled: true
+                enabled: true,
             },
             {
                 id: "autonav",
@@ -60,7 +180,73 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     swipeableViewsIdxSet(1);
                 },
                 icon: <CheckCircleIcon />,
-                enabled: true
+                enabled: true,
+            },
+            {
+                id: "localize-aruco",
+                name: "Localize (ArUco)",
+                description: "TextDescription",
+                onClick: startLocalizeAruco,
+                icon: <CheckCircleIcon />,
+                enabled: localizeStatus !== "loading",
+                status: localizeStatus,
+            },
+            {
+                id: "robot-mic-mute",
+                name: isRobotAudioMuted ? "Unmute Robot Mic" : "Mute Robot Mic",
+                description: "Toggle robot microphone audio stream playback",
+                onClick: () => {
+                    const player = RobotAudioPlayer.getInstance();
+                    if (player.getMuted()) {
+                        player.unlockFromUserGesture();
+                    }
+                    player.toggleMuted();
+                },
+                icon: isRobotAudioMuted ? <MicOffIcon /> : <MicIcon />,
+                enabled: true,
+            },
+            // @flag voice_control_interface
+            ...(voiceSvc
+                ? [
+                    {
+                        id: "mic-mute",
+                        name: micMuted
+                            ? "Enable Voice Control"
+                            : "Disable Voice Control",
+                        description: "Toggle microphone uplink to OpenAI",
+                        onClick: () => {
+                            const nextMuted =
+                                !getVoiceStatusSnapshot().micMuted;
+                            setVoiceStatus({ micMuted: nextMuted });
+                            if (!nextMuted) {
+                                bumpVoiceCommandActivity();
+                                // Reacquire from this tap — iOS needs the gesture for getUserMedia.
+                                void recoverVoiceMicFromUserGesture();
+                            }
+                        },
+                        icon: micMuted ? <MicOffIcon /> : <MicIcon />,
+                        enabled: voiceConnected,
+                    } satisfies SceneItem,
+                ]
+                : []),
+            {
+                id: "reload-app",
+                name: "Reload App",
+                description: "Reload the operator page",
+                onClick: () => {
+                    try {
+                        const cancelFn = underMapFunctionProvider?.provideFunctions(
+                            UnderMapButton.CancelGoal,
+                        ) as (() => void) | undefined;
+                        cancelFn?.();
+                    } catch (e) {
+                        console.warn("Failed to cancel navigation on reload:", e);
+                    }
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 150);
+                },
+                enabled: true,
             },
             {
                 id: "finedex-gripper",
@@ -68,7 +254,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'finedex-gripper'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
+                enabled: false,
             },
             {
                 id: "autodock",
@@ -76,7 +262,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'autodock'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
+                enabled: false,
             },
             {
                 id: "feeding",
@@ -84,7 +270,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'feeding'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
+                enabled: false,
             },
             {
                 id: "settings",
@@ -92,13 +278,35 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 description: "TextDescription",
                 onClick: () => console.log("You selected 'settings'"),
                 icon: <CheckCircleIcon />,
-                enabled: false
-            }
+                enabled: false,
+            },
         ],
-        [onSceneSelectedChange, swipeableViewsIdxSet]
+        [
+            voiceSvc,
+            localizeStatus,
+            onSceneSelectedChange,
+            swipeableViewsIdxSet,
+            micMuted,
+            voiceConnected,
+            isRobotAudioMuted,
+        ]
     );
 
     const handleSceneSelect = (scene: SceneItem) => {
+        FunctionProvider.stopAllActions(true);
+        // Action-only items run their handler without switching the active scene.
+        if (scene.id === "localize-aruco") {
+            if (localizeStatus === "loading") {
+                return;
+            }
+            scene.onClick?.();
+            return;
+        }
+        if (scene.id === "robot-mic-mute" || scene.id === "mic-mute") {
+            scene.onClick?.();
+            isMainMenuOpenSet(false);
+            return;
+        }
         onSceneSelectedChange(scene.id);
         scene.onClick?.();
         isMainMenuOpenSet(false);
@@ -116,10 +324,33 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             <div className="scene-menu-button-container">
                 <button
                     className="scene-menu-button"
-                    onPointerUp={() => isMainMenuOpenSet(true)}
+                    onPointerDown={() => {
+                        FunctionProvider.stopAllActions(true);
+                    }}
+                    onClick={() => {
+                        FunctionProvider.stopAllActions(true);
+                        isMainMenuOpenSet(true);
+                    }}
                 >
-                    {sceneNameCurrent}
-                    <div className="fancy-border" />
+                    {/* @flag voice_control_interface */}
+                    {voiceSvc ? (
+                        <React.Suspense
+                            fallback={
+                                <span className="scene-menu-button__label">
+                                    {sceneNameCurrent}
+                                </span>
+                            }
+                        >
+                            <VoicePilotSceneChrome
+                                sceneSelected={sceneSelected}
+                                fallbackName={sceneNameCurrent}
+                            />
+                        </React.Suspense>
+                    ) : (
+                        <span className="scene-menu-button__label">
+                         {sceneNameCurrent}
+                        </span>
+                    )}
                 </button>
                 <MainMenu
                     isOpen={isMainMenuOpen}

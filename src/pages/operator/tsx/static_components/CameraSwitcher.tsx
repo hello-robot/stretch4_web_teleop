@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import ModalMobile from "../basic_components/ModalMobile";
+import { useDismissTimeout } from "../react_hooks/useDismissTimeout";
+import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import MagneticWrapper from "./MagneticWrapper";
 import "operator/css/CameraSwitcher.css";
 import { CameraViewId, OverheadCameraID } from "../utils/component_definitions";
@@ -12,6 +14,7 @@ import cameraCenterWithoutText from "operator/icons/Camera_Center_Without_Text.s
 import cameraRightWithoutText from "operator/icons/Camera_Right_Without_Text.svg";
 
 import { CameraSwitcherFunctions } from "../function_providers/CameraSwitcherFunctionProvider";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { cameraSwitcherFunctionProvider } from "..";
 
 const CAMERA_OPTIONS: CameraViewId[] = [
@@ -62,6 +65,15 @@ export const CameraSwitcher: React.FC<MenuCameraSelectProps> = ({
     setCameraVeilCallback,
 }) => {
     const [isModalOpen, isModalOpenSet] = useState<boolean>(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(
+        isModalOpen,
+        () => {
+            isModalOpenSet(false);
+            setCameraVeilCallback(false);
+        },
+        { restoreVeil: setCameraVeilCallback },
+    );
     const [cameraID, setCameraID] = useState<OverheadCameraID>(OverheadCameraID.right);
 
     return (
@@ -79,6 +91,10 @@ export const CameraSwitcher: React.FC<MenuCameraSelectProps> = ({
                 <MagneticWrapper>
                     <button
                         onPointerDown={() => {
+                            FunctionProvider.stopAllActions(true);
+                        }}
+                        onClick={() => {
+                            FunctionProvider.stopAllActions(true);
                             isModalOpenSet(!isModalOpen);
                             setCameraVeilCallback(!isModalOpen);
                         }}
@@ -111,6 +127,8 @@ const ModalMenuCameraSelect: React.FC<ModalMenuCameraSelectProps> = ({
     isOpen,
     handleClose,
 }) => {
+    const scheduleClose = useDismissTimeout(isOpen);
+
     const handleCameraSelection = (id: OverheadCameraID) => {
         setCameraID(id);
         if (id === OverheadCameraID.left) {
@@ -126,7 +144,7 @@ const ModalMenuCameraSelect: React.FC<ModalMenuCameraSelectProps> = ({
                 CameraSwitcherFunctions.SetCameraRight
             )();
         }
-        setTimeout(() => handleClose(), 500);
+        scheduleClose(handleClose);
     };
 
     return (
@@ -149,7 +167,7 @@ const ModalMenuCameraSelect: React.FC<ModalMenuCameraSelectProps> = ({
                                 className={`${id} ${cameraID === id ? "selected" : ""}`}
                                 aria-label={ariaLabel}
                                 aria-hidden={!isOpen}
-                                onPointerDown={() => handleCameraSelection(id)}
+                                onClick={() => handleCameraSelection(id)}
                             >
                                 <img
                                     src={CAMERA_ICONS_WITHOUT_TEXT[id]}

@@ -1,25 +1,39 @@
-import React, { Dispatch, useRef, SetStateAction, useState, useCallback, useEffect } from 'react';
-import ModalMobile from '../basic_components/ModalMobile';
-import { AutoNavFunctions } from "./AutoNav";
-import MagneticWrapper from '../static_components/MagneticWrapper';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ModeEditIcon from '@mui/icons-material/ModeEdit';
+import SearchIcon from '@mui/icons-material/Search';
+import StopCircleIcon from '@mui/icons-material/StopCircle';
+import { motion } from 'framer-motion';
+import "operator/css/FooterAutoNav.css";
+import React, { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
+import { Transform } from 'roslib';
 import {
     ROSPoint,
 } from 'shared/util';
-import "operator/css/FooterAutoNav.css";
-import { motion } from 'framer-motion';
 import InputFluid from '../basic_components/InputFluid';
-import SearchIcon from '@mui/icons-material/Search';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ModalMobile from '../basic_components/ModalMobile';
+import MagneticWrapper from '../static_components/MagneticWrapper';
 import ScrollableList from '../static_components/ScrollableList';
-import DeleteIcon from '@mui/icons-material/Delete';
-import StopCircleIcon from '@mui/icons-material/StopCircle';
-import ModeEditIcon from '@mui/icons-material/ModeEdit';
-import FooterGlobal from './FooterGlobal';
-import { set } from 'firebase/database';
+import { AutoNavFunctions } from "./AutoNav";
 
-import StartNavIcon from '../../icons/StartNavIcon.svg';
-import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
 import AddLocationIcon from '../../icons/AddLocationIcon.svg';
+import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
+import StartNavIcon from '../../icons/StartNavIcon.svg';
+import { LocalStorageHandler } from '../storage_handler/LocalStorageHandler';
+
+/** Result from imperative AutoNav start/cancel (voice + UI share this path). */
+export type AutoNavNavControlResult = {
+    ok: boolean;
+    detail: string;
+};
+
+/** Imperative AutoNav controls registered for voice (and similar callers). */
+export type AutoNavNavControls = {
+    start: () => AutoNavNavControlResult;
+    cancel: () => AutoNavNavControlResult;
+    loadLocation: (poseName: string) => AutoNavNavControlResult;
+    getSavedPoseNames: () => string[];
+};
 
 interface FooterAutoNavProps {
     handleSelectGoal: (selectGoal: boolean) => void;
@@ -39,6 +53,7 @@ interface FooterAutoNavProps {
     swipeableViewsIdxSet?: Dispatch<SetStateAction<number>>;
     sceneSelected?: string;
     onSceneSelectedChange?: Dispatch<SetStateAction<string>>;
+    onRegisterAutoNavNavControls?: (controls: AutoNavNavControls | null) => void;
 }
 
 interface ModalAddLocationProps {
@@ -407,6 +422,13 @@ const ModalLocationsMenu: React.FC<ModalLocationsMenuProps> = ({
         }
     }, [isModalLocationsMenuVisible]);
 
+    // Reload from storage whenever the menu opens (e.g. after a voice save).
+    useEffect(() => {
+        if (isModalLocationsMenuVisible) {
+            getPosesLatest();
+        }
+    }, [isModalLocationsMenuVisible, getPosesLatest]);
+
     const Footer = () => (
         <MagneticWrapper>
             <button
@@ -455,7 +477,7 @@ const ModalLocationsMenu: React.FC<ModalLocationsMenuProps> = ({
         <ModalMobile
             isOpen={isModalLocationsMenuVisible}
             onClose={closeModal}
-            title="Select Location"
+            title="Saved Locations"
             subtitle="AUTONAV"
             HeaderControls={<HeaderControls />}
             footer={<Footer />}
@@ -508,53 +530,77 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     addToast,
     sceneSelected,
     onSceneSelectedChange,
+    onRegisterAutoNavNavControls,
 }) => {
 
     React.useEffect(() => {
         if (selectedLocationMenuItem) {
-            let pose: ROSLIB.Transform = functs.LoadGoal(selectedLocationMenuItem)!;
-            functs.DisplayGoalMarker(pose.translation);
+            let pose: Transform = functs.LoadGoal(selectedLocationMenuItem)!;
+            functs.DisplayGoalMarker(pose.translation, pose.rotation);
         }
     }, [selectedLocationMenuItem]);
 
-    // This function is called when the user
-    // selects a goal on the map or from the
-    // locations menu.
-    const handleStartAutoNav = useCallback(() => {
+    // Shared by Start button and voice control_autonav.
+    const startAutoNav = useCallback((): AutoNavNavControlResult => {
+        if (isCurrentlyMoving) {
+            return {
+                ok: false,
+                detail: "AutoNav is already navigating.",
+            };
+        }
+        if (
+            selectedLocationMenuItem === undefined &&
+            !goalPosition
+        ) {
+            return {
+                ok: false,
+                detail: "Load a pose or select a goal before starting AutoNav.",
+            };
+        }
         // ...when selecting from Locations Menu
-        if (!isCurrentlyMoving && selectedLocationMenuItem !== undefined) {
-
-            let pose: ROSLIB.Transform = functs.LoadGoal(selectedLocationMenuItem)!;
-            functs.NavigateToPose(pose)
+        if (selectedLocationMenuItem !== undefined) {
+            let pose: Transform = functs.LoadGoal(selectedLocationMenuItem)!;
+            functs.NavigateToPose(pose);
             // functs.DisplayGoalMarker(pose.translation);
             isCurrentlyMovingSet(true);
             isSelectingGoalSet(false);
             selectedLocationMenuItemSet(undefined);
-            functs
-                .GoalReached()
-                .then((goalReached) => {
-                    isCurrentlyMovingSet(false)
-                    isSelectingGoalSet(true);
-                });
-            // When selecting manually on map...
-        } else if (!isCurrentlyMoving && isSelectingGoal) {
+            // Completion clears via terminal moveBaseState in AutoNav.
+            return { ok: true, detail: "Started AutoNav." };
+        }
+        // When selecting manually on map...
+        if (isSelectingGoal) {
             functs.Play();
             isCurrentlyMovingSet(true);
             isSelectingGoalSet(false);
-            functs
-                .GoalReached()
-                .then((goalReached) => {
-                    isCurrentlyMovingSet(false)
-                    isSelectingGoalSet(true);
-                });
+            // Completion clears via terminal moveBaseState in AutoNav.
+            return { ok: true, detail: "Started AutoNav." };
         }
+        return {
+            ok: false,
+            detail: "Load a pose or select a goal before starting AutoNav.",
+        };
     }, [
         functs,
         isCurrentlyMoving,
         isSelectingGoalSet,
         isSelectingGoal,
         selectedLocationMenuItem,
-        isCurrentlyMovingSet
+        selectedLocationMenuItemSet,
+        goalPosition,
+        isCurrentlyMovingSet,
+    ]);
+
+    const cancelAutoNav = useCallback((): AutoNavNavControlResult => {
+        functs.CancelGoal();
+        functs.RemoveGoalMarker();
+        isCurrentlyMovingSet(false);
+        isSelectingGoalSet(true);
+        return { ok: true, detail: "Cancelled AutoNav." };
+    }, [
+        functs,
+        isCurrentlyMovingSet,
+        isSelectingGoalSet,
     ]);
 
     // List of saved pose names for navigation goals
@@ -570,7 +616,69 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         const poses = functs.GetSavedPoseNames();
         // Update local state with latest poses...
         posesSet(poses);
-    }, []);
+    }, [functs]);
+
+    const getSavedPoseNames = useCallback(
+        () => functs.GetSavedPoseNames(),
+        [functs],
+    );
+
+    const loadLocation = useCallback(
+        (poseName: string): AutoNavNavControlResult => {
+            const names = functs.GetSavedPoseNames();
+            if (!names.includes(poseName)) {
+                return {
+                    ok: false,
+                    detail: `Unknown location: "${poseName}".`,
+                };
+            }
+            selectedLocationMenuItemSet(poseName);
+            isModalLocationsMenuVisibleSet(false);
+            return {
+                ok: true,
+                detail: `Selected "${poseName}"`,
+            };
+        },
+        [
+            functs,
+            selectedLocationMenuItemSet,
+            isModalLocationsMenuVisibleSet,
+        ],
+    );
+
+    useEffect(() => {
+        if (!onRegisterAutoNavNavControls) {
+            return;
+        }
+        onRegisterAutoNavNavControls({
+            start: startAutoNav,
+            cancel: cancelAutoNav,
+            loadLocation,
+            getSavedPoseNames,
+        });
+        return () => onRegisterAutoNavNavControls(null);
+    }, [
+        onRegisterAutoNavNavControls,
+        startAutoNav,
+        cancelAutoNav,
+        loadLocation,
+        getSavedPoseNames,
+    ]);
+
+    // Voice (and other non-UI) saves write storage without updating React state.
+    useEffect(() => {
+        const onMapPosesChanged = () => getPosesLatest();
+        window.addEventListener(
+            LocalStorageHandler.MAP_POSES_CHANGED_EVENT,
+            onMapPosesChanged,
+        );
+        return () => {
+            window.removeEventListener(
+                LocalStorageHandler.MAP_POSES_CHANGED_EVENT,
+                onMapPosesChanged,
+            );
+        };
+    }, [getPosesLatest]);
 
     return (
         <div className="footer-auto-nav">
@@ -603,7 +711,9 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                 {!isCurrentlyMoving
                     ? (
                         <motion.button
-                            onClick={handleStartAutoNav}
+                            onClick={() => {
+                                startAutoNav();
+                            }}
                             disabled={!goalPosition && !selectedLocationMenuItem}
                             className="auto-nav-button"
                             initial={false}
@@ -659,9 +769,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                     : (<button
                         className="cancel-auto-nav-button"
                         onClick={() => {
-                            functs.CancelGoal();
-                            isCurrentlyMovingSet(!isCurrentlyMoving);
-                            isSelectingGoalSet(true);
+                            cancelAutoNav();
                         }}
                     >
                         <span>Stop</span>

@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import ModalMobile from "../basic_components/ModalMobile";
+import { useDismissTimeout } from "../react_hooks/useDismissTimeout";
+import { useExclusiveModal } from "../react_hooks/useExclusiveModal";
 import MagneticWrapper from "../static_components/MagneticWrapper";
 import "operator/css/ActionSpeed.css";
-import { buttonFunctionProvider } from "..";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import speedSlowIcon from "operator/icons/Speed_Slow.svg";
 import speedMediumIcon from "operator/icons/Speed_Medium.svg";
 import speedFastIcon from "operator/icons/Speed_Fast.svg";
@@ -10,13 +12,12 @@ import speedSlowIconWithoutText from "operator/icons/Speed_Slow_Without_Text.svg
 import speedMediumIconWithoutText from "operator/icons/Speed_Medium_Without_Text.svg";
 import speedFastIconWithoutText from "operator/icons/Speed_Fast_Without_Text.svg";
 
-/**Details of a velocity setting */
-type ActionSpeedDetails = {
-    /**Name of the setting to display on the button */
-    label: string;
-    /**The speed of this setting */
-    speed: number;
-};
+import {
+    DEFAULT_SPEED_PROFILE,
+    getLabelBySpeed,
+    getSpeedByLabel,
+    VELOCITY_SCALE,
+} from "../utils/action-speed-scale";
 
 /**Props for {@link ActionSpeed} */
 type ActionSpeedProps = {
@@ -41,24 +42,6 @@ type ActionSpeedProps = {
     setCameraVeilCallback: (enable: boolean) => void;
 };
 
-/**
- * The different velocity settings to display.
- * Scale: 0 -> 1.6
- */
-export const VELOCITY_SCALE: ActionSpeedDetails[] = [
-    { label: "slow", speed: 0.5 },
-    { label: "medium", speed: 1.0 },
-    { label: "fast", speed: 1.5 },
-];
-
-const getSpeedByLabel = (label: string): number | undefined => {
-    return VELOCITY_SCALE.find((item) => item.label === label)?.speed;
-};
-
-const getLabelBySpeed = (speed: number): string | undefined => {
-    return VELOCITY_SCALE.find((item) => item.speed === speed)?.label;
-};
-
 const SPEED_ICONS: Record<string, string> = {
     slow: speedSlowIcon,
     medium: speedMediumIcon,
@@ -76,33 +59,47 @@ const getIconBySpeed = (speed: number): string => {
     return label ? SPEED_ICONS[label] : speedMediumIcon;
 };
 
-/**The speed the interface should initialize with */
-export const DEFAULT_VELOCITY_SCALE: number = VELOCITY_SCALE[1].speed;
-
 /**
  * Set of buttons so the user can control the scaling of the speed for all controls.
- * @param props see {@link SpeedControlProps}
+ * @param props see {@link ActionSpeedProps}
  */
 export const ActionSpeed = (props: ActionSpeedProps) => {
     const [isModalOpen, setIsModalOpen] = React.useState<boolean>(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(
+        isModalOpen,
+        () => {
+            setIsModalOpen(false);
+            props.setCameraVeilCallback(false);
+        },
+        { restoreVeil: props.setCameraVeilCallback },
+    );
+    const speedLabel =
+        getLabelBySpeed(props.speed) ?? DEFAULT_SPEED_PROFILE;
 
     return (
         <div className="action-speed">
             <ModalActionSpeed
                 isOpen={isModalOpen}
-                handleClose={(newSpeedLabel: string) => {
+                speedLabel={speedLabel}
+                onSelect={(newSpeedLabel: string) => {
+                    props.onChange(getSpeedByLabel(newSpeedLabel));
+                }}
+                handleClose={() => {
                     setIsModalOpen(false);
                     props.setCameraVeilCallback(false);
-                    props.onChange(getSpeedByLabel(newSpeedLabel));
                 }}
             />
             <MagneticWrapper>
                 <button
                     className="button-action-speed"
                     onPointerDown={() => {
+                        FunctionProvider.stopAllActions(true);
+                    }}
+                    onClick={() => {
+                        FunctionProvider.stopAllActions(true);
                         setIsModalOpen(!isModalOpen);
                         props.setCameraVeilCallback(!isModalOpen);
-                        buttonFunctionProvider.disableActiveButton();
                     }}
                     aria-label="Change action speed"
                     aria-hidden={props.isCameraVeilVisible}
@@ -120,11 +117,11 @@ export const ActionSpeed = (props: ActionSpeedProps) => {
 
 interface ModalActionSpeedProps {
     isOpen: boolean;
-    /**
-     * Function handles behavior modal close
-     * @param newSpeedLabel the label for the newly selected speed
-     */
-    handleClose: (newSpeedLabel: string) => void;
+    speedLabel: string;
+    /** Apply the chosen speed immediately (before the dismiss animation). */
+    onSelect: (newSpeedLabel: string) => void;
+    /** Hide the modal and camera veil. */
+    handleClose: () => void;
 }
 
 interface OptionItem {
@@ -133,24 +130,30 @@ interface OptionItem {
 
 const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
     isOpen,
+    speedLabel,
+    onSelect,
     handleClose,
 }) => {
-    const [selectedSpeed, setSelectedSpeed] = useState<string>(
-        VELOCITY_SCALE[1].label
-    );
+    const [selectedSpeed, setSelectedSpeed] = useState<string>(speedLabel);
+    const scheduleClose = useDismissTimeout(isOpen);
+
+    React.useEffect(() => {
+        setSelectedSpeed(speedLabel);
+    }, [speedLabel, isOpen]);
 
     const options: OptionItem[] = VELOCITY_SCALE.map((item) => ({
         value: item.label,
     }));
 
     const handleSpeedSelection = (speed: string) => {
+        FunctionProvider.stopAllActions(true);
         setSelectedSpeed(speed);
-        setTimeout(() => handleClose(speed), 500);
+        onSelect(speed);
+        scheduleClose(handleClose);
     };
 
     const close = () => {
-        // Close without selecting a new button pad
-        setTimeout(() => handleClose(selectedSpeed), 500);
+        scheduleClose(handleClose);
     };
 
     return (
@@ -172,7 +175,7 @@ const ModalActionSpeed: React.FC<ModalActionSpeedProps> = ({
                             className={`${opt.value} ${selectedSpeed === opt.value ? "selected" : ""}`}
                             aria-label={ariaLabel}
                             aria-hidden={!isOpen}
-                            onPointerDown={() =>
+                            onClick={() =>
                                 handleSpeedSelection(opt.value)
                             }
                         >

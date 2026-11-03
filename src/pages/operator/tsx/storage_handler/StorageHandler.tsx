@@ -1,4 +1,4 @@
-import ROSLIB from "roslib";
+import { Transform } from "roslib";
 import { BASIC_LAYOUT } from "../default_layouts/SIMPLE_LAYOUT";
 import { LayoutDefinition } from "operator/tsx/utils/component_definitions";
 import { ArucoMarkersInfo, RobotPose } from "shared/util";
@@ -69,7 +69,7 @@ export abstract class StorageHandler {
      */
     public abstract saveMapPose(
         poseName: string,
-        pose: ROSLIB.Transform,
+        pose: Transform,
         poseType: string,
     ): void;
 
@@ -84,13 +84,13 @@ export abstract class StorageHandler {
      * @param name the name of the map pose
      * @returns a map pose associated with the given name
      */
-    public abstract getMapPose(poseName: string): ROSLIB.Transform;
+    public abstract getMapPose(poseName: string): Transform;
 
     /**
      * Gets an array of all saved poses
      * @returns an array of all saved poses
      */
-    public abstract getMapPoses(): ROSLIB.Transform[];
+    public abstract getMapPoses(): Transform[];
 
     /**
      * Get an array of all the saved map pose types (map or aruco)

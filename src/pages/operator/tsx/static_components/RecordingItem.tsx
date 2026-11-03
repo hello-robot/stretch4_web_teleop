@@ -159,15 +159,15 @@ const RecordingItem: React.FC<RecordingItemProps> = ({
         isEditingSet(false);
     }, [idxFixed, recordingName, functions, recordingsRefresh]);
 
-    // Handler for playback
-    const playback = useCallback((idxFixed) => {
-        setCameraVeilCallback(true)
-        setTimeout(() => {
-            idxFixedRecordingPlayingSet(idxFixed);
-            functions.LoadRecording(idxFixed);
-            // Use a delay to allow for the modal to close before kicking off
-        }, DELAYMS_PLAYBACK_BEFORE_START);
-    }, []);
+    const playback = useCallback(async (idxFixed) => {
+        setCameraVeilCallback(true);
+        closeModal();
+
+        // 1. Set optimistic state immediately so the Stop button renders 0ms after tap
+        idxFixedRecordingPlayingSet(idxFixed);
+        // 2. Call playback immediately (awaiting mode switch if async)
+        await functions.LoadRecording(idxFixed);
+    }, [closeModal, idxFixedRecordingPlayingSet, functions]);
 
     // Side-effects when playback starts/ends
     useEffect(() => {
@@ -208,13 +208,22 @@ const RecordingItem: React.FC<RecordingItemProps> = ({
     }, [isThisPlaying]);
 
     // Handler for play/stop button
-    const handlePlay = useCallback(() => {
-        // Close the modal without
-        // revealing Pilot controls...
-        closeModal();
-        // ...start playback!
-        playback(idxFixed);
-    }, [idxFixedRecordingPlaying, idxFixed, functions]);
+    const handlePlay = useCallback(
+        (e?: React.SyntheticEvent) => {
+            if (e) {
+                // Prevent duplicate trigger when pointerdown is followed by click
+                // and stop propagation so underlying controls are not triggered upon modal close.
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            // Close the modal without
+            // revealing Pilot controls...
+            closeModal();
+            // ...start playback!
+            playback(idxFixed);
+        },
+        [closeModal, playback, idxFixed],
+    );
 
     const handleEditClick = useCallback(() => {
         // Synchronous focus (after enabling the field) keeps iOS user-gesture context
@@ -323,9 +332,12 @@ const RecordingItem: React.FC<RecordingItemProps> = ({
             **************************/}
             <Flex gap={10} flex={1} align="center">
                 <button
+                    type="button"
                     onPointerDown={handlePlay}
+                    onClick={handlePlay}
                     className="button-playback"
                     disabled={isDisabled}
+                    aria-label={`Play ${recordingName}`}
                 >
                     <PlayArrow htmlColor="hsl(204, 89%, 32%)" />
                 </button>

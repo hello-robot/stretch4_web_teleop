@@ -1,35 +1,48 @@
 import React from "react";
 import {
-    Ros,
     Action,
     Goal,
-    Topic,
-    Service,
-    ROS2TFClient,
-    Transform,
-    Param,
     Message,
+    Param,
+    Ros,
+    ROS2TFClient,
+    Service,
+    Topic,
+    Transform,
 } from "roslib";
+import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 import {
-    ROSJointState,
-    ROSCompressedImage,
-    ValidJoints,
-    VideoProps,
-    ROSOccupancyGrid,
-    ROSPose,
     ActionState,
     ActionStatusList,
     BatteryState,
-    StretchTool,
-    getStretchTool,
     DiagnosticArray,
+    EE_VELOCITY_LIMITER_NODE,
+    getMaxEeSpeed,
+    getPlaybackJointVelocities,
+    getPlaybackJointVelocity,
+    GRIPPER_INCREMENT_RANGE_FRACTION,
+    JOINT_VELOCITY_HEARTBEAT_MS,
+    ParameterEvent,
+    ROSCompressedImage,
+    ROSJointState,
+    ROSOccupancyGrid,
+    ROSOdometry,
+    ROSPose,
+    setMaxEeSpeed,
+    updateJointIncrements,
+    ValidJoints,
+    VideoProps,
 } from "shared/util";
 import {
-    rosJointStatetoRobotPose,
-    ValidJointStateDict,
     RobotPose,
-    IsRunStoppedMessage,
+    rosJointStatetoRobotPose,
+    ValidJointStateDict
 } from "../../../shared/util";
+const { createRosReconnectGuard } = require("./rosReconnectGuard");
+
+/** Ask /map_server/map once, then retry a miss up to this many times. */
+const OCCUPANCY_GRID_MAX_RETRIES = 10;
+const OCCUPANCY_GRID_RETRY_MS = 2000;
 
 export var robotMode: "navigation" | "position" | "velocity" | "unknown" = "position";
 export var rosConnected = false;
@@ -52,6 +65,18 @@ export const movementStatesTransitory: MovementState[] = [MovementState.Executin
 
 export const movementStatesAll = Object.values(MovementState);
 
+// ROS 2 action_msgs/msg/GoalStatus values.
+// Reference: https://github.com/ros2/rcl_interfaces/blob/humble/action_msgs/msg/GoalStatus.msg
+export enum GoalStatus {
+    STATUS_UNKNOWN = 0,
+    STATUS_ACCEPTED = 1,
+    STATUS_EXECUTING = 2,
+    STATUS_CANCELING = 3,
+    STATUS_SUCCEEDED = 4,
+    STATUS_CANCELED = 5,
+    STATUS_ABORTED = 6,
+}
+
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
@@ -60,22 +85,62 @@ export class Robot extends React.Component {
     private ros: Ros;
     private readonly rosURL = "wss://localhost:9090";
     private rosReconnectTimerID?: ReturnType<typeof setTimeout>;
+    private rosReconnectGuard = createRosReconnectGuard();
     private onRosConnectCallback?: () => Promise<void>;
+    /**
+     * Simulation only [lower, upper] position bounds per joint
+     * Only the simulated (mujoco) driver publishes to the /joint_limits topic.
+     */
     private jointLimits: { [key in ValidJoints]?: [number, number] } = {};
+    /**
+     * [withinLowerLimit, withinUpperLimit] per joint, from the real driver's
+     * /joint_states_diagnostics topic (the "at_limit" status). This is the
+     * authoritative source for at-limit state on real hardware.
+     */
+    private diagnosticJointLimits: { [key in ValidJoints]?: [boolean, boolean] } = {};
+    /**
+     * [inCollisionNeg, inCollisionPos] per joint, from the real driver's
+     * /joint_states_diagnostics topic (the "in_collision" status).
+     */
+    private diagnosticInCollision: { [key in ValidJoints]?: [boolean, boolean] } = {};
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
     private poseGoalID?: string;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
+    private moveBaseGoalID?: string;
+    /**
+     * Nav2 keeps SUCCEEDED entries in /_action/status forever. We only treat a
+     * terminal status as "our" result after we've seen an in-progress status
+     * (or feedback) for the current sendGoal session.
+     */
+    private moveBaseStatusWatching = false;
+    private moveBaseStatusSeenActive = false;
+    private moveBaseStatusLastEmitted?: number;
+    /** Count of terminal statuses when this goal session began (stale SUCCEEDED pile). */
+    private moveBaseTerminalBaseline?: number;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
-    private cmdVelTopic?: Topic;
+    /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
+    private cmdVelNavTopic?: Topic;
+    /** Drive straight to the driver (or to /teleop/cmd_vel when velocity limiter is active). */
+    private cmdVelDirectTopic?: Topic;
+    private collisionMonitorStateService?: Service;
+    private collisionMonitorActive = false;
+    private collisionMonitorPollTimerID?: ReturnType<typeof setInterval>;
+    private occupancyGridPollTimerID?: ReturnType<typeof setTimeout>;
+    /** Ignores a /map_server/map reply after a newer getOccupancyGrid call. */
+    private occupancyGridRequestId = 0;
+    /** Retries already scheduled for the current getOccupancyGrid call. */
+    private occupancyGridRetries = 0;
     private jointVelTopic?: Topic;
+    private eeCmdVelTopic?: Topic;
     private useCenterCameraService?: Service;
     private useLeftCameraService?: Service;
     private useRightCameraService?: Service;
     private setExpandedGripperService?: Service;
     private setRunStopService?: Service;
+    private toggleBaseOnlyCollisionService?: Service;
     private robotFrameTfClient?: ROS2TFClient;
     private mapFrameTfClient?: ROS2TFClient;
     private linkGripperFingerLeftTF?: Transform;
@@ -88,6 +153,8 @@ export class Robot extends React.Component {
     ) => void;
     private batteryStateCallback: (batteryState: BatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+    private occupancyGridUnavailableCallback: () => void;
+    private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
@@ -95,11 +162,17 @@ export class Robot extends React.Component {
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
     private stretchToolCallback: (value: string) => void;
+    private leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+    private maxEeSpeedCallback: (maxEeSpeed: number) => void;
     private subscriptions: Topic[] = [];
-    private stretchToolParam: Param;
+    private stretchToolParam?: Param;
+    private toolIsActuatedParam?: Param;
     private modeParam: Param;
     private homeTheRobotService?: Service;
-    private stretchTool: StretchTool;
+    private seedLocalizationService?: Service;
+    private stretchToolName: string = "unknown";
+    private toolIsActuated: boolean = true;
+    private stretchParamsReady: Promise<void> = Promise.resolve();
 
     constructor(props: {
         jointStateCallback: (
@@ -109,6 +182,8 @@ export class Robot extends React.Component {
         ) => void;
         batteryStateCallback: (batteryState: BatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
+        occupancyGridUnavailableCallback: () => void;
+        odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
@@ -116,18 +191,34 @@ export class Robot extends React.Component {
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
         stretchToolCallback: (value: string) => void;
+        leaseStatusCallback: (holder: string, isDriverHolding: boolean) => void;
+        maxEeSpeedCallback: (maxEeSpeed: number) => void;
     }) {
         super(props);
         this.jointStateCallback = props.jointStateCallback;
         this.batteryStateCallback = props.batteryStateCallback;
         this.occupancyGridCallback = props.occupancyGridCallback;
-        this.moveBaseResultCallback = props.moveBaseResultCallback;
+        this.occupancyGridUnavailableCallback =
+            props.occupancyGridUnavailableCallback;
+        this.odomCallback = props.odomCallback;
+        this.moveBaseResultCallback = (goalState) => {
+            if (goalState.state !== "Navigation executing!") {
+                this.moveBaseGoalID = undefined;
+                this.moveBaseGoal = undefined;
+                this.moveBaseStatusWatching = false;
+                this.moveBaseStatusSeenActive = false;
+                this.moveBaseTerminalBaseline = undefined;
+            }
+            props.moveBaseResultCallback(goalState);
+        };
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
         this.modeCallback = props.modeCallback;
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
         this.stretchToolCallback = props.stretchToolCallback;
+        this.leaseStatusCallback = props.leaseStatusCallback;
+        this.maxEeSpeedCallback = props.maxEeSpeedCallback;
     }
 
     setOnRosConnectCallback(callback: () => Promise<void>) {
@@ -166,19 +257,32 @@ export class Robot extends React.Component {
 
         this.ros.on("close", () => {
             console.log("Connection to ROS has been closed.");
+            if (!this.rosReconnectGuard.shouldReconnectAfterClose()) {
+                console.log("Ignoring close requested by ROS reconnect.");
+                return;
+            }
             this.reconnect();
         });
     }
 
     async reconnect(interval_ms: number = 1000) {
-        if (!this.rosReconnectTimerID) {
-            this.rosReconnectTimerID = setTimeout(() => {
-                console.log("Reconnecting to ROS...");
-                this.ros.close();
-                this.ros.connect(this.rosURL);
-                this.rosReconnectTimerID = undefined;
-            }, interval_ms);
+        if (this.rosReconnectTimerID) {
+            return;
         }
+        this.rosReconnectTimerID = setTimeout(() => {
+            // Clear before close/connect. Those events call reconnect()
+            // synchronously, and a still-set timer id would drop the next try.
+            this.rosReconnectTimerID = undefined;
+            console.log("Reconnecting to ROS...");
+            try {
+                this.rosReconnectGuard.beginIntentionalClose();
+                this.ros.close();
+            } catch (error) {
+                this.rosReconnectGuard.cancelIntentionalClose();
+                console.log("Error closing ROS socket:", error);
+            }
+            this.ros.connect(this.rosURL);
+        }, interval_ms);
     }
 
     async checkROSConnection(
@@ -251,38 +355,52 @@ export class Robot extends React.Component {
 
     async onConnect() {
         console.log("onConnect");
+
         this.subscribeToJointState();
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
+        this.subscribeToOdom();
         this.subscribeToMode();
+        this.subscribeToIsRunStopped();
         this.subscribetoJointStateDiagnostics();
-        this.subscribeToActionResult(
-            moveBaseActionName,
-            this.moveBaseResultCallback,
-            "Navigation canceled!",
-            "Navigation succeeded!",
-            "Navigation failed!"
-        );
+        this.subscribeToLeaseHolder();
         this.createTrajectoryClient();
         this.createMoveBaseClient();
-        this.createCmdVelTopic();
+        // Primary completion signal: rosbridge sendGoal result callbacks are
+        // unreliable; Nav2 /_action/status is the durable path for Stop UI.
+        this.subscribeToActionResult(
+            moveBaseActionName,
+            this.handleMoveBaseResult.bind(this),
+            "Navigation executing!",
+            "Navigation canceled!",
+            "Navigation succeeded!",
+            "Navigation failed!",
+        );
+
+        this.createCmdVelTopics();
+        this.startCollisionMonitorPoll();
         this.createJointVelTopic();
+        this.createEeCmdVelTopic();
         this.createUseCenterCameraService();
         this.createUseLeftCameraService();
         this.createUseRightCameraService();
         this.createExpandedGripperService();
         this.createRunStopService();
+        this.createToggleBaseOnlyCollisionService();
+        this.toggleBaseOnlyCollision(true);
         // this.createRobotFrameTFClient();
         // this.createMapFrameTFClient();
         // this.subscribeToHeadTiltTF();
         // this.subscribeToMapTF();
         this.createHomeTheRobotService();
+        this.createSeedLocalizationService();
         this.initStretchParams();
 
         return Promise.resolve();
     }
 
     closeROSConnection() {
+        this.stopCollisionMonitorPoll();
         this.subscriptions.forEach((topic) => {
             topic.unsubscribe();
         });
@@ -306,13 +424,16 @@ export class Robot extends React.Component {
             let robotPose: RobotPose = rosJointStatetoRobotPose(
                 this.jointState
             );
+            robotPose["arm_joint"] = this.getJointValue("arm_joint");
             let jointValues: ValidJointStateDict = {};
             let effortValues: ValidJointStateDict = {};
-            this.jointState.name.forEach((name?: ValidJoints) => {
+            const jointsToEvaluate = new Set([...this.jointState.name as ValidJoints[], "arm_joint" as ValidJoints, "wrist_extension" as ValidJoints]);
+            jointsToEvaluate.forEach((name?: ValidJoints) => {
+                if (!name) return;
                 let inLimits = this.inJointLimits(name);
                 let collision = this.inCollision(name);
-                if (inLimits) jointValues[name!] = inLimits;
-                if (collision) effortValues[name!] = collision;
+                if (inLimits) jointValues[name] = inLimits;
+                if (collision) effortValues[name] = collision;
             });
 
             if (this.jointStateCallback)
@@ -355,6 +476,19 @@ export class Robot extends React.Component {
         });
     }
 
+    subscribeToOdom() {
+        const odomTopic: Topic<ROSOdometry> = new Topic({
+            ros: this.ros,
+            name: "/wheel_odom",
+            messageType: "nav_msgs/msg/Odometry",
+        });
+        this.subscriptions.push(odomTopic);
+
+        odomTopic.subscribe((msg: ROSOdometry) => {
+            if (this.odomCallback) this.odomCallback(msg);
+        });
+    }
+
     subscribeToMode() {
         const modeTopic: Topic = new Topic({
             ros: this.ros,
@@ -363,8 +497,61 @@ export class Robot extends React.Component {
         });
         this.subscriptions.push(modeTopic);
 
-        modeTopic.subscribe((msg) => {
+        modeTopic.subscribe((msg: any) => {
+            robotMode = msg.data;
             if (this.modeCallback) this.modeCallback(msg.data);
+        });
+    }
+
+    subscribeToIsRunStopped() {
+        const runStopTopic: Topic = new Topic({
+            ros: this.ros,
+            name: "/is_runstopped",
+            messageType: "std_msgs/msg/Bool",
+        });
+        this.subscriptions.push(runStopTopic);
+
+        runStopTopic.subscribe((msg: any) => {
+            const isRunStopped = Boolean(msg.data);
+            this.isRunStopped = isRunStopped;
+            if (isRunStopped) {
+                this.stopExecution(true);
+                this.toggleBaseOnlyCollision(true);
+            }
+            if (this.isRunStoppedCallback) this.isRunStoppedCallback(isRunStopped);
+        });
+    }
+
+    getIsRunStopped(): boolean {
+        return Boolean(this.isRunStopped);
+    }
+
+    subscribeToLeaseHolder() {
+        const leaseHolderTopic: Topic = new Topic({
+            ros: this.ros,
+            name: "/server_lease_holder",
+            messageType: "diagnostic_msgs/msg/DiagnosticStatus",
+        });
+        this.subscriptions.push(leaseHolderTopic);
+
+        leaseHolderTopic.subscribe((message: Message) => {
+            const status = message as any;
+            let leaseHolder = "none";
+            let leaseExpired = false;
+            if (status && status.values) {
+                const holderPair = status.values.find((pair: any) => pair.key === "lease_holder");
+                if (holderPair) {
+                    leaseHolder = holderPair.value;
+                }
+                const expiredPair = status.values.find((pair: any) => pair.key === "lease_expired");
+                if (expiredPair) {
+                    leaseExpired = expiredPair.value.toLowerCase() === "true";
+                }
+            }
+            const isDriverHolding = leaseHolder === "ros2_driver" || leaseExpired;
+            if (this.leaseStatusCallback) {
+                this.leaseStatusCallback(leaseHolder, isDriverHolding);
+            }
         });
     }
 
@@ -378,13 +565,45 @@ export class Robot extends React.Component {
         jointStateDiagnosticsTopic.subscribe((message: Message) => {
             let msg = message as DiagnosticArray;
             msg.status.forEach((status) => {
-                if (status.name == "is_runstopped") {
-                    let isRunStopped = status.values.every((v) => v.value == 'True');
-                    if (this.isRunStoppedCallback) this.isRunStoppedCallback(isRunStopped);
-                }
                 if (status.name == "is_homed") {
                     let isHomed = status.values.every((v) => v.value == 'True');
                     if (this.isHomedCallback) this.isHomedCallback(isHomed);
+                }
+                if (status.name == "at_limit") {
+                    status.values.forEach((v) => {
+                        let rawKey = v.key;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
+                        let valStr = v.value;
+                        let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
+                        let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
+                        let limits: [boolean, boolean] = [!isNeg, !isPos];
+                        let prevLimits = this.diagnosticJointLimits[jointName];
+                        if (!prevLimits || prevLimits[0] !== limits[0] || prevLimits[1] !== limits[1]) {
+                            console.log(`[Diagnostics] at_limit for ${rawKey} (${jointName}): limits=[${limits[0]}, ${limits[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        }
+                        this.diagnosticJointLimits[jointName] = limits;
+                        // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
+                        if (jointName === "arm_joint") this.diagnosticJointLimits["wrist_extension"] = limits;
+                        if (jointName === "wrist_extension") this.diagnosticJointLimits["arm_joint"] = limits;
+                    });
+                }
+                if (status.name == "in_collision") {
+                    status.values.forEach((v) => {
+                        let rawKey = v.key;
+                        let jointName = (rawKey === "gripper_joint" || rawKey === "stretch_gripper_joint" || rawKey === "gripper_aperture" ? "gripper_joint" : rawKey) as ValidJoints;
+                        let valStr = v.value;
+                        let isPos = /['"]pos['"]\s*:\s*(True|1)/i.test(valStr);
+                        let isNeg = /['"]neg['"]\s*:\s*(True|1)/i.test(valStr);
+                        let collisions: [boolean, boolean] = [isNeg, isPos];
+                        let prevCollisions = this.diagnosticInCollision[jointName];
+                        if (!prevCollisions || prevCollisions[0] !== collisions[0] || prevCollisions[1] !== collisions[1]) {
+                            console.log(`[Diagnostics] in_collision for ${rawKey} (${jointName}): collisions=[${collisions[0]}, ${collisions[1]}] (isNeg=${isNeg}, isPos=${isPos}) raw="${valStr}"`);
+                        }
+                        this.diagnosticInCollision[jointName] = collisions;
+                        // Handle joint name aliasing: ROS driver uses "arm_joint" while UI/web teleop components may query "wrist_extension"
+                        if (jointName === "arm_joint") this.diagnosticInCollision["wrist_extension"] = collisions;
+                        if (jointName === "wrist_extension") this.diagnosticInCollision["arm_joint"] = collisions;
+                    });
                 }
             });
         });
@@ -408,62 +627,173 @@ export class Robot extends React.Component {
             ros: this.ros,
             name: "/configure_video_streams_gripper:stretch_tool",
         });
-        this.stretchToolParam.get((value: string) => {
-            this.stretchTool = getStretchTool(value);
+        const stretchToolReady = new Promise<void>((resolve) => {
+            this.stretchToolParam!.get((value: string) => {
+                this.stretchToolName = value || "unknown";
+                resolve();
+            });
+        });
+
+        this.toolIsActuatedParam = new Param({
+            ros: this.ros,
+            name: "/stretch_driver:tool_info.is_actuated",
+        });
+        const toolIsActuatedReady = new Promise<void>((resolve) => {
+            this.toolIsActuatedParam!.get((value: boolean) => {
+                this.toolIsActuated = value ?? true;
+                resolve();
+            });
+        });
+
+        // Guard against a Param.get() that never calls back (e.g. the
+        // parameter doesn't exist yet on the robot) so getStretchTool()
+        // can't hang forever waiting on this promise.
+        this.stretchParamsReady = Promise.race([
+            Promise.all([stretchToolReady, toolIsActuatedReady]).then(() => { }),
+            new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]);
+
+        // Scale the gripper's jog increment from the attached tool's advertised travel.
+        new Param({
+            ros: this.ros,
+            name: "/stretch_driver:tool_info.urdf_range",
+        }).get((value: number[]) => {
+            if (Array.isArray(value) && value.length === 2) {
+                const travel = Math.abs(value[1] - value[0]);
+                if (travel > 0) {
+                    updateJointIncrements({
+                        gripper_joint: travel * GRIPPER_INCREMENT_RANGE_FRACTION,
+                    });
+                }
+            }
         });
 
         this.modeParam = new Param({
             ros: this.ros,
             name: "/stretch_driver:mode"
         });
+
+        this.initMaxEeSpeed();
     }
 
-    getStretchTool() {
-        // if (this.stretchTool == StretchTool.TABLET) {
-        //     this.subscribeToTabletTF();
-        // } else {
-        //     this.subscribeToGripperFingerTF();
-        // }
+    /**
+     * Track the velocity limiter's max_ee_speed, which every derived joint velocity scales from.
+     *
+     * The limiter re-reads this parameter on each command, so an operator raising or lowering it
+     * at runtime changes what the robot actually does; the interface has to follow or its speed
+     * profiles stop describing the motion. The parameter is read once at startup and then watched
+     * on /parameter_events. If the limiter is not running the read simply never calls back, and
+     * the compiled-in default stands.
+     */
+    initMaxEeSpeed() {
+        new Param({
+            ros: this.ros,
+            name: `/${EE_VELOCITY_LIMITER_NODE}:max_ee_speed`,
+        }).get((value: number) => this.applyMaxEeSpeed(value));
+
+        const parameterEvents: Topic = new Topic({
+            ros: this.ros,
+            name: "/parameter_events",
+            messageType: "rcl_interfaces/msg/ParameterEvent",
+        });
+        this.subscriptions.push(parameterEvents);
+        parameterEvents.subscribe((message: Message) => {
+            const event = message as ParameterEvent;
+            if (!event?.node?.endsWith(`/${EE_VELOCITY_LIMITER_NODE}`)) return;
+            const changed = [
+                ...(event.new_parameters ?? []),
+                ...(event.changed_parameters ?? []),
+            ].find((parameter) => parameter?.name === "max_ee_speed");
+            if (changed) this.applyMaxEeSpeed(changed.value?.double_value);
+        });
+    }
+
+    /**
+     * Adopt a ceiling reported by ROS and tell the operator, if it is a real change.
+     *
+     * Args:
+     *     speed: Ceiling in m/s, or undefined when the parameter event carried no double value.
+     */
+    private applyMaxEeSpeed(speed: number | undefined) {
+        if (typeof speed !== "number") return;
+        if (!setMaxEeSpeed(speed)) return;
+        this.getMaxEeSpeed();
+    }
+
+    /** Report the ceiling the joint velocity table is derived from to the operator. */
+    getMaxEeSpeed() {
+        if (this.maxEeSpeedCallback) this.maxEeSpeedCallback(getMaxEeSpeed());
+    }
+
+    isToolActuated(): boolean {
+        return this.toolIsActuated;
+    }
+
+    async getStretchTool() {
+        // Wait for the initial Param fetches so a request that arrives
+        // right after connecting reports the robot's real values instead
+        // of racing initStretchParams() and reading its hardcoded defaults.
+        await this.stretchParamsReady;
         if (this.stretchToolCallback)
-            this.stretchToolCallback(this.stretchTool);
+            this.stretchToolCallback(this.stretchToolName);
     }
 
     getOccupancyGrid() {
-        let getMapService = new Service({
+        this.stopOccupancyGridPoll();
+        this.occupancyGridRetries = 0;
+        const requestId = ++this.occupancyGridRequestId;
+        this.requestOccupancyGrid(requestId);
+    }
+
+    private requestOccupancyGrid(requestId: number) {
+        const getMapService = new Service({
             ros: this.ros,
             name: "/map_server/map",
             serviceType: "nav2_msgs/srv/GetMap",
         });
 
-        var request = {};
-        getMapService?.callService(
-            request,
-            (response: { map: ROSOccupancyGrid }) => {
-                if (this.occupancyGridCallback)
-                    this.occupancyGridCallback(response.map);
-            }
-        );
-    }
-
-    getJointLimits() {
-        console.log("Getting joint limits");
-        let getJointLimitsService = new Service({
-            ros: this.ros,
-            name: "/get_joint_states",
-            serviceType: "std_srvs/Trigger",
-        });
-
-        var request = {};
-        getJointLimitsService.callService(
-            request,
-            () => {
-                console.log("Got joint limits service succeeded");
+        getMapService.callService(
+            {},
+            (response: { map?: ROSOccupancyGrid }) => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                const map = response?.map;
+                const cells =
+                    (map?.info?.width ?? 0) * (map?.info?.height ?? 0);
+                if (!map || cells <= 0) {
+                    this.reportOccupancyGridUnavailable(requestId);
+                    return;
+                }
+                this.stopOccupancyGridPoll();
+                this.subscribeToMapTF();
+                this.occupancyGridCallback(map);
             },
-            (error) => {
-                console.log("Got joint limits service failed", error);
-            }
+            () => {
+                if (requestId !== this.occupancyGridRequestId) return;
+                this.reportOccupancyGridUnavailable(requestId);
+            },
         );
     }
+
+    private reportOccupancyGridUnavailable(requestId: number) {
+        this.stopOccupancyGridPoll();
+        this.occupancyGridUnavailableCallback();
+        if (this.occupancyGridRetries >= OCCUPANCY_GRID_MAX_RETRIES) return;
+        this.occupancyGridRetries += 1;
+        this.occupancyGridPollTimerID = setTimeout(() => {
+            this.occupancyGridPollTimerID = undefined;
+            if (requestId !== this.occupancyGridRequestId) return;
+            this.requestOccupancyGrid(requestId);
+        }, OCCUPANCY_GRID_RETRY_MS);
+    }
+
+    private stopOccupancyGridPoll() {
+        if (this.occupancyGridPollTimerID !== undefined) {
+            clearTimeout(this.occupancyGridPollTimerID);
+            this.occupancyGridPollTimerID = undefined;
+        }
+    }
+
+
 
     subscribeToActionResult(
         actionName: string,
@@ -497,32 +827,178 @@ export class Robot extends React.Component {
 
         // Subscribe to the topic
         topic.subscribe((msg: ActionStatusList) => {
-            console.log("Got action status msg", msg);
-            let status = msg.status_list.pop()?.status;
-            console.log("For action ", actionName, "got status ", status);
-            if (callback) {
-                if (status == 2)
-                    callback({
-                        state: executingMsg,
-                        alert_type: "info",
-                    });
-                else if (status == 4)
-                    callback({
-                        state: successMsg,
-                        alert_type: "success",
-                    });
-                else if (status == 5)
-                    callback({
-                        state: cancelMsg,
-                        alert_type: "error",
-                    });
-                else if (status == 6)
-                    callback({
-                        state: failureMsg,
-                        alert_type: "error",
-                    });
+            const statusList = msg.status_list;
+            if (!statusList?.length || !callback) {
+                return;
             }
+
+            if (actionName === moveBaseActionName) {
+                this.handleMoveBaseActionStatus(
+                    statusList,
+                    callback,
+                    executingMsg!,
+                    cancelMsg!,
+                    successMsg!,
+                    failureMsg!,
+                );
+                return;
+            }
+
+            // Generic (non-move-base) path: newest status only.
+            const status = statusList[statusList.length - 1]?.status;
+            console.log("For action ", actionName, "got status ", status);
+            if (status === undefined) {
+                return;
+            }
+            if (status == GoalStatus.STATUS_EXECUTING)
+                callback({
+                    state: executingMsg,
+                    alert_type: "info",
+                });
+            else if (status == GoalStatus.STATUS_SUCCEEDED)
+                callback({
+                    state: successMsg,
+                    alert_type: "success",
+                });
+            else if (status == GoalStatus.STATUS_CANCELED)
+                callback({
+                    state: cancelMsg,
+                    alert_type: "error",
+                });
+            else if (status == GoalStatus.STATUS_ABORTED)
+                callback({
+                    state: failureMsg,
+                    alert_type: "error",
+                });
         });
+    }
+
+    /**
+     * Interpret Nav2 /navigate_to_pose/_action/status without treating a pile of
+     * historical SUCCEEDED entries as the current goal finishing.
+     */
+    private handleMoveBaseActionStatus(
+        statusList: { status: number }[],
+        callback: (goalState: ActionState) => void,
+        executingMsg: string,
+        cancelMsg: string,
+        successMsg: string,
+        failureMsg: string,
+    ) {
+        // rosbridge may deliver status as string; coerce before compares.
+        const statuses = statusList.map((entry) => Number(entry.status));
+        const terminalCount = statuses.filter(
+            (status) =>
+                status === GoalStatus.STATUS_SUCCEEDED ||
+                status === GoalStatus.STATUS_CANCELED ||
+                status === GoalStatus.STATUS_ABORTED,
+        ).length;
+        if (this.moveBaseTerminalBaseline === undefined) {
+            this.moveBaseTerminalBaseline = terminalCount;
+        }
+
+        const hasAccepted = statuses.includes(GoalStatus.STATUS_ACCEPTED);
+        const hasExecuting = statuses.includes(GoalStatus.STATUS_EXECUTING);
+        const hasCanceling = statuses.includes(GoalStatus.STATUS_CANCELING);
+
+        // Check if Nav2 action server is actively tracking a goal even if we weren't
+        // actively watching (e.g. app reload or mid-navigation session sync).
+        if (!this.moveBaseStatusWatching) {
+            if (hasAccepted || hasExecuting || hasCanceling) {
+                console.log("Nav2 action server has active goal on (re)load; activating watch session");
+                this.moveBaseStatusWatching = true;
+                this.moveBaseStatusSeenActive = true;
+                this.toggleBaseOnlyCollision(false);
+                callback({
+                    state: executingMsg,
+                    alert_type: "info",
+                });
+                this.moveBaseStatusLastEmitted = GoalStatus.STATUS_EXECUTING;
+            }
+            return;
+        }
+
+        if (hasAccepted || hasExecuting || hasCanceling) {
+            this.moveBaseStatusSeenActive = true;
+            if (
+                hasExecuting &&
+                this.moveBaseStatusLastEmitted !== GoalStatus.STATUS_EXECUTING
+            ) {
+                console.log(
+                    "For action ",
+                    moveBaseActionName,
+                    "got status ",
+                    GoalStatus.STATUS_EXECUTING,
+                );
+                callback({
+                    state: executingMsg,
+                    alert_type: "info",
+                });
+                this.moveBaseStatusLastEmitted = GoalStatus.STATUS_EXECUTING;
+            }
+            return;
+        }
+
+        // Fallback when rosbridge never shows EXECUTING: a new terminal entry
+        // appeared after this goal was sent.
+        if (
+            !this.moveBaseStatusSeenActive &&
+            terminalCount > (this.moveBaseTerminalBaseline ?? 0)
+        ) {
+            this.moveBaseStatusSeenActive = true;
+        }
+
+        // No in-progress goals. Ignore stale SUCCEEDED until we've seen ours active.
+        if (!this.moveBaseStatusSeenActive) {
+            return;
+        }
+
+        // Prefer the newest terminal status in the list.
+        let terminal: number | undefined;
+        for (let i = statuses.length - 1; i >= 0; i--) {
+            const status = statuses[i];
+            if (
+                status === GoalStatus.STATUS_SUCCEEDED ||
+                status === GoalStatus.STATUS_CANCELED ||
+                status === GoalStatus.STATUS_ABORTED
+            ) {
+                terminal = status;
+                break;
+            }
+        }
+        if (terminal === undefined) {
+            return;
+        }
+        if (terminal === this.moveBaseStatusLastEmitted) {
+            return;
+        }
+
+        console.log(
+            "For action ",
+            moveBaseActionName,
+            "got status ",
+            terminal,
+        );
+        if (terminal === GoalStatus.STATUS_SUCCEEDED) {
+            callback({
+                state: successMsg,
+                alert_type: "success",
+            });
+            this.toggleBaseOnlyCollision(true);
+        } else if (terminal === GoalStatus.STATUS_CANCELED) {
+            callback({
+                state: cancelMsg,
+                alert_type: "error",
+            });
+            this.toggleBaseOnlyCollision(true);
+        } else if (terminal === GoalStatus.STATUS_ABORTED) {
+            callback({
+                state: failureMsg,
+                alert_type: "error",
+            });
+            this.toggleBaseOnlyCollision(true);
+        }
+        this.moveBaseStatusLastEmitted = terminal;
     }
 
     createTrajectoryClient() {
@@ -537,25 +1013,61 @@ export class Robot extends React.Component {
     createMoveBaseClient() {
         this.moveBaseClient = new Action({
             ros: this.ros,
-            serverName: moveBaseActionName,
-            actionName: "nav2_msgs/action/NavigateToPose",
+            name: moveBaseActionName,
+            actionType: "nav2_msgs/action/NavigateToPose",
             // timeout: 100
         });
     }
 
-    createCmdVelTopic() {
-        this.cmdVelTopic = new Topic({
+    createCmdVelTopics() {
+        if (FEATURE_EE_VELOCITY_LIMITER) {
+            this.cmdVelDirectTopic = new Topic({
+                ros: this.ros,
+                name: "/teleop/cmd_vel",
+                messageType: "geometry_msgs/Twist",
+            });
+        } else {
+            this.cmdVelNavTopic = new Topic({
+                ros: this.ros,
+                name: "/cmd_vel_nav",
+                messageType: "geometry_msgs/Twist",
+            });
+            this.cmdVelDirectTopic = new Topic({
+                ros: this.ros,
+                name: "/cmd_vel",
+                messageType: "geometry_msgs/Twist",
+            });
+        }
+        this.collisionMonitorStateService = new Service({
             ros: this.ros,
-            name: "/cmd_vel",
-            messageType: "geometry_msgs/Twist",
+            name: "/collision_monitor/get_state",
+            serviceType: "lifecycle_msgs/srv/GetState",
         });
+    }
+
+    /** Drive publisher for base commands (filtered by velocity_limiter when enabled, else dynamic collision monitor routing). */
+    private get cmdVelTopic(): Topic | undefined {
+        if (FEATURE_EE_VELOCITY_LIMITER) {
+            return this.cmdVelDirectTopic;
+        }
+        return this.collisionMonitorActive
+            ? this.cmdVelNavTopic
+            : this.cmdVelDirectTopic;
     }
 
     createJointVelTopic() {
         this.jointVelTopic = new Topic({
             ros: this.ros,
-            name: "/joint_vel",
+            name: FEATURE_EE_VELOCITY_LIMITER ? "/teleop/joint_vel" : "/joint_vel",
             messageType: "control_msgs/JointJog",
+        });
+    }
+
+    createEeCmdVelTopic() {
+        this.eeCmdVelTopic = new Topic({
+            ros: this.ros,
+            name: "/ee_cmd_vel",
+            messageType: "geometry_msgs/Twist",
         });
     }
 
@@ -591,6 +1103,14 @@ export class Robot extends React.Component {
         });
     }
 
+    createSeedLocalizationService() {
+        this.seedLocalizationService = new Service({
+            ros: this.ros,
+            name: "/seed_localization",
+            serviceType: "std_srvs/Trigger",
+        });
+    }
+
     createExpandedGripperService() {
         this.setExpandedGripperService = new Service({
             ros: this.ros,
@@ -603,6 +1123,14 @@ export class Robot extends React.Component {
         this.setRunStopService = new Service({
             ros: this.ros,
             name: "/runstop_the_robot",
+            serviceType: "std_srvs/srv/SetBool",
+        });
+    }
+
+    createToggleBaseOnlyCollisionService() {
+        this.toggleBaseOnlyCollisionService = new Service({
+            ros: this.ros,
+            name: "/joystick_control",
             serviceType: "std_srvs/srv/SetBool",
         });
     }
@@ -667,6 +1195,7 @@ export class Robot extends React.Component {
     }
 
     subscribeToMapTF() {
+        this.createMapFrameTFClient();
         this.mapFrameTfClient?.subscribe("base_link", (transform) => {
             if (this.amclPoseCallback) this.amclPoseCallback(transform);
         });
@@ -687,43 +1216,132 @@ export class Robot extends React.Component {
         );
     }
 
+    /**
+     * Set the software runstop state. If enabled (toggle=true), stops all
+     * active execution on the robot.
+     *
+     * @param toggle True to engage runstop, false to release.
+     */
     setRunStop(toggle: boolean) {
+        if (!this.setRunStopService) {
+            console.error("setRunStopService is undefined");
+            return;
+        }
+        if (toggle) {
+            this.stopExecution(true);
+            this.toggleBaseOnlyCollision(true);
+        }
         var request = { data: toggle };
-        this.setRunStopService?.callService(request, (response: boolean) => { });
+        console.log(`Calling /runstop_the_robot with data=${toggle}`);
+        this.setRunStopService.callService(
+            request,
+            (response: { success?: boolean; message?: string }) => {
+                console.log("setRunStop service response:", response);
+            },
+            (error: any) => {
+                console.error("setRunStop service call failed:", error);
+            }
+        );
+    }
+
+    toggleBaseOnlyCollision(bool: boolean) {
+        console.log("toggleBaseOnlyCollision called with value:", bool);
+        var request = { data: bool };
+        this.toggleBaseOnlyCollisionService?.callService(
+            request,
+            (response: boolean) => {
+                response
+                    ? console.log(
+                        "Successfully toggled base only collision to",
+                        bool
+                    )
+                    : console.log("Failed to toggle base only collision to", bool);
+            }
+        );
+    }
+
+    private handleMoveBaseResult(goalState: ActionState) {
+        if (goalState.state === "Navigation executing!") {
+            this.toggleBaseOnlyCollision(false);
+        } else if (
+            goalState.state === "Navigation succeeded!" ||
+            goalState.state === "Navigation canceled!" ||
+            goalState.state === "Navigation failed!"
+        ) {
+            console.log(`Navigation finished with state: ${goalState.state}. Restoring base-only collision.`);
+            this.toggleBaseOnlyCollision(true);
+        }
+
+        if (this.moveBaseResultCallback) {
+            this.moveBaseResultCallback(goalState);
+        }
     }
 
     /**
      * In navigation mode, you can send position commands to the arm and
      * velocity commands to the base.
      */
-    switchToNavigationMode() {
-        if (robotMode === "navigation") return;
-        this.modeParam.set("navigation", () => {
-            robotMode = "navigation";
-            console.log("Switched to navigation mode");
-        });
+    switchToNavigationMode(): Promise<void> {
+        return new Promise((resolve) => {
+            if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+                console.warn("Cannot switch mode while robot is runstopped");
+                resolve();
+                return;
+            }
+            if (robotMode === "navigation") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("navigation", () => {
+                robotMode = "navigation";
+                console.log("Switched to navigation mode");
+                resolve();
+            });
+        })
     }
 
     /**
      * In position mode, you can send position commands to the arm and
      * position commands to the base.
      */
-    switchToPositionMode = () => {
-        if (robotMode === "position") return;
-        this.modeParam.set("position", () => {
-            robotMode = "position";
-            console.log("Switched to position mode");
+    switchToPositionMode = (): Promise<void> => {
+        return new Promise((resolve) => {
+            if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+                console.warn("Cannot switch mode while robot is runstopped");
+                resolve();
+                return;
+            }
+            if (robotMode === "position") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("position", () => {
+                robotMode = "position";
+                console.log("Switched to position mode");
+                resolve();
+            });
         });
     };
 
     /**
      * In velocity mode, you can send velocity commands to the arm and base.
      */
-    switchToVelocityMode = () => {
-        if (robotMode === "velocity") return;
-        this.modeParam.set("velocity", () => {
-            robotMode = "velocity";
-            console.log("Switched to velocity mode");
+    switchToVelocityMode = (): Promise<void> => {
+        return new Promise((resolve) => {
+            if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+                console.warn("Cannot switch mode while robot is runstopped");
+                resolve();
+                return;
+            }
+            if (robotMode === "velocity") {
+                resolve();
+                return;
+            }
+            this.modeParam.set("velocity", () => {
+                robotMode = "velocity";
+                console.log("Switched to velocity mode");
+                resolve();
+            });
         });
     };
 
@@ -737,12 +1355,51 @@ export class Robot extends React.Component {
         });
     }
 
-    executeBaseVelocity = (props: {
+    /**
+     * Ask the robot to seed its localization via /seed_localization (std_srvs/Trigger).
+     */
+    seedLocalization(
+        resultCallback?: (result: { success: boolean; message: string }) => void
+    ) {
+        var request = {};
+        this.seedLocalizationService!.callService(
+            request,
+            (response: { success: boolean; message: string }) => {
+                console.log("Seed localization complete", response);
+                resultCallback?.(response);
+            }
+        );
+    }
+
+    /**
+     * Publishes a planar velocity twist command to the base velocity topic.
+     *
+     * Args:
+     *     props: Linear X/Y and angular Z velocity targets.
+     */
+    executeBaseVelocity = async (props: {
         linVelX: number;
         linVelY: number;
         angVel: number;
-    }): void => {
-        this.switchToVelocityMode();
+    }): Promise<void> => {
+        const isZeroStop =
+            props.linVelX === 0 && props.linVelY === 0 && props.angVel === 0;
+        if (isZeroStop) {
+            if (!this.cmdVelTopic) return;
+            this.cmdVelTopic.publish({
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: 0 },
+            });
+            return;
+        }
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executeBaseVelocity while robot is runstopped");
+            return;
+        }
+        await this.switchToVelocityMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            return;
+        }
         this.stopExecution();
         let twist = {
             linear: {
@@ -762,12 +1419,80 @@ export class Robot extends React.Component {
         this.cmdVelTopic.publish(twist);
     };
 
-    setJointVelocity(jointName: ValidJoints, velocity: number) {
-        this.switchToVelocityMode();
+    /**
+     * Publishes a linear velocity command in end-effector task space.
+     *
+     * Args:
+     *     linear_X: Forward velocity component in m/s.
+     *     linear_Y: Lateral velocity component in m/s.
+     *     linear_Z: Vertical velocity component in m/s.
+     */
+    async setTaskSpaceVelocity(linear_X: number, linear_Y: number, linear_Z: number) {
+        const isZeroStop =
+            linear_X === 0 && linear_Y === 0 && linear_Z === 0;
+        if (isZeroStop) {
+            if (!this.eeCmdVelTopic) return;
+            this.eeCmdVelTopic.publish({
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: 0 },
+            });
+            return;
+        }
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring setTaskSpaceVelocity while robot is runstopped");
+            return;
+        }
+        await this.switchToVelocityMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            return;
+        }
+        this.stopExecution();
+        const twist = {
+            linear: {
+                x: linear_X,
+                y: linear_Y,
+                z: linear_Z,
+            },
+            angular: {
+                x: 0,
+                y: 0,
+                z: 0,
+            },
+        };
+        if (!this.eeCmdVelTopic) throw "eeCmdVelTopic is undefined";
+        this.eeCmdVelTopic.publish(twist);
+    }
+
+    /**
+     * Publishes a single-joint velocity command with a short heartbeat duration.
+     *
+     * Args:
+     *     jointName: Target joint identifier.
+     *     velocity: Commanded joint velocity in rad/s or m/s.
+     */
+    async setJointVelocity(jointName: ValidJoints, velocity: number) {
+        if (velocity === 0) {
+            if (!this.jointVelTopic) return;
+            this.jointVelTopic.publish({
+                joint_names: [jointName],
+                velocities: [0],
+                duration: JOINT_VELOCITY_HEARTBEAT_MS / 1000,
+            });
+            return;
+        }
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring setJointVelocity while robot is runstopped");
+            return;
+        }
+        await this.switchToVelocityMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            return;
+        }
         this.stopExecution();
         let jointVelocities = {
             joint_names: [jointName],
             velocities: [velocity],
+            duration: JOINT_VELOCITY_HEARTBEAT_MS / 1000
         };
         if (!this.jointVelTopic) throw "jointVelTopic is undefined";
         this.jointVelTopic.publish(jointVelocities);
@@ -834,85 +1559,255 @@ export class Robot extends React.Component {
     }
 
 
-    makePoseGoal(pose: RobotPose) {
-        let jointNames: ValidJoints[] = [];
-        let jointPositions: number[] = [];
+    makePoseGoal(pose: RobotPose, minDuration: number = 0.5) {
+        const allJointNames = Object.keys(pose) as ValidJoints[];
+        if (allJointNames.length === 0) throw new Error("Pose object cannot be empty");
+
+        let maxDuration = minDuration;
+        const jointNames: ValidJoints[] = [];
+        const jointPositions: number[] = [];
+
         for (let key in pose) {
-            jointNames.push(key as ValidJoints);
-            jointPositions.push(pose[key as ValidJoints]!);
+            const jointName = key as ValidJoints;
+            let targetPos = pose[jointName]!;
+
+            try {
+                const currentPos = this.getJointValue(jointName);
+                if (currentPos !== undefined && !isNaN(currentPos)) {
+                    const distance = Math.abs(targetPos - currentPos);
+                    const velocityLimit = getPlaybackJointVelocity(jointName);
+
+                    if (velocityLimit > 0) {
+                        const jointDuration = distance / velocityLimit;
+                        if (!isNaN(jointDuration) && jointDuration > maxDuration) {
+                            maxDuration = jointDuration;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn(`Could not compute dynamic duration for ${jointName}:`, e);
+            }
+            let targetJointName: ValidJoints = jointName;
+            if (jointName === "gripper_joint") {
+                if (this.jointState?.name?.includes("stretch_gripper_joint" as ValidJoints)) {
+                    targetJointName = "stretch_gripper_joint" as ValidJoints;
+                } else if (this.jointState?.name?.includes("gripper_aperture" as ValidJoints)) {
+                    targetJointName = "gripper_aperture" as ValidJoints;
+                }
+            }
+            jointNames.push(targetJointName);
+            jointPositions.push(targetPos);
         }
 
-        console.log(jointNames, jointPositions);
-        if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = {
+        if (jointNames.length === 0) {
+            // Defensive fallback: if all joints are skipped, include the first one to avoid empty goal errors
+            const firstKey = Object.keys(pose)[0] as ValidJoints;
+            jointNames.push(firstKey);
+            jointPositions.push(pose[firstKey]!);
+        }
+
+        // Safe nanosecond calculation
+        let secs = Math.floor(maxDuration);
+        let nsecs = Math.round((maxDuration - secs) * 1e9);
+        if (nsecs >= 1e9) {
+            secs += 1;
+            nsecs = 0;
+        }
+
+        console.log("Calculated synchronized trajectory duration:", maxDuration, "secs:", secs, "nsecs:", nsecs);
+
+        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
+
+        const playbackVelocities = getPlaybackJointVelocities(jointNames);
+
+        return {
             trajectory: {
                 header: {
-                    stamp: {
-                        secs: 0,
-                        nsecs: 0,
-                    },
+                    stamp: { secs: 0, nsecs: 0 }, // Execute immediately
                 },
                 joint_names: jointNames,
                 points: [
                     {
                         positions: jointPositions,
-                        // The following might causing the jumpiness in continuous motions
+                        velocities: playbackVelocities,
                         time_from_start: {
-                            secs: 1,
-                            nsecs: 0,
+                            sec: secs,
+                            nanosec: nsecs,
+                            secs: secs,
+                            nsecs: nsecs,
                         },
                     },
                 ],
             },
         };
-
-        return newGoal;
     }
 
-    makePoseGoals(poses: RobotPose[]) {
-        let jointNames: ValidJoints[] = [];
-        for (let key in poses[0]) {
-            jointNames.push(key as ValidJoints);
+    makePoseGoals(poses: RobotPose[], minSegmentDuration: number = 0.5) {
+        if (!poses || poses.length === 0) {
+            throw new Error("Poses array cannot be empty");
         }
 
-        let points: any = [];
-        let jointPositions: number[] = [];
+        // Standardize joint list using the union of keys or the first pose's keys
+        const jointNames = Object.keys(poses[0]) as ValidJoints[];
+        const points: any[] = [];
+        let cumulativeTime = 0.0;
+
+        // keep track of cumulative duration for timestamps for each point
         poses.forEach((pose, index) => {
-            jointPositions = [];
-            for (let key in pose) {
-                jointPositions.push(pose[key as ValidJoints]!);
+            let segmentDuration = minSegmentDuration;
+            const jointPositions: number[] = [];
+
+            jointNames.forEach((name) => {
+                if (index === 0) {
+                    // First pose: evaluate vs. live state
+                    const currentPos = this.getJointValue(name);
+                    const targetPos = pose[name] !== undefined ? pose[name]! : currentPos;
+                    jointPositions.push(targetPos);
+
+                    if (targetPos !== undefined && currentPos !== undefined && !isNaN(currentPos)) {
+                        const distance = Math.abs(targetPos - currentPos);
+                        const velocityLimit = getPlaybackJointVelocity(name);
+                        if (velocityLimit > 0) {
+                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
+                        }
+                    }
+                } else {
+                    // Subsequent poses: evaluate vs. previous point's recorded target position
+                    const prevPos = points[index - 1].positions[jointNames.indexOf(name)];
+                    const targetPos = pose[name] !== undefined ? pose[name]! : prevPos;
+                    jointPositions.push(targetPos);
+
+                    if (targetPos !== undefined && prevPos !== undefined) {
+                        const distance = Math.abs(targetPos - prevPos);
+                        const velocityLimit = getPlaybackJointVelocity(name);
+                        if (velocityLimit > 0) {
+                            segmentDuration = Math.max(segmentDuration, distance / velocityLimit);
+                        }
+                    }
+                }
+            });
+
+            cumulativeTime += segmentDuration;
+
+            // Safe nanosecond calculation
+            let secs = Math.floor(cumulativeTime);
+            let nsecs = Math.round((cumulativeTime - secs) * 1e9);
+            if (nsecs >= 1e9) {
+                secs += 1;
+                nsecs = 0;
             }
+
+            const jointVelocities = getPlaybackJointVelocities(jointNames);
+
             points.push({
                 positions: jointPositions,
+                velocities: jointVelocities,
                 time_from_start: {
-                    secs: 10,
-                    nsecs: 0,
+                    sec: secs,
+                    nanosec: nsecs,
+                    secs: secs,
+                    nsecs: nsecs,
                 },
             });
         });
 
-        if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        let newGoal = {
+        if (!this.trajectoryClient) throw new Error("trajectoryClient is undefined");
+
+        return {
             trajectory: {
                 header: {
-                    stamp: {
-                        secs: 0,
-                        nsecs: 0,
-                    },
+                    stamp: { secs: 0, nsecs: 0 },
                 },
                 joint_names: jointNames,
                 points: points,
             },
         };
-
-        return newGoal;
     }
 
-    executePoseGoal(pose: RobotPose) {
+    isAlreadyAtPose(pose: RobotPose, tolerance: number = 0.01): boolean {
+        if (!this.jointState) {
+            console.log("isAlreadyAtPose: No jointState received yet.");
+            return false;
+        }
+        console.log("Checking if robot is already at pose. Target vs Current:");
+        for (let key in pose) {
+            const jointName = key as ValidJoints;
+            const targetPos = pose[jointName];
+            if (targetPos !== undefined) {
+                try {
+                    const currentPos = this.getJointValue(jointName);
+                    if (currentPos === undefined || isNaN(currentPos)) {
+                        console.log(`isAlreadyAtPose: Joint ${jointName} has invalid current position:`, currentPos);
+                        return false;
+                    }
+                    const diff = Math.abs(targetPos - currentPos);
+                    console.log(`- ${jointName}: Target=${targetPos.toFixed(4)}, Current=${currentPos.toFixed(4)}, Diff=${diff.toFixed(4)} (Tol=${tolerance})`);
+                    if (diff > tolerance) {
+                        console.log(`isAlreadyAtPose: Joint ${jointName} exceeds tolerance.`);
+                        return false;
+                    }
+                } catch (e) {
+                    console.log(`isAlreadyAtPose: Exception querying joint ${jointName}:`, e);
+                    return false;
+                }
+            }
+        }
+        console.log("isAlreadyAtPose: All joints within tolerance. Already at pose!");
+        return true;
+    }
+
+    /**
+     * Executes a single pose goal by switching to navigation mode and sending
+     * the trajectory goal to the ROS action server.
+     *
+     * Args:
+     *     pose: The target RobotPose to move joints toward.
+     *
+     * Returns:
+     *     A promise resolving when execution has been dispatched.
+     */
+    async executePoseGoal(pose: RobotPose): Promise<void> {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoal while robot is runstopped");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
+        await this.switchToNavigationMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoal while robot is runstopped (after switch mode)");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
+
+        /// check if at goal already
+        if (this.isAlreadyAtPose(pose)) {
+            console.log("Robot is already at target pose, skipping execution.");
+            this.playbackPosesResultCallback({
+                state: MovementState.Executing,
+                alert_type: "info",
+            });
+            setTimeout(() => {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Success,
+                    alert_type: "info",
+                });
+            }, 1000);
+            return;
+        }
         console.log("executing pose goal");
-        this.switchToNavigationMode();
+
         this.stopExecution();
-        this.poseGoal = this.makePoseGoal(pose);
+        this.poseGoal = this.makePoseGoal(pose, 1.5);
         console.log("execute: ", pose);
         this.poseGoalID = this.trajectoryClient.sendGoal(
             this.poseGoal,
@@ -939,7 +1834,12 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
-                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                let error_code = -4; // default fallback error code
+                try {
+                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                } catch (e) {
+                    console.warn("Could not parse action error code:", e);
+                }
                 console.log(
                     "Error for action on " +
                     this.trajectoryClient.name +
@@ -951,7 +1851,7 @@ export class Robot extends React.Component {
                         state: MovementState.Cancel,
                         alert_type: "error",
                     });
-                } else if (error_code == -4) {
+                } else {
                     this.playbackPosesResultCallback({
                         state: MovementState.Fail,
                         alert_type: "error",
@@ -961,10 +1861,61 @@ export class Robot extends React.Component {
         );
     }
 
-    async executePoseGoals(poses: RobotPose[], index: number) {
-        this.switchToNavigationMode();
-        // this.stopExecution();
-        this.poseGoal = this.makePoseGoals(poses);
+    /**
+     * Executes a series of pose goals sequentially by switching to navigation mode
+     * and sending the trajectory goals to the ROS action server.
+     *
+     * Args:
+     *     poses: Array of target RobotPose waypoints.
+     *     index: Starting index in the pose list.
+     *
+     * Returns:
+     *     A promise resolving when execution has been dispatched.
+     */
+    async executePoseGoals(poses: RobotPose[], index: number): Promise<void> {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoals while robot is runstopped");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
+        await this.switchToNavigationMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoals while robot is runstopped (after switch mode)");
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
+            return;
+        }
+
+        // check if at goal already
+        if (poses.length > 0) {
+            const finalPose = poses[poses.length - 1];
+            if (this.isAlreadyAtPose(finalPose)) {
+                console.log("Robot is already at final target pose, skipping execution.");
+                this.playbackPosesResultCallback({
+                    state: MovementState.Executing,
+                    alert_type: "info",
+                });
+                setTimeout(() => {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Success,
+                        alert_type: "info",
+                    });
+                }, 1000);
+                return;
+            }
+        }
+
+        this.stopExecution();
+        this.poseGoal = this.makePoseGoals(poses, 1.5);
         this.playbackPosesResultCallback({
             state: MovementState.Executing,
             alert_type: "info",
@@ -984,6 +1935,11 @@ export class Robot extends React.Component {
                         state: MovementState.Success,
                         alert_type: "info",
                     });
+                } else {
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Fail,
+                        alert_type: "error",
+                    });
                 }
             },
             (feedback) => {
@@ -995,7 +1951,12 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
-                let error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                let error_code = -4; // default fallback error code
+                try {
+                    error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
+                } catch (e) {
+                    console.warn("Could not parse action error code:", e);
+                }
                 console.log(
                     "Error for action on " +
                     this.trajectoryClient.name +
@@ -1007,7 +1968,7 @@ export class Robot extends React.Component {
                         state: MovementState.Cancel,
                         alert_type: "error",
                     });
-                } else if (error_code == -4) {
+                } else {
                     this.playbackPosesResultCallback({
                         state: MovementState.Fail,
                         alert_type: "error",
@@ -1018,14 +1979,70 @@ export class Robot extends React.Component {
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executeMoveBaseGoal while robot is runstopped");
+            return;
+        }
         // this.switchToNavigationMode();
         // this.stopExecution()
+
+        // Toggle base-only collision when publication starts (set to false to enforce full-body collision)
+        this.toggleBaseOnlyCollision(false);
+
         this.moveBaseGoal = this.makeMoveBaseGoal(pose);
-        this.moveBaseClient.sendGoal(this.moveBaseGoal);
+
+        // New status-watch session: ignore historical SUCCEEDED until we see
+        // ACCEPTED/EXECUTING (or feedback) for this goal.
+        this.moveBaseStatusWatching = true;
+        this.moveBaseStatusSeenActive = false;
+        this.moveBaseStatusLastEmitted = undefined;
+        this.moveBaseTerminalBaseline = undefined;
+
+        // Immediately notify operator that navigation has started executing
+        this.moveBaseResultCallback({
+            state: "Navigation executing!",
+            alert_type: "info",
+        });
+
+        this.moveBaseGoalID = this.moveBaseClient.sendGoal(
+            this.moveBaseGoal,
+            (result) => {
+                console.log("Navigation succeeded:", result);
+                this.moveBaseResultCallback({
+                    state: "Navigation succeeded!",
+                    alert_type: "success",
+                });
+                this.toggleBaseOnlyCollision(true);
+            },
+            (feedback) => {
+                // Feedback proves this goal is live even if status topic is laggy.
+                this.moveBaseStatusSeenActive = true;
+                console.log("Navigation feedback:", feedback);
+            },
+            (error) => {
+                console.log("Navigation failed/canceled:", error);
+                if (error && (error.includes("canceled") || error.includes("cancel"))) {
+                    this.moveBaseResultCallback({
+                        state: "Navigation canceled!",
+                        alert_type: "error",
+                    });
+                } else {
+                    this.moveBaseResultCallback({
+                        state: "Navigation failed!",
+                        alert_type: "error",
+                    });
+                }
+                this.toggleBaseOnlyCollision(true);
+            }
+        );
     }
 
-    executeIncrementalMove(jointName: ValidJoints, increment: number) {
-        // this.switchToNavigationMode();
+    async executeIncrementalMove(jointName: ValidJoints, increment: number) {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executeIncrementalMove while robot is runstopped");
+            return;
+        }
+        await this.switchToNavigationMode();
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
@@ -1038,6 +2055,8 @@ export class Robot extends React.Component {
                     ": " +
                     result.error_string
                 );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             },
             (feedback) => {
                 console.log(
@@ -1046,36 +2065,108 @@ export class Robot extends React.Component {
                     ": " +
                     feedback
                 );
+            },
+            (error) => {
+                console.log(
+                    "Error for action on " +
+                    this.trajectoryClient.name +
+                    ": " +
+                    error
+                );
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
             }
         );
     }
 
+    /**
+     * Stops active autonomous navigation clients and optionally halts trajectory and velocity topics.
+     *
+     * Args:
+     *     stop_trajectory_client: When true, cancels active trajectory goals and publishes zero velocity twists.
+     */
     stopExecution(stop_trajectory_client: boolean = false) {
-        if (stop_trajectory_client) this.stopTrajectoryClient();
+        if (stop_trajectory_client) {
+            this.stopTrajectoryClient();
+            const zeroTwist = {
+                linear: { x: 0, y: 0, z: 0 },
+                angular: { x: 0, y: 0, z: 0 },
+            };
+            this.cmdVelTopic?.publish(zeroTwist);
+            this.eeCmdVelTopic?.publish(zeroTwist);
+        }
         this.stopAutonomousClients();
     }
 
+    /**
+     * Stop and cancel active autonomous clients, specifically the move base client.
+     */
     stopAutonomousClients() {
         this.stopMoveBaseClient();
     }
 
-    stopTrajectoryClient() {
+    /**
+     * Cancels any active trajectory action goal and emits a canceled playback state.
+     *
+     * Args:
+     *     None.
+     *
+     * Returns:
+     *     None.
+     */
+    stopTrajectoryClient(): void {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
-        if (this.poseGoal) {
-            this.trajectoryClient.cancelGoal(this.poseGoalID);
+        if (this.poseGoal || this.poseGoalID) {
+            if (this.poseGoalID) {
+                this.trajectoryClient.cancelGoal(this.poseGoalID);
+            }
             this.poseGoal = undefined;
-            this.playbackPosesResultCallback({
-                state: MovementState.Cancel,
-                alert_type: "error",
-            });
+            this.poseGoalID = undefined;
+            if (this.playbackPosesResultCallback) {
+                this.playbackPosesResultCallback({
+                    state: MovementState.Cancel,
+                    alert_type: "error",
+                });
+            }
         }
     }
 
-    stopMoveBaseClient() {
-        if (!this.moveBaseClient) throw "moveBaseClient is undefined";
-        if (this.moveBaseGoal) {
-            this.moveBaseClient.cancelGoal();
+    /**
+     * Cancel active navigation execution on the move_base / navigate_to_pose action client.
+     * Cancels any active goals via rosbridge without throwing if uninitialized,
+     * resets state tracking, and emits a cancellation alert if navigation was active.
+     */
+    stopMoveBaseClient(): void {
+        if (!this.moveBaseClient) return;
+
+        const hadActiveGoal = this.moveBaseGoalID !== undefined || this.moveBaseStatusWatching;
+        try {
+            this.moveBaseClient.cancelAllGoals();
+        } catch (e) {
+            console.warn("Error calling cancelAllGoals on moveBaseClient:", e);
+        }
+
+        if (this.moveBaseGoalID) {
+            this.moveBaseClient.cancelGoal(this.moveBaseGoalID);
+        }
+
+        if (hadActiveGoal) {
+            this.moveBaseGoalID = undefined;
             this.moveBaseGoal = undefined;
+            // Operator CancelGoal already synthesizes local cancel UI; stop
+            // watching so a later stale SUCCEEDED does not clear/start races.
+            this.moveBaseStatusWatching = false;
+            this.moveBaseStatusSeenActive = false;
+            this.moveBaseTerminalBaseline = undefined;
+            this.moveBaseGoalXY = undefined;
+            this.moveBaseInsideTolStreak = 0;
+            this.toggleBaseOnlyCollision(true);
+            if (this.moveBaseResultCallback) {
+                this.moveBaseResultCallback({
+                    state: "Navigation canceled!",
+                    alert_type: "error",
+                });
+            }
         }
     }
 
@@ -1087,7 +2178,42 @@ export class Robot extends React.Component {
             return 0;
         }
 
-        let jointIndex = this.jointState.name.indexOf(jointName);
+        let name: string = jointName;
+        if (name === "arm_joint" || name === "wrist_extension") {
+            let total = 0;
+            let foundAny = false;
+            for (let link of ["arm_l1_joint", "arm_l2_joint", "arm_l3_joint", "arm_l4_joint"]) {
+                let idx = this.jointState.name.indexOf(link as ValidJoints);
+                if (idx !== -1) {
+                    total += this.jointState.position[idx];
+                    foundAny = true;
+                }
+            }
+            if (foundAny) return total;
+
+            // Fallback for when individual telescoping links are not published:
+            // Check if either "arm_joint" or "wrist_extension" is available in the jointState.
+            let idx = this.jointState.name.indexOf(name as ValidJoints);
+            if (idx !== -1) {
+                return this.jointState.position[idx];
+            }
+            let fallbackName = name === "arm_joint" ? "wrist_extension" : "arm_joint";
+            let fallbackIdx = this.jointState.name.indexOf(fallbackName as ValidJoints);
+            if (fallbackIdx !== -1) {
+                return this.jointState.position[fallbackIdx];
+            }
+        }
+
+        if (name === "gripper_joint") {
+            for (let gName of ["gripper_joint", "stretch_gripper_joint", "gripper_aperture"]) {
+                let idx = this.jointState.name.indexOf(gName as ValidJoints);
+                if (idx !== -1) {
+                    return this.jointState.position[idx];
+                }
+            }
+        }
+
+        let jointIndex = this.jointState.name.indexOf(name as ValidJoints);
         return this.jointState.position[jointIndex];
     }
 
@@ -1098,43 +2224,89 @@ export class Robot extends React.Component {
     }
 
     inJointLimitsHelper(jointValue: number, jointName: ValidJoints) {
+        if (this.diagnosticJointLimits[jointName] !== undefined) {
+            return this.diagnosticJointLimits[jointName];
+        }
+
+        let alias: ValidJoints | undefined =
+            jointName === "arm_joint" ? "wrist_extension" :
+                jointName === "wrist_extension" ? "arm_joint" : undefined;
+        if (alias && this.diagnosticJointLimits[alias] !== undefined) {
+            return this.diagnosticJointLimits[alias];
+        }
+
+        // this.jointLimits comes from the /joint_limits topic, which only the
+        // simulated (mujoco) driver publishes. The real stretch_driver never
+        // publishes it, so this fallback stays empty and inert on hardware -
+        // meaningful at-limit values there always come from diagnosticJointLimits
+        // above (populated from /joint_states_diagnostics).
         let jointLimits = this.jointLimits[jointName];
         if (!jointLimits) return;
 
-        var eps = 0.03;
         let inLimits: [boolean, boolean] = [true, true];
-        inLimits[0] = jointValue - eps >= jointLimits[0]; // Lower joint limit
-        inLimits[1] = jointValue + eps <= jointLimits[1]; // Upper joint limit
+        inLimits[0] = jointValue >= jointLimits[0]; // Lower joint limit
+        inLimits[1] = jointValue <= jointLimits[1]; // Upper joint limit
         return inLimits;
     }
 
     inCollision(jointName: ValidJoints) {
-        let inCollision: [boolean, boolean] = [false, false];
-        // TODO: This formulation needs to be changed, because effort values are
-        // robot-specific and change based on whether the robot is plugged in or not,
-        // mechanical factors (e.g., an old cable), etc. Thus, a single threshold
-        // will not work across all robots.
-        const MAX_EFFORTS: { [key in ValidJoints]?: [number, number] } = {
-            head_tilt_joint: [-50, 50],
-            head_pan_joint: [-50, 50],
-            wrist_extension: [-40, 40],
-            lift_joint: [0, 70],
-            // "wrist_yaw_joint": [-10, 10],
-            // "wrist_pitch_joint": [-10, 10],
-            // "wrist_roll_joint": [-10, 10],
-        };
+        let res: [boolean, boolean] = [false, false];
+        if (this.diagnosticInCollision[jointName] !== undefined) {
+            res = this.diagnosticInCollision[jointName]!;
+        } else {
+            let alias: ValidJoints | undefined =
+                jointName === "arm_joint" ? "wrist_extension" :
+                    jointName === "wrist_extension" ? "arm_joint" : undefined;
+            if (alias && this.diagnosticInCollision[alias] !== undefined) {
+                res = this.diagnosticInCollision[alias]!;
+            }
+        }
+        return res;
+    }
 
-        if (!(jointName in MAX_EFFORTS)) return inCollision;
+    /**
+     * collision_monitor is a lifecycle node. It exists in the graph as soon as
+     * Nav2 loads it, but it only forwards /cmd_vel_nav -> /cmd_vel once ACTIVE.
+     * If Nav2 bringup aborts (e.g. no map TF) it sits INACTIVE forever, so a
+     * "node exists" check is not enough.
+     */
+    startCollisionMonitorPoll(intervalMs: number = 2000) {
+        this.stopCollisionMonitorPoll();
+        const poll = () => this.queryCollisionMonitorActive();
+        poll();
+        this.collisionMonitorPollTimerID = setInterval(poll, intervalMs);
+    }
 
-        let jointIndex = this.jointState.name.indexOf(jointName);
-        // In collision if joint is applying more than 50% effort when moving downward/inward/backward
-        inCollision[0] =
-            this.jointState.effort[jointIndex] < MAX_EFFORTS[jointName]![0];
-        // In collision if joint is applying more than 50% effort when moving upward/outward/forward
-        inCollision[1] =
-            this.jointState.effort[jointIndex] > MAX_EFFORTS[jointName]![1];
+    stopCollisionMonitorPoll() {
+        if (this.collisionMonitorPollTimerID !== undefined) {
+            clearInterval(this.collisionMonitorPollTimerID);
+            this.collisionMonitorPollTimerID = undefined;
+        }
+    }
 
-        return inCollision;
+    private queryCollisionMonitorActive() {
+        if (!this.collisionMonitorStateService) return;
+        // lifecycle_msgs/State: PRIMARY_STATE_ACTIVE = 3
+        const ACTIVE = 3;
+        this.collisionMonitorStateService.callService(
+            {},
+            (response: { current_state?: { id?: number } }) => {
+                this.setCollisionMonitorActive(
+                    response?.current_state?.id === ACTIVE
+                );
+            },
+            () => this.setCollisionMonitorActive(false)
+        );
+    }
+
+    private setCollisionMonitorActive(active: boolean) {
+        if (active === this.collisionMonitorActive) return;
+        this.collisionMonitorActive = active;
+        console.log(
+            active
+                ? "collision_monitor ACTIVE: Drive -> /cmd_vel_nav"
+                : "collision_monitor not active: Drive -> /cmd_vel (no obstacle stopping)"
+        );
     }
 
     /**

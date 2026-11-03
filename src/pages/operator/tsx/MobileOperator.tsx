@@ -1,56 +1,71 @@
-import React, { PointerEventHandler, useState } from "react";
+import "operator/css/MobileOperator.css";
+import { default as React, useState, useSyncExternalStore } from "react";
 import {
-    ActionModeType,
-    ButtonPadIdMobile,
-    CameraViewId,
-    ComponentDefinition,
-    ComponentType,
-    MapDefinition,
-    LayoutDefinition,
-    PilotButtonPadType,
-} from "./utils/component_definitions";
+    isVoiceControlEnabled,
+    subscribeOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
 import {
     ActionState,
-    className,
     ActionState as MoveBaseState,
     RemoteStream,
+    ToolMetadata,
 } from "shared/util";
 import {
     buttonFunctionProvider,
-    stretchTool,
-    movementRecorderFunctionProvider,
-    underMapFunctionProvider,
     homeTheRobotFunctionProvider,
+    movementRecorderFunctionProvider,
+    runStopFunctionProvider,
+    subscribeToolMetadata,
+    underMapFunctionProvider,
 } from ".";
 import {
     ButtonPadButton,
     ButtonState,
     ButtonStateMap,
 } from "./function_providers/ButtonFunctionProvider";
-import { StorageHandler } from "./storage_handler/StorageHandler";
 import { FunctionProvider } from "./function_providers/FunctionProvider";
-import PilotMode from "./layout_components/PilotMode";
-import "operator/css/MobileOperator.css";
-import { SimpleCameraView } from "./layout_components/SimpleCameraView";
-import { SharedState } from "./layout_components/CustomizableComponent";
-import FooterPilotMode from "./layout_components/FooterPilotMode";
 import { ButtonPad } from "./layout_components/ButtonPad";
-// import Swipe from "./static_components/Swipe";
-import { Map } from "./layout_components/Map";
-import { TabGroup } from "./basic_components/TabGroup";
-import SwipeableViews from "react-swipeable-views";
+import { SharedState } from "./layout_components/CustomizableComponent";
+import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
+import PilotMode from "./layout_components/PilotMode";
+import { StorageHandler } from "./storage_handler/StorageHandler";
 import {
-    MovementRecorder,
-    MovementRecorderFunction,
-} from "./layout_components/MovementRecorder";
+    ActionModeType,
+    ButtonPadIdMobile,
+    CameraViewId,
+    ComponentType,
+    LayoutDefinition,
+    PilotButtonPadType
+} from "./utils/component_definitions";
+// import Swipe from "./static_components/Swipe";
+import SwipeableViews from "react-swipeable-views";
+import { TabGroup } from "./basic_components/TabGroup";
 import AutoNav from "./layout_components/AutoNav";
-import { CheckToggleButton } from "./basic_components/CheckToggleButton";
 
-import { Alert } from "./basic_components/Alert";
-import { RadioFunctions, RadioGroup } from "./basic_components/RadioGroup";
-import GripperCamPIP from "./layout_components/GripperCamPIP";
-import FooterGlobal from "./layout_components/FooterGlobal";
 import { HomingBanner } from "./basic_components/HomingBanner";
+import FooterGlobal from "./layout_components/FooterGlobal";
+import GripperCamPIP from "./layout_components/GripperCamPIP";
+import Toasts, { useToasts } from "./layout_components/Toasts";
+import { useExclusiveModal } from "./react_hooks/useExclusiveModal";
+import type {
+    ControlAutoNavAction,
+    ControlAutoNavResult,
+    FlyingGripperModeAction,
+    LoadAutoNavLocationResult,
+    MainMenuAction,
+    SavedLocationsModalAction,
+    SetFlyingGripperModeResult,
+    SetMainMenuResult,
+    SetSavedLocationsModalResult,
+} from "./voice/constants";
+
+// @flag voice_control_interface
+// Loaded lazily so the Realtime session, microphone capture, and the voice
+// tool runners stay out of the operator bundle's initial chunk. The chunk is
+// never requested while isVoiceControlEnabled() is false.
+const VoiceCommandAssistant = React.lazy(
+    () => import("./static_components/VoiceCommandAssistant")
+);
 
 /** Operator interface webpage */
 export const MobileOperator = (props: {
@@ -69,6 +84,10 @@ export const MobileOperator = (props: {
     const [velocityScale, setVelocityScale] = React.useState<number>(
         FunctionProvider.velocityScale
     );
+    const applyVelocityScale = React.useCallback((scale: number) => {
+        FunctionProvider.velocityScale = scale;
+        setVelocityScale(FunctionProvider.velocityScale);
+    }, []);
     const [activeMainGroupTab, setActiveMainGroupTab] =
         React.useState<number>(0);
     const [activeControlTab, setActiveControlTab] = React.useState<number>(0);
@@ -81,6 +100,14 @@ export const MobileOperator = (props: {
 
     // Track homed state in local React state
     const [robotIsHomed, robotIsHomedSet] = useState<boolean>(true);
+    // Track runstop state in local React state
+    const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
+    // Track tool metadata in local React state so MobileOperator (and its
+    // descendants, e.g. ButtonPad) re-render when the attached tool changes
+    const [toolMetadata, toolMetadataSet] = useState<ToolMetadata | undefined>(
+        undefined,
+    );
+    React.useEffect(() => subscribeToolMetadata(toolMetadataSet), []);
     // True once `HomingBanner` has fully dismissed (after success strip + exit), not merely `robotIsHomed`
     const [homingBannerDismissed, homingBannerDismissedSet] =
         useState(false);
@@ -88,6 +115,13 @@ export const MobileOperator = (props: {
     // When the robot is homed, update local React state `robotIsHomed` to `true`
     React.useEffect(() => {
         homeTheRobotFunctionProvider.setIsHomedCallback(robotIsHomedSet);
+    }, []);
+
+    // When the robot runstop state changes, update local React state `isRunStopped`
+    React.useEffect(() => {
+        return runStopFunctionProvider.setRunStopStateChangeCallback(
+            isRunStoppedSet
+        );
     }, []);
 
     // State for swipeable views
@@ -99,12 +133,226 @@ export const MobileOperator = (props: {
 
     // State for selected scene
     const [sceneSelected, setSceneSelected] = useState<string>("pilot-mode");
+    /** Live scene for voice tools (connect opts capture callbacks, not render values). */
+    const sceneSelectedRef = React.useRef(sceneSelected);
+    sceneSelectedRef.current = sceneSelected;
+
+    // Saved Locations modal (owned here so voice can open/close with AutoNav gate)
+    const [isModalLocationsMenuVisible, isModalLocationsMenuVisibleSet] =
+        useState(false);
+
+    // Main Menu (owned here so voice can open/close via Realtime tool)
+    const [isMainMenuOpen, isMainMenuOpenSet] = useState(false);
+    // Apply exclusive modal to prevent multiple modals
+    useExclusiveModal(isMainMenuOpen, () => isMainMenuOpenSet(false));
+    useExclusiveModal(isModalLocationsMenuVisible, () =>
+        isModalLocationsMenuVisibleSet(false),
+    );
+
+    React.useEffect(() => {
+        if (isMainMenuOpen || isCameraVeilVisible) {
+            FunctionProvider.stopAllActions(true);
+        }
+    }, [isMainMenuOpen, isCameraVeilVisible]);
+
+    /** Imperative Start/Stop from FooterAutoNav for voice control_autonav. */
+    const autoNavNavControlsRef = React.useRef<AutoNavNavControls | null>(null);
+    const registerAutoNavNavControls = React.useCallback(
+        (controls: AutoNavNavControls | null) => {
+            autoNavNavControlsRef.current = controls;
+        },
+        [],
+    );
 
     // GripperPIP
     const [isGripperCamPIPViz, isGripperCamPIPVizSet] = useState<boolean>(true);
     const [isGripperCamLarge, isGripperCamLargeSet] = useState<boolean>(false);
 
-    const alertTimeoutDuration = 5000; // milliseconds
+    // Flying gripper: Pilot-only overlay where the gripper cam becomes the hero
+    // view. Session-only, never persisted.
+    const [isFlyingGripper, isFlyingGripperSet] = useState(false);
+    const setFlyingGripper = React.useCallback((flying: boolean) => {
+        // Never carry an in-flight press across a pad swap.
+        FunctionProvider.stopAllActions(true);
+        isFlyingGripperSet(flying);
+    }, []);
+    const enterFlyingGripper = React.useCallback(
+        () => setFlyingGripper(true),
+        [setFlyingGripper],
+    );
+    const exitFlyingGripper = React.useCallback(
+        () => setFlyingGripper(false),
+        [setFlyingGripper],
+    );
+
+    const handleSetFlyingGripperMode = React.useCallback(
+        (action: FlyingGripperModeAction): SetFlyingGripperModeResult => {
+            if (action === "open") {
+                if (sceneSelectedRef.current !== "pilot-mode" || swipeableViewsIdx !== 0) {
+                    swipeableViewsIdxSet(0);
+                    setSceneSelected("pilot-mode");
+                }
+                setFlyingGripper(true);
+                return {
+                    ok: true,
+                    detail: "Opened Flying Gripper mode.",
+                };
+            } else {
+                setFlyingGripper(false);
+                return {
+                    ok: true,
+                    detail: "Closed Flying Gripper mode.",
+                };
+            }
+        },
+        [setFlyingGripper, swipeableViewsIdx],
+    );
+
+    // Leaving Pilot (scene or slide) stops any active motion and drops flying
+    // gripper so AutoNav never sits on top of it.
+    React.useEffect(() => {
+        FunctionProvider.stopAllActions(true);
+        if (
+            isFlyingGripper &&
+            (sceneSelected !== "pilot-mode" || swipeableViewsIdx !== 0)
+        ) {
+            setFlyingGripper(false);
+        }
+    }, [isFlyingGripper, sceneSelected, swipeableViewsIdx, setFlyingGripper]);
+
+    const { toasts, toastsSet, addToast } = useToasts();
+
+    // Close Saved Locations when leaving AutoNav
+    React.useEffect(() => {
+        if (sceneSelected !== "autonav") {
+            isModalLocationsMenuVisibleSet(false);
+        }
+    }, [sceneSelected]);
+
+    const handleSetMainMenu = React.useCallback(
+        (action: MainMenuAction): SetMainMenuResult => {
+            if (action === "open") {
+                FunctionProvider.stopAllActions(true);
+            }
+            isMainMenuOpenSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Main Menu."
+                        : "Closed Main Menu.",
+            };
+        },
+        [],
+    );
+
+    const handleSetSavedPosesModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (action === "open") {
+                FunctionProvider.stopAllActions(true);
+            }
+            movementRecorderFunctionProvider.setModalOpen(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Poses."
+                        : "Closed Saved Poses.",
+            };
+        },
+        [],
+    );
+
+    /** Bare stop / stop_motion: cancel only if AutoNav is actively navigating. */
+    const handleCancelAutoNavOnStop =
+        React.useCallback((): ControlAutoNavResult => {
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return controls.cancel();
+        }, []);
+
+    const handleGetAutoNavSavedPoseNames = React.useCallback(():
+        | string[]
+        | null => {
+        if (sceneSelectedRef.current !== "autonav") {
+            return null;
+        }
+        const controls = autoNavNavControlsRef.current;
+        if (!controls) {
+            return null;
+        }
+        return controls.getSavedPoseNames();
+    }, []);
+
+    const handleLoadAutoNavLocation = React.useCallback(
+        (poseName: string): LoadAutoNavLocationResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav location loading is only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            const result = controls.loadLocation(poseName);
+            return result.ok
+                ? { ok: true, detail: result.detail, label: poseName }
+                : { ok: false, detail: result.detail };
+        },
+        [],
+    );
+
+    const handleSetSavedLocationsModal = React.useCallback(
+        (action: SavedLocationsModalAction): SetSavedLocationsModalResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saved Locations is only available in AutoNav",
+                };
+            }
+            isModalLocationsMenuVisibleSet(action === "open");
+            return {
+                ok: true,
+                detail:
+                    action === "open"
+                        ? "Opened Saved Locations."
+                        : "Closed Saved Locations.",
+            };
+        },
+        [],
+    );
+
+    const handleControlAutoNav = React.useCallback(
+        (action: ControlAutoNavAction): ControlAutoNavResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "AutoNav controls are only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return action === "start" ? controls.start() : controls.cancel();
+        },
+        [],
+    );
+
+    const alertTimeoutDuration = 100; // milliseconds
     React.useEffect(() => {
         setTimeout(function () {
             setShowAlert(false);
@@ -123,15 +371,22 @@ export const MobileOperator = (props: {
             if (state == ButtonState.Collision) collisionButtons.push(button);
         });
         setButtonCollision(collisionButtons);
-        if (bsm !== buttonStateMap.current) {
-            buttonStateMap.current = bsm;
-            setButtonStateMapRerender(!buttonStateMapRerender);
-        }
+        buttonStateMap.current = new Map(bsm);
+        setButtonStateMapRerender((prev) => !prev);
     }
     buttonFunctionProvider.setOperatorCallback(operatorCallback);
 
     const layout = React.useRef<LayoutDefinition>(props.layout);
-    FunctionProvider.actionMode = layout.current.actionMode;
+    const [actionMode, actionModeSet] = React.useState<ActionModeType>(
+        props.layout.actionMode ??
+            FunctionProvider.actionMode ??
+            ActionModeType.PressAndHold,
+    );
+    const [pilotControlsCurrent, pilotControlsCurrentSet] =
+        React.useState<PilotButtonPadType>(
+            (props.layout.pilotControlsCurrent as PilotButtonPadType) ??
+                FunctionProvider.pilotControlsCurrent,
+        );
 
     /** Rerenders the operator */
     function updateLayout() {
@@ -142,21 +397,28 @@ export const MobileOperator = (props: {
      * Updates the action mode in the layout (visually) and in the function
      * provider (functionally).
      */
-    function setActionMode(actionMode: ActionModeType) {
-        layout.current.actionMode = actionMode;
-        FunctionProvider.actionMode = actionMode;
-        props.storageHandler.saveCurrentLayout(layout.current);
-    }
+    const setActionMode = React.useCallback(
+        (nextActionMode: ActionModeType) => {
+            FunctionProvider.stopAllActions(true);
+            layout.current.actionMode = nextActionMode;
+            FunctionProvider.actionMode = nextActionMode;
+            actionModeSet(nextActionMode);
+            props.storageHandler.saveCurrentLayout(layout.current);
+        },
+        [props.storageHandler],
+    );
 
-    function setPilotControlsCurrent(pilotControlsCurrent: string) {
-        layout.current.pilotControlsCurrent = pilotControlsCurrent;
-        FunctionProvider.pilotControlsCurrent =
-            pilotControlsCurrent as PilotButtonPadType;
-        props.storageHandler.saveCurrentLayout(layout.current);
-        setButtonStateMapRerender(!buttonStateMapRerender);
-    }
-
-
+    const setPilotControlsCurrent = React.useCallback(
+        (nextPilotControls: string) => {
+            FunctionProvider.stopAllActions(true);
+            const nextPad = nextPilotControls as PilotButtonPadType;
+            layout.current.pilotControlsCurrent = nextPad;
+            FunctionProvider.pilotControlsCurrent = nextPad;
+            pilotControlsCurrentSet(nextPad);
+            props.storageHandler.saveCurrentLayout(layout.current);
+        },
+        [props.storageHandler],
+    );
 
     function moveBaseStateCallback(state: MoveBaseState) {
         setMoveBaseState(state);
@@ -202,8 +464,9 @@ export const MobileOperator = (props: {
         },
         buttonStateMap: buttonStateMap.current,
         hideLabels: false,
-        stretchTool: stretchTool,
-        robotIsHomed: true,
+        toolMetadata: toolMetadata,
+        robotIsHomed: robotIsHomed,
+        isRunStopped: isRunStopped,
         playbackPosesState: playbackPosesState,
         idxFixedRecordingPlaying: idxFixedRecordingPlaying,
         idxFixedRecordingPlayingSet: idxFixedRecordingPlayingSet,
@@ -223,8 +486,7 @@ export const MobileOperator = (props: {
                         overlay: false,
                         aspectRatio: 3.35,
                         isCameraVeilVisible: isCameraVeilVisible,
-                        pilotControlsCurrent:
-                            FunctionProvider.pilotControlsCurrent,
+                        pilotControlsCurrent: pilotControlsCurrent,
                     }}
                 />
             </React.Fragment>
@@ -233,28 +495,59 @@ export const MobileOperator = (props: {
         );
     };
 
-    const ControlModes = () => {
-        return (
-            <>
-                <TabGroup
-                    tabLabels={[""]}
-                    tabContent={[buttonPad]}
-                    startIdx={activeControlTab}
-                    onChange={(index: number) => setActiveControlTab(index)}
-                    pill={true}
-                    key={"controls-group"}
-                />
-            </>
+    const controlModes = (show: boolean) => {
+        return show ? (
+            <TabGroup
+                tabLabels={[""]}
+                tabContent={[buttonPad]}
+                startIdx={activeControlTab}
+                onChange={(index: number) => setActiveControlTab(index)}
+                pill={true}
+                key={"controls-group"}
+            />
+        ) : (
+            <></>
         );
     };
 
-    const controlModes = (show: boolean) => {
-        return show ? <ControlModes key={"control-modes"} /> : <></>;
-    };
+    // @flag voice_control_interface
+    const voiceSvc = useSyncExternalStore(
+        subscribeOperatorVoiceSvc,
+        isVoiceControlEnabled,
+    );
 
     return (
         <div id="mobile-operator" onContextMenu={(e) => e.preventDefault()}>
-             <HomingBanner
+            <Toasts toasts={toasts} toastsSet={toastsSet} />
+            {/* @flag voice_control_interface */}
+            {voiceSvc ? (
+                <React.Suspense fallback={null}>
+                    <VoiceCommandAssistant
+                        setActionMode={setActionMode}
+                        addToast={addToast}
+                        onSwitchScene={(scene) => {
+                            FunctionProvider.stopAllActions(true);
+                            if (scene === "pilot") {
+                                swipeableViewsIdxSet(0);
+                                setSceneSelected("pilot-mode");
+                            } else {
+                                setSceneSelected("autonav");
+                                swipeableViewsIdxSet(1);
+                            }
+                        }}
+                        onSetSavedLocationsModal={handleSetSavedLocationsModal}
+                        onSetSavedPosesModal={handleSetSavedPosesModal}
+                        onSetMainMenu={handleSetMainMenu}
+                        onControlAutoNav={handleControlAutoNav}
+                        onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
+                        onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
+                        onLoadAutoNavLocation={handleLoadAutoNavLocation}
+                        onSetFlyingGripperMode={handleSetFlyingGripperMode}
+                        isFlyingGripperActive={isFlyingGripper}
+                    />
+                </React.Suspense>
+            ) : null}
+            <HomingBanner
                 robotIsHomed={robotIsHomed}
                 homingBannerDismissedSet={homingBannerDismissedSet}
             />
@@ -325,14 +618,19 @@ export const MobileOperator = (props: {
                             tabContent={[controlModes]}
                             activeMainGroupTab={activeMainGroupTab}
                             setActiveMainGroupTab={setActiveMainGroupTab}
-                            setVelocityScale={setVelocityScale}
+                            velocityScale={velocityScale}
+                            onVelocityScaleChange={applyVelocityScale}
+                            actionMode={actionMode}
                             setActionMode={setActionMode}
+                            pilotControlsCurrent={pilotControlsCurrent}
                             setPilotControlsCurrent={setPilotControlsCurrent}
                             isCameraVeilVisibleSet={isCameraVeilVisibleSet}
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
                             sharedState={sharedState}
+                            isFlyingGripper={isFlyingGripper}
+                            onExitFlyingGripper={exitFlyingGripper}
                         />
                         <GripperCamPIP
                             cameraID={CameraViewId.gripper}
@@ -343,6 +641,8 @@ export const MobileOperator = (props: {
                             isGripperCamLarge={isGripperCamLarge}
                             isGripperCamLargeSet={isGripperCamLargeSet}
                             homingBannerDismissed={homingBannerDismissed}
+                            isFlyingGripper={isFlyingGripper}
+                            onEnterFlyingGripper={enterFlyingGripper}
                         />
                     </div>
                     <div
@@ -356,6 +656,18 @@ export const MobileOperator = (props: {
                             swipeableViewsIdxSet={swipeableViewsIdxSet}
                             sceneSelected={sceneSelected}
                             onSceneSelectedChange={setSceneSelected}
+                            addToast={addToast}
+                            isModalLocationsMenuVisible={
+                                isModalLocationsMenuVisible
+                            }
+                            isModalLocationsMenuVisibleSet={
+                                isModalLocationsMenuVisibleSet
+                            }
+
+                            moveBaseState={moveBaseState}
+                            onRegisterAutoNavNavControls={
+                                registerAutoNavNavControls
+                            }
                         />
                     </div>
                 </SwipeableViews>
@@ -363,6 +675,8 @@ export const MobileOperator = (props: {
                     swipeableViewsIdxSet={swipeableViewsIdxSet}
                     sceneSelected={sceneSelected}
                     onSceneSelectedChange={setSceneSelected}
+                    isMainMenuOpen={isMainMenuOpen}
+                    isMainMenuOpenSet={isMainMenuOpenSet}
                 />
             </div>
         </div>

@@ -1,38 +1,58 @@
+import { FirebaseOptions } from "firebase/app";
+import "operator/css/index.css";
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
-import { WebRTCConnection } from "shared/webrtcconnections";
-import {
-    WebRTCMessage,
-    RemoteStream,
-    RobotPose,
-    ROSOccupancyGrid,
-    StretchTool,
-    delay,
-    getStretchTool,
-    waitUntil,
-} from "shared/util";
-import { RemoteRobot } from "shared/remoterobot";
 import { cmd } from "shared/commands";
-import { Operator } from "./Operator";
-import { DEFAULT_VELOCITY_SCALE } from "./static_components/ActionSpeed";
-import { StorageHandler } from "./storage_handler/StorageHandler";
+import {
+    setOperatorVoiceInputRecording,
+    setOperatorVoiceSvc,
+} from "shared/operatorVoiceSession";
+import { RemoteRobot } from "shared/remoterobot";
+import {
+    consumeOperatorTakeover,
+    OPERATOR_SEAT_STALE_MS,
+} from "shared/signaling/operatorSeat";
+import {
+    delay,
+    MaxEeSpeedMessage,
+    parseToolMetadata,
+    RemoteStream,
+    ROSOccupancyGrid,
+    setMaxEeSpeed,
+    ToolMetadata,
+    waitUntil,
+    WebRTCMessage
+} from "shared/util";
+import { WebRTCConnection } from "shared/webrtcconnections";
+import { waitUntilAsync } from "../../../shared/util";
+import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
+import { createLoginHandler } from "../../home/tsx/utils";
+import { BatteryStateFunctionProvider } from "./function_providers/BatteryStateFunctionProvider";
+import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
+import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
+import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
+import { FunctionProvider } from "./function_providers/FunctionProvider";
+import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
+import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
+import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
+import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
+import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
+import { MobileOperator } from "./MobileOperator";
+import { notifyRemoteStreams } from "./remoteStreamStore";
+import { RobotAudioPlayer } from "./utils/robotAudioPlayer";
 import { FirebaseStorageHandler } from "./storage_handler/FirebaseStorageHandler";
 import { LocalStorageHandler } from "./storage_handler/LocalStorageHandler";
-import { FirebaseOptions } from "firebase/app";
-import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
-import { FunctionProvider } from "./function_providers/FunctionProvider";
-
-import { MapFunctionProvider } from "./function_providers/MapFunctionProvider";
-import { UnderMapFunctionProvider } from "./function_providers/UnderMapFunctionProvider";
-import { MovementRecorderFunctionProvider } from "./function_providers/MovementRecorderFunctionProvider";
-import { HomeTheRobotFunctionProvider } from "./function_providers/HomeTheRobotFunctionProvider";
-import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
-import { MobileOperator } from "./MobileOperator";
-import { isMobile } from "react-device-detect";
-import "operator/css/index.css";
-import { RunStopFunctionProvider } from "./function_providers/RunStopFunctionProvider";
-import { BatteryStateFunctionProvider } from "./function_providers/BatteryStateFunctionProvider";
-import { waitUntilAsync } from "../../../shared/util";
+import { StorageHandler } from "./storage_handler/StorageHandler";
+import { DEFAULT_VELOCITY_SCALE } from "./utils/action-speed-scale";
+import {
+    configureVoiceTokenRelay,
+    resolveVoiceToken,
+} from "./voice/voiceTokenRelay";
+import {
+    advanceRecoveryWatchdog,
+    canAttemptOperatorRecovery,
+    shouldScheduleForegroundRecovery,
+} from "shared/webrtcRecovery";
 
 let allRemoteStreams: Map<string, RemoteStream> = new Map<
     string,
@@ -41,13 +61,89 @@ let allRemoteStreams: Map<string, RemoteStream> = new Map<
 let remoteRobot: RemoteRobot;
 let connection: WebRTCConnection;
 let root: Root;
-export let stretchTool: StretchTool;
+let toolMetadata: ToolMetadata | undefined = undefined;
 export let occupancyGrid: ROSOccupancyGrid | undefined = undefined;
 export let storageHandler: StorageHandler;
+export let loginHandler: LoginHandler;
+let room_name: string | null = null;
+let yieldedToOtherTab = false;
+
+/** True when all WebRTC occupancy-grid chunks have been reassembled. */
+export function isOccupancyGridComplete(
+    grid: ROSOccupancyGrid | undefined,
+): boolean {
+    if (!grid?.info) return false;
+    const expected = grid.info.width * grid.info.height;
+    return expected > 0 && grid.data.length >= expected;
+}
+
+export function isOccupancyGridReady(): boolean {
+    return isOccupancyGridComplete(occupancyGrid);
+}
+
+export type OccupancyGridStatus = "loading" | "ready" | "unavailable";
+
+let occupancyGridStatus: OccupancyGridStatus = "loading";
+type OccupancyGridStatusListener = (status: OccupancyGridStatus) => void;
+const occupancyGridStatusListeners = new Set<OccupancyGridStatusListener>();
+
+export function getOccupancyGridStatus(): OccupancyGridStatus {
+    return occupancyGridStatus;
+}
+
+function setOccupancyGridStatus(status: OccupancyGridStatus) {
+    if (occupancyGridStatus === status) return;
+    occupancyGridStatus = status;
+    occupancyGridStatusListeners.forEach((listener) => {
+        try {
+            listener(status);
+        } catch (err) {
+            console.warn("occupancyGridStatus listener failed:", err);
+        }
+    });
+}
+
+/** Subscribe to map load status. Fires immediately with the current status. */
+export function subscribeOccupancyGridStatus(
+    callback: OccupancyGridStatusListener,
+): () => void {
+    occupancyGridStatusListeners.add(callback);
+    callback(occupancyGridStatus);
+    return () => {
+        occupancyGridStatusListeners.delete(callback);
+    };
+}
+
+function resetOccupancyGrid() {
+    occupancyGrid = undefined;
+    setOccupancyGridStatus("loading");
+}
+
+type ToolMetadataListener = (toolMetadata: ToolMetadata) => void;
+const toolMetadataListeners = new Set<ToolMetadataListener>();
+
+/** Subscribe to tool metadata updates. Fires immediately if already known. */
+export function subscribeToolMetadata(
+    callback: ToolMetadataListener,
+): () => void {
+    toolMetadataListeners.add(callback);
+    if (toolMetadata) {
+        callback(toolMetadata);
+    }
+    return () => {
+        toolMetadataListeners.delete(callback);
+    };
+}
+
+function setToolMetadata(newToolMetadata: ToolMetadata) {
+    toolMetadata = newToolMetadata;
+    toolMetadataListeners.forEach((listener) => listener(newToolMetadata));
+}
 
 // Create the function providers. These abstract the logic between the React
 // components and remote robot.
 export var buttonFunctionProvider = new ButtonFunctionProvider();
+export var flyingGripperFunctionProvider = new FlyingGripperFunctionProvider();
 
 export var runStopFunctionProvider = new RunStopFunctionProvider();
 export var batteryStateFunctionProvider =
@@ -66,33 +162,81 @@ connection = new WebRTCConnection({
     onMessage: handleWebRTCMessage,
     onTrackAdded: handleRemoteTrackAdded,
     onMessageChannelOpen: configureRemoteRobot,
-    onConnectionEnd: disconnectFromRobot,
+    onOperatorDisplaced: () => {
+        yieldedToOtherTab = true;
+        showOperatorSeatNotice(
+            "This account is already operating from another tab.",
+        );
+        connection.hangup();
+    },
+});
+
+loginHandler = createLoginHandler(() => {
+    console.log("Operator login handler ready");
 });
 
 new Promise<void>(async (resolve) => {
     let currURL = new URL(window.location.href);
-    let room_name = currURL.searchParams.get("robot");
+    room_name = currURL.searchParams.get("robot");
+    if (process.env.storage === "firebase" && !room_name) {
+        room_name = process.env.HELLO_FLEET_ID;
+    }
     if (
         process.env.storage === "firebase" &&
-        !/^stretch-(re1|re2|se3)-\d{4}$/.test(room_name)
+        !/^stretch-(re1|re2|se3|se4)-\d{4}$/.test(room_name)
     ) {
         console.error(`ERROR: Invalid room ${room_name}`);
         throw new Error("Invalid room name");
     }
-    await connection.configure_signaler(room_name);
-    console.log("Signaler ready!");
+    try {
+        await connection.configure_signaler(room_name);
+        console.log("Signaler ready!");
+    } catch (error) {
+        console.error("Failed to configure signaler.", error);
+        return;
+    }
+
+    if (consumeOperatorTakeover()) connection.requestOperatorTakeover();
 
     let connected = false;
+    let occupiedSince: number | undefined;
+    let waitingOnSameAccount = false;
     while (!connected) {
-        connection.hangup();
+        if (!waitingOnSameAccount) connection.hangup();
 
         // Attempt to join robot room
         let joinedRobotRoom = await connection.addOperatorToRobotRoom();
         if (!joinedRobotRoom) {
+            const block = connection.operatorJoinBlock();
+            if (block === "same-account") {
+                if (!waitingOnSameAccount) {
+                    console.log("Operator seat is in use in another tab");
+                    showOperatorSeatNotice(
+                        "Your account is teleoperating this robot from another browser tab.",
+                    );
+                }
+                waitingOnSameAccount = true;
+                await delay(2000);
+                continue;
+            }
+            waitingOnSameAccount = false;
             console.log("Operator failed to join robot room");
+            if (block === "other") {
+                occupiedSince ??= Date.now();
+                if (Date.now() - occupiedSince > OPERATOR_SEAT_STALE_MS) {
+                    showOperatorSeatNotice(
+                        "Another account is teleoperating this robot.",
+                    );
+                    return;
+                }
+            } else {
+                occupiedSince = undefined;
+            }
             await delay(500);
             continue;
         }
+        waitingOnSameAccount = false;
+        occupiedSince = undefined;
 
         // Wait for WebRTC connection to resolve, timeout after 10 seconds
         let isResolved = await waitUntil(
@@ -126,7 +270,7 @@ new Promise<void>(async (resolve) => {
 const container = document.getElementById("root");
 root = createRoot(container!);
 
-/** Handle when the WebRTC connection adds a new track on a camera video stream. */
+/** Handle when the WebRTC connection adds a new track on a camera video or audio stream. */
 function handleRemoteTrackAdded(event: RTCTrackEvent) {
     const track = event.track;
     const stream = event.streams[0];
@@ -142,6 +286,14 @@ function handleRemoteTrackAdded(event: RTCTrackEvent) {
     console.log("OPERATOR: adding remote tracks");
 
     allRemoteStreams.set(streamName, { track: track, stream: stream });
+    if (streamName === "overhead" || streamName === "gripper") {
+        notifyRemoteStreams();
+    }
+
+    if (streamName === "audio" || track.kind === "audio") {
+        console.log("OPERATOR: Routing robot audio stream to RobotAudioPlayer");
+        RobotAudioPlayer.getInstance().playStream(stream);
+    }
 }
 
 /**
@@ -174,9 +326,19 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "isRunStopped":
             remoteRobot.sensors.setRunStopState(message.enabled);
             break;
+        case "leaseStatus":
+            remoteRobot.sensors.setLeaseStatus(message.holder, message.isDriverHolding);
+            break;
         case "stretchTool":
-            console.log("index stretchTool", message.value);
-            stretchTool = getStretchTool(message.value);
+            setToolMetadata(
+                message.toolMetadata || parseToolMetadata(message.value),
+            );
+            console.log(
+                "[Operator index] stretchTool message received:",
+                message.value,
+                "toolMetadata:",
+                toolMetadata,
+            );
             break;
         case "occupancyGrid":
             if (!occupancyGrid) {
@@ -186,13 +348,19 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
                     message.message.data
                 );
             }
+            if (isOccupancyGridReady()) {
+                setOccupancyGridStatus("ready");
+            } else if (occupancyGridStatus === "unavailable") {
+                setOccupancyGridStatus("loading");
+            }
+            break;
+        case "occupancyGridUnavailable":
+            if (!isOccupancyGridReady()) {
+                setOccupancyGridStatus("unavailable");
+            }
             break;
         case "amclPose":
             remoteRobot.setMapPose(message.message);
-            break;
-        case "goalStatus":
-            console.log("goalStatus", message.message);
-            remoteRobot.setGoalReached(true);
             break;
         case "moveBaseState":
             console.log("moveBaseState", message.message);
@@ -202,11 +370,30 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             console.log("playbackPosesState", message.message);
             movementRecorderFunctionProvider.setPlaybackPosesState(message.message);
             break;
+        case "seedLocalizationState":
+            console.log("seedLocalizationState", message.message);
+            mapFunctionProvider.setSeedLocalizationState(message.message);
+            break;
         case "relativePose":
             remoteRobot.setRelativePose(message.message);
             break;
         case "batteryState":
             remoteRobot.sensors.setBatteryState(message.percentage, message.isCharging);
+            break;
+        case "odom":
+            remoteRobot.sensors.setOdom(message.message);
+            break;
+        // @flag voice_control_interface
+        case "voiceCapability":
+            setOperatorVoiceSvc(message.enabled);
+            setOperatorVoiceInputRecording(message.voiceInputRecording);
+            break;
+        // @flag voice_control_interface
+        case "voiceToken":
+            resolveVoiceToken(message);
+            break;
+        case "maxEeSpeed":
+            setMaxEeSpeed((message as MaxEeSpeedMessage).maxEeSpeed);
             break;
         default:
             throw Error(`unhandled WebRTC message type ${message.type}`);
@@ -234,11 +421,19 @@ function initializeOperator() {
  * WebRTC connection.
  */
 function configureRemoteRobot() {
+    // Stop a held drive or joint before this channel is used.
+    buttonFunctionProvider.disableActiveButton();
+    flyingGripperFunctionProvider.disableActiveButton();
     remoteRobot = new RemoteRobot({
         robotChannel: (message: cmd) => connection.sendData(message),
     });
-    occupancyGrid = undefined;
+    resetOccupancyGrid();
     remoteRobot.getStretchTool("getStretchTool");
+    remoteRobot.getRunStop("getRunStop");
+    // @flag voice_control_interface
+    remoteRobot.getVoiceCapability();
+    configureVoiceTokenRelay(() => remoteRobot.requestVoiceToken());
+    remoteRobot.getMaxEeSpeed();
     FunctionProvider.addRemoteRobot(remoteRobot);
     mapFunctionProvider = new MapFunctionProvider();
     remoteRobot.sensors.setFunctionProviderCallback(
@@ -254,9 +449,38 @@ function configureRemoteRobot() {
     remoteRobot.sensors.setIsHomedFunctionProviderCallback(
         homeTheRobotFunctionProvider.updateIsHomedState
     );
+    runStopFunctionProvider.setOnRunStopEngagedCallback(() => {
+        stopAllRobotMovement(false);
+    });
     remoteRobot.sensors.setRunStopFunctionProviderCallback(
-        runStopFunctionProvider.updateRunStopState
+        (enabled: boolean) => {
+            if (enabled) {
+                stopAllRobotMovement(false);
+            }
+            runStopFunctionProvider.updateRunStopState(enabled);
+        }
     );
+    remoteRobot.sensors.setLeaseStatusFunctionProviderCallback(
+        (holder, isDriverHolding) => {
+            if (!isDriverHolding) {
+                stopAllRobotMovement(true);
+            }
+        }
+    );
+}
+
+/**
+ * Stops all active robot motions including teleop actions, autonomous navigation,
+ * and saved trajectory playback.
+ *
+ * Args:
+ *     onlyCancelActiveGoalUi: Whether to suppress the AutoNav cancellation UI reset
+ *         when no navigation goal is actively executing on the operator.
+ */
+function stopAllRobotMovement(onlyCancelActiveGoalUi: boolean = true): void {
+    FunctionProvider.stopAllActions(true);
+    underMapFunctionProvider?.cancelGoal(onlyCancelActiveGoalUi);
+    movementRecorderFunctionProvider?.cancelPlayback();
 }
 
 /**
@@ -269,13 +493,13 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
     switch (process.env.storage) {
         case "firebase":
             const config: FirebaseOptions = {
-                apiKey: process.env.apiKey,
-                authDomain: process.env.authDomain,
-                projectId: process.env.projectId,
-                storageBucket: process.env.storageBucket,
-                messagingSenderId: process.env.messagingSenderId,
-                appId: process.env.appId,
-                measurementId: process.env.measurementId,
+                apiKey: process.env.PUBLIC_FIREBASE_API_KEY,
+                authDomain: process.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
+                projectId: process.env.PUBLIC_FIREBASE_PROJECT_ID,
+                storageBucket: process.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
+                messagingSenderId: process.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+                appId: process.env.PUBLIC_FIREBASE_APP_ID,
+                measurementId: process.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
             };
             return new FirebaseStorageHandler(
                 storageHandlerReadyCallback,
@@ -286,37 +510,197 @@ function createStorageHandler(storageHandlerReadyCallback: () => void) {
     }
 }
 
+function showOperatorSeatNotice(detail: string) {
+    document.querySelectorAll("body > .boot-screen").forEach((node) => node.remove());
+    const host = document.getElementById("root");
+    if (!host) return;
+    host.replaceChildren();
+
+    const kicker = document.createElement("p");
+    kicker.className = "op-seat-notice__kicker";
+    kicker.textContent = "hello robot";
+
+    const body = document.createElement("p");
+    body.className = "op-seat-notice__detail";
+    body.textContent = detail;
+
+    const back = document.createElement("a");
+    back.className = "op-seat-notice__button";
+    back.href = "/";
+    back.textContent = "←  Home";
+
+    const card = document.createElement("div");
+    card.className = "op-seat-notice__card";
+    card.append(kicker, body, back);
+
+    const notice = document.createElement("div");
+    notice.className = "op-seat-notice";
+    notice.append(card);
+    host.append(notice);
+}
+
+/** Up-chevron used by the Dashboard control on the boot screen. */
+function appendChevronUp(parent: HTMLElement) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "16");
+    svg.setAttribute("height", "16");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M3 10.5 8 5.5 13 10.5");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.6");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.append(path);
+    parent.append(svg);
+}
+
+/**
+ * Same layout as the first-paint screen in operator/html/index.html.
+ * Styled by the inline stylesheet there.
+ */
+function createBootScreen(label: string): HTMLDivElement {
+    const screen = document.createElement("div");
+    screen.className = "boot-screen";
+
+    const dashboard = document.createElement("a");
+    dashboard.className = "boot-screen__dashboard";
+    dashboard.href = "/";
+    dashboard.setAttribute("aria-label", "Dashboard");
+    dashboard.addEventListener("click", (event) => {
+        event.preventDefault();
+        window.history.back();
+    });
+    const icon = document.createElement("span");
+    icon.className = "boot-screen__dashboard-icon";
+    icon.setAttribute("aria-hidden", "true");
+    appendChevronUp(icon);
+    const dashboardLabel = document.createElement("span");
+    dashboardLabel.className = "boot-screen__dashboard-label";
+    dashboardLabel.textContent = "Dashboard";
+    dashboard.append(icon, dashboardLabel);
+
+    const spinner = document.createElement("div");
+    spinner.className = "boot-screen__spinner";
+    spinner.setAttribute("role", "status");
+    const ring = document.createElement("div");
+    ring.className = "boot-screen__spinner-ring";
+    ring.setAttribute("aria-hidden", "true");
+    const spinnerLabel = document.createElement("span");
+    spinnerLabel.className = "boot-screen__spinner-label";
+    spinnerLabel.textContent = label;
+    spinner.append(ring, spinnerLabel);
+
+    const reload = document.createElement("button");
+    reload.className = "boot-screen__reload";
+    reload.type = "button";
+    reload.setAttribute("aria-label", "Reload");
+    reload.textContent = "Reload";
+    reload.addEventListener("click", () => {
+        window.location.reload();
+    });
+
+    screen.append(dashboard, spinner, reload);
+    return screen;
+}
+
 /**
  * Periodic check of the WebRTC connection state.
- * Shows "Reconnecting..." loading spinner if connection drops.
-*/
+ * Shows the "Reconnecting" boot screen when the link drops, and rebuilds
+ * the link after a few visible seconds down or when the page comes back.
+ */
 function initConnectionStateCheck() {
-    // 100%x100% black backdrop
-    var loadingBackground = document.createElement("div");
-    loadingBackground.className = "loader-background";
+    const screen = createBootScreen("Reconnecting");
+    // Visible seconds the link has been down.
+    let downTicks = 0;
+    // The page went to the background.
+    let sawHidden = false;
+    // Shared timer for visibilitychange and pageshow.
+    let foregroundTimer: number | undefined;
 
-    // Loading spinner
-    var loader = document.createElement("div");
-    loader.className = "loader";
-
-    // "Reconnecting..." text inside the spinner
-    var loaderText = document.createElement("div");
-    loaderText.className = "loading-text";
-    var text = document.createElement("p");
-    text.textContent = "Reconnecting...";
-    loaderText.appendChild(text);
-
-    setInterval(async () => {
-        let connected = await connection.isConnected();
-        if (!connected && !window.document.body.contains(loader)) {
-            window.document.body.appendChild(loaderText);
-            window.document.body.appendChild(loader);
-            window.document.body.appendChild(loadingBackground);
-        } else if (connected && window.document.body.contains(loader)) {
-            window.document.body.removeChild(loaderText);
-            window.document.body.removeChild(loader);
-            window.document.body.removeChild(loadingBackground);
+    // Rebuild the link. Yield the seat when another tab holds it.
+    const recoverConnection = async () => {
+        if (
+            !canAttemptOperatorRecovery({
+                yielded: yieldedToOtherTab,
+                hidden: document.hidden,
+            })
+        ) {
+            return;
         }
+        const recovered = await connection.recover();
+        if (recovered || yieldedToOtherTab) return;
+        const block = connection.operatorJoinBlock();
+        if (!block) return;
+        yieldedToOtherTab = true;
+        showOperatorSeatNotice(
+            block === "same-account"
+                ? "Your account is teleoperating this robot from another browser tab."
+                : "Another account is teleoperating this robot.",
+        );
+    };
+
+    // 2 second wait. Another foreground event restarts this timer.
+    const scheduleForegroundRecovery = () => {
+        if (foregroundTimer !== undefined) {
+            window.clearTimeout(foregroundTimer);
+        }
+        foregroundTimer = window.setTimeout(() => {
+            foregroundTimer = undefined;
+            void recoverConnection();
+        }, 2000);
+    };
+
+    // Record a hide. Schedule a rebuild when the page is visible again.
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            sawHidden = true;
+            return;
+        }
+        if (
+            shouldScheduleForegroundRecovery({
+                persisted: false,
+                sawHidden,
+            })
+        ) {
+            sawHidden = false;
+            scheduleForegroundRecovery();
+        }
+    });
+    // Back-forward cache restore.
+    window.addEventListener("pageshow", (event) => {
+        if (
+            shouldScheduleForegroundRecovery({
+                persisted: event.persisted,
+                sawHidden,
+            })
+        ) {
+            sawHidden = false;
+            scheduleForegroundRecovery();
+        }
+    });
+
+    // Update the reconnecting screen once a second.
+    setInterval(async () => {
+        if (yieldedToOtherTab) {
+            screen.remove();
+            return;
+        }
+        const connected = await connection.isConnected();
+        const watchdog = advanceRecoveryWatchdog({
+            linkUp: connected,
+            visible: document.visibilityState === "visible",
+            downTicks,
+        });
+        downTicks = watchdog.downTicks;
+        if (connected) {
+            if (document.body.contains(screen)) screen.remove();
+            return;
+        }
+        if (!document.body.contains(screen)) document.body.appendChild(screen);
+        if (watchdog.recover) void recoverConnection();
     }, 1000);
 }
 
@@ -346,17 +730,44 @@ function renderOperator(storageHandler: StorageHandler) {
     initConnectionStateCheck();
 }
 
-function disconnectFromRobot() {
+/**
+ * Disconnects the operator from the robot and cleans up audio and WebRTC sessions.
+ */
+function disconnectFromRobot(): void {
+    stopAllRobotMovement(true);
+    RobotAudioPlayer.getInstance().stop();
+
+    // @flag voice_control_interface
+    configureVoiceTokenRelay(null);
+    setOperatorVoiceSvc(false);
     connection.hangup();
     connection.stop();
 }
 
+window.addEventListener("blur", () => {
+    stopAllRobotMovement(true);
+});
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" || document.hidden) {
+        stopAllRobotMovement(true);
+    }
+});
+
+window.addEventListener("pagehide", () => {
+    stopAllRobotMovement(true);
+});
+
 window.onbeforeunload = () => {
+    stopAllRobotMovement(true);
+    RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 };
 
 window.onunload = () => {
+    stopAllRobotMovement(true);
+    RobotAudioPlayer.getInstance().stop();
     connection.hangup();
     connection.stop();
 };

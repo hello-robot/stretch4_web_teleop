@@ -1,8 +1,7 @@
-import { ActionState, ROSPose, waitUntil } from "shared/util";
+import { Transform, Vector3 } from "roslib";
+import { ActionState, ROSPose } from "shared/util";
 import { StorageHandler } from "../storage_handler/StorageHandler";
 import { FunctionProvider } from "./FunctionProvider";
-import { resolve } from "path";
-import ROSLIB from "roslib";
 
 export enum UnderMapButton {
     SelectGoal,
@@ -16,15 +15,14 @@ export enum UnderMapButton {
     GetSavedPoseNames,
     GetSavedPoseTypes,
     GetSavedPoses,
-    GoalReached,
     RenamePose,
 }
 
 export class UnderMapFunctionProvider extends FunctionProvider {
     private selectGoal: boolean;
+    private isMoveBaseActive: boolean = false;
     private storageHandler: StorageHandler;
-    private navigationSuccess?: boolean;
-    private mapPoseCallback?: (pose: ROSLIB.Vector3) => void = undefined;
+    private mapPoseCallback?: (pose: Vector3) => void = undefined;
     private operatorCallback?: (state: ActionState) => void = undefined;
 
     constructor(storageHandler: StorageHandler) {
@@ -34,9 +32,35 @@ export class UnderMapFunctionProvider extends FunctionProvider {
         this.storageHandler = storageHandler;
     }
 
-    public setMoveBaseState(state: ActionState) {
-        if (state.alert_type == "success") this.navigationSuccess = true;
+    /**
+     * Updates the current move_base execution state and notifies registered operator listeners.
+     *
+     * Args:
+     *     state: Action state returned by or synthesized for move_base.
+     */
+    public setMoveBaseState(state: ActionState): void {
+        this.isMoveBaseActive =
+            state.alert_type === "info" && state.state === "Navigation executing!";
         if (this.operatorCallback) this.operatorCallback(state);
+    }
+
+    /**
+     * Cancels the current navigation goal and notifies remote robot and operator listeners.
+     *
+     * Args:
+     *     onlyIfActive: When true, always sends a stop command to the robot but only
+     *         emits the UI cancellation alert when navigation is actively executing.
+     */
+    public cancelGoal(onlyIfActive: boolean = false): void {
+        const shouldNotifyUi = !onlyIfActive || this.isMoveBaseActive;
+        this.isMoveBaseActive = false;
+        if (shouldNotifyUi) {
+            this.setMoveBaseState({
+                state: "Navigation canceled!",
+                alert_type: "error",
+            });
+        }
+        FunctionProvider.remoteRobot?.stopMoveBase();
     }
 
     public provideFunctions(button: UnderMapButton) {
@@ -46,7 +70,9 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                     this.selectGoal = toggle;
                 };
             case UnderMapButton.CancelGoal:
-                return () => FunctionProvider.remoteRobot?.stopMoveBase();
+                return () => {
+                    this.cancelGoal();
+                };
 
             case UnderMapButton.DeleteGoal:
                 return (idx: number) => {
@@ -67,12 +93,15 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                 };
             case UnderMapButton.LoadGoal:
                 return (poseName: string) => {
-                    this.navigationSuccess = undefined;
                     let pose = this.storageHandler.getMapPose(poseName);
                     return pose;
                 };
             case UnderMapButton.NavigateToPose:
-                return (pose: ROSLIB.Transform) => {
+                return (pose: Transform) => {
+                    this.setMoveBaseState({
+                        state: "Navigation executing!",
+                        alert_type: "info",
+                    });
                     let rosPose = {
                         position: {
                             x: pose.translation.x,
@@ -104,20 +133,6 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                 return () => {
                     return this.storageHandler.getMapPoses();
                 };
-            case UnderMapButton.GoalReached:
-                return () => {
-                    const promise = new Promise((resolve, reject) => {
-                        let interval = setInterval(() => {
-                            let goalReached =
-                                FunctionProvider.remoteRobot?.isGoalReached();
-                            if (goalReached) {
-                                clearInterval(interval);
-                                resolve(true);
-                            }
-                        });
-                    });
-                    return promise;
-                };
             case UnderMapButton.RenamePose:
                 return (poseNameOld: string, poseNameNew: string) => {
                     return this.storageHandler.renamePose(poseNameOld, poseNameNew);
@@ -144,7 +159,7 @@ export class UnderMapFunctionProvider extends FunctionProvider {
      *
      * @param callback - A function that receives a `ROSLIB.Vector3` object representing the pose on the map.
      */
-    public setMapPoseCallback(callback: (pose: ROSLIB.Vector3) => void) {
+    public setMapPoseCallback(callback: (pose: Vector3) => void) {
         this.mapPoseCallback = callback;
     }
 }

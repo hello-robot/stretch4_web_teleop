@@ -1,15 +1,17 @@
-import ROSLIB from "roslib";
+
 import { ROSPose, RobotPose } from "./util";
 import { ValidJoints } from "./util";
 
 export type cmd =
     | DriveCommand
     | SetJointVelocityCommand
+    | SetTaskSpaceVelocityCommand
     | IncrementalMove
     | setRobotModeCommand
     | CameraPerspectiveCommand
     | RobotPoseCommand
     | ToggleCommand
+    | GetRunStopCommand
     | GetOccupancyGrid
     | MoveBaseCommand
     | StopTrajectoryCommand
@@ -17,7 +19,29 @@ export type cmd =
     | PlaybackPosesCommand
     | GetBatteryStateCommand
     | GetStretchTool
-    | HomeTheRobotCommand;
+    | GetMaxEeSpeed
+    | HomeTheRobotCommand
+    | SeedLocalizationCommand
+    | GetVoiceCapabilityCommand
+    | RequestVoiceTokenCommand;
+
+export interface SeedLocalizationCommand {
+    type: "seedLocalization";
+}
+
+/** Ask the robot whether its server can mint OpenAI Realtime credentials. */
+export interface GetVoiceCapabilityCommand {
+    type: "getVoiceCapability";
+}
+
+/**
+ * Ask the robot to mint an OpenAI Realtime ephemeral credential and relay it
+ * back over the data channel (used when the operator page cannot reach the
+ * robot's local server, e.g. Firebase Hosting).
+ */
+export interface RequestVoiceTokenCommand {
+    type: "requestVoiceToken";
+}
 
 export interface VelocityCommand {
     stop: () => void;
@@ -37,6 +61,14 @@ export interface SetJointVelocityCommand {
     type: "setJointVelocity";
     jointName: ValidJoints;
     velocity: number;
+}
+
+/** Tool-frame linear twist for stretch_kinematics task_space_controller (/ee_cmd_vel). */
+export interface SetTaskSpaceVelocityCommand {
+    type: "setTaskSpaceVelocity";
+    linear_X: number;
+    linear_Y: number;
+    linear_Z: number;
 }
 
 export interface IncrementalMove {
@@ -70,12 +102,20 @@ export interface ToggleCommand {
     toggle: boolean;
 }
 
+export interface GetRunStopCommand {
+    type: "getRunStop";
+}
+
 export interface GetOccupancyGrid {
     type: "getOccupancyGrid";
 }
 
 export interface GetStretchTool {
     type: "getStretchTool";
+}
+
+export interface GetMaxEeSpeed {
+    type: "getMaxEeSpeed";
 }
 
 export interface MoveBaseCommand {

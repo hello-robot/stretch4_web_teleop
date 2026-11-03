@@ -4,7 +4,7 @@ import {
     ComponentType,
 } from "../utils/component_definitions";
 import { Panel } from "./Panel";
-import { RemoteStream, StretchTool } from "shared/util";
+import { RemoteStream, ToolMetadata } from "shared/util";
 import { ButtonPad } from "./ButtonPad";
 import { ButtonStateMap } from "../function_providers/ButtonFunctionProvider";
 import { Map } from "./Map";
@@ -24,10 +24,12 @@ export type SharedState = {
     buttonStateMap?: ButtonStateMap;
     /** Whether or not to hide the button labels */
     hideLabels?: boolean;
-    /** What tool is attached to the stretch gripper. */
-    stretchTool: StretchTool;
+    /** Metadata for tool attached to the robot. */
+    toolMetadata?: ToolMetadata;
     /** Whether or not robot has been homed */
     robotIsHomed: boolean;
+    /** Whether or not robot is currently runstopped */
+    isRunStopped?: boolean;
     /** Movement recorder's playback state  */
     playbackPosesState?: undefined | {
         state: string;

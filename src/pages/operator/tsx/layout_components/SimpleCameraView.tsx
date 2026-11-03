@@ -1,6 +1,10 @@
 import React from "react";
 import { className, RemoteStream } from "shared/util";
 import { CameraViewId } from "../utils/component_definitions";
+import {
+    remoteStreamRevision,
+    subscribeRemoteStreams,
+} from "../remoteStreamStore";
 import "operator/css/SimpleCameraView.css";
 
 /**
@@ -15,6 +19,11 @@ export const SimpleCameraView = (props: {
 }) => {
     // Reference to the video element
     const videoRef = React.useRef<HTMLVideoElement>(null);
+    const streamRevision = React.useSyncExternalStore(
+        subscribeRemoteStreams,
+        remoteStreamRevision,
+        remoteStreamRevision,
+    );
     // Get the stream to display inside the video
     const stream: MediaStream = getStream(props.id, props.remoteStreams);
     // Reference to the div immediately around the video element
@@ -26,9 +35,11 @@ export const SimpleCameraView = (props: {
 
     // Update the source of the video stream
     React.useEffect(() => {
-        if (!videoRef?.current) return;
-        videoRef.current.srcObject = stream;
-    }, [stream]);
+        const video = videoRef.current;
+        if (!video) return;
+        video.srcObject = stream;
+        video.play().catch(() => {});
+    }, [stream, streamRevision]);
 
     function setVideoSize(videoRef) {
         const videoRect = videoRef.current.getBoundingClientRect();

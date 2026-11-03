@@ -1,11 +1,95 @@
 // Adapted from ros2djs and nav2djs
 
-import React from "react";
 import createjs from "createjs-module";
+import React from "react";
+import { Pose, Quaternion, Transform, Vector3 } from "roslib";
 import { ROSOccupancyGrid, ROSPoint, ROSPose } from "shared/util";
-import ROSLIB from "roslib";
+import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { MapFunctions } from "../layout_components/AutoNav";
 import hexToRgbArray from "../utils/hex-to-rgb-array";
+
+/** Arrow size in map coords. */
+const NAV_ARROW_GEOM_SIZE = 40;
+/** Arrow size on screen (CSS px). */
+const NAV_ARROW_SCREEN_PX = 32;
+/** White border size around marker */
+const NAV_ARROW_BORDER_WIDTH_PX = 5;
+/** Same outline, in map coords. */
+const NAV_ARROW_OUTLINE_LOCAL =
+    (NAV_ARROW_GEOM_SIZE / NAV_ARROW_SCREEN_PX) * NAV_ARROW_BORDER_WIDTH_PX;
+/** Saved-pose circle radius. */
+const SAVED_POSE_RADIUS = 30;
+/** Saved-pose diameter (for scaling). */
+const SAVED_POSE_DIAMETER = SAVED_POSE_RADIUS * 2;
+/** Saved-pose size on screen (CSS px). */
+const SAVED_POSE_SCREEN_PX = 22;
+/** Hover label font size in map coords. */
+const LABEL_GEOM_SIZE = 40;
+/** Hover label size on screen (CSS px). */
+const LABEL_SCREEN_PX = 14;
+
+type Point2 = { x: number; y: number };
+
+/** DisplayObject that can store a base scale + optional pulse multiplier. */
+type ScalableMarker = createjs.DisplayObject & {
+    baseScaleX?: number;
+    baseScaleY?: number;
+    pulseFactor?: number;
+};
+
+/** Push each vertex outward from the centroid by `outlineLocal` (approx. outside outline). */
+function expandVerticesOutward(
+    vertices: Point2[],
+    outlineLocal: number,
+): Point2[] {
+    const cx = vertices.reduce((sum, v) => sum + v.x, 0) / vertices.length;
+    const cy = vertices.reduce((sum, v) => sum + v.y, 0) / vertices.length;
+    return vertices.map((v) => {
+        const dx = v.x - cx;
+        const dy = v.y - cy;
+        const len = Math.hypot(dx, dy) || 1;
+        return {
+            x: v.x + (dx / len) * outlineLocal,
+            y: v.y + (dy / len) * outlineLocal,
+        };
+    });
+}
+
+/**
+ * Append a closed rounded polygon path to a CreateJS Graphics object.
+ */
+function appendRoundedPolygon(
+    graphics: createjs.Graphics,
+    vertices: Point2[],
+    cornerRadius: number,
+) {
+    const n = vertices.length;
+    for (let i = 0; i < n; i++) {
+        const curr = vertices[i];
+        const prev = vertices[(i + n - 1) % n];
+        const next = vertices[(i + 1) % n];
+        const toPrev = { x: prev.x - curr.x, y: prev.y - curr.y };
+        const toNext = { x: next.x - curr.x, y: next.y - curr.y };
+        const lenPrev = Math.hypot(toPrev.x, toPrev.y);
+        const lenNext = Math.hypot(toNext.x, toNext.y);
+        const r = Math.min(cornerRadius, lenPrev / 2, lenNext / 2);
+        const p1 = {
+            x: curr.x + (toPrev.x / lenPrev) * r,
+            y: curr.y + (toPrev.y / lenPrev) * r,
+        };
+        const p2 = {
+            x: curr.x + (toNext.x / lenNext) * r,
+            y: curr.y + (toNext.y / lenNext) * r,
+        };
+        if (i === 0) {
+            graphics.moveTo(p1.x, p1.y);
+        } else {
+            graphics.lineTo(p1.x, p1.y);
+        }
+        graphics.quadraticCurveTo(curr.x, curr.y, p2.x, p2.y);
+    }
+    graphics.closePath();
+}
 
 /**
  * OccupancyGrid is a React component that manages the display and interaction
@@ -17,7 +101,7 @@ export class OccupancyGrid extends React.Component {
     // The createjs stage (canvas root)
     private rootObject: createjs.Stage;
     // The origin of the map in ROS coordinates
-    private origin?: ROSLIB.Pose;
+    private origin?: Pose;
     // The bitmap image of the occupancy grid
     private bitmap?: createjs.Bitmap;
     // Map dimensions in cells
@@ -30,11 +114,19 @@ export class OccupancyGrid extends React.Component {
     private map: ROSOccupancyGrid;
     // The createjs shape for the goal marker
     private goalMarker?: createjs.Shape;
-    // Interval for checking if the goal is reached
-    private getGoalReached?: NodeJS.Timeout;
+    // The createjs shape for the robot's current pose
+    private robotMarker?: createjs.Shape;
+    // Fallback poll when amclPose events are sparse
+    private setPoseInterval?: ReturnType<typeof setInterval>;
+    // Unsubscribe from RemoteRobot map-pose listeners
+    private mapPoseUnsubscribe?: () => void;
+    // Re-apply marker scales when the canvas CSS size changes
+    private resizeObserver?: ResizeObserver;
+    // Goal-marker pulse tick handler (must be removable!)
+    private goalPulseTick?: () => void;
     // List of saved pose markers (shapes and labels)
     private savedPoseMarkers: {
-        circle: createjs.Shape;
+        circle: createjs.DisplayObject;
         label: createjs.Text;
     }[];
     // List of saved pose marker labels
@@ -65,44 +157,155 @@ export class OccupancyGrid extends React.Component {
     }
 
     /**
+     * Helper method to calculate the scale of a marker based on
+     * the desired screen size and the geometric size of the marker
+     */
+    private screenConstantScale(
+        geomSize: number,
+        desiredScreenPx: number,
+    ): { scaleX: number; scaleY: number } {
+        const canvas = this.rootObject.canvas as HTMLCanvasElement | undefined;
+        const stageScaleX = this.rootObject.scaleX || 1;
+        const stageScaleY = this.rootObject.scaleY || 1;
+        const cssScaleX =
+            canvas && canvas.width > 0 && canvas.clientWidth > 0
+                ? canvas.clientWidth / canvas.width
+                : 1;
+        const cssScaleY =
+            canvas && canvas.height > 0 && canvas.clientHeight > 0
+                ? canvas.clientHeight / canvas.height
+                : 1;
+        return {
+            scaleX: desiredScreenPx / (geomSize * stageScaleX * cssScaleX),
+            scaleY: desiredScreenPx / (geomSize * stageScaleY * cssScaleY),
+        };
+    }
+
+    /**
+     * Apply screen-constant scale to a marker
+     */
+    private applyMarkerScreenScale(
+        marker: ScalableMarker,
+        geomSize: number,
+        desiredScreenPx: number,
+    ) {
+        const { scaleX, scaleY } = this.screenConstantScale(
+            geomSize,
+            desiredScreenPx,
+        );
+        marker.baseScaleX = scaleX;
+        marker.baseScaleY = scaleY;
+        const pulse = marker.pulseFactor ?? 1;
+        marker.scaleX = scaleX * pulse;
+        marker.scaleY = scaleY * pulse;
+    }
+
+    /** Helper method to update marker size useful if screen is resized */
+    public refreshMarkerScales() {
+        if (this.robotMarker) {
+            this.applyMarkerScreenScale(
+                this.robotMarker,
+                NAV_ARROW_GEOM_SIZE,
+                NAV_ARROW_SCREEN_PX,
+            );
+        }
+        if (this.goalMarker) {
+            this.applyMarkerScreenScale(
+                this.goalMarker,
+                NAV_ARROW_GEOM_SIZE,
+                NAV_ARROW_SCREEN_PX,
+            );
+        }
+        this.savedPoseMarkers.forEach((marker) => {
+            this.applyMarkerScreenScale(
+                marker.circle,
+                SAVED_POSE_DIAMETER,
+                SAVED_POSE_SCREEN_PX,
+            );
+            this.applyMarkerScreenScale(
+                marker.label,
+                LABEL_GEOM_SIZE,
+                LABEL_SCREEN_PX,
+            );
+        });
+        this.rootObject.update();
+    }
+
+    /** Stop the goal pulse animation. */
+    private stopGoalPulse() {
+        if (!this.goalPulseTick) return;
+        createjs.Ticker.removeEventListener("tick", this.goalPulseTick);
+        this.goalPulseTick = undefined;
+    }
+
+    /**
      * Draws a saved pose marker (circle and label) at the given coordinates.
      * @param x X coordinate
      * @param y Y coordinate
      * @param color RGB color array
      * @param text Label text
+     * @param rotation Optional rotation quaternion (SE2 transform support)
      */
-    drawSavedPoseMarker(x: number, y: number, color: number[], text: string) {
+    drawSavedPoseMarker(x: number, y: number, color: number[], text: string, rotation?: Quaternion) {
+        var container = new createjs.Container();
+
         var circle = new createjs.Shape();
-        var radius = 30;
 
         var graphics = new createjs.Graphics();
         graphics.beginFill(
             createjs.Graphics.getRGB(color[0], color[1], color[2], 0.5),
         );
-        graphics.drawCircle(0, 0, radius);
+        graphics.drawCircle(0, 0, SAVED_POSE_RADIUS);
+        graphics.endFill();
 
         createjs.Shape.call(circle, graphics);
+        container.addChild(circle);
 
-        circle.x = x;
-        circle.y = y;
-        circle.scaleX = 1.0 / this.rootObject.scaleX;
-        circle.scaleY = 1.0 / this.rootObject.scaleY;
+        if (rotation) {
+            var arrow = new createjs.Shape();
+            var arrowGraphics = new createjs.Graphics();
+            var size = 20;
+            var arrowColor = createjs.Graphics.getRGB(color[0], color[1], color[2], 0.9);
+            arrowGraphics.beginFill(arrowColor);
+            arrowGraphics.moveTo(0, size);
+            arrowGraphics.lineTo(-size / 2, -size / 2);
+            arrowGraphics.lineTo(size / 2, -size / 2);
+            arrowGraphics.lineTo(0, size);
+            arrowGraphics.closePath();
+            arrowGraphics.endFill();
+            createjs.Shape.call(arrow, arrowGraphics);
 
-        var label = new createjs.Text(text, "bold 40px Arial", "#ff7700");
+            let theta = this.rosQuaternionToGlobalTheta(rotation);
+            arrow.rotation = theta - 90.0;
+            container.addChild(arrow);
+        }
+
+        container.x = x;
+        container.y = y;
+        this.applyMarkerScreenScale(
+            container,
+            SAVED_POSE_DIAMETER,
+            SAVED_POSE_SCREEN_PX,
+        );
+
+        var label = new createjs.Text(
+            text,
+            `bold ${LABEL_GEOM_SIZE}px Arial`,
+            "#ff7700",
+        );
         label.x = x;
         label.y = y - 10;
         label.textAlign = "center";
-        label.scaleX = 1.0 / this.rootObject.scaleX;
-        label.scaleY = 1.0 / this.rootObject.scaleY;
+        this.applyMarkerScreenScale(label, LABEL_GEOM_SIZE, LABEL_SCREEN_PX);
         label.textBaseline = "alphabetic";
 
-        circle.on("mouseover", (event) => {
+        container.on("mouseover", (event) => {
             label.visible = true;
         });
-        circle.on("mouseout", (event) => {
+        container.on("mouseout", (event) => {
             label.visible = false;
         });
-        return { circle, label };
+        return { circle: container, label };
     }
 
     /**
@@ -112,14 +315,10 @@ export class OccupancyGrid extends React.Component {
      */
     drawNavigationArrow(pulse: boolean, color: number[]) {
         var arrow = new createjs.Shape();
-        var size = 40;
-        var strokeSize = 0;
-        var strokeColor = createjs.Graphics.getRGB(
-            color[0],
-            color[1],
-            color[2],
-            0.85,
-        );
+        var size = NAV_ARROW_GEOM_SIZE;
+        var cornerRadius = 10;
+        // Outside-only outline (CSS outline-like): larger white underlay, then fill on top.
+        var outlineColor = createjs.Graphics.getRGB(255, 255, 255, 0.7);
         var fillColor = createjs.Graphics.getRGB(
             color[0],
             color[1],
@@ -127,40 +326,57 @@ export class OccupancyGrid extends React.Component {
             0.85,
         );
 
-        // draw the arrow
-        var graphics = new createjs.Graphics();
+        // Tip / left / right — same geometry as before, with rounded corners.
+        const vertices: Point2[] = [
+            { x: 0.0, y: size / 1.5 },
+            { x: -size / 2.0, y: -size / 2.0 },
+            { x: size / 2.0, y: -size / 2.0 },
+        ];
+        const outlineVertices = expandVerticesOutward(
+            vertices,
+            NAV_ARROW_OUTLINE_LOCAL,
+        );
 
-        // line width
-        graphics.setStrokeStyle(strokeSize);
-        graphics.moveTo(0.0, size / 1.5);
-        graphics.beginStroke(strokeColor);
-        graphics.beginFill(fillColor);
-        graphics.lineTo(-size / 2.0, -size / 2.0);
-        graphics.lineTo(size / 2.0, -size / 2.0);
-        graphics.lineTo(0.0, size / 1.5);
-        graphics.closePath();
+        var graphics = new createjs.Graphics();
+        graphics.beginFill(outlineColor);
+        appendRoundedPolygon(
+            graphics,
+            outlineVertices,
+            cornerRadius + NAV_ARROW_OUTLINE_LOCAL,
+        );
         graphics.endFill();
-        graphics.endStroke();
+
+        graphics.beginFill(fillColor);
+        appendRoundedPolygon(graphics, vertices, cornerRadius);
+        graphics.endFill();
 
         // create the shape
         createjs.Shape.call(arrow, graphics);
 
-        // check if we are pulsing
+        const scalable = arrow as ScalableMarker;
+        scalable.baseScaleX = 1;
+        scalable.baseScaleY = 1;
+        scalable.pulseFactor = 1;
+
         if (pulse) {
-            // have the model "pulse"
+            this.stopGoalPulse();
             var growCount = 0;
             var growing = true;
-            createjs.Ticker.addEventListener("tick", () => {
+            const onTick = () => {
                 if (growing) {
-                    arrow.scaleX *= 1.035;
-                    arrow.scaleY *= 1.035;
+                    scalable.pulseFactor = (scalable.pulseFactor ?? 1) * 1.035;
                     growing = ++growCount < 10;
                 } else {
-                    arrow.scaleX /= 1.035;
-                    arrow.scaleY /= 1.035;
+                    scalable.pulseFactor = (scalable.pulseFactor ?? 1) / 1.035;
                     growing = --growCount < 0;
                 }
-            });
+                scalable.scaleX =
+                    (scalable.baseScaleX ?? 1) * (scalable.pulseFactor ?? 1);
+                scalable.scaleY =
+                    (scalable.baseScaleY ?? 1) * (scalable.pulseFactor ?? 1);
+            };
+            this.goalPulseTick = onTick;
+            createjs.Ticker.addEventListener("tick", onTick);
         }
         return arrow;
     }
@@ -192,7 +408,7 @@ export class OccupancyGrid extends React.Component {
         }
 
         // Save the map origin (position and orientation) from ROS map metadata
-        this.origin = new ROSLIB.Pose({
+        this.origin = new Pose({
             position: this.map.info.origin.position,
             orientation: this.map.info.origin.orientation,
         });
@@ -283,7 +499,7 @@ export class OccupancyGrid extends React.Component {
             return;
         }
 
-        this.origin = new ROSLIB.Pose({
+        this.origin = new Pose({
             position: this.map.info.origin.position,
             orientation: this.map.info.origin.orientation,
         });
@@ -318,7 +534,7 @@ export class OccupancyGrid extends React.Component {
     /**
      * Converts a ROS translation (Vector3) to global canvas coordinates.
      */
-    rosToGlobal(translation: ROSLIB.Vector3) {
+    rosToGlobal(translation: Vector3) {
         var x =
             (this.width * this.scaleX! -
                 (-translation.x +
@@ -340,7 +556,7 @@ export class OccupancyGrid extends React.Component {
      * Converts a ROS quaternion to a global theta (angle in degrees).
      * See: https://github.com/RobotWebTools/ros2djs/blob/develop/src/Ros2D.js#L34C1-L44C3
      */
-    rosQuaternionToGlobalTheta(orientation: ROSLIB.Quaternion) {
+    rosQuaternionToGlobalTheta(orientation: Quaternion) {
         // See https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Rotation_matrices
         // here we use [x y z] = R * [1 0 0]
         var w = orientation.w;
@@ -370,24 +586,67 @@ export class OccupancyGrid extends React.Component {
     }
 
     /**
-     * Adds a marker for the robot's current pose and updates it periodically.
+     * Apply a map pose to the robot marker (null-safe).
+     */
+    updateRobotMarker(pose?: Transform | null) {
+        if (!this.robotMarker || !pose?.translation || !pose?.rotation) {
+            return;
+        }
+        try {
+            const globalCoord = this.rosToGlobal(pose.translation);
+            this.robotMarker.x = globalCoord.x;
+            this.robotMarker.y = globalCoord.y;
+            const theta = this.rosQuaternionToGlobalTheta(pose.rotation);
+            this.robotMarker.rotation = theta - 90.0;
+            this.applyMarkerScreenScale(
+                this.robotMarker,
+                NAV_ARROW_GEOM_SIZE,
+                NAV_ARROW_SCREEN_PX,
+            );
+            this.robotMarker.visible = true;
+            // Keep the robot marker above goal / saved-pose markers.
+            const top = this.rootObject.numChildren - 1;
+            if (top >= 0) {
+                this.rootObject.setChildIndex(this.robotMarker, top);
+            }
+            this.rootObject.update();
+        } catch (err) {
+            console.warn("updateRobotMarker failed:", err);
+        }
+    }
+
+    private trySubscribeMapPoseUpdates() {
+        if (this.mapPoseUnsubscribe) {
+            return;
+        }
+        const unsubscribe = FunctionProvider.subscribeMapPose((pose) => {
+            this.updateRobotMarker(pose);
+        });
+        if (!unsubscribe) {
+            return;
+        }
+        this.mapPoseUnsubscribe = unsubscribe;
+        this.updateRobotMarker(FunctionProvider.getMapPose());
+    }
+
+    /**
+     * Adds a marker for the robot's current pose and updates it from amclPose
+     * events (with a slow null-safe poll as backup).
      */
     addCurrentPoseMarker() {
-        const color = hexToRgbArray('#008AE5');
-        var robotMarker = this.drawNavigationArrow(false, color);
-        this.rootObject.addChild(robotMarker);
+        const color = hexToRgbArray("#008AE5");
+        this.robotMarker = this.drawNavigationArrow(false, color);
+        this.rootObject.addChild(this.robotMarker);
 
-        const setPoseInterval = setInterval(() => {
-            let pose = this.functs.GetPose();
-            let globalCoord = this.rosToGlobal(pose.translation);
-            robotMarker.x = globalCoord.x;
-            robotMarker.y = globalCoord.y;
-            let theta = this.rosQuaternionToGlobalTheta(pose.rotation);
-            robotMarker.rotation = theta - 90.0;
-            robotMarker.scaleX = 1.0 / this.rootObject.scaleX;
-            robotMarker.scaleY = 1.0 / this.rootObject.scaleY;
-            robotMarker.visible = true;
-            this.rootObject.update();
+        this.trySubscribeMapPoseUpdates();
+        this.setPoseInterval = setInterval(() => {
+            this.trySubscribeMapPoseUpdates();
+            try {
+                const pose = this.functs.GetPose();
+                this.updateRobotMarker(pose);
+            } catch {
+                // Pose may be unavailable before WebRTC map TF arrives.
+            }
         }, 1000);
     }
 
@@ -400,7 +659,7 @@ export class OccupancyGrid extends React.Component {
      */
     public displayPoseMarkers(
         display: boolean,
-        poses: ROSLIB.Transform[],
+        poses: Transform[],
         poseNames: string[],
         poseTypes: string[],
     ) {
@@ -420,6 +679,7 @@ export class OccupancyGrid extends React.Component {
                     globalCoord.y,
                     color,
                     poseNames[index],
+                    pose.rotation,
                 );
                 poseMarker.circle.visible = true;
                 poseMarker.label.visible = false;
@@ -452,7 +712,7 @@ export class OccupancyGrid extends React.Component {
      * @param y Y coordinate
      * @param ros Whether the coordinates are in ROS space
      */
-    public createGoalMarker(x: number, y: number, ros: boolean) {
+    public createGoalMarker(x: number, y: number, ros: boolean, rotation?: Quaternion) {
         const color = hexToRgbArray('#2EE4C8');
         let globalCoord = { x: x, y: y };
         if (ros)
@@ -460,22 +720,34 @@ export class OccupancyGrid extends React.Component {
                 x: x,
                 y: y,
                 z: 0,
-            } as ROSLIB.Vector3);
-        if (this.getGoalReached) clearInterval(this.getGoalReached);
-        if (this.goalMarker) this.rootObject.removeChild(this.goalMarker);
+            } as Vector3);
+        // Preview / active goal draw only — do not poll GoalReached here
+        // (that raced with FooterAutoNav and stole nav-complete events).
+        if (this.goalMarker) {
+            this.stopGoalPulse();
+            this.rootObject.removeChild(this.goalMarker);
+        }
         this.goalMarker = this.drawNavigationArrow(true, color);
         this.goalMarker.x = globalCoord.x;
         this.goalMarker.y = globalCoord.y;
-        this.goalMarker.scaleX = 1.0 / this.rootObject.scaleX;
-        this.goalMarker.scaleY = 1.0 / this.rootObject.scaleY;
+        if (rotation) {
+            let theta = this.rosQuaternionToGlobalTheta(rotation);
+            this.goalMarker.rotation = theta - 90.0;
+        }
+        this.applyMarkerScreenScale(
+            this.goalMarker,
+            NAV_ARROW_GEOM_SIZE,
+            NAV_ARROW_SCREEN_PX,
+        );
         this.goalMarker.visible = true;
         this.rootObject.addChild(this.goalMarker);
-        this.getGoalReached = setInterval(() => {
-            if (this.functs.GoalReached()) {
-                this.rootObject.removeChild(this.goalMarker!);
-                clearInterval(this.getGoalReached);
+        if (this.robotMarker) {
+            const top = this.rootObject.numChildren - 1;
+            if (top >= 0) {
+                this.rootObject.setChildIndex(this.robotMarker, top);
             }
-        }, 1000);
+        }
+        this.rootObject.update();
     }
 
     /**
@@ -525,7 +797,31 @@ export class OccupancyGrid extends React.Component {
      */
     removeGoalMarker() {
         this.goalPositionSet(undefined);
-        if (this.goalMarker) this.rootObject.removeChild(this.goalMarker);
+        if (this.goalMarker) {
+            this.stopGoalPulse();
+            this.rootObject.removeChild(this.goalMarker);
+            this.goalMarker = undefined;
+            this.rootObject.update();
+        }
+    }
+
+    /** Tear down observers/timers/listeners owned by this map instance. */
+    public dispose() {
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
+        if (this.setPoseInterval) {
+            clearInterval(this.setPoseInterval);
+            this.setPoseInterval = undefined;
+        }
+        if (this.mapPoseUnsubscribe) {
+            this.mapPoseUnsubscribe();
+            this.mapPoseUnsubscribe = undefined;
+        }
+        this.stopGoalPulse();
+        if (this.goalMarker) {
+            this.rootObject.removeChild(this.goalMarker);
+            this.goalMarker = undefined;
+        }
     }
 
     /**
@@ -539,6 +835,14 @@ export class OccupancyGrid extends React.Component {
         if (!this.map) return;
 
         this.addCurrentPoseMarker();
+
+        const canvas = this.rootObject.canvas as HTMLCanvasElement | undefined;
+        if (canvas && typeof ResizeObserver !== "undefined") {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.refreshMarkerScales();
+            });
+            this.resizeObserver.observe(canvas);
+        }
 
         this.rootObject.on("mousedown", (event) => {
             if (!this.functs.SelectGoal()) return

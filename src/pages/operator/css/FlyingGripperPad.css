@@ -1,0 +1,556 @@
+/* Flying gripper pad — visual stub. Geometry is a ratio of the 9:16 scene
+   width (--w) so it scales with the video like `.mrecord` / `.pilot-controls-toggle`.
+   The `--r-*` ratios are injected by FlyingGripperPad.tsx from
+   utils/flyingGripperGeometry.ts (single source of truth, shared with the SVG
+   panel outlines). Surface treatment (ridge borders, soft-light, glow, blue
+   pressed state) comes from the shared --pad-* tokens in index.css so it
+   matches DirectionalPad. */
+.fgpad {
+    --w: var(--scene-area-width);
+    --ring: calc(var(--w) * var(--r-ring));
+    /* a wedge is a quarter of the ring: a square of side ring/2 */
+    --wedge: calc(var(--ring) / 2);
+    --inner: calc(var(--ring) * 0.5);
+    /* how far the ring's bottom edge sits above the scene's bottom edge */
+    --ring-lift: calc(var(--w) * var(--r-ring-lift));
+    /* ring center height, measured up from the scene's bottom edge */
+    --ring-cy-up: calc(var(--ring-lift) + var(--ring) / 2);
+
+    /* Bottom row: two side panels + Close, all carved around the ring with a gap */
+    --row-bottom: calc(var(--w) * var(--r-row-bottom));
+    --panel-w: calc(var(--w) * var(--r-panel-w));
+    --panel-h: calc(var(--w) * var(--r-panel-h));
+    --panel-inset: calc(var(--w) * var(--r-panel-inset));
+    --close-w: calc(var(--w) * var(--r-close-w));
+    --close-h: calc(var(--w) * var(--r-close-h));
+    --bite-gap: calc(var(--w) * var(--r-bite-gap));
+    --bite-r: calc(var(--ring) / 2 + var(--bite-gap));
+
+    /* Shared pad surface (see :root --pad-* in index.css) */
+    --border: var(--pad-border-width) var(--pad-border-style)
+        var(--pad-border-color);
+    --radial-border-width: calc(var(--pad-border-width) * (2 / 3));
+    --glow-wedge: inset 0px 0px calc(var(--wedge) / 10) 0px
+        var(--pad-glow-color);
+    --glow-inner: inset 0px 0px calc(var(--inner) / 10) 0px
+        var(--pad-glow-color);
+    --glow-panel-blur: calc(var(--panel-w) / 5);
+    --surface-transition: border-color 500ms ease-out,
+        border-width 500ms ease-out, box-shadow 500ms ease-out;
+
+    --icon: hsl(0, 0%, 100%);
+    --icon-chevron: calc(var(--w) * 0.075);
+    --icon-arrow: calc(var(--w) * 0.09);
+    --icon-gripper: calc(var(--w) * 0.1);
+
+    z-index: 2;
+    position: absolute;
+    left: calc(50% - 1px);
+    bottom: 0px;
+    translate: -50% 0%;
+    width: var(--w);
+    height: var(--scene-area-height);
+    pointer-events: none;
+}
+
+.fgpad button {
+    margin: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    box-shadow: none;
+    color: var(--icon);
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.fgpad .fgpad-icon {
+    display: block;
+    pointer-events: none;
+}
+
+/* App SVGs are blue; idle renders them white, pressed reveals the blue */
+.fgpad .fgpad-icon--svg {
+    filter: var(--pad-icon-filter-idle);
+    transition: filter 300ms ease-out;
+}
+
+.fgpad button:active .fgpad-icon--svg {
+    filter: var(--pad-icon-filter-active);
+}
+
+/* ---------------------------------------------------------------------------
+   Side panels (gripper open / close). Rounded rect with the ring+gap circle
+   bitten out of its inner-top corner, like the Figma "Subtract" shapes, with
+   fillets where the bite meets the straight edges. The outline is an inline
+   SVG (see PanelOutline in FlyingGripperPad.tsx) because CSS borders cannot
+   round that junction. Drawn before the ring so the ring sits on top. */
+.fgpad .fgpad-panel {
+    position: absolute;
+    bottom: var(--row-bottom);
+    width: var(--panel-w);
+    height: var(--panel-h);
+    /* icon center: vertically centered, nudged toward the outer edge to sit on
+       the horizontal centroid of the bitten shape (~0.41 of the panel width) */
+    --icon-x: calc(var(--panel-w) * 0.41);
+}
+
+.fgpad .fgpad-panel--left {
+    left: var(--panel-inset);
+}
+
+.fgpad .fgpad-panel--right {
+    right: var(--panel-inset);
+}
+
+.fgpad .fgpad-panel-outline {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    mix-blend-mode: soft-light;
+    pointer-events: none;
+}
+
+/* The path is authored for the left panel; mirror it for the right one */
+.fgpad .fgpad-panel-outline--right {
+    transform: scaleX(-1);
+}
+
+/* Panels switch state instantly (no press animation), unlike the wedges */
+.fgpad .fgpad-panel-outline path {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+}
+
+.fgpad .fgpad-panel .fgpad-icon--svg {
+    transition: none;
+}
+
+/* Two-tone stroke emulating `ridge`: light outside, shaded inside (same as the
+   wedges' outer arcs). Both strokes are centered on the path; the inner one is
+   clipped to the interior so only its inside half shows. */
+.fgpad .fgpad-panel-stroke-outer {
+    stroke: var(--pad-border-color);
+    stroke-width: var(--pad-border-width);
+    opacity: 1;
+    transition: opacity 300ms ease-out;
+}
+
+.fgpad .fgpad-panel-stroke-inner {
+    stroke: var(--pad-border-color-dark);
+    stroke-width: var(--pad-border-width);
+    opacity: 1;
+    transition: opacity 300ms ease-out;
+}
+
+.fgpad .fgpad-panel:active .fgpad-panel-stroke-outer,
+.fgpad .fgpad-panel:active .fgpad-panel-stroke-inner {
+    opacity: 0.2;
+}
+
+/* Inset glow: a blurred stroke clipped to the interior. Blur radius equals the
+   band width, so the glow is softest-peaked at the edge and fades out over a
+   long run rather than reading as a second, thicker border. */
+.fgpad .fgpad-panel-glow {
+    /* panels glow only while pressed (see :active below) */
+    stroke: none;
+    stroke-width: var(--glow-panel-blur);
+    filter: blur(var(--glow-panel-blur));
+}
+
+.fgpad .fgpad-panel .fgpad-icon {
+    position: absolute;
+    top: 50%;
+    width: var(--icon-gripper);
+    height: var(--icon-gripper);
+}
+
+.fgpad .fgpad-panel--left .fgpad-icon {
+    left: var(--icon-x);
+    translate: -50% 15%;
+}
+
+.fgpad .fgpad-panel--right .fgpad-icon {
+    right: var(--icon-x);
+    translate: 50% 15%;
+}
+
+.fgpad .fgpad-panel:active .fgpad-panel-outline {
+    mix-blend-mode: screen;
+}
+
+.fgpad .fgpad-panel:active .fgpad-panel-glow {
+    stroke: var(--pad-active-color);
+    opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------------------
+   Standalone Close pill, bottom-aligned with the panels. The same ring+gap
+   circle masks its top edge so it dips to hug the ring. (Figma CTA; not part
+   of the d-pad surface family.) */
+.fgpad .fgpad-close {
+    position: absolute;
+    left: 50%;
+    bottom: var(--row-bottom);
+    width: var(--close-w);
+    height: var(--close-h);
+    translate: -50% 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: calc(var(--w) * 0.012);
+    border-radius: 4px 4px 7px 7px;
+    /* #1E313D; hover/active only shift lightness and alpha of these two */
+    --close-bg-l: 20%;
+    --close-bg-a: 70%;
+    --close-fg-l: 66%;
+    background: hsl(203deg 60% var(--close-bg-l) / var(--close-bg-a));
+    color: hsl(204deg 44% var(--close-fg-l));
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    transition:
+        background-color 160ms ease-out,
+        color 160ms ease-out,
+        transform 120ms ease-out;
+    --bite-cy: calc(var(--row-bottom) + var(--close-h) - var(--ring-cy-up));
+    -webkit-mask: radial-gradient(
+        circle var(--bite-r) at 50% var(--bite-cy),
+        transparent calc(100% - 1px),
+        #000 100%
+    );
+    mask: radial-gradient(
+        circle var(--bite-r) at 50% var(--bite-cy),
+        transparent calc(100% - 1px),
+        #000 100%
+    );
+}
+
+/* Hover only on devices that have one, so touch does not get stuck lit */
+@media (hover: hover) {
+    .fgpad .fgpad-close:hover {
+        --close-bg-l: 26%;
+        --close-bg-a: 85%;
+        --close-fg-l: 80%;
+    }
+}
+
+/* Pressed: fill goes opaque and lighter, text goes white, pill sits down a
+   hair. translate is stacked after the centering translate so the centering
+   is not lost. */
+.fgpad .fgpad-close:active {
+    --close-bg-l: 50%;
+    --close-bg-a: 100%;
+    --close-fg-l: 100%;
+    transition-duration: 100ms;
+}
+
+/* ---------------------------------------------------------------------------
+   Outer ring: four wedges. Each wedge is a quarter circle (right angle at the
+   ring center) with the inner disc clipped away, rotated into place around the
+   center — the same construction as DirectionalPad's .button-cardinal, so the
+   ridge borders, soft-light blend and glow match exactly. */
+.fgpad-ring {
+    position: absolute;
+    left: 50%;
+    bottom: var(--ring-lift);
+    width: var(--ring);
+    height: var(--ring);
+    translate: -50% 0;
+}
+
+.fgpad-mask {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+/* Shared wedge geometry for the interactive button and its visual sibling */
+.fgpad .fgpad-wedge,
+.fgpad .fgpad-wedge-shape {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--wedge);
+    height: var(--wedge);
+    transform-origin: 0 0;
+    /* -45deg turns the radial edges into the diagonals */
+    transform: rotate(calc(var(--turn) - 45deg));
+}
+
+/* Interactive wedge: invisible, holds the chevron. The annular clip scopes
+   pointer hit-testing to the ring sector (no spill onto Close / panels). */
+.fgpad .fgpad-wedge {
+    -webkit-clip-path: url(#fgpad-clip-hit);
+    clip-path: url(#fgpad-clip-hit);
+}
+
+/* Visual wedge: a sibling (not a descendant) so the button's tight clip cannot
+   clip its glow and the chevron is not soft-light blended — the same split as
+   .button-cardinal vs .button-chevron in DirectionalPad. */
+.fgpad .fgpad-wedge-shape {
+    display: block;
+    box-sizing: border-box;
+    pointer-events: none;
+    -webkit-clip-path: url(#fgpad-clip-shape);
+    clip-path: url(#fgpad-clip-shape);
+    /* quarter circle: outer arc on the bottom-right corner */
+    border-radius: 0 0 var(--wedge) 0;
+    border-color: var(--pad-border-color);
+    border-style: var(--pad-border-style);
+    border-right-width: var(--pad-border-width);
+    border-bottom-width: var(--pad-border-width);
+    border-top-width: var(--radial-border-width);
+    border-left-width: var(--radial-border-width);
+    box-shadow: var(--glow-wedge);
+    mix-blend-mode: soft-light;
+    transition: var(--surface-transition);
+}
+
+.fgpad .fgpad-wedge--east {
+    --turn: 0deg;
+    --point: -90deg;
+}
+
+.fgpad .fgpad-wedge--south {
+    --turn: 90deg;
+    --point: 0deg;
+}
+
+.fgpad .fgpad-wedge--west {
+    --turn: 180deg;
+    --point: 90deg;
+}
+
+.fgpad .fgpad-wedge--north {
+    --turn: 270deg;
+    --point: 180deg;
+}
+
+/* Chevron sits on the wedge's bisector at ~0.72 of the ring radius, counter-
+   rotated so it points outward. Chevron.svg points down natively. */
+.fgpad .fgpad-wedge .fgpad-icon {
+    --icon-r: 0.72;
+    position: absolute;
+    width: var(--icon-chevron);
+    height: var(--icon-chevron);
+    left: calc(var(--wedge) * var(--icon-r) * 0.7071 - var(--icon-chevron) / 2);
+    top: calc(var(--wedge) * var(--icon-r) * 0.7071 - var(--icon-chevron) / 2);
+    transform: rotate(calc(45deg - var(--turn) + var(--point)));
+}
+
+/* Pressed: style the visual sibling that follows the pressed button */
+.fgpad .fgpad-wedge:active + .fgpad-wedge-shape {
+    mix-blend-mode: screen;
+    border-top-width: 1px;
+    border-left-width: 1px;
+    box-shadow: var(--pad-active-glow);
+}
+
+/* ---------------------------------------------------------------------------
+   Inner disc: up / down halves, styled like DirectionalPad's rotate buttons
+   (inset glow, white-to-blue on press) with a ridge divider between them. */
+.fgpad-inner {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--ring-lift) + (var(--ring) - var(--inner)) / 2);
+    width: var(--inner);
+    height: var(--inner);
+    translate: -50% 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 50%;
+}
+
+/* Disc outline, blended like the wedges' inner arc */
+.fgpad-inner::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border: var(--border);
+    border-radius: 50%;
+    mix-blend-mode: soft-light;
+    pointer-events: none;
+}
+
+.fgpad .fgpad-inner-btn {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--glow-inner);
+    /* Reserve the 1px active ring so :active does not change box size */
+    border: 1px solid transparent;
+    transition:
+        var(--surface-transition),
+        color 300ms ease-out;
+    /* Shallow perspective so the arrow's rotateX reads as depth; the button
+       surface and border stay flat. */
+    perspective: 280px;
+}
+
+.fgpad .fgpad-inner-btn--up {
+    border-radius: var(--inner) var(--inner) 0 0 / var(--inner) var(--inner) 0 0;
+    /* No border on the shared edge: a transparent 1px border there is a dark
+       gutter, and it shows once the equator bows off the midline. */
+    border-bottom-width: 0;
+}
+
+.fgpad .fgpad-inner-btn--down {
+    border-radius: 0 0 var(--inner) var(--inner) / 0 0 var(--inner) var(--inner);
+    border-top-width: 0;
+}
+
+.fgpad .fgpad-inner-btn .fgpad-icon {
+    font-size: var(--icon-arrow);
+    transform-origin: center;
+    transform: rotateX(0deg);
+    /* Release path: the transition eases the arrow back to flat */
+    transition: transform 220ms ease-out;
+    will-change: transform;
+}
+
+/* The arrow rocks in the direction it points.*/
+.fgpad .fgpad-inner-btn--up:active .fgpad-icon {
+    transform: rotateX(35deg);
+    animation: fgpad-tilt-forward 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.fgpad .fgpad-inner-btn--down:active .fgpad-icon {
+    transform: rotateX(-35deg);
+    animation: fgpad-tilt-backward 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes fgpad-tilt-forward {
+    from {
+        transform: rotateX(0deg);
+    }
+    to {
+        transform: rotateX(28deg);
+    }
+}
+
+@keyframes fgpad-tilt-backward {
+    from {
+        transform: rotateX(0deg);
+    }
+    to {
+        transform: rotateX(-28deg);
+    }
+}
+
+.fgpad .fgpad-inner-btn:active {
+    mix-blend-mode: screen;
+    border-color: var(--pad-active-color);
+    color: var(--blue);
+}
+
+/* Equator between the two halves (see INNER_LINE_PATH in FlyingGripperPad.tsx).
+   The path is authored as a downward bow; at rest it is scaled flat about the
+   disc's center line, and a press bows it toward the pressed arrow so arrow
+   and seam read as sitting on one ball. Clipped to the disc so the stroke
+   cannot run past the circle. */
+.fgpad-inner-line {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    /* SVG strokes can paint past overflow:hidden; clip-path keeps the equator
+       inside the disc on those engines too. */
+    clip-path: circle(50%);
+    mix-blend-mode: soft-light;
+    pointer-events: none;
+}
+
+.fgpad-inner-line-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Ridge emulation: the two half-width strokes sit edge to edge, light above
+   shaded, so together they span --pad-border-width like the disc outline.
+   Offsets live on the <svg> (a CSS box) so they are true pixels. */
+.fgpad-inner-line-svg--light {
+    translate: 0 calc(var(--pad-border-width) / -4);
+}
+
+.fgpad-inner-line-svg--dark {
+    translate: 0 calc(var(--pad-border-width) / 4);
+}
+
+.fgpad-inner-line-svg--light path {
+    stroke: var(--pad-border-color);
+}
+
+.fgpad-inner-line-svg--dark path {
+    stroke: var(--pad-border-color-dark);
+}
+
+.fgpad-inner-line path {
+    fill: none;
+    stroke-width: calc(var(--pad-border-width) / 2);
+    vector-effect: non-scaling-stroke;
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+    /* Near-zero rather than 0: a singular matrix would drop the path from
+       rendering. At 0.02 the bow is a fraction of a pixel, so it reads flat,
+       while the matrix stays well-conditioned for non-scaling-stroke. */
+    transform: scaleY(0.02);
+    /* Release path, matched to the arrow's ease back to flat */
+    transition:
+        transform 220ms ease-out,
+        stroke 300ms ease-out;
+    will-change: transform;
+}
+
+/* The equator rolls toward the pressed arrow: forward bows up (∩),
+   backward bows down (∪). Same attack as the arrow tilt. The two-tone
+   ridge becomes a single active-blue stroke, matching the half's ring. */
+.fgpad .fgpad-inner-btn--up:active ~ .fgpad-inner-line,
+.fgpad .fgpad-inner-btn--down:active ~ .fgpad-inner-line {
+    mix-blend-mode: screen;
+}
+
+.fgpad .fgpad-inner-btn--up:active ~ .fgpad-inner-line path,
+.fgpad .fgpad-inner-btn--down:active ~ .fgpad-inner-line path {
+    stroke: var(--pad-active-color);
+}
+
+.fgpad .fgpad-inner-btn--up:active ~ .fgpad-inner-line path {
+    transform: scaleY(-1);
+    animation: fgpad-bow-up 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.fgpad .fgpad-inner-btn--down:active ~ .fgpad-inner-line path {
+    transform: scaleY(1);
+    animation: fgpad-bow-down 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes fgpad-bow-down {
+    from {
+        transform: scaleY(0.02);
+    }
+    to {
+        transform: scaleY(1);
+    }
+}
+
+@keyframes fgpad-bow-up {
+    from {
+        transform: scaleY(-0.02);
+    }
+    to {
+        transform: scaleY(-1);
+    }
+}

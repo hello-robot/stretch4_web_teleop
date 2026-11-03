@@ -24,6 +24,7 @@ export enum ComponentType {
     LayoutGrid = "Layout Grid",
     Panel = "Panel",
     SingleTab = "Tab",
+    CameraView = "Camera View",
     ButtonPad = "Button Pad",
     Map = "Map",
     RunStopButton = "Run Stop Button",

@@ -1,12 +1,14 @@
-# Overview
+# README
+
+## Overview
 
 This interface enables a user to remotely teleoperate a Stretch robot through a web browser. This website can be set up to teleoperate the robot remotely from anywhere in the world with an internet connection, or simply eyes-off teleop from the next room on a local network. The codebase is built on ROS2, WebRTC, Nav2, and TypeScript.
 
-# Setup & Installation
+## Setup & Installation
 
-The interface is compatible with the Stretch 4. It currently only supports Ubuntu 24.04 and ROS2 Humble. Upgrade your operating system if necessary ([instructions](https://docs.hello-robot.com/0.3/installation/robot_install/)) and create/update the Stretch ROS2 Humble workspace ([instructions](https://docs.hello-robot.com/0.3/installation/ros_workspace/)). This will install all package dependencies and install the web teleop interface.
+The interface is compatible with the Stretch 4. It currently only supports Ubuntu 24.04 and ROS2 Jazzy. Upgrade your operating system if necessary ([instructions](https://docs.hello-robot.com/stretch4_install/docs/install_ubuntu_24.04)) and create/update the Stretch ROS2 Jazzy workspace ([instructions](https://docs.hello-robot.com/stretch4_install/docs/ros_workspace)). This will install all package dependencies and install the web teleop interface.
 
-# Launching the Interface
+## Launching the Interface
 
 First, navigate to the folder containing the codebase using:
 
@@ -17,18 +19,18 @@ colcon_cd stretch4_web_teleop
 Next, launch the interface:
 
 ```
-./launch_interface
+./launch_interface.sh
 ```
 
 In the terminal, you will see output similar to:
 
 ```
-Visit the URL(s) below to see the web interface:
-https://localhost/operator
-https://192.168.1.14/operator
+Hosting Mode: local (default)
+  Robot: https://localhost/local/operator/
+  WiFi: https://192.168.1.14/local/operator/
 ```
 
-Look for a URL like `https://<ip_address>/operator`. Visit this URL in a web browser on your personal laptop or desktop to see the web interface. Ensure your personal computer is connected to the same network as Stretch. You might see a warning that says "Your connection is not private". If you do, click `Advanced` and `Proceed`.
+Look for a URL like `https://<ip_address>/local/operator/`. Visit this URL in a web browser on your personal laptop or desktop to see the web interface (`https://<ip_address>/operator/` also redirects to `/local/operator/` in local mode). Ensure your personal computer is connected to the same network as Stretch. You might see a warning that says "Your connection is not private". If you do, click `Advanced` and `Proceed`.
 
 Once you're done with the interface, close the browser and run:
 
@@ -38,9 +40,46 @@ Once you're done with the interface, close the browser and run:
 
 **Note:** Only one browser can be connected to the interface at a time.
 
-# Using the Interface Remotely
+## Firebase (optional)
+
+The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted dashboard, user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project.
+
+A plain `./launch_interface.sh` defaults to `local` hosting (serving the LAN door at `/local/operator/`). Once a robot is onboarded, pass `-f` / `--firebase` (or `--hosting firebase`, or set `HOSTING_MODE=firebase` in `.env` or the environment) to serve the interface through Firebase Hosting in addition to the robot's local LAN door. To override a standing `HOSTING_MODE=firebase` for a single local-only run, pass `--local` or `--hosting local` (a bare `--hosting` with no argument also defaults to `local`). Run `./launch_interface.sh --dry-run` to validate the installation and print the resolved launch configuration and provenance without starting ROS2 or PM2. See the [Firebase storage handler README](src/pages/operator/tsx/storage_handler/README.md) for instructions to set up Firebase hosting, and [Primer: Launching the Interface](src/primer_launch.md) for how a launch resolves `HOSTING_MODE`.
+
+## Feature flags
+
+Optional features are declared in [`features.json`](features.json), which is
+the single source of truth for each flag's name, default, and description:
+
+```json
+{
+    "<flag_name>": {
+        "enabled": false,
+        "description": "..."
+    }
+}
+```
+
+Edit `features.json` to change a flag's default. To override a flag for a
+single run without editing the file, set `FEATURE_<NAME>` in the environment
+(`<NAME>` is the flag name upper-cased), which accepts `1`/`0`, `true`/`false`,
+`yes`/`no` or `on`/`off`:
+
+```
+FEATURE_<NAME>=1 ./launch_interface.sh
+```
+
+Each flag is read at launch by `server.js`, which registers the routes it
+gates only when it is on, and by `webpack.config.js`, which substitutes it
+into the bundle as `process.env.FEATURE_<NAME>`. Changing it therefore takes
+effect on the next `./launch_interface.sh`. Grep for `@flag <flag_name>` to
+find every seam for a given flag.
+
+## Using the Interface Remotely
 
 **WARNING: This is prototype code and there are security issues. Deploy this code at your own risk.**
+
+This section covers remote access in `local` hosting mode, where the interface is served from the robot and needs a tunnel to reach the public internet. In `firebase` hosting mode your own Firebase dashboard already reaches the robot from anywhere, and none of the setup below is needed.
 
 We recommend setting up the interface for remote use using [ngrok](https://ngrok.com/docs/what-is-ngrok/). First, create an account with `ngrok` and follow the Linux installation instructions in the `Setup & Installation` tab in your ngrok account dashboard.
 
@@ -52,7 +91,7 @@ ngrok http --basic-auth="user:password" --domain=<NGROK_DOMAIN> 443
 
 In your browser, open `https://<NGROK_DOMAIN>/operator` to see the interface. You will then be prompted to enter the appropriate username and password. Note, anyone in the world with internet access can open this link.
 
-## Storing Ngrok Tunnel Configuration
+### Storing Ngrok Tunnel Configuration
 
 To store this configuration, open the ngrok config file:
 
@@ -78,26 +117,27 @@ tunnels:
 
 Now run `ngrok start stretch-web-teleop` to start the tunnel and navigate to `https://<NGROK_DOMAIN>/operator`. You will then be prompted to enter the appropriate username and password.
 
-# Developer Docs
+## Developer Docs
 
 The following primers provide a high-level introduction to the codebase for developers.
 
-| Primer | Description |
-| :--- | :--- |
-| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the robot browser, operator browser, ROS2, and WebRTC fit together. Includes a render logic flow diagram showing how `MobileOperator` is structured into scenes, function providers, and the global footer. |
-| [Operator Page](src/primer_operator.md) | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`), the entry point (`index.tsx`), function providers, component folders, storage handler, and a step-by-step guide for adding new features. |
-| [Robot Page](src/primer_robot.md) | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and the full bidirectional data flow between ROS2 and the operator browser. |
+| Primer                                                       | Description                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the robot browser, operator browser, ROS2, and WebRTC fit together. Includes a render logic flow diagram showing how `MobileOperator` is structured into scenes, function providers, and the global footer.                             |
+| [Launching the Interface](src/primer_launch.md)              | How `launch_interface.sh` resolves `HOSTING_MODE`, validates the installation and Firebase readiness, prints the launch manifest, and brings up ROS2, the HTTPS server, and the robot browser.                                                                                      |
+| [Operator Page](src/primer_operator.md)                      | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`), the entry point (`index.tsx`), function providers, component folders, storage handler, and a step-by-step guide for adding new features. |
+| [Robot Page](src/primer_robot.md)                            | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and the full bidirectional data flow between ROS2 and the operator browser.                                                  |
 
-# Contributing
+## Contributing
 
 - This repository uses pre-commit hooks to enforce consistent formatting and style.
   - Install pre-commit: `python3 -m pip install pre-commit`
   - Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
   - Moving forward, pre-commit hooks will run before you create any commit.
 
-# Troubleshooting
+## Troubleshooting
 
-## Collecting logs
+### Collecting logs
 
 First, ensure that your robot has the latest version of Web Teleop by [updating your ROS workspace](https://docs.hello-robot.com/0.3/installation/ros_workspace/).
 
@@ -105,7 +145,18 @@ Then, launch the program normally, and if you see "FAILURE. COULD NOT LAUNCH WEB
 
 To locate the logs, open a file explorer, go into "Home", go into "stretch_user", go into "log", go into "web_teleop", locate the folder with the latest timestamp, and send "stretch4_web_teleop_logs.zip" to the support team.
 
-# Licenses
+### Manage PM2 logs
+
+PM2 outputs logs to `~/.pm2/logs`. You can configure log rotation using [pm2-logrotate](https://github.com/keymetrics/pm2-logrotate) so the directory has a set size limit:
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M # Clamps each log file to 10M
+```
+
+The `pm2 flush` command is also available but will delete every log file in `~/.pm2/logs`.
+
+## Licenses
 
 The following license applies to the contents of this directory written by Vinitha Ranganeni, Noah Ponto, authors associated with the University of Washington, and authors associated with Hello Robot Inc. (the "Contents"). This software is intended for use with Stretch ® mobile manipulators produced and sold by Hello Robot ®.
 

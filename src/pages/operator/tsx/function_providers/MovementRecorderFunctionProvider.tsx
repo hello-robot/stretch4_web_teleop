@@ -15,11 +15,114 @@ export class MovementRecorderFunctionProvider extends FunctionProvider {
      */
     private operatorCallback?: (state: ActionState) => void = undefined;
 
+    /**
+     * Callback to programmatically open/close the Movement Recorder modal.
+     */
+    private modalOpenHandler?: (open: boolean) => void = undefined;
+
+    /**
+     * Callback to set camera veil visibility.
+     */
+    private cameraVeilHandler?: (visible: boolean) => void = undefined;
+
+    /**
+     * Callback to set active playing recording index.
+     */
+    private idxFixedRecordingPlayingHandler?: (idx: number) => void = undefined;
+
+    /**
+     * Callback to refresh saved recording list in UI.
+     */
+    private refreshRecordingsHandler?: () => void = undefined;
+
+    /**
+     * Callback to cancel active pose playback via MovementRecorder UI handler.
+     */
+    private cancelPlaybackHandler?: () => boolean = undefined;
+
     constructor(storageHandler: StorageHandler) {
         super();
         this.provideFunctions = this.provideFunctions.bind(this);
         this.poses = [];
         this.storageHandler = storageHandler;
+    }
+
+    /**
+     * Registers a callback handler for cancelling active playback.
+     *
+     * Args:
+     *     handler: Optional function returning true if active playback was cancelled.
+     *
+     * Returns:
+     *     None.
+     */
+    public setCancelPlaybackHandler(handler?: () => boolean): void {
+        this.cancelPlaybackHandler = handler;
+    }
+
+    /**
+     * Cancels any active pose playback by invoking the UI cancel handler and sending
+     * a stopTrajectory command to the remote robot.
+     *
+     * Args:
+     *     None.
+     *
+     * Returns:
+     *     True if cancellation was dispatched, False otherwise.
+     */
+    public cancelPlayback(): boolean {
+        let handled = false;
+        if (this.cancelPlaybackHandler) {
+            handled = this.cancelPlaybackHandler();
+        }
+        if (FunctionProvider.remoteRobot) {
+            FunctionProvider.remoteRobot.stopTrajectory();
+        }
+        return handled;
+    }
+
+    public setModalOpenHandler(handler?: (open: boolean) => void) {
+        this.modalOpenHandler = handler;
+    }
+
+    public setModalOpen(open: boolean) {
+        if (this.modalOpenHandler) {
+            this.modalOpenHandler(open);
+        }
+    }
+
+    public setCameraVeilHandler(handler?: (visible: boolean) => void) {
+        this.cameraVeilHandler = handler;
+    }
+
+    public setCameraVeil(visible: boolean) {
+        if (this.cameraVeilHandler) {
+            this.cameraVeilHandler(visible);
+        }
+    }
+
+    public setIdxFixedRecordingPlayingHandler(handler?: (idx: number) => void) {
+        this.idxFixedRecordingPlayingHandler = handler;
+    }
+
+    public setIdxFixedRecordingPlaying(idx: number) {
+        if (this.idxFixedRecordingPlayingHandler) {
+            this.idxFixedRecordingPlayingHandler(idx);
+        }
+    }
+
+    public setRefreshRecordingsHandler(handler?: () => void) {
+        this.refreshRecordingsHandler = handler;
+    }
+
+    public refreshRecordings() {
+        if (this.refreshRecordingsHandler) {
+            this.refreshRecordingsHandler();
+        }
+    }
+
+    public pushPoseSnapshot(pose: RobotPose) {
+        this.poses.push(pose);
     }
 
     public setPlaybackPosesState(state: ActionState) {
