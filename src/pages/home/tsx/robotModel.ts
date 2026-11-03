@@ -62,13 +62,60 @@ export const branchLabel = (branch: string | undefined): string =>
     !branch || branch === "HEAD" ? "unknown" : branch;
 
 /**
+ * What the tag on a card shows: the build the robot reported, else its branch.
+ *
+ * A describe names a commit; a branch name does not, so the describe is the
+ * better answer whenever the robot has published one.
+ */
+export const buildLabel = (robot: RobotRecord): string =>
+    robot.build?.describe || branchLabel(robot.branch);
+
+/**
+ * What the tag on a card means, spelled out for its tooltip.
+ *
+ * The label alone cannot say whether the card routes to a rail: that also
+ * depends on the origin, and on whether the rail was reported or defaulted.
+ *
+ * @param robot Record the card was rendered from.
+ * @param rail Rail the card resolved, from railFor.
+ */
+export const buildTitle = (robot: RobotRecord, rail: string | null): string => {
+    if (rail && robot.build?.rail === rail) {
+        return `Release ${rail} — this card opens that version of the interface`;
+    }
+    if (rail && isUnreleasedBuild(robot)) {
+        return `${buildLabel(robot)} is not a release — this card opens the stable release, ${rail}`;
+    }
+    if (rail) {
+        return `This robot reports no build — this card opens the stable release, ${rail}`;
+    }
+    return `${buildLabel(robot)} — no stable release is set, so this card opens the default interface`;
+};
+
+/**
  * Release tags only. Mirrors the `.validate` on `robots/<id>/build/rail` and
  * `RELEASE_TAG` in the daemon; all three move together.
  */
 const RAIL = /^v\d+\.\d+\.\d+(-(alpha|beta|rc)\d+)?$/;
 
 /**
- * The rail a robot's build routes to, or null when it has none.
+ * The stable release this lobby was built against, or null when it has none.
+ *
+ * Baked in beside the lobby, so the pointer and the rail tree it names ship in
+ * one Hosting version and cannot drift apart.
+ */
+const stableRail = (): string | null => {
+    const stable = process.env.PUBLIC_STABLE_RAIL;
+    return stable && RAIL.test(stable) ? stable : null;
+};
+
+/**
+ * The rail a robot routes to, or null for the unversioned page.
+ *
+ * A robot reporting a release tag routes to that rail. Everything else — a
+ * robot that predates the tag system, and a robot on a checkout no rail was
+ * cut from — takes the stable release, which is a named and pinned interface
+ * where the unversioned page is neither.
  *
  * Only the Hosting origin serves rails. In firebase mode `server.js` mounts
  * `dist-firebase` at `/`, so the robot serves this same lobby at its own
@@ -79,8 +126,19 @@ const RAIL = /^v\d+\.\d+\.\d+(-(alpha|beta|rc)\d+)?$/;
 export const railFor = (robot: RobotRecord): string | null => {
     if (location.origin !== process.env.PUBLIC_HOSTING_ORIGIN) return null;
     const rail = robot.build?.rail;
-    return rail && RAIL.test(rail) ? rail : null;
+    return rail && RAIL.test(rail) ? rail : stableRail();
 };
+
+/**
+ * True when a robot reports a build that names no release.
+ *
+ * Distinct from a robot reporting no build at all, which has simply not been
+ * migrated. This one is running a checkout nobody cut a rail from, so no
+ * deployed operator page matches it and its branch belongs on a preview
+ * channel.
+ */
+export const isUnreleasedBuild = (robot: RobotRecord): boolean =>
+    Boolean(robot.build) && !(robot.build?.rail && RAIL.test(robot.build.rail));
 
 /**
  * Where the Connect control sends the operator.

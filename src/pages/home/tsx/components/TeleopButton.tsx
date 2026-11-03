@@ -19,9 +19,9 @@ type Treatment =
     | "failed"
     | "connect"
     | "takeover"
-    | "in-use";
-
-const launchOwnerKey = (operatorHref: string) => `hr-launch-owner:${operatorHref}`;
+    | "in-use"
+    | "rail-pending"
+    | "rail-missing";
 
 /** Controls that tear the interface down, and so swap to Ending while it happens. */
 const STOPPABLE: Treatment[] = [
@@ -137,6 +137,16 @@ const formatElapsed = (totalSeconds: number): string => {
 interface TeleopButtonProps {
     status: RobotStatus;
     operatorHref: string;
+    /**
+     * Identifies this robot's launch in sessionStorage. Keyed on the robot
+     * rather than on operatorHref, which moves when the robot republishes its
+     * build and would strand the entry under the old address.
+     */
+    ownerKey: string;
+    /** Whether the rail operatorHref points into is deployed; null while probing. */
+    railAvailable: boolean | null;
+    /** Release tag the card routes to, named on the card when it is missing. */
+    railLabel: string | null;
     seat: OperatorSeat | null;
     beat: boolean;
     beatUntil: number;
@@ -159,6 +169,9 @@ interface TeleopButtonProps {
 export const TeleopButton = ({
     status,
     operatorHref,
+    ownerKey,
+    railAvailable,
+    railLabel,
     seat,
     beat,
     beatUntil,
@@ -169,7 +182,6 @@ export const TeleopButton = ({
     onLaunch,
     onStop,
 }: TeleopButtonProps) => {
-    const ownerKey = launchOwnerKey(operatorHref);
     const [launchedHere, launchedHereSet] = useState(
         () => sessionStorage.getItem(ownerKey) === "1",
     );
@@ -181,11 +193,12 @@ export const TeleopButton = ({
     useEffect(() => {
         if (!launchedHere || manualLaunch) return;
         if (status !== "online" || beatUntil <= Date.now()) return;
+        if (railAvailable !== true) return;
         const timer = window.setTimeout(() => {
             window.location.assign(operatorHref);
         }, Math.max(0, beatUntil - Date.now()));
         return () => window.clearTimeout(timer);
-    }, [beatUntil, launchedHere, manualLaunch, operatorHref, status]);
+    }, [beatUntil, launchedHere, manualLaunch, operatorHref, railAvailable, status]);
 
     /**
      * The daemon reports a failed launch by dropping back to standby without
@@ -237,7 +250,18 @@ export const TeleopButton = ({
     );
     const [elapsedSec, elapsedSecSet] = useState(0);
     const [ending, endingSet] = useState(false);
-    const shown = ending && canStop(treatment) ? "ending" : treatment;
+    // connect and takeover are the only treatments that navigate, so they are
+    // the only ones that wait on the rail being there.
+    const railBlocked =
+        (treatment === "connect" || treatment === "takeover") &&
+        railAvailable !== true;
+    const shown = ending && canStop(treatment)
+        ? "ending"
+        : railBlocked
+          ? railAvailable === null
+              ? "rail-pending"
+              : "rail-missing"
+          : treatment;
     const logsAvailable =
         !logsOpen &&
         (treatment === "starting" ||
@@ -305,6 +329,7 @@ export const TeleopButton = ({
                 },
                 launchReady,
                 seat?.email,
+                railLabel,
             )}
         </div>
     );
@@ -319,6 +344,7 @@ const controlFor = (
     onTakeover: () => void,
     launchReady: boolean,
     occupantEmail?: string,
+    railLabel?: string | null,
 ) => {
     if (treatment === "standby") {
         return (
@@ -399,6 +425,43 @@ const controlFor = (
                     </span>
                 </span>
             </button>
+        );
+    }
+    if (treatment === "rail-pending") {
+        return (
+            <div
+                className="hr-button hr-button--skeleton"
+                role="status"
+                aria-label="Checking the interface version"
+            />
+        );
+    }
+    // The robot runs an interface this dashboard has no matching page for.
+    // Stopping it stays available: relaunching on a deployed release is the
+    // way out.
+    if (treatment === "rail-missing") {
+        return (
+            <>
+                <button className="hr-button hr-button--dim" type="button" disabled>
+                    <span className="hr-button__stack">
+                        <span>Connect</span>
+                        <span className="hr-teleop__note hr-teleop__note--fail">
+                            {railLabel
+                                ? `Release ${railLabel} is not deployed`
+                                : "Interface version is not deployed"}
+                        </span>
+                    </span>
+                </button>
+                {launchReady && (
+                    <button
+                        className="hr-button hr-button--ghost"
+                        type="button"
+                        onClick={onStop}
+                    >
+                        Stop Interface
+                    </button>
+                )}
+            </>
         );
     }
     // `takeover` is our own seat, or one being launched: claim it rather than
