@@ -7,6 +7,12 @@ export type RobotStatus =
     | "launching"
     | "occupied";
 
+/** Shape of `robots/{id}/build` in RTDB: how the robot's checkout describes. */
+export interface BuildRecord {
+    describe?: string;
+    rail?: string;
+}
+
 /** Shape of `robots/{id}` in RTDB plus the `is_active` assignment flag. */
 export interface RobotRecord {
     name?: string;
@@ -14,6 +20,7 @@ export interface RobotRecord {
     uid?: string;
     last_updated?: number;
     branch?: string;
+    build?: BuildRecord;
     map_id?: string | null;
     config?: Record<string, boolean>;
     is_active?: boolean;
@@ -53,6 +60,39 @@ export const holdsOperatorSeat = (
  */
 export const branchLabel = (branch: string | undefined): string =>
     !branch || branch === "HEAD" ? "unknown" : branch;
+
+/**
+ * Release tags only. Mirrors the `.validate` on `robots/<id>/build/rail` and
+ * `RELEASE_TAG` in the daemon; all three move together.
+ */
+const RAIL = /^v\d+\.\d+\.\d+(-(alpha|beta|rc)\d+)?$/;
+
+/**
+ * The rail a robot's build routes to, or null when it has none.
+ *
+ * Only the Hosting origin serves rails. In firebase mode `server.js` mounts
+ * `dist-firebase` at `/`, so the robot serves this same lobby at its own
+ * address, where no `r/` tree exists and the operator page already comes from
+ * the robot's own checkout. Preview channels are whole-site builds on their
+ * own origin. Both keep the unversioned path.
+ */
+export const railFor = (robot: RobotRecord): string | null => {
+    if (location.origin !== process.env.PUBLIC_HOSTING_ORIGIN) return null;
+    const rail = robot.build?.rail;
+    return rail && RAIL.test(rail) ? rail : null;
+};
+
+/**
+ * Where the Connect control sends the operator.
+ *
+ * A robot reporting no rail keeps the unversioned page, which is every robot
+ * until it publishes a build naming a release tag.
+ */
+export const operatorHref = (robot: RobotRecord, name: string): string => {
+    const query = `?robot=${encodeURIComponent(name)}`;
+    const rail = railFor(robot);
+    return rail ? `/r/${rail}/operator/${query}` : `/operator/${query}`;
+};
 
 /** Visual tone of a card: lit when the robot daemon is reachable, dim when not. */
 export type CardTone = "lit" | "dim";
