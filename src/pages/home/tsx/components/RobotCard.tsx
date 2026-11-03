@@ -26,7 +26,7 @@ import { BranchTag } from "./BranchTag";
 import { ConfigChecklist } from "./ConfigChecklist";
 import { ConfigSheet } from "./ConfigSheet";
 import { MapPickerSheet } from "./MapPickerSheet";
-import { StatusPill } from "./StatusPill";
+import { PillPhase, StatusPill } from "./StatusPill";
 import { LaunchLogPanel } from "./LaunchLogPanel";
 import { TeleopButton } from "./TeleopButton";
 
@@ -124,8 +124,10 @@ export const RobotCard = ({
         mapId: string | null;
     } | null>(null);
     const [slotHeight, slotHeightSet] = useState<number | null>(null);
+    const [pillPhase, pillPhaseSet] = useState<PillPhase>("status");
     const cardRef = useRef<HTMLElement>(null);
     const dialogRef = useRef<HTMLElement>(null);
+    const pillRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         if (!robot.uid) {
@@ -144,6 +146,28 @@ export const RobotCard = ({
         : "No map selected";
     const { beat, beatUntil } = useLaunchingBeat(status);
     const reduceMotion = usePrefersReducedMotion();
+
+    useEffect(() => {
+        if (presence !== "ready" && presence !== "idle") pillPhaseSet("status");
+    }, [presence]);
+
+    useEffect(() => {
+        if (pillPhase !== "shutdown") return;
+        const onPointerDown = (event: PointerEvent) => {
+            if (pillRef.current?.contains(event.target as Node)) return;
+            pillPhaseSet("status");
+        };
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape") pillPhaseSet("status");
+        };
+        document.addEventListener("pointerdown", onPointerDown);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("pointerdown", onPointerDown);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [pillPhase]);
+
     const glow = glowFor(status, beat);
     const pulsed = glow === "outside" || glow === "inner";
 
@@ -284,7 +308,14 @@ export const RobotCard = ({
         >
             <header className="hr-card__head">
                 <span className="hr-card__id">{robotDisplayId(name)}</span>
-                <StatusPill presence={presence} />
+                <StatusPill
+                    presence={presence}
+                    phase={pillPhase}
+                    reduceMotion={reduceMotion}
+                    onArm={() => pillPhaseSet("shutdown")}
+                    onConfirm={() => pillPhaseSet("shutting-down")}
+                    pillRef={pillRef}
+                />
             </header>
 
             {expanded && (
