@@ -4,7 +4,7 @@
  * stretch_firebase_daemon.js
  *
  * Onboard daemon for Stretch Web Teleop.
- * Listens for remote launch/stop commands via Firebase Realtime Database
+ * Listens for remote launch/stop/shutdown commands via Firebase Realtime Database
  * and manages robot presence ('offline', 'standby', 'launching', 'online', 'occupied').
  */
 
@@ -610,6 +610,80 @@ function runStopScript() {
     });
 }
 
+const SHUTDOWN_CALL_TIMEOUT_MS = 15000;
+
+function powerOffHost() {
+    return new Promise((resolve) => {
+        execFile(
+            'sudo',
+            ['-n', '/usr/bin/systemctl', 'poweroff'],
+            { timeout: SHUTDOWN_CALL_TIMEOUT_MS },
+            (error, stdout, stderr) => {
+                if (error) {
+                    console.error('[DAEMON] systemctl poweroff failed:', error.message);
+                    if (stderr) console.error(stderr);
+                } else if (stdout) {
+                    console.log(`[DAEMON] systemctl poweroff: ${stdout.trim()}`);
+                }
+                resolve();
+            },
+        );
+    });
+}
+
+/**
+ * The daemon process has no ROS environment. Source the shared robot env,
+ * then ask the interface's /system/shutdown service to power the host off.
+ * If that service is not up, power off directly.
+ */
+function callSystemShutdown() {
+    const envScript = path.join(repoRoot, 'scripts/lib/teleop_env.sh');
+    const quotedEnv = `'${envScript.replace(/'/g, `'\\''`)}'`;
+    const command = [
+        `source ${quotedEnv}`,
+        'teleop_setup_env',
+        'ros2 service call /system/shutdown std_srvs/srv/Trigger "{}"',
+    ].join(' && ');
+    return new Promise((resolve) => {
+        execFile(
+            'bash',
+            ['-lc', command],
+            { cwd: repoRoot, timeout: SHUTDOWN_CALL_TIMEOUT_MS },
+            (error, stdout, stderr) => {
+                if (error) {
+                    console.error('[DAEMON] /system/shutdown call failed:', error.message);
+                    if (stderr) console.error(stderr);
+                    powerOffHost().then(resolve);
+                    return;
+                }
+                if (stdout) {
+                    console.log(`[DAEMON] /system/shutdown: ${stdout.trim()}`);
+                }
+                resolve();
+            },
+        );
+    });
+}
+
+let shutdownInFlight = false;
+
+async function handleShutdownCommand(requestedBy) {
+    console.log(`[DAEMON] Received SHUTDOWN command from user: ${requestedBy}`);
+    if (shutdownInFlight) return;
+    shutdownInFlight = true;
+    try {
+        const running = await checkInterfaceRunning();
+        if (running) {
+            await callSystemShutdown();
+        } else {
+            console.log('[DAEMON] Interface is not running; powering off directly.');
+            await powerOffHost();
+        }
+    } finally {
+        shutdownInFlight = false;
+    }
+}
+
 async function handleStopCommand(requestedBy) {
     console.log(`[DAEMON] Received STOP command from user: ${requestedBy}`);
     launchEpoch += 1;
@@ -712,6 +786,11 @@ async function initDaemon() {
             } else if (action === 'stop') {
                 handleStopCommand(requested_by).catch((error) => {
                     console.error('[DAEMON] Stop command failed:', error.message);
+                });
+                set(controlRef, null);
+            } else if (action === 'shutdown') {
+                handleShutdownCommand(requested_by).catch((error) => {
+                    console.error('[DAEMON] Shutdown command failed:', error.message);
                 });
                 set(controlRef, null);
             }

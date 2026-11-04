@@ -17,13 +17,18 @@ export type cmd =
     | StopTrajectoryCommand
     | StopMoveBaseCommand
     | PlaybackPosesCommand
-    | GetBatteryVoltageCommand
+    | GetBatteryStateCommand
     | GetStretchTool
     | GetMaxEeSpeed
     | HomeTheRobotCommand
     | SeedLocalizationCommand
+    | ShutdownCommand
     | GetVoiceCapabilityCommand
     | RequestVoiceTokenCommand;
+
+export interface ShutdownCommand {
+    type: "shutdown";
+}
 
 export interface SeedLocalizationCommand {
     type: "seedLocalization";
@@ -131,8 +136,8 @@ export interface StopMoveBaseCommand {
     type: "stopMoveBase";
 }
 
-export interface GetBatteryVoltageCommand {
-    type: "getBatteryVoltage";
+export interface GetBatteryStateCommand {
+    type: "getBatteryState";
 }
 
 export interface HomeTheRobotCommand {

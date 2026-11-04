@@ -120,7 +120,7 @@
     padding: 21px 25px 25px;
     display: flex;
     flex-direction: column;
-    gap: 30px;
+    gap: 28px;
     border-radius: 10px;
     border: 1px solid transparent;
     transition:
@@ -207,9 +207,11 @@
 }
 
 .hr-card__head {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    min-height: 35px;
 }
 
 .hr-card__id {
@@ -283,10 +285,167 @@
 /* Status pill ------------------------------------------------------------ */
 
 .hr-pill {
+    --pill-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --pill-dur: 350ms;
+    position: absolute;
+    top: 0;
+    right: -4px;
+    z-index: 1;
+    height: 35px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    appearance: none;
+    cursor: pointer;
+    overflow: visible;
+    transition: none;
+}
+
+.hr-pill--shutting-down {
+    cursor: default;
+}
+
+.hr-pill--instant .hr-pill__chrome,
+.hr-pill--instant .hr-pill__cap--left,
+.hr-pill--instant .hr-pill__mid,
+.hr-pill--instant .hr-pill__face {
+    transition: none;
+}
+
+.hr-pill--instant .hr-pill__spinner,
+.hr-pill--instant .hr-button__ellipsis::after {
+    animation: none;
+}
+
+.hr-pill--instant .hr-button__ellipsis::after {
+    content: "...";
+}
+
+/* Chrome is painted from the right edge. Width changes are transforms. */
+.hr-pill__chrome {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 35px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--pill-dur) var(--pill-ease);
+}
+
+.hr-pill__chrome.is-on {
+    opacity: 1;
+}
+
+.hr-pill__cap,
+.hr-pill__mid {
+    position: absolute;
+    top: 0;
+    height: 35px;
+}
+
+.hr-pill__cap {
+    right: 0;
+    width: 35px;
+    border-radius: 50%;
+}
+
+.hr-pill__cap--left {
+    transform: translate3d(var(--pill-shift, 0px), 0, 0);
+    transition: transform var(--pill-dur) var(--pill-ease);
+    will-change: transform;
+    clip-path: inset(0 50% 0 0);
+}
+
+.hr-pill__cap--right {
+    clip-path: inset(0 0 0 50%);
+}
+
+.hr-pill__mid {
+    right: 17.5px;
+    transform-origin: right center;
+    transform: scale3d(var(--pill-scale, 1), 1, 1);
+    transition: transform var(--pill-dur) var(--pill-ease);
+    will-change: transform;
+}
+
+.hr-pill__chrome--line .hr-pill__cap {
+    box-sizing: border-box;
+    border: 1.3px solid hsl(204, 30%, 15%);
+}
+
+.hr-pill--offline .hr-pill__chrome--line .hr-pill__cap {
+    border-color: hsl(204, 0%, 10%);
+}
+
+.hr-pill__chrome--line .hr-pill__mid {
+    box-sizing: border-box;
+    border-top: 1.3px solid hsl(204, 30%, 15%);
+    border-bottom: 1.3px solid hsl(204, 30%, 15%);
+}
+
+.hr-pill--offline .hr-pill__chrome--line .hr-pill__mid {
+    border-top-color: hsl(204, 0%, 10%);
+    border-bottom-color: hsl(204, 0%, 10%);
+}
+
+.hr-pill__chrome--fill .hr-pill__cap,
+.hr-pill__chrome--fill .hr-pill__mid {
+    background: hsla(0, 30%, 10%, 1);
+}
+
+.hr-pill__face {
+    position: absolute;
+    top: 0;
+    right: 0;
     display: flex;
     align-items: center;
+    height: 35px;
+    width: max-content;
     gap: 7px;
-    border-radius: 100px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--pill-dur) var(--pill-ease);
+    will-change: opacity;
+}
+
+.hr-pill__face.is-on {
+    opacity: 1;
+}
+
+.hr-pill__face--status {
+    padding: 9px 13px 9px 11px;
+}
+
+.hr-pill__face--action {
+    padding: 9px 14px 9px 9px;
+}
+
+.hr-pill__face--action:has(.hr-pill__mark) {
+    padding-left: 8px;
+}
+
+.hr-pill__mark {
+    display: block;
+    width: 21px;
+    height: 21px;
+    flex: none;
+}
+
+.hr-pill__spinner {
+    box-sizing: border-box;
+    width: 17px;
+    height: 17px;
+    flex: none;
+    border: 1.5px solid rgb(202 120 120 / 50%);
+    border-left-color: #ca7878;
+    border-radius: 50%;
+    animation: load 1s infinite linear;
 }
 
 .hr-pill__dot {
@@ -309,8 +468,8 @@
 .hr-pill__dot-flat {
     position: absolute;
     inset: 0;
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
 }
 
 .hr-pill__text {
@@ -347,6 +506,10 @@
     color: transparent;
 }
 
+.hr-pill__text--shutdown {
+    color: #ffcccc;
+}
+
 .hr-pill__text--pulse {
     animation: hr-pulse 1.6s ease-in-out infinite;
 }
@@ -368,6 +531,7 @@
     align-items: center;
     justify-content: space-between;
     height: 19px;
+    padding-right: 9px;
 }
 
 .hr-row__main {
@@ -381,6 +545,7 @@
     flex-shrink: 0;
     width: 16px;
     height: 16px;
+    opacity: 65%;
 }
 
 .hr-row__label {

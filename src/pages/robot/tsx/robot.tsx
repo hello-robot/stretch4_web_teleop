@@ -14,6 +14,7 @@ import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 import {
     ActionState,
     ActionStatusList,
+    BatteryState,
     DiagnosticArray,
     EE_VELOCITY_LIMITER_NODE,
     getMaxEeSpeed,
@@ -22,7 +23,6 @@ import {
     GRIPPER_INCREMENT_RANGE_FRACTION,
     JOINT_VELOCITY_HEARTBEAT_MS,
     ParameterEvent,
-    ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
@@ -152,7 +152,7 @@ export class Robot extends React.Component {
         jointValues: ValidJointStateDict,
         effortValues: ValidJointStateDict
     ) => void;
-    private batteryStateCallback: (batteryState: ROSBatteryState) => void;
+    private batteryStateCallback: (batteryState: BatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
     private occupancyGridUnavailableCallback: () => void;
     private odomCallback: (odom: ROSOdometry) => void;
@@ -171,6 +171,7 @@ export class Robot extends React.Component {
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
+    private shutdownService?: Service;
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
     private stretchParamsReady: Promise<void> = Promise.resolve();
@@ -181,7 +182,7 @@ export class Robot extends React.Component {
             jointValues: ValidJointStateDict,
             effortValues: ValidJointStateDict
         ) => void;
-        batteryStateCallback: (batteryState: ROSBatteryState) => void;
+        batteryStateCallback: (batteryState: BatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
         occupancyGridUnavailableCallback: () => void;
         odomCallback: (odom: ROSOdometry) => void;
@@ -395,6 +396,7 @@ export class Robot extends React.Component {
         // this.subscribeToMapTF();
         this.createHomeTheRobotService();
         this.createSeedLocalizationService();
+        this.createShutdownService();
         this.initStretchParams();
 
         return Promise.resolve();
@@ -465,14 +467,14 @@ export class Robot extends React.Component {
     }
 
     subscribeToBatteryState() {
-        const batteryStateTopic: Topic<ROSBatteryState> = new Topic({
+        const batteryStateTopic: Topic<BatteryState> = new Topic({
             ros: this.ros,
             name: "/battery",
             messageType: "sensor_msgs/msg/BatteryState",
         });
         this.subscriptions.push(batteryStateTopic);
 
-        batteryStateTopic.subscribe((msg: ROSBatteryState) => {
+        batteryStateTopic.subscribe((msg: BatteryState) => {
             if (this.batteryStateCallback) this.batteryStateCallback(msg);
         });
     }
@@ -1112,6 +1114,14 @@ export class Robot extends React.Component {
         });
     }
 
+    createShutdownService() {
+        this.shutdownService = new Service({
+            ros: this.ros,
+            name: "/system/shutdown",
+            serviceType: "std_srvs/Trigger",
+        });
+    }
+
     createExpandedGripperService() {
         this.setExpandedGripperService = new Service({
             ros: this.ros,
@@ -1367,6 +1377,22 @@ export class Robot extends React.Component {
             request,
             (response: { success: boolean; message: string }) => {
                 console.log("Seed localization complete", response);
+                resultCallback?.(response);
+            }
+        );
+    }
+
+    /**
+     * Ask the robot to shut down via /system/shutdown (std_srvs/Trigger).
+     */
+    shutdown(
+        resultCallback?: (result: { success: boolean; message: string }) => void
+    ) {
+        var request = {};
+        this.shutdownService!.callService(
+            request,
+            (response: { success: boolean; message: string }) => {
+                console.log("Shutdown complete", response);
                 resultCallback?.(response);
             }
         );

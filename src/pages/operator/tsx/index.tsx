@@ -27,7 +27,7 @@ import { WebRTCConnection } from "shared/webrtcconnections";
 import { waitUntilAsync } from "../../../shared/util";
 import { LoginHandler } from "../../home/tsx/login_handler/LoginHandler";
 import { createLoginHandler } from "../../home/tsx/utils";
-import { BatteryVoltageFunctionProvider } from "./function_providers/BatteryVoltageFunctionProvider";
+import { BatteryStateFunctionProvider } from "./function_providers/BatteryStateFunctionProvider";
 import { ButtonFunctionProvider } from "./function_providers/ButtonFunctionProvider";
 import { CameraSwitcherFunctionProvider } from "./function_providers/CameraSwitcherFunctionProvider";
 import { FlyingGripperFunctionProvider } from "./function_providers/FlyingGripperFunctionProvider";
@@ -146,8 +146,8 @@ export var buttonFunctionProvider = new ButtonFunctionProvider();
 export var flyingGripperFunctionProvider = new FlyingGripperFunctionProvider();
 
 export var runStopFunctionProvider = new RunStopFunctionProvider();
-export var batteryVoltageFunctionProvider =
-    new BatteryVoltageFunctionProvider();
+export var batteryStateFunctionProvider =
+    new BatteryStateFunctionProvider();
 export var mapFunctionProvider: MapFunctionProvider;
 export var underMapFunctionProvider: UnderMapFunctionProvider;
 export var movementRecorderFunctionProvider: MovementRecorderFunctionProvider;
@@ -377,8 +377,8 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "relativePose":
             remoteRobot.setRelativePose(message.message);
             break;
-        case "batteryVoltage":
-            remoteRobot.sensors.setBatteryVoltage(message.message);
+        case "batteryState":
+            remoteRobot.sensors.setBatteryState(message.percentage, message.isCharging);
             break;
         case "odom":
             remoteRobot.sensors.setOdom(message.message);
@@ -441,7 +441,7 @@ function configureRemoteRobot() {
     );
 
     remoteRobot.sensors.setBatteryFunctionProviderCallback(
-        batteryVoltageFunctionProvider.updateVoltage
+        batteryStateFunctionProvider.updateState
     );
     remoteRobot.sensors.setModeFunctionProviderCallback(
         homeTheRobotFunctionProvider.updateModeState
