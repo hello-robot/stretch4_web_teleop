@@ -15,17 +15,17 @@ const PUBLIC_WEBPACK_ENV_KEYS = Object.freeze([
 /**
  * DefinePlugin entries for the keys a browser bundle may see.
  *
- * .env wins, and the process environment answers for anything it does not
- * define, so a release job can export a value for one build without rewriting
- * the file every robot also reads.
+ * The process environment wins over .env, so a release or preview build can
+ * export PUBLIC_HOSTING_ORIGIN or PUBLIC_STABLE_RAIL for one invocation
+ * without rewriting the .env file on disk.
  *
  * @param {Record<string, string>} env Parsed .env contents.
  * @returns {Record<string, string>} DefinePlugin replacements.
  */
-function webpackPublicEnvDefinitions(env) {
+function webpackPublicEnvDefinitions(env = {}) {
     return Object.fromEntries(
         PUBLIC_WEBPACK_ENV_KEYS.map((key) => {
-            const value = env[key] ?? process.env[key];
+            const value = process.env[key] ?? env[key];
             return [
                 `process.env.${key}`,
                 value === undefined ? "undefined" : JSON.stringify(value),

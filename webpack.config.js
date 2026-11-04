@@ -96,7 +96,13 @@ module.exports = (webpackEnv, argv) => {
             // Incremental watch builds reuse cached HTML/assets. Cleaning on
             // every rebuild can remove those cached files without re-emitting
             // them, leaving the local server with 404s.
-            clean: isProduction,
+            //
+            // Only clean a directory this build owns outright: a whole-site
+            // build owns dist/, and a rail owns its own r/<tag>/. A partial
+            // build at the root -- the lobby, or the unversioned operator
+            // page -- shares the tree with the others assembled beside it,
+            // and the caller clears it once before assembling.
+            clean: isProduction && (rail !== null || pages.length === ALL_PAGES.length),
         },
         optimization: {
             splitChunks: {
