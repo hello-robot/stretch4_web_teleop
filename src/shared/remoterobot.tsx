@@ -19,6 +19,7 @@ import {
     SetJointVelocityCommand,
     setRobotModeCommand,
     SetTaskSpaceVelocityCommand,
+    ShutdownCommand,
     ToggleCommand,
     VelocityCommand
 } from "shared/commands";
@@ -315,6 +316,16 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Ask the robot to shut down its operating system.
+     */
+    shutdown() {
+        let cmd: ShutdownCommand = {
+            type: "shutdown",
         };
         this.robotChannel(cmd);
     }

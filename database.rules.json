@@ -54,7 +54,7 @@
         },
         "control": {
           ".write": "auth != null && (((root.child('assignments').child(auth.uid).child('robots').child($fleetId).val() === true || (root.child('uids').child(auth.uid).exists() && root.child('assignments').child(root.child('uids').child(auth.uid).val()).child('robots').child($fleetId).val() === true)) && !data.exists() && newData.exists() && (newData.child('requested_by').val() === auth.uid || (root.child('uids').child(auth.uid).exists() && newData.child('requested_by').val() === root.child('uids').child(auth.uid).val()))) || (root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid && !newData.exists()))",
-          ".validate": "!newData.exists() || (newData.hasChildren(['action', 'requested_by', 'requested_at']) && (newData.child('action').val() === 'launch' || newData.child('action').val() === 'stop') && newData.child('requested_by').isString() && newData.child('requested_at').isNumber() && (!newData.child('map_id').exists() || newData.child('map_id').isString()))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['action', 'requested_by', 'requested_at']) && (newData.child('action').val() === 'launch' || newData.child('action').val() === 'stop' || newData.child('action').val() === 'shutdown') && newData.child('requested_by').isString() && newData.child('requested_at').isNumber() && (!newData.child('map_id').exists() || newData.child('map_id').isString()))",
           "action": {
             ".validate": "newData.isString()"
           },

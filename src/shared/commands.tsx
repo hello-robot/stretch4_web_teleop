@@ -22,8 +22,13 @@ export type cmd =
     | GetMaxEeSpeed
     | HomeTheRobotCommand
     | SeedLocalizationCommand
+    | ShutdownCommand
     | GetVoiceCapabilityCommand
     | RequestVoiceTokenCommand;
+
+export interface ShutdownCommand {
+    type: "shutdown";
+}
 
 export interface SeedLocalizationCommand {
     type: "seedLocalization";
