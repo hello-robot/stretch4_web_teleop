@@ -73,7 +73,7 @@ Each of these functions is registered with `Robot` at startup. When the robot pu
 | Callback | WebRTC message type sent |
 | :--- | :--- |
 | `forwardJointStates` | `validJointState` (robotPose, limits, collision) |
-| `forwardBatteryState` | `batteryVoltage` |
+| `forwardBatteryState` | `batteryState` |
 | `forwardOccupancyGrid` | `occupancyGrid` (chunked into 50k-element slices) |
 | `forwardActionState` | `moveBaseState` or `playbackPosesState` |
 | `forwardAMCLPose` | `amclPose` |

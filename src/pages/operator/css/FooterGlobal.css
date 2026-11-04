@@ -16,14 +16,27 @@
 
 /* START Battery */
 .footer-global .battery-container {
-    width: 32px;
-    height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 35px;
+    flex: 0 0 35px;
+    position: relative;
+    left: 6px;
+}
+
+.footer-global .battery-container .battery-percentage {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 2px;
+    text-align: center;
+    user-select: none;
 }
 
 .footer-global .battery-container .battery {
     position: relative;
-    top: 3px;
-    left: 6px;
     display: inline-block;
     width: 35px;
     height: auto;

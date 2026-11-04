@@ -33,7 +33,7 @@ Before describing the operator page itself, it helps to understand the shared la
 
 ### `commands.tsx`
 
-This file defines the common language between the operator and robot browsers. It defines every **command** the interface can transmit — the full vocabulary of robot actions. For example, you can ask Nav2 to navigate the robot using the MoveBaseCommand, or you can ask the driver for the battery's current voltage using GetBatteryVoltageCommand. Every action taken in the web interface is converted into a command and transmitted through WebRTC's data channel to the robot browser, where it is interpreted and further transmitted to Stretch's ROS2 packages.
+This file defines the common language between the operator and robot browsers. It defines every **command** the interface can transmit — the full vocabulary of robot actions. For example, you can ask Nav2 to navigate the robot using the MoveBaseCommand, or you can ask the driver for the battery's current voltage using GetBatteryStateCommand. Every action taken in the web interface is converted into a command and transmitted through WebRTC's data channel to the robot browser, where it is interpreted and further transmitted to Stretch's ROS2 packages.
 
 Each command is a TypeScript interface with a `type` discriminant:
 
@@ -114,7 +114,7 @@ Key module-level exports that components import directly (no prop-drilling):
 | :--- | :--- | :--- |
 | `buttonFunctionProvider` | `ButtonFunctionProvider` | Main movement logic |
 | `runStopFunctionProvider` | `RunStopFunctionProvider` | Run-stop state |
-| `batteryVoltageFunctionProvider` | `BatteryVoltageFunctionProvider` | Battery display |
+| `BatteryStateFunctionProvider` | `BatteryStateFunctionProvider` | Battery display |
 | `movementRecorderFunctionProvider` | `MovementRecorderFunctionProvider` | Playback/recording |
 | `underMapFunctionProvider` | `UnderMapFunctionProvider` | Autonomous navigation |
 | `homeTheRobotFunctionProvider` | `HomeTheRobotFunctionProvider` | Homing sequence |
@@ -187,7 +187,7 @@ Tracks homing and robot mode state. Exposes `updateModeState()` and `updateIsHom
 
 Tracks the software run-stop state. Exposes `updateRunStopState()`.
 
-### `BatteryVoltageFunctionProvider`
+### `BatteryStateFunctionProvider`
 
 Tracks battery voltage. Exposes `updateVoltage()`.
 
@@ -282,7 +282,7 @@ WebRTC data channel (robot → operator)
         │
   ┌─────┴──────────────────────────────────────────────┐
   │ joint states   → buttonFunctionProvider            │
-  │ battery        → batteryVoltageFunctionProvider    │
+  │ battery        → BatteryStateFunctionProvider    │
   │ mode/homed     → homeTheRobotFunctionProvider      │
   │ run-stop       → runStopFunctionProvider           │
   │ occupancy grid → occupancyGrid (module-level var)  │

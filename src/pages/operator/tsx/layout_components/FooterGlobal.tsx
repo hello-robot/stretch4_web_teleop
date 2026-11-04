@@ -17,15 +17,16 @@ import SceneCarousel, {
     SceneItemStatus,
 } from "../basic_components/SceneCarousel";
 import MagneticWrapper from "../static_components/MagneticWrapper";
-import batteryIcon from "operator/icons/Battery_Footer.svg";
 import runStopRunIcon from "operator/icons/RunStop_Run.svg";
 import runStopStopIcon from "operator/icons/RunStop_Stop.svg";
 import "operator/css/FooterGlobal.css";
 import {
+    batteryStateFunctionProvider,
     mapFunctionProvider,
     runStopFunctionProvider,
     underMapFunctionProvider,
 } from "..";
+import { BatteryStateFunctions } from "../function_providers/BatteryStateFunctionProvider";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { RunStopFunctions } from "../function_providers/RunStopFunctionProvider";
 import { UnderMapButton } from "../function_providers/UnderMapFunctionProvider";
@@ -76,6 +77,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     isMainMenuOpenSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
+    const [batteryPercentage, batteryPercentageSet] = useState<number>(0);
+    const [isCharging, isChargingSet] = useState<boolean>(false);
     const [isRobotAudioMuted, isRobotAudioMutedSet] = useState<boolean>(
         RobotAudioPlayer.getInstance().getMuted()
     );
@@ -102,6 +105,10 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         };
     }, []);
     const functs: RunStopFunctions = runStopFunctionProvider.provideFunctions();
+
+    batteryStateFunctionProvider.setPercentageChangeCallback(batteryPercentageSet);
+    batteryStateFunctionProvider.setChargeStateChangeCallback(isChargingSet);
+    const batteryFuncts: BatteryStateFunctions = batteryStateFunctionProvider.provideFunctions();
 
     // Re-register each render (provider may be created after first mount).
     mapFunctionProvider?.setOperatorCallback((state: ActionState) => {
@@ -312,7 +319,17 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     return (
         <div className="footer-global">
             <div className="battery-container">
-                <img src={batteryIcon} alt="Battery" className="battery" />
+                <span
+                    className="battery-percentage"
+                    style={{ color: batteryFuncts.getBatteryColor() }}
+                >
+                    {batteryFuncts.getPercentage()}
+                </span>
+                <img
+                    src={batteryFuncts.getBatteryIcon()}
+                    alt="Battery"
+                    className="battery"
+                />
             </div>
             <div className="scene-menu-button-container">
                 <button

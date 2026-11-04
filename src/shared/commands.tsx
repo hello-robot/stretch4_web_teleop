@@ -17,7 +17,7 @@ export type cmd =
     | StopTrajectoryCommand
     | StopMoveBaseCommand
     | PlaybackPosesCommand
-    | GetBatteryVoltageCommand
+    | GetBatteryStateCommand
     | GetStretchTool
     | GetMaxEeSpeed
     | HomeTheRobotCommand
@@ -136,8 +136,8 @@ export interface StopMoveBaseCommand {
     type: "stopMoveBase";
 }
 
-export interface GetBatteryVoltageCommand {
-    type: "getBatteryVoltage";
+export interface GetBatteryStateCommand {
+    type: "getBatteryState";
 }
 
 export interface HomeTheRobotCommand {

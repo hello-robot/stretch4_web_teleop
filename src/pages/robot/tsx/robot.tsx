@@ -14,6 +14,7 @@ import { FEATURE_EE_VELOCITY_LIMITER } from "shared/featureFlags";
 import {
     ActionState,
     ActionStatusList,
+    BatteryState,
     DiagnosticArray,
     EE_VELOCITY_LIMITER_NODE,
     getMaxEeSpeed,
@@ -22,7 +23,6 @@ import {
     GRIPPER_INCREMENT_RANGE_FRACTION,
     JOINT_VELOCITY_HEARTBEAT_MS,
     ParameterEvent,
-    ROSBatteryState,
     ROSCompressedImage,
     ROSJointState,
     ROSOccupancyGrid,
@@ -151,7 +151,7 @@ export class Robot extends React.Component {
         jointValues: ValidJointStateDict,
         effortValues: ValidJointStateDict
     ) => void;
-    private batteryStateCallback: (batteryState: ROSBatteryState) => void;
+    private batteryStateCallback: (batteryState: BatteryState) => void;
     private occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
     private occupancyGridUnavailableCallback: () => void;
     private odomCallback: (odom: ROSOdometry) => void;
@@ -181,7 +181,7 @@ export class Robot extends React.Component {
             jointValues: ValidJointStateDict,
             effortValues: ValidJointStateDict
         ) => void;
-        batteryStateCallback: (batteryState: ROSBatteryState) => void;
+        batteryStateCallback: (batteryState: BatteryState) => void;
         occupancyGridCallback: (occupancyGrid: ROSOccupancyGrid) => void;
         occupancyGridUnavailableCallback: () => void;
         odomCallback: (odom: ROSOdometry) => void;
@@ -466,14 +466,14 @@ export class Robot extends React.Component {
     }
 
     subscribeToBatteryState() {
-        const batteryStateTopic: Topic<ROSBatteryState> = new Topic({
+        const batteryStateTopic: Topic<BatteryState> = new Topic({
             ros: this.ros,
             name: "/battery",
             messageType: "sensor_msgs/msg/BatteryState",
         });
         this.subscriptions.push(batteryStateTopic);
 
-        batteryStateTopic.subscribe((msg: ROSBatteryState) => {
+        batteryStateTopic.subscribe((msg: BatteryState) => {
             if (this.batteryStateCallback) this.batteryStateCallback(msg);
         });
     }

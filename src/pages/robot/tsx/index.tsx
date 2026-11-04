@@ -10,7 +10,8 @@ import {
     ActionState,
     ActionStateMessage,
     audioProps,
-    BatteryVoltageMessage,
+    BatteryState,
+    BatteryStateMessage,
     delay,
     gripperProps,
     IsHomedMessage,
@@ -25,7 +26,6 @@ import {
     OdomMessage,
     parseToolMetadata,
     RobotPose,
-    ROSBatteryState,
     ROSOccupancyGrid,
     ROSOdometry,
     ValidJointStateDict,
@@ -271,13 +271,14 @@ function forwardJointStates(
     } as ValidJointStateMessage);
 }
 
-function forwardBatteryState(batteryState: ROSBatteryState) {
+function forwardBatteryState(batteryState: BatteryState) {
     if (!connection) throw "WebRTC connection undefined";
 
     connection.sendData({
-        type: "batteryVoltage",
-        message: batteryState.voltage,
-    } as BatteryVoltageMessage);
+        type: "batteryState",
+        percentage: batteryState.percentage,
+        isCharging: batteryState.power_supply_status === 1,
+    } as BatteryStateMessage);
 }
 
 function forwardOdom(odom: ROSOdometry) {
