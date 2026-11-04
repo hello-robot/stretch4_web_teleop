@@ -323,7 +323,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                     className="battery-percentage"
                     style={{ color: batteryFuncts.getBatteryColor() }}
                 >
-                    {batteryFuncts.getPercentage()}%
+                    {batteryFuncts.getPercentage()}
                 </span>
                 <img
                     src={batteryFuncts.getBatteryIcon()}
