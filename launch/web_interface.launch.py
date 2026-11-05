@@ -72,7 +72,14 @@ def check_valid_configuration(model, has_head_cams):
         sys.exit(1)
 
 
-def generate_launch_description():
+def generate_launch_description() -> LaunchDescription:
+    """
+    Build the launch description for the Stretch 4 web teleop ROS 2 stack.
+
+    Returns:
+        Configured LaunchDescription containing driver, cameras, navigation,
+        safety filters, and web teleop auxiliary nodes.
+    """
     teleop_interface_package = str(get_package_share_path("stretch4_web_teleop"))
     core_package = str(get_package_share_path("stretch_core"))
     rosbridge_package = str(get_package_share_path("rosbridge_server"))
@@ -469,5 +476,14 @@ def generate_launch_description():
         output="screen",
     )
     ld.add_action(shutdown_robot_node)
+
+    # Autodocking Server Node
+    docking_server_node = Node(
+        package="stretch_nav2",
+        executable="docking_server.py",
+        name="docking_server",
+        output="screen",
+    )
+    ld.add_action(docking_server_node)
 
     return ld

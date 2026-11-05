@@ -80,6 +80,7 @@ export enum GoalStatus {
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
+const dockRobotActionName = "/dock_robot";
 
 export class Robot extends React.Component {
     private ros: Ros;
@@ -122,6 +123,12 @@ export class Robot extends React.Component {
     private moveBaseTerminalBaseline?: number;
     private trajectoryClient?: Action;
     private moveBaseClient?: Action;
+    private dockRobotClient?: Action;
+    private dockRobotGoalID?: string;
+    private dockRobotFinishCallback?: (res: {
+        success: boolean;
+        message: string;
+    }) => void;
     /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
     private cmdVelNavTopic?: Topic;
     /** Drive straight to the driver (or to /teleop/cmd_vel when velocity limiter is active). */
@@ -368,6 +375,7 @@ export class Robot extends React.Component {
         this.subscribeToLeaseHolder();
         this.createTrajectoryClient();
         this.createMoveBaseClient();
+        this.createDockRobotClient();
         // Primary completion signal: rosbridge sendGoal result callbacks are
         // unreliable; Nav2 /_action/status is the durable path for Stop UI.
         this.subscribeToActionResult(
@@ -1022,6 +1030,20 @@ export class Robot extends React.Component {
         });
     }
 
+    /**
+     * Initialize the ROS 2 action client for /dock_robot (nav2_msgs/action/DockRobot).
+     *
+     * Returns:
+     *     None.
+     */
+    createDockRobotClient(): void {
+        this.dockRobotClient = new Action({
+            ros: this.ros,
+            name: dockRobotActionName,
+            actionType: "nav2_msgs/action/DockRobot",
+        });
+    }
+
     createCmdVelTopics() {
         if (FEATURE_EE_VELOCITY_LIMITER) {
             this.cmdVelDirectTopic = new Topic({
@@ -1380,6 +1402,127 @@ export class Robot extends React.Component {
                 resultCallback?.(response);
             }
         );
+    }
+
+    /**
+     * Execute near-dock autonomous docking via /dock_robot (nav2_msgs/action/DockRobot).
+     *
+     * Switches stretch_driver to navigation mode before sending the goal with
+     * navigate_to_staging_pose and use_dock_id disabled.
+     *
+     * Args:
+     *     resultCallback: Optional callback invoked with completion status and message.
+     *
+     * Returns:
+     *     Promise resolving once the docking goal has been dispatched or rejected.
+     */
+    async executeAutoDock(
+        resultCallback?: (result: { success: boolean; message: string }) => void
+    ): Promise<void> {
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executeAutoDock while robot is runstopped");
+            resultCallback?.({
+                success: false,
+                message: "Cannot dock while robot is runstopped.",
+            });
+            return;
+        }
+        if (!this.dockRobotClient) {
+            resultCallback?.({
+                success: false,
+                message: "Docking action client is not initialized.",
+            });
+            return;
+        }
+
+        await this.switchToNavigationMode();
+        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
+            resultCallback?.({
+                success: false,
+                message: "Cannot dock while robot is runstopped.",
+            });
+            return;
+        }
+
+        this.stopExecution(true);
+
+        const goal = {
+            use_dock_id: false,
+            dock_id: "",
+            dock_type: "stretch4_dock",
+            max_staging_time: 0.0,
+            navigate_to_staging_pose: false,
+        };
+
+        let settled = false;
+        const finish = (res: { success: boolean; message: string }) => {
+            if (settled) return;
+            settled = true;
+            this.dockRobotGoalID = undefined;
+            if (this.dockRobotFinishCallback === finish) {
+                this.dockRobotFinishCallback = undefined;
+            }
+            resultCallback?.(res);
+        };
+        this.dockRobotFinishCallback = finish;
+
+        this.dockRobotGoalID = this.dockRobotClient.sendGoal(
+            goal,
+            (result: {
+                success?: boolean;
+                error_code?: number;
+                error_msg?: string;
+            }) => {
+                console.log("AutoDock result:", result);
+                const ok = Boolean(result?.success);
+                finish({
+                    success: ok,
+                    message:
+                        result?.error_msg ||
+                        (ok ? "AutoDock succeeded!" : "AutoDock failed."),
+                });
+            },
+            (feedback: unknown) => {
+                console.log("AutoDock feedback:", feedback);
+            },
+            (error: string) => {
+                console.warn("AutoDock failed/canceled:", error);
+                finish({
+                    success: false,
+                    message: error || "AutoDock failed or was canceled.",
+                });
+            },
+        );
+    }
+
+    /**
+     * Cancel any active autonomous docking goal on /dock_robot.
+     *
+     * Returns:
+     *     None.
+     */
+    stopDockRobotClient(): void {
+        if (!this.dockRobotClient) return;
+        const hadActiveGoal =
+            this.dockRobotGoalID !== undefined ||
+            this.dockRobotFinishCallback !== undefined;
+        try {
+            this.dockRobotClient.cancelAllGoals();
+        } catch (e) {
+            console.warn("Error calling cancelAllGoals on dockRobotClient:", e);
+        }
+        if (this.dockRobotGoalID) {
+            this.dockRobotClient.cancelGoal(this.dockRobotGoalID);
+        }
+        if (hadActiveGoal) {
+            this.dockRobotGoalID = undefined;
+            const pendingFinish = this.dockRobotFinishCallback;
+            this.dockRobotFinishCallback = undefined;
+            pendingFinish?.({
+                success: false,
+                message: "AutoDock canceled.",
+            });
+        }
     }
 
     /**
@@ -2199,10 +2342,11 @@ export class Robot extends React.Component {
     }
 
     /**
-     * Stop and cancel active autonomous clients, specifically the move base client.
+     * Stop and cancel active autonomous clients, specifically the move base and dock clients.
      */
     stopAutonomousClients() {
         this.stopMoveBaseClient();
+        this.stopDockRobotClient();
     }
 
     /**

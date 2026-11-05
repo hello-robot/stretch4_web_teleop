@@ -102,6 +102,7 @@ export type WebRTCMessage =
     | StretchToolMessage
     | ActionStateMessage
     | SeedLocalizationStateMessage
+    | AutoDockStateMessage
     | VoiceCapabilityMessage
     | VoiceTokenMessage
     | MaxEeSpeedMessage
@@ -206,6 +207,11 @@ export interface ActionStateMessage {
 
 export interface SeedLocalizationStateMessage {
     type: "seedLocalizationState";
+    message: ActionState;
+}
+
+export interface AutoDockStateMessage {
+    type: "autoDockState";
     message: ActionState;
 }
 
