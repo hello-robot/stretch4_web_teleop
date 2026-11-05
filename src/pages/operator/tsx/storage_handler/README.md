@@ -350,9 +350,25 @@ Deploy database rules separately from the site with:
 npm run deploy:rules
 ```
 
-This syncs `.firebaserc`, runs the rules test suite (`npm run test:firebase-rules`) against the local
-emulator, and uploads `database.rules.json` when the suite passes. Validate rules changes in a separate
-staging Firebase project before running `npm run deploy:rules` against a project with active robots.
+This syncs `.firebaserc`, pulls the ruleset the project is currently enforcing, and prints a line by
+line diff of it against `database.rules.json`. Nothing is uploaded until you agree to the diff at the
+prompt. On a yes it runs the rules test suite (`npm run test:firebase-rules`) against the local
+emulator and uploads `database.rules.json` when the suite passes.
+
+A deploy replaces the whole ruleset rather than patching it, so a repository copy that has fallen
+behind reverts whatever it is missing. Read the removed lines in the diff before answering: they are
+rules the project enforces today. The suite gates only what it covers, so it will not catch a rule it
+has no case for.
+
+Pass `--no-check` to skip the diff and the prompt, for an unattended deploy:
+
+```bash
+npm run deploy:rules -- --no-check
+```
+
+Without it, a run with no terminal to ask stops rather than assuming consent. Validate rules changes
+in a separate staging Firebase project before running `npm run deploy:rules` against a project with
+active robots.
 
 ## Releases and rails
 
