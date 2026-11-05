@@ -31,7 +31,7 @@ import { BranchTag } from "./BranchTag";
 import { ConfigChecklist } from "./ConfigChecklist";
 import { ConfigSheet } from "./ConfigSheet";
 import { MapPickerSheet } from "./MapPickerSheet";
-import { StatusPill } from "./StatusPill";
+import { PillPhase, StatusPill } from "./StatusPill";
 import { LaunchLogPanel } from "./LaunchLogPanel";
 import { TeleopButton } from "./TeleopButton";
 
@@ -106,6 +106,12 @@ const glowFor = (status: RobotStatus, beat: boolean): CardGlow | null => {
     return null;
 };
 
+/** A busy control node rejects the write. Say that, not "permission denied". */
+const controlError = (what: string, message: string) =>
+    /PERMISSION_DENIED/i.test(message)
+        ? `${what} failed: the robot is handling another launch or stop, or you are not assigned to it. Try again in a moment.`
+        : `${what} failed: ${message}`;
+
 export const RobotCard = ({
     uid,
     robot,
@@ -129,8 +135,10 @@ export const RobotCard = ({
         mapId: string | null;
     } | null>(null);
     const [slotHeight, slotHeightSet] = useState<number | null>(null);
+    const [pillPhase, pillPhaseSet] = useState<PillPhase>("status");
     const cardRef = useRef<HTMLElement>(null);
     const dialogRef = useRef<HTMLElement>(null);
+    const pillRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         if (!robot.uid) {
@@ -152,6 +160,28 @@ export const RobotCard = ({
         : "No map selected";
     const { beat, beatUntil } = useLaunchingBeat(status);
     const reduceMotion = usePrefersReducedMotion();
+
+    useEffect(() => {
+        if (presence !== "ready" && presence !== "idle") pillPhaseSet("status");
+    }, [presence]);
+
+    useEffect(() => {
+        if (pillPhase !== "shutdown") return;
+        const onPointerDown = (event: PointerEvent) => {
+            if (pillRef.current?.contains(event.target as Node)) return;
+            pillPhaseSet("status");
+        };
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape") pillPhaseSet("status");
+        };
+        document.addEventListener("pointerdown", onPointerDown);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("pointerdown", onPointerDown);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [pillPhase]);
+
     const glow = glowFor(status, beat);
     const pulsed = glow === "outside" || glow === "inner";
 
@@ -228,12 +258,17 @@ export const RobotCard = ({
             // queued. That arrives as PERMISSION_DENIED, which otherwise reads
             // as an access problem on a robot the user can plainly see.
             const message = err instanceof Error ? err.message : String(err);
-            onError(
-                /PERMISSION_DENIED/i.test(message)
-                    ? `${what} failed: the robot is handling another launch or stop, or you are not assigned to it. Try again in a moment.`
-                    : `${what} failed: ${message}`
-            );
+            onError(controlError(what, message));
         }
+    };
+
+    const confirmShutdown = () => {
+        pillPhaseSet("shutting-down");
+        loginHandler.requestRobotShutdown(uid).catch((err) => {
+            pillPhaseSet((phase) => (phase === "shutting-down" ? "shutdown" : phase));
+            const message = err instanceof Error ? err.message : String(err);
+            onError(controlError("Shutdown", message));
+        });
     };
 
     useEffect(() => {
@@ -292,7 +327,14 @@ export const RobotCard = ({
         >
             <header className="hr-card__head">
                 <span className="hr-card__id">{robotDisplayId(name)}</span>
-                <StatusPill presence={presence} />
+                <StatusPill
+                    presence={presence}
+                    phase={pillPhase}
+                    reduceMotion={reduceMotion}
+                    onArm={() => pillPhaseSet("shutdown")}
+                    onConfirm={confirmShutdown}
+                    pillRef={pillRef}
+                />
             </header>
 
             {expanded && (

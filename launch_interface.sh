@@ -337,7 +337,10 @@ if [ $? -ne 0 ]; then
 	echo_failure_help "$logdir"
 fi
 
-# 20. Archive this run's logs and print the operator URLs
+# 20. Allow passwordless poweroff, archive this run's logs, and print the operator URLs
 zip -r $logzip $logdir/ >/dev/null
+
+echo "Configure shutdown permissions..."
+./configure_shutdown_permissions.sh || true
 
 print_interface_urls "$HOSTING_MODE"

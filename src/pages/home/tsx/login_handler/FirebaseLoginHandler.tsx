@@ -473,4 +473,13 @@ export class FirebaseLoginHandler extends LoginHandler {
             requested_at: Date.now(),
         });
     }
+
+    public requestRobotShutdown(robo_uid: string): Promise<void> {
+        if (!this.alias) return Promise.reject("User not logged in");
+        return set(ref(this.db, "robots/" + robo_uid + "/control"), {
+            action: "shutdown",
+            requested_by: this.alias,
+            requested_at: Date.now(),
+        });
+    }
 }

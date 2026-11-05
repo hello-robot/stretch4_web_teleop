@@ -30,6 +30,7 @@ ament_python_install_package(${PROJECT_NAME}_helpers)
 install(PROGRAMS
   nodes/compressed_image_visualizer.py
   nodes/configure_video_streams.py
+  nodes/shutdown_robot_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

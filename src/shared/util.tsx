@@ -64,8 +64,9 @@ export function parseToolMetadata(toolName: string, isActuated?: boolean): ToolM
 }
 
 
-export interface ROSBatteryState extends Message {
-    voltage: number;
+export interface BatteryState extends Message {
+    percentage: number;
+    power_supply_status: number;
 }
 
 export interface ROSCompressedImage extends Message {
@@ -93,7 +94,7 @@ export type WebRTCMessage =
     | MapPoseMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
-    | BatteryVoltageMessage
+    | BatteryStateMessage
     | ModeMessage
     | IsHomedMessage
     | IsRunStoppedMessage
@@ -227,9 +228,10 @@ export interface MapPoseMessage {
     message: Transform;
 }
 
-export interface BatteryVoltageMessage {
-    type: "batteryVoltage";
-    message: number;
+export interface BatteryStateMessage {
+    type: "batteryState";
+    percentage: number;
+    isCharging: boolean;
 }
 
 export interface OdomMessage {
