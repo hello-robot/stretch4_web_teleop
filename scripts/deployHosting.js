@@ -281,10 +281,14 @@ function parseArgs(argv) {
  * rail to test with; builtFrom then records the checkout, as does the rail's
  * manifest, and the caller confines it to a preview channel.
  *
+ * A checkout that names no rail is not an error here. A preview serves one
+ * interface under no release name and needs none, so the tag comes back null
+ * and the caller decides whether this run required one.
+ *
  * @param {string|null} requested Tag named with --tag, if any.
- * @returns {{tag: string, builtFrom: string|null}} The rail name, and the
- *     describe it was built from when that is not the tag itself.
- * @throws {Error} When the checkout names no rail and none was requested.
+ * @returns {{tag: string|null, builtFrom: string|null}} The rail name or null,
+ *     and the describe it was built from when that is not the tag itself.
+ * @throws {Error} When --tag names something that is not a release tag.
  */
 function checkoutTag(requested) {
     const dirty = git(["status", "--porcelain"]) !== "";
@@ -299,12 +303,7 @@ function checkoutTag(requested) {
     }
 
     if (!requested) {
-        throw new Error(
-            `this checkout is not a supported rail: ${describe}\n` +
-                "          Check out a release tag to publish it, or pass " +
-                "--preview --tag <release> to build a\n" +
-                "          temporary preview rail under that name.",
-        );
+        return { tag: null, builtFrom: describe };
     }
     if (!isReleaseTag(requested)) {
         throw new Error(`--tag ${requested} is not a release tag`);
@@ -546,15 +545,25 @@ async function checkPublishedRail(origin, tag, channel, republish) {
 /**
  * Build the lobby into a cleared dist-firebase.
  *
+ * PUBLIC_HOSTING_ORIGIN is the origin the lobby compares location.origin
+ * against to decide whether it routes to rails at all. A preview channel
+ * serves one build, so it is deliberately not handed its own origin here: the
+ * comparison fails there, every card routes to the unversioned /operator/
+ * page, and rails stay a property of the live site alone. The stable release
+ * is withheld for the same reason, since nothing on a preview can route to it.
+ *
  * @param {string} origin Origin the lobby is served from.
  * @param {string|null} stable Stable release tag, or null for none.
+ * @param {boolean} [preview=false] True when this version goes to a preview
+ *     channel rather than the live site.
  * @returns {void}
  */
-function buildLobby(origin, stable) {
+function buildLobby(origin, stable, preview = false) {
+    const railsOrigin = preview ? configuredLiveOrigin() : origin;
     fs.rmSync(distDir, { recursive: true, force: true });
     run("npm", ["run", "build:lobby"], {
-        PUBLIC_HOSTING_ORIGIN: origin,
-        ...(stable ? { PUBLIC_STABLE_RAIL: stable } : {}),
+        ...(railsOrigin ? { PUBLIC_HOSTING_ORIGIN: railsOrigin } : {}),
+        ...(stable && !preview ? { PUBLIC_STABLE_RAIL: stable } : {}),
     });
     if (!lobbyBundleReady(distDir)) {
         throw new Error("lobby build produced no root index.html");
@@ -697,7 +706,6 @@ async function main() {
     }
 
     syncFirebaseRc(envProjectId());
-    const rails = retainedRails();
 
     // A non-tag build always targets a preview channel unless --dry-run was
     // given with an explicit preview --origin.
@@ -719,6 +727,23 @@ async function main() {
     const origin = resolveOrigin({ channel, origin: options.origin });
     const preview = isPreviewOrigin(origin, channel);
     const publishingLive = !channel && !preview && !options.dryRun;
+
+    // Rails exist so one live site can serve a fleet spread across releases. A
+    // preview channel carries a single build of a single branch, so it reads
+    // no release.json, keeps no rails, and publishes none.
+    const rails = preview ? [] : retainedRails();
+
+    // Everything off a preview serves a rail, and a rail must be named after a
+    // release. A preview serves one interface at /operator/ and names nothing.
+    if (!preview && !tag) {
+        throw new Error(
+            `this checkout is not a release: ${builtFrom}\n` +
+                "          Check out a release tag to publish it, or pass " +
+                "--tag <release> to build a\n" +
+                "          temporary rail under that name. A preview needs " +
+                "neither.",
+        );
+    }
 
     // A rail whose contents do not match its name is temporary. It may never
     // be published to the live site, and even on a dry run it may not use a
@@ -744,9 +769,15 @@ async function main() {
         );
     }
 
-    // The temporary rail rides alongside the kept set rather than replacing it.
-    const assembling =
-        temporary && !rails.includes(tag) ? [...rails, tag] : rails;
+    // A preview assembles no rails at all. Off a preview this checkout's rail
+    // rides alongside the kept set rather than replacing it, whether it was
+    // built from a tag or from a branch: a dry run may legitimately assemble a
+    // tag release.json does not retain.
+    const assembling = preview
+        ? []
+        : rails.includes(tag)
+          ? rails
+          : [...rails, tag];
 
     const site = channel
         ? `${origin} (preview channel ${channel})`
@@ -769,27 +800,43 @@ async function main() {
         options.dryRun ? `Assembling only, for ${site}` : `Deploying to ${site}`,
     );
     row("lobby", builtFrom ?? tag, "/");
-    row("rail", `${tag}${temporary ? " (temporary)" : ""}`, `/r/${tag}/`);
-    row("rails kept", rails.join(", "));
+    if (preview) {
+        row("interface", builtFrom ?? tag, "/operator/");
+        row("rails", "none (a preview serves one build)");
+    } else {
+        row("rail", `${tag}${temporary ? " (temporary)" : ""}`, `/r/${tag}/`);
+        row("rails kept", rails.join(", "));
+    }
     if (!options.verbose) row("build log", options.log);
     console.log("");
 
-    if (temporary) {
+    if (preview) {
+        pass(
+            "Preview publishes one interface, under no release name",
+            `${builtFrom ?? tag} -> /operator/`,
+        );
+    } else if (temporary) {
         pass(
             "Temporary rail targets a preview build",
             `${tag} from ${builtFrom}`,
         );
-    } else if (rails.includes(tag)) {
+    } else {
         pass(
             "Release tag listed in supported rails",
             `${tag} in [${rails.join(", ")}]`,
         );
-    } else {
-        pass("Staging unretained tag on preview channel", tag);
     }
 
-    const stable = await stableRail(repoRoot);
-    if (stable) {
+    // The stable release decides which rail a robot reporting none falls back
+    // to. A preview routes every card to /operator/, so it has nothing to ask
+    // GitHub about.
+    const stable = preview ? null : await stableRail(repoRoot);
+    if (preview) {
+        pass(
+            "Preview does not consult the fleet's stable release",
+            "every card there opens /operator/",
+        );
+    } else if (stable) {
         pass("Default rail taken from the latest GitHub release", stable);
         if (!rails.includes(stable)) {
             if (publishingLive) {
@@ -813,18 +860,24 @@ async function main() {
         );
     }
 
-    if (temporary) {
-        warn(`rail ${tag} is built from ${builtFrom}, not from a release.`, [
-            "Its manifest.json records that. It is not cached in .rails-cache/",
-            "and is not retained by release.json.",
-        ]);
-    } else {
-        pass("Rail built from its own release tag", tag);
+    if (!preview) {
+        if (temporary) {
+            warn(
+                `rail ${tag} is built from ${builtFrom}, not from a release.`,
+                [
+                    "Its manifest.json records that. It is not cached in .rails-cache/",
+                    "and is not retained by release.json.",
+                ],
+            );
+        } else {
+            pass("Rail built from its own release tag", tag);
+        }
+        // A rail is immutable, so its name may not change hands. A preview
+        // publishes no rail, and rebuilding a branch is the whole point.
+        await checkPublishedRail(origin, tag, channel, options.republish);
     }
 
-    await checkPublishedRail(origin, tag, channel, options.republish);
-
-    buildLobby(origin, stable);
+    buildLobby(origin, stable, preview);
     pass("Lobby emits the only page at the root", "index.html");
     buildFallbackOperator(origin, stable);
     pass(
