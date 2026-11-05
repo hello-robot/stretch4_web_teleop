@@ -62,13 +62,32 @@ export const branchLabel = (branch: string | undefined): string =>
     !branch || branch === "HEAD" ? "unknown" : branch;
 
 /**
+ * Whether this lobby is the one that serves rails.
+ *
+ * A version built for the live site is given its own origin to compare
+ * against. A preview channel is deliberately not, so the comparison fails
+ * there, and so it does in firebase mode where the robot serves this same
+ * lobby at its own address. Both serve exactly one interface, which is the
+ * one they published, and neither has a release to measure a robot against.
+ */
+export const servesRails = (): boolean =>
+    location.origin === process.env.PUBLIC_HOSTING_ORIGIN;
+
+/**
  * What the tag on a card shows: the build the robot reported, else its branch.
  *
  * A describe names a commit; a branch name does not, so the describe is the
  * better answer whenever the robot has published one.
  */
-export const buildLabel = (robot: RobotRecord): string =>
-    robot.build?.describe || branchLabel(robot.branch);
+export const buildLabel = (robot: RobotRecord): string => {
+    // Where no rails are served, the card is showing a branch under test, and
+    // the branch is what names it. A describe names a commit, which answers a
+    // question nobody is asking on a preview channel.
+    if (!servesRails() && robot.branch && robot.branch !== "HEAD") {
+        return robot.branch;
+    }
+    return robot.build?.describe || branchLabel(robot.branch);
+};
 
 /**
  * What the tag on a card means, spelled out for its tooltip.
@@ -80,6 +99,9 @@ export const buildLabel = (robot: RobotRecord): string =>
  * @param rail Rail the card resolved, from railFor.
  */
 export const buildTitle = (robot: RobotRecord, rail: string | null): string => {
+    if (!servesRails()) {
+        return `${buildLabel(robot)} — this channel serves one interface, and this card opens it`;
+    }
     if (rail && robot.build?.rail === rail) {
         return `Release ${rail} — this card opens that version of the interface`;
     }
@@ -124,10 +146,11 @@ const stableRail = (): string | null => {
  * own origin. Both keep the unversioned path.
  */
 export const railFor = (robot: RobotRecord): string | null => {
-    if (location.origin !== process.env.PUBLIC_HOSTING_ORIGIN) return null;
+    if (!servesRails()) return null;
     const rail = robot.build?.rail;
     return rail && RAIL.test(rail) ? rail : stableRail();
 };
+
 
 /**
  * True when a robot reports a build that names no release.
@@ -153,6 +176,10 @@ export const buildWarning = (
     robot: RobotRecord,
     rail: string | null
 ): string | null => {
+    // A channel that serves no rails serves one interface, built from one
+    // branch. There is no release here for a robot to disagree with, so there
+    // is nothing to warn about: bending that rule is what a preview is for.
+    if (!servesRails()) return null;
     if (!isUnreleasedBuild(robot)) return null;
     const tail =
         "which may not match what the robot is running — test this branch on" +
