@@ -25,6 +25,10 @@ import {
     LOAD_AUTONAV_LOCATION,
     MAIN_MENU_ACTIONS,
     MOVE_TO_POSE,
+    EDIT_POSE,
+    DELETE_POSE,
+    PIN_POSE,
+    PIN_POSE_ACTIONS,
     REPEAT_BASE_MOVE,
     SAVE_MAP_LOCATION,
     SAVE_POSE,
@@ -83,6 +87,10 @@ export {
     LOAD_AUTONAV_LOCATION,
     MAIN_MENU_ACTIONS,
     MOVE_TO_POSE,
+    EDIT_POSE,
+    DELETE_POSE,
+    PIN_POSE,
+    PIN_POSE_ACTIONS,
     REPEAT_BASE_MOVE,
     SAVE_MAP_LOCATION,
     SAVE_POSE,
@@ -239,6 +247,32 @@ export type MoveToPoseResult = {
     ok: boolean;
     detail: string;
     name?: string;
+};
+
+/** All valid pin_pose.action values. */
+export type PinPoseAction = (typeof PIN_POSE_ACTIONS)[number];
+
+/** Result of edit_pose for toast UX. */
+export type EditPoseResult = {
+    ok: boolean;
+    detail: string;
+    oldName?: string;
+    newName?: string;
+};
+
+/** Result of delete_pose for toast UX. */
+export type DeletePoseResult = {
+    ok: boolean;
+    detail: string;
+    name?: string;
+};
+
+/** Result of pin_pose for toast UX. */
+export type PinPoseResult = {
+    ok: boolean;
+    detail: string;
+    name?: string;
+    action?: PinPoseAction;
 };
 
 /** All valid control_autonav.action values. */
