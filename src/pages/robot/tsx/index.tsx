@@ -463,6 +463,20 @@ function handleMessage(message: WebRTCMessage) {
                 );
             });
             break;
+        case "autoDock":
+            void robot.executeAutoDock((response) => {
+                forwardActionState(
+                    {
+                        state: response.message,
+                        alert_type: response.success ? "success" : "error",
+                    },
+                    "autoDockState"
+                );
+            });
+            break;
+        case "stopAutoDock":
+            robot.stopDockRobotClient();
+            break;
         case "shutdown":
             robot.shutdown((response) => {
                 console.log("Shutdown initiated:", response);

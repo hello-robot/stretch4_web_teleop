@@ -5,6 +5,7 @@ import { occupancyGrid, underMapFunctionProvider } from "operator/tsx/index";
 
 export class MapFunctionProvider extends FunctionProvider {
     private operatorCallback?: (state: ActionState) => void = undefined;
+    private autoDockCallback?: (state: ActionState) => void = undefined;
 
     constructor() {
         super();
@@ -20,6 +21,41 @@ export class MapFunctionProvider extends FunctionProvider {
         this.operatorCallback = callback;
     }
 
+    /**
+     * Forward an autonomous docking state update to the registered UI callback.
+     *
+     * Args:
+     *     state: ActionState containing status message and alert type.
+     *
+     * Returns:
+     *     None.
+     */
+    public setAutoDockState(state: ActionState): void {
+        if (this.autoDockCallback) this.autoDockCallback(state);
+    }
+
+    /**
+     * Register a callback invoked when autonomous docking state updates arrive.
+     *
+     * Args:
+     *     callback: Handler receiving the updated ActionState.
+     *
+     * Returns:
+     *     None.
+     */
+    public setAutoDockCallback(callback: (state: ActionState) => void): void {
+        this.autoDockCallback = callback;
+    }
+
+    /**
+     * Return a handler function or data reference for the requested map action.
+     *
+     * Args:
+     *     mapFunction: MapFunction identifier specifying the operation to bind.
+     *
+     * Returns:
+     *     Callable action handler or occupancy grid reference.
+     */
     public provideFunctions(mapFunction: MapFunction) {
         switch (mapFunction) {
             case MapFunction.GetMap:
@@ -40,6 +76,14 @@ export class MapFunctionProvider extends FunctionProvider {
             case MapFunction.SeedLocalization:
                 return () => {
                     FunctionProvider.remoteRobot?.seedLocalization();
+                };
+            case MapFunction.AutoDock:
+                return () => {
+                    FunctionProvider.remoteRobot?.autoDock();
+                };
+            case MapFunction.StopAutoDock:
+                return () => {
+                    FunctionProvider.remoteRobot?.stopAutoDock();
                 };
         }
     }

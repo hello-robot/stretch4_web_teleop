@@ -49,6 +49,8 @@ export enum MapFunction {
     GetPose,
     MoveBase,
     SeedLocalization,
+    AutoDock,
+    StopAutoDock,
 }
 
 /**

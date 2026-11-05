@@ -1,6 +1,7 @@
 import React from "react";
 import { Quaternion, Transform, Vector3 } from "roslib";
 import {
+    AutoDockCommand,
     CameraPerspectiveCommand,
     cmd,
     DriveCommand,
@@ -20,6 +21,7 @@ import {
     setRobotModeCommand,
     SetTaskSpaceVelocityCommand,
     ShutdownCommand,
+    StopAutoDockCommand,
     ToggleCommand,
     VelocityCommand
 } from "shared/commands";
@@ -318,6 +320,32 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Send an autonomous near-dock docking command to the robot.
+     *
+     * Returns:
+     *     None.
+     */
+    autoDock(): void {
+        let cmd: AutoDockCommand = {
+            type: "autoDock",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Send a command to cancel an active autonomous docking goal.
+     *
+     * Returns:
+     *     None.
+     */
+    stopAutoDock(): void {
+        let cmd: StopAutoDockCommand = {
+            type: "stopAutoDock",
         };
         this.robotChannel(cmd);
     }

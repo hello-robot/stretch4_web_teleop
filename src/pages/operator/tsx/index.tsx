@@ -374,6 +374,10 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
             console.log("seedLocalizationState", message.message);
             mapFunctionProvider.setSeedLocalizationState(message.message);
             break;
+        case "autoDockState":
+            console.log("autoDockState", message.message);
+            mapFunctionProvider.setAutoDockState(message.message);
+            break;
         case "relativePose":
             remoteRobot.setRelativePose(message.message);
             break;
@@ -481,6 +485,7 @@ function stopAllRobotMovement(onlyCancelActiveGoalUi: boolean = true): void {
     FunctionProvider.stopAllActions(true);
     underMapFunctionProvider?.cancelGoal(onlyCancelActiveGoalUi);
     movementRecorderFunctionProvider?.cancelPlayback();
+    remoteRobot?.stopAutoDock();
 }
 
 /**
