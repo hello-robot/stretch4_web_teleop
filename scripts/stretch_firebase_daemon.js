@@ -17,6 +17,7 @@ const {
     spawnProcessGroup,
     terminateProcessGroup,
 } = require('./launchProcessGroup');
+const { isReleaseTag } = require('./releaseTag');
 
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
@@ -62,6 +63,7 @@ const db = getDatabase(app);
 
 let currentStatus = 'offline';
 let currentBranch = null;
+let currentBuild = null;
 let isProcessingCommand = false;
 let launchingSince = 0;
 let reconcileTimer = null;
@@ -293,6 +295,59 @@ function publishBranch() {
         .catch((err) => console.error('[DAEMON] Error updating branch:', err.message));
 }
 
+/**
+ * Read the build identity of the checkout the interface launches from.
+ *
+ * A describe carrying a commit count or -dirty matches no deployed rail, so
+ * rail is set only when the describe is exactly a release tag. --match keeps
+ * tags outside the release grammar out of the answer.
+ *
+ * @returns {Promise<{describe: string, rail?: string}|null>} Build fields, or
+ *     null when git cannot answer.
+ */
+function readGitBuild() {
+    return new Promise((resolve) => {
+        execFile(
+            'git',
+            ['describe', '--tags', '--always', '--dirty', '--match', 'v*'],
+            { cwd: repoRoot },
+            (error, stdout) => {
+                if (error) return resolve(null);
+                const describe = stdout.trim();
+                if (!describe) return resolve(null);
+                return resolve(
+                    isReleaseTag(describe)
+                        ? { describe, rail: describe }
+                        : { describe },
+                );
+            },
+        );
+    });
+}
+
+/**
+ * Refresh the cached build identity.
+ *
+ * @returns {Promise<{describe: string, rail?: string}|null>} The new value.
+ */
+async function refreshBuild() {
+    currentBuild = await readGitBuild();
+    return currentBuild;
+}
+
+/**
+ * Publish the build identity to robots/<fleetId>/build.
+ *
+ * update() is atomic, so a build the rules reject would discard the status
+ * written beside it; build goes in a write of its own. set() rather than
+ * update() so a robot leaving a tag clears rail instead of keeping a stale one.
+ */
+function publishBuild() {
+    if (!auth.currentUser || !currentBuild) return;
+    set(ref(db, `robots/${fleetId}/build`), currentBuild)
+        .catch((err) => console.error('[DAEMON] Error updating build:', err.message));
+}
+
 function setStatus(status) {
     if (status !== 'launching') stopLaunchLogTail();
     if (!auth.currentUser) return;
@@ -469,6 +524,16 @@ async function ensureMapLocal(mapId, requestedBy) {
     }
 }
 
+/**
+ * Bring the interface up for one operator request.
+ *
+ * Ignored while another command is in flight. Git is re-read first so the
+ * branch and build the dashboard sees describe the checkout this launch runs.
+ *
+ * @param {string} requestedBy Auth uid that asked for the launch.
+ * @param {string|null} mapId Map to launch with, or null to use the saved one.
+ * @returns {Promise<void>} Resolves once the launch has settled or failed.
+ */
 async function handleLaunchCommand(requestedBy, mapId) {
     if (isProcessingCommand) {
         console.log('[DAEMON] Already processing a command, ignoring launch request.');
@@ -478,7 +543,8 @@ async function handleLaunchCommand(requestedBy, mapId) {
     isProcessingCommand = true;
     const epoch = ++launchEpoch;
     try {
-        await refreshBranch();
+        await Promise.all([refreshBranch(), refreshBuild()]);
+        publishBuild();
         const effectiveMapId = mapId || (await readSavedMapId());
         console.log(`[DAEMON] Received LAUNCH command from user: ${requestedBy}, map: ${effectiveMapId || 'none'}`);
         stopLaunchLogTail();
@@ -710,14 +776,22 @@ async function handleStopCommand(requestedBy) {
     }
 }
 
+/**
+ * Sign in as the robot account and start serving launch and stop commands.
+ *
+ * @returns {Promise<void>} Resolves once the listeners are attached.
+ */
 async function initDaemon() {
     try {
         console.log(`[DAEMON] Logging in as robot user (${roboUsername})...`);
         const userCredential = await signInWithEmailAndPassword(auth, roboUsername, roboPassword);
         const uid = userCredential.user.uid;
         console.log(`[DAEMON] Logged in successfully. Robot UID: ${uid}`);
-        console.log(`[DAEMON] Repo branch: ${(await refreshBranch()) || 'unknown'}`);
+        const [branch, build] = await Promise.all([refreshBranch(), refreshBuild()]);
+        console.log(`[DAEMON] Repo branch: ${branch || 'unknown'}`);
+        console.log(`[DAEMON] Repo build: ${build ? build.describe : 'unknown'}`);
         publishBranch();
+        publishBuild();
 
         // Set up presence monitoring via .info/connected
         const connectedRef = ref(db, '.info/connected');

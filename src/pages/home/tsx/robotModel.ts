@@ -7,6 +7,12 @@ export type RobotStatus =
     | "launching"
     | "occupied";
 
+/** Shape of `robots/{id}/build` in RTDB: how the robot's checkout describes. */
+export interface BuildRecord {
+    describe?: string;
+    rail?: string;
+}
+
 /** Shape of `robots/{id}` in RTDB plus the `is_active` assignment flag. */
 export interface RobotRecord {
     name?: string;
@@ -14,6 +20,7 @@ export interface RobotRecord {
     uid?: string;
     last_updated?: number;
     branch?: string;
+    build?: BuildRecord;
     map_id?: string | null;
     config?: Record<string, boolean>;
     is_active?: boolean;
@@ -53,6 +60,147 @@ export const holdsOperatorSeat = (
  */
 export const branchLabel = (branch: string | undefined): string =>
     !branch || branch === "HEAD" ? "unknown" : branch;
+
+/**
+ * Whether this lobby is the one that serves rails.
+ *
+ * A version built for the live site is given its own origin to compare
+ * against. A preview channel is deliberately not, so the comparison fails
+ * there, and so it does in firebase mode where the robot serves this same
+ * lobby at its own address. Both serve exactly one interface, which is the
+ * one they published, and neither has a release to measure a robot against.
+ */
+export const servesRails = (): boolean =>
+    location.origin === process.env.PUBLIC_HOSTING_ORIGIN;
+
+/**
+ * What the tag on a card shows: the build the robot reported, else its branch.
+ *
+ * A describe names a commit; a branch name does not, so the describe is the
+ * better answer whenever the robot has published one.
+ */
+export const buildLabel = (robot: RobotRecord): string => {
+    // Where no rails are served, the card is showing a branch under test, and
+    // the branch is what names it. A describe names a commit, which answers a
+    // question nobody is asking on a preview channel.
+    if (!servesRails() && robot.branch && robot.branch !== "HEAD") {
+        return robot.branch;
+    }
+    return robot.build?.describe || branchLabel(robot.branch);
+};
+
+/**
+ * What the tag on a card means, spelled out for its tooltip.
+ *
+ * The label alone cannot say whether the card routes to a rail: that also
+ * depends on the origin, and on whether the rail was reported or defaulted.
+ *
+ * @param robot Record the card was rendered from.
+ * @param rail Rail the card resolved, from railFor.
+ */
+export const buildTitle = (robot: RobotRecord, rail: string | null): string => {
+    if (!servesRails()) {
+        return `${buildLabel(robot)} — this channel serves one interface, and this card opens it`;
+    }
+    if (rail && robot.build?.rail === rail) {
+        return `Release ${rail} — this card opens that version of the interface`;
+    }
+    if (rail && isUnreleasedBuild(robot)) {
+        return `${buildLabel(robot)} is not a release — this card opens the stable release, ${rail}`;
+    }
+    if (rail) {
+        return `This robot reports no build — this card opens the stable release, ${rail}`;
+    }
+    return `${buildLabel(robot)} — no stable release is set, so this card opens the default interface`;
+};
+
+/**
+ * Release tags only. Mirrors the `.validate` on `robots/<id>/build/rail` and
+ * `RELEASE_TAG` in the daemon; all three move together.
+ */
+const RAIL = /^v\d+\.\d+\.\d+(-(alpha|beta|rc)\d+)?$/;
+
+/**
+ * The stable release this lobby was built against, or null when it has none.
+ *
+ * Baked in beside the lobby, so the pointer and the rail tree it names ship in
+ * one Hosting version and cannot drift apart.
+ */
+const stableRail = (): string | null => {
+    const stable = process.env.PUBLIC_STABLE_RAIL;
+    return stable && RAIL.test(stable) ? stable : null;
+};
+
+/**
+ * The rail a robot routes to, or null for the unversioned page.
+ *
+ * A robot reporting a release tag routes to that rail. Everything else — a
+ * robot that predates the tag system, and a robot on a checkout no rail was
+ * cut from — takes the stable release, which is a named and pinned interface
+ * where the unversioned page is neither.
+ *
+ * Only the Hosting origin serves rails. In firebase mode `server.js` mounts
+ * `dist-firebase` at `/`, so the robot serves this same lobby at its own
+ * address, where no `r/` tree exists and the operator page already comes from
+ * the robot's own checkout. Preview channels are whole-site builds on their
+ * own origin. Both keep the unversioned path.
+ */
+export const railFor = (robot: RobotRecord): string | null => {
+    if (!servesRails()) return null;
+    const rail = robot.build?.rail;
+    return rail && RAIL.test(rail) ? rail : stableRail();
+};
+
+
+/**
+ * True when a robot reports a build that names no release.
+ *
+ * Distinct from a robot reporting no build at all, which has simply not been
+ * migrated. This one is running a checkout nobody cut a rail from, so no
+ * deployed operator page matches it and its branch belongs on a preview
+ * channel.
+ */
+export const isUnreleasedBuild = (robot: RobotRecord): boolean =>
+    Boolean(robot.build) && !(robot.build?.rail && RAIL.test(robot.build.rail));
+
+/**
+ * The line the card shows about an unreleased checkout, or null for silence.
+ *
+ * Names the destination, which differs by deployment: a rail when a stable
+ * release is set, and the unversioned page when it is not.
+ *
+ * @param robot Record the card was rendered from.
+ * @param rail Rail the card resolved, from railFor.
+ */
+export const buildWarning = (
+    robot: RobotRecord,
+    rail: string | null
+): string | null => {
+    // A channel that serves no rails serves one interface, built from one
+    // branch. There is no release here for a robot to disagree with, so there
+    // is nothing to warn about: bending that rule is what a preview is for.
+    if (!servesRails()) return null;
+    if (!isUnreleasedBuild(robot)) return null;
+    const tail =
+        "which may not match what the robot is running — test this branch on" +
+        " its preview channel instead.";
+    return rail
+        ? `This checkout is not a release. This card opens the stable interface (${rail}), ${tail}`
+        : `This checkout is not a release. This card opens the default interface, ${tail}`;
+};
+
+/**
+ * Where the Connect control sends the operator.
+ *
+ * A card that resolves no rail keeps the unversioned page, which is every card
+ * until a stable release is set, and every card on an origin that serves no
+ * rails at all.
+ */
+export const operatorHref = (robot: RobotRecord, name: string): string => {
+    const query = `?robot=${encodeURIComponent(name)}`;
+    const rail = railFor(robot);
+    return rail ? `/r/${rail}/operator/${query}` : `/operator/${query}`;
+};
 
 /** Visual tone of a card: lit when the robot daemon is reachable, dim when not. */
 export type CardTone = "lit" | "dim";

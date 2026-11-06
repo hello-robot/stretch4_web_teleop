@@ -8,19 +8,24 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loginHandler } from "../index";
 import {
-    branchLabel,
+    buildLabel,
+    buildTitle,
+    buildWarning,
     CardTone,
     holdsOperatorSeat,
     MapIndex,
     normalizeStatus,
+    operatorHref,
     OperatorSeat,
     presenceFor,
+    railFor,
     robotDisplayId,
     RobotRecord,
     RobotStatus,
     toneForStatus,
 } from "../robotModel";
 import { useLaunchingBeat } from "../useLaunchingBeat";
+import { useRailAvailable } from "../useRail";
 import { usePrefersReducedMotion } from "../usePrefersReducedMotion";
 import { BranchTag } from "./BranchTag";
 import { ConfigChecklist } from "./ConfigChecklist";
@@ -144,6 +149,9 @@ export const RobotCard = ({
     }, [robot.uid]);
 
     const name = robot.name || uid;
+    const rail = railFor(robot);
+    const warning = buildWarning(robot, rail);
+    const railAvailable = useRailAvailable(rail);
     const status = normalizeStatus(robot.status);
     const presence = presenceFor(status, seat !== null);
     const tone = toneForStatus(robot.status);
@@ -398,7 +406,10 @@ export const RobotCard = ({
                         logsOpen={expanded}
                         restarting={restart !== null}
                         onOpenLogs={openLogs}
-                        operatorHref={`/operator/?robot=${encodeURIComponent(name)}`}
+                        operatorHref={operatorHref(robot, name)}
+                        ownerKey={uid}
+                        railAvailable={railAvailable}
+                        railLabel={rail}
                         onLaunch={() =>
                             loginHandler
                                 .requestRobotLaunch(uid, robot.map_id ?? null)
@@ -417,7 +428,14 @@ export const RobotCard = ({
                                 });
                         }}
                     />
-                    <BranchTag branch={branchLabel(robot.branch)} tone={tone} />
+                    {warning && (
+                        <p className="hr-card__build-warning">{warning}</p>
+                    )}
+                    <BranchTag
+                        branch={buildLabel(robot)}
+                        title={buildTitle(robot, rail)}
+                        tone={tone}
+                    />
                 </div>
             </div>
 
