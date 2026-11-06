@@ -7,6 +7,7 @@ import Ellipsis from "./Ellipsis";
 import "operator/css/HomingBanner.css";
 
 const SUCCESS_DURATION = 2000;
+const HOME_REQUEST_TIMEOUT = 3000;
 
 /** All the possible button functions */
 export enum HomeTheRobotFunction {
@@ -19,7 +20,7 @@ export interface HomeTheRobotFunctions {
 
 export interface HomingBannerProps {
     robotIsHomed: boolean;
-    /** Homing cannot run while runstopped, so the button is disabled. */
+    /** Disables the home button, since the driver rejects homing while runstopped. */
     isRunStopped?: boolean;
     /** Fired whenever the banner finishes showing the success strip and applies full dismiss (`fullyDismissed`). */
     homingBannerDismissedSet?: (fullyDismissed: boolean) => void;
@@ -27,14 +28,16 @@ export interface HomingBannerProps {
 
 export const HomingBanner = (props: HomingBannerProps) => {
 
-    // State to track if the robot is calibrating
-    const [isCalibrating, isCalibratingSet] = useState(false);
+    // State to track if the driver is running the homing routine
+    const [driverIsHoming, driverIsHomingSet] = useState(false);
+
+    // State to track a home request until the driver switches to "homing" mode
+    const [homeRequested, homeRequestedSet] = useState(false);
+
+    const isCalibrating = driverIsHoming || homeRequested;
 
     // After homing completes, keep the banner visible for a success strip until this is true
     const [fullyDismissed, fullyDismissedSet] = useState(props.robotIsHomed);
-
-    // Refs to track the calibration process
-    const calibratingRef = useRef(false);
 
     // Ref to the container element (for focus containment when hiding)
     const containerRef = useRef<HTMLDivElement>(null);
@@ -42,27 +45,39 @@ export const HomingBanner = (props: HomingBannerProps) => {
     // Previous `robotIsHomed` to detect false → true (start success timer only on transition)
     const prevHomedRef = useRef(props.robotIsHomed);
 
-    // When the user clicks the home button, start the calibration process
-    const home = useCallback(() => {
-        if (calibratingRef.current || props.isRunStopped) {
-            return;
-        }
-        calibratingRef.current = true;
-        isCalibratingSet(true);
-        homeTheRobotFunctionProvider.provideFunctions(HomeTheRobotFunction.Home)!();
-    }, [props.isRunStopped]);
-
-    // If the homing service returns without homing the robot (e.g. runstopped,
-    // wrong driver mode, timeout), drop back to the idle state so the user can retry.
+    // When the driver mode changes, update `driverIsHoming`. 
     useEffect(() => {
-        return homeTheRobotFunctionProvider.setHomingResultCallback((result) => {
-            if (result.alert_type !== "success") {
-                console.warn("Homing failed:", result.state);
-                calibratingRef.current = false;
-                isCalibratingSet(false);
-            }
+        return homeTheRobotFunctionProvider.setDriverModeCallback((mode) => {
+            if (mode === "homing") driverIsHomingSet(true);
+            else if (mode !== "runstopped") driverIsHomingSet(false);
         });
     }, []);
+
+    // When the hardware run stop engages, homing is aborted
+    useEffect(() => {
+        if (props.isRunStopped) driverIsHomingSet(false);
+    }, [props.isRunStopped]);
+
+    // When the user clicks the home button, start the calibration process
+    const home = useCallback(() => {
+        if (isCalibrating || props.isRunStopped) {
+            return;
+        }
+        homeRequestedSet(true);
+        homeTheRobotFunctionProvider.provideFunctions(HomeTheRobotFunction.Home)!();
+    }, [isCalibrating, props.isRunStopped]);
+
+    // Clear the home request once the driver starts homing, the robot is runstopped,
+    // or the driver never starts homing (request rejected)
+    useEffect(() => {
+        if (!homeRequested) return;
+        if (driverIsHoming || props.isRunStopped) {
+            homeRequestedSet(false);
+            return;
+        }
+        const timer = setTimeout(() => homeRequestedSet(false), HOME_REQUEST_TIMEOUT);
+        return () => clearTimeout(timer);
+    }, [homeRequested, driverIsHoming, props.isRunStopped]);
 
     // When `robotIsHomed` updates: reset UI if un-homed; on first homing completion blur focus,
     // then show success for 2s before applying dismiss (`fullyDismissed`) styles
@@ -70,13 +85,11 @@ export const HomingBanner = (props: HomingBannerProps) => {
         if (!props.robotIsHomed) {
             prevHomedRef.current = false;
             fullyDismissedSet(false);
-            calibratingRef.current = false;
-            isCalibratingSet(false);
+            homeRequestedSet(false);
             return;
         }
 
-        calibratingRef.current = false;
-        isCalibratingSet(false);
+        homeRequestedSet(false);
         const root = containerRef.current;
         if (root?.contains(document.activeElement)) {
             (document.activeElement as HTMLElement).blur();

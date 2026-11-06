@@ -1359,21 +1359,11 @@ export class Robot extends React.Component {
     /**
      * Ask the robot to home itself.
      */
-    homeTheRobot(
-        resultCallback?: (result: { success: boolean; message: string }) => void
-    ) {
+    homeTheRobot() {
         var request = {};
-        this.homeTheRobotService!.callService(
-            request,
-            (response: { success: boolean; message: string }) => {
-                console.log("Homing finished", response);
-                resultCallback?.(response);
-            },
-            (error: string) => {
-                console.error("Homing service call failed", error);
-                resultCallback?.({ success: false, message: String(error) });
-            }
-        );
+        this.homeTheRobotService!.callService(request, () => {
+            console.log("Homing complete");
+        });
     }
 
     /**
