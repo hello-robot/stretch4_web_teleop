@@ -450,7 +450,15 @@ function handleMessage(message: WebRTCMessage) {
             forwardIsRunStopped(robot.getIsRunStopped());
             break;
         case "homeTheRobot":
-            robot.homeTheRobot();
+            robot.homeTheRobot((response) => {
+                forwardActionState(
+                    {
+                        state: response.message,
+                        alert_type: response.success ? "success" : "error",
+                    },
+                    "homeTheRobotState"
+                );
+            });
             break;
         case "seedLocalization":
             robot.seedLocalization((response) => {

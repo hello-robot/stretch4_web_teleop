@@ -1,17 +1,20 @@
 import { FunctionProvider } from "./FunctionProvider";
 import { HomeTheRobotFunction } from "../basic_components/HomingBanner";
+import { ActionState } from "shared/util";
 
 export class HomeTheRobotFunctionProvider extends FunctionProvider {
     private driverMode: string;
     private modeIsHomingCallback: (mode: boolean) => void;
     private isHomed: boolean;
     private isHomedCallback: (isHomed: boolean) => void;
+    private homingResultCallback?: (result: ActionState) => void;
 
     constructor() {
         super();
         this.provideFunctions = this.provideFunctions.bind(this);
         this.updateModeState = this.updateModeState.bind(this);
         this.updateIsHomedState = this.updateIsHomedState.bind(this);
+        this.updateHomingResult = this.updateHomingResult.bind(this);
     }
 
     /**
@@ -43,6 +46,24 @@ export class HomeTheRobotFunctionProvider extends FunctionProvider {
     public updateIsHomedState(isHomed: boolean): void {
         this.isHomed = isHomed;
         if (this.isHomedCallback) this.isHomedCallback(this.isHomed);
+    }
+
+    /**
+     * Records a callback invoked when the /home_the_robot service returns
+     * (success or failure, e.g. rejected because the robot is runstopped).
+     *
+     * @returns unsubscribe function
+     */
+    public setHomingResultCallback(callback: (result: ActionState) => void) {
+        this.homingResultCallback = callback;
+        return () => {
+            if (this.homingResultCallback === callback)
+                this.homingResultCallback = undefined;
+        };
+    }
+
+    public updateHomingResult(result: ActionState): void {
+        this.homingResultCallback?.(result);
     }
 
     public provideFunctions(homeTheRobotFunction: HomeTheRobotFunction) {

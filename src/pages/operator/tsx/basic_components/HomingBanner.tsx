@@ -19,6 +19,8 @@ export interface HomeTheRobotFunctions {
 
 export interface HomingBannerProps {
     robotIsHomed: boolean;
+    /** Homing cannot run while runstopped, so the button is disabled. */
+    isRunStopped?: boolean;
     /** Fired whenever the banner finishes showing the success strip and applies full dismiss (`fullyDismissed`). */
     homingBannerDismissedSet?: (fullyDismissed: boolean) => void;
 }
@@ -42,12 +44,24 @@ export const HomingBanner = (props: HomingBannerProps) => {
 
     // When the user clicks the home button, start the calibration process
     const home = useCallback(() => {
-        if (calibratingRef.current) {
+        if (calibratingRef.current || props.isRunStopped) {
             return;
         }
         calibratingRef.current = true;
         isCalibratingSet(true);
         homeTheRobotFunctionProvider.provideFunctions(HomeTheRobotFunction.Home)!();
+    }, [props.isRunStopped]);
+
+    // If the homing service returns without homing the robot (e.g. runstopped,
+    // wrong driver mode, timeout), drop back to the idle state so the user can retry.
+    useEffect(() => {
+        return homeTheRobotFunctionProvider.setHomingResultCallback((result) => {
+            if (result.alert_type !== "success") {
+                console.warn("Homing failed:", result.state);
+                calibratingRef.current = false;
+                isCalibratingSet(false);
+            }
+        });
     }, []);
 
     // When `robotIsHomed` updates: reset UI if un-homed; on first homing completion blur focus,
@@ -124,7 +138,9 @@ export const HomingBanner = (props: HomingBannerProps) => {
                 <div className="copywriting">
                     <div className="heading">Calibration required</div>
                     <div className="subheading">
-                        Please ensure Stretch has a 2ft clearance area in front its base.
+                        {props.isRunStopped && !isCalibrating
+                            ? "Release the run stop to start calibration."
+                            : "Please ensure Stretch has a 2ft clearance area in front its base."}
                     </div>
                 </div>
                 <div className="homing-btn-ghost" />
@@ -134,7 +150,7 @@ export const HomingBanner = (props: HomingBannerProps) => {
                 type="button"
                 className={"homing-btn" + buttonMods}
                 onClick={home}
-                disabled={isCalibrating || showSuccess || homedForCss}
+                disabled={isCalibrating || showSuccess || homedForCss || (props.isRunStopped && !isCalibrating)}
                 aria-busy={!homedForCss && isCalibrating}
                 tabIndex={homedForCss ? -1 : undefined}
             >
