@@ -23,6 +23,9 @@ export declare const LOAD_AUTONAV_LOCATION: "load_autonav_location";
 export declare const SET_SAVED_POSES_MODAL: "set_saved_poses_modal";
 export declare const SAVE_POSE: "save_pose";
 export declare const MOVE_TO_POSE: "move_to_pose";
+export declare const EDIT_POSE: "edit_pose";
+export declare const DELETE_POSE: "delete_pose";
+export declare const PIN_POSE: "pin_pose";
 export declare const EXECUTE_FLYING_GRIPPER_MOVE: "execute_flying_gripper_move";
 export declare const SET_FLYING_GRIPPER_MODE: "set_flying_gripper_mode";
 export declare const VOICE_MACRO_NAMES: readonly ["center_wrist", "stow_wrist"];
@@ -32,6 +35,7 @@ export declare const MAIN_MENU_ACTIONS: readonly ["open", "close"];
 export declare const SAVED_POSES_MODAL_ACTIONS: readonly ["open", "close"];
 export declare const FLYING_GRIPPER_MODE_ACTIONS: readonly ["open", "close"];
 export declare const AUTONAV_NAV_ACTIONS: readonly ["start", "cancel"];
+export declare const PIN_POSE_ACTIONS: readonly ["pin", "unpin"];
 export declare const FLYING_GRIPPER_MOVE_ACTIONS: readonly [
     "forward",
     "backward",
@@ -55,6 +59,9 @@ export declare const VOICE_TOOLS: readonly [
     typeof SET_SAVED_POSES_MODAL,
     typeof SAVE_POSE,
     typeof MOVE_TO_POSE,
+    typeof EDIT_POSE,
+    typeof DELETE_POSE,
+    typeof PIN_POSE,
     typeof EXECUTE_FLYING_GRIPPER_MOVE,
     typeof SET_FLYING_GRIPPER_MODE,
 ];

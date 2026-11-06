@@ -21,6 +21,11 @@ import { ANIMS_STATUSBAR } from "../basic_components/PlaybackStatusbar";
 import RecordingItem from "../static_components/RecordingItem";
 import { ConfirmOverlay } from "../basic_components/ConfirmOverlay";
 import { HelperText } from "../static_components/HelperText";
+import {
+    MAX_RECORDING_NAME_LENGTH,
+    MovementRecorderFunction,
+    MovementRecorderFunctions,
+} from "../function_providers/MovementRecorderTypes";
 import "operator/css/basic_components.css";
 import "operator/css/MovementRecorder.css";
 
@@ -38,44 +43,11 @@ const DELAYMS_BUTTONPAD = ANIMS_STATUSBAR * 2;
 /** Modal footer Flex: row-reverse when viewport height < this (px), else column */
 const VIEWPORT_HEIGHT_MODAL_FOOTER_FLEX_BREAKPOINT_PX = 650;
 
-/** Max length for the new-recording name field (save flow). */
-export const MAX_RECORDING_NAME_LENGTH = 30;
-
-/** All the possible button functions */
-export enum MovementRecorderFunction {
-    Record,
-    SaveRecording,
-    StopRecording,
-    SavedRecordingNames,
-    DeleteRecording,
-    LoadRecording,
-    LoadRecordingName,
-    Cancel,
-    DeleteRecordingName,
-    RenameRecording,
-    GetPinnedRecordingNames,
-    SetPinnedRecordingNames,
-}
-
-export interface MovementRecorderFunctions {
-    Record: (
-        arm: boolean,
-        lift: boolean,
-        wrist_roll: boolean,
-        wrist_pitch: boolean,
-        wrist_yaw: boolean,
-        gripper: boolean,
-    ) => void;
-    SaveRecording: (name: string) => void;
-    StopRecording: () => void;
-    SavedRecordingNames: () => string[];
-    DeleteRecording: (recordingID: number) => void;
-    LoadRecording: (recordingID: number) => void;
-    RenameRecording: (recordingID: number, recordingNameNew: string) => void;
-    Cancel: () => void;
-    GetPinnedRecordingNames: () => string[];
-    SetPinnedRecordingNames: (names: string[]) => void;
-}
+export {
+    MAX_RECORDING_NAME_LENGTH,
+    MovementRecorderFunction,
+    type MovementRecorderFunctions,
+};
 
 /*********************************
  * Primary Call-to-Action Button *
@@ -253,6 +225,7 @@ export const MovementRecorder = (props: MovementRecorderProps) => {
         });
         movementRecorderFunctionProvider.setRefreshRecordingsHandler(() => {
             recordingsSet(functions.SavedRecordingNames());
+            pinnedRecordingNamesSet(functions.GetPinnedRecordingNames());
         });
         return () => {
             movementRecorderFunctionProvider.setModalOpenHandler(undefined);

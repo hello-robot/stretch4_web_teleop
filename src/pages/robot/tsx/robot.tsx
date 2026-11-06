@@ -106,6 +106,7 @@ export class Robot extends React.Component {
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
     private poseGoalID?: string;
+    private poseGoalWatchdogTimerID?: ReturnType<typeof setTimeout>;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
     private moveBaseGoalID?: string;
@@ -1921,35 +1922,57 @@ export class Robot extends React.Component {
             return;
         }
 
-        // check if at goal already
-        if (poses.length > 0) {
-            const finalPose = poses[poses.length - 1];
-            if (this.isAlreadyAtPose(finalPose)) {
-                console.log("Robot is already at final target pose, skipping execution.");
+        // Check if robot is already at all target poses in the sequence.
+        // For a multi-pose sequence, if the robot is only at the final pose but not the start,
+        // it must not be skipped; it should move to poses[0] and execute the full sequence.
+        if (poses.length > 0 && poses.every((pose) => this.isAlreadyAtPose(pose))) {
+            console.log("Robot is already at all target poses in sequence, skipping execution.");
+            this.playbackPosesResultCallback({
+                state: MovementState.Executing,
+                alert_type: "info",
+            });
+            setTimeout(() => {
                 this.playbackPosesResultCallback({
-                    state: MovementState.Executing,
+                    state: MovementState.Success,
                     alert_type: "info",
                 });
-                setTimeout(() => {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Success,
-                        alert_type: "info",
-                    });
-                }, 1000);
-                return;
-            }
+            }, 1000);
+            return;
         }
 
         this.stopExecution();
+        if (this.poseGoalWatchdogTimerID) {
+            clearTimeout(this.poseGoalWatchdogTimerID);
+            this.poseGoalWatchdogTimerID = undefined;
+        }
+
         this.poseGoal = this.makePoseGoals(poses, 1.5);
         this.playbackPosesResultCallback({
             state: MovementState.Executing,
             alert_type: "info",
-        })
+        });
+
+        // Compute cumulative trajectory duration and establish a watchdog timeout (+10%)
+        const trajectoryPoints = (this.poseGoal as any)?.trajectory?.points;
+        const lastPoint = trajectoryPoints && trajectoryPoints.length > 0
+            ? trajectoryPoints[trajectoryPoints.length - 1]
+            : undefined;
+        const cumulativeTime = lastPoint?.time_from_start
+            ? Number(lastPoint.time_from_start.sec || 0) + Number(lastPoint.time_from_start.nanosec || 0) / 1e9
+            : 0;
 
         this.poseGoalID = this.trajectoryClient.sendGoal(
             this.poseGoal,
             (result) => {
+                if (this.poseGoalWatchdogTimerID) {
+                    clearTimeout(this.poseGoalWatchdogTimerID);
+                    this.poseGoalWatchdogTimerID = undefined;
+                }
+                if (this.poseGoalID !== goalID) {
+                    return;
+                }
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
                 console.log(
                     "Result for action goal on " +
                     this.trajectoryClient.name +
@@ -1977,6 +2000,15 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
+                if (this.poseGoalWatchdogTimerID) {
+                    clearTimeout(this.poseGoalWatchdogTimerID);
+                    this.poseGoalWatchdogTimerID = undefined;
+                }
+                if (this.poseGoalID !== goalID) {
+                    return;
+                }
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
                 let error_code = -4; // default fallback error code
                 try {
                     error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
@@ -2002,6 +2034,48 @@ export class Robot extends React.Component {
                 }
             }
         );
+
+        const goalID = this.poseGoalID;
+
+        // Arm the cumulativeTime + 10% watchdog
+        if (cumulativeTime > 0) {
+            const watchdogMs = Math.round(cumulativeTime * 1.1 * 1000);
+            this.poseGoalWatchdogTimerID = setTimeout(() => {
+                this.poseGoalWatchdogTimerID = undefined;
+                if (!this.poseGoalID || this.poseGoalID !== goalID) {
+                    return;
+                }
+                console.warn(
+                    `Trajectory watchdog expired (${(cumulativeTime * 1.1).toFixed(2)}s). Evaluating robot pose...`
+                );
+                const finalPose = poses.length > 0 ? poses[poses.length - 1] : undefined;
+                const isAtFinalPose = finalPose ? this.isAlreadyAtPose(finalPose) : false;
+
+                if (this.poseGoalID && this.trajectoryClient) {
+                    try {
+                        this.trajectoryClient.cancelGoal(this.poseGoalID);
+                    } catch (e) {
+                        console.warn("Could not cancel trajectory goal on watchdog timeout:", e);
+                    }
+                }
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
+
+                if (isAtFinalPose) {
+                    console.log("Watchdog: robot reached final pose; treating as Success.");
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Success,
+                        alert_type: "info",
+                    });
+                } else {
+                    console.warn("Watchdog: robot did not reach final pose; treating as Fail.");
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Fail,
+                        alert_type: "error",
+                    });
+                }
+            }, watchdogMs);
+        }
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
@@ -2142,6 +2216,10 @@ export class Robot extends React.Component {
      */
     stopTrajectoryClient(): void {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
+        if (this.poseGoalWatchdogTimerID) {
+            clearTimeout(this.poseGoalWatchdogTimerID);
+            this.poseGoalWatchdogTimerID = undefined;
+        }
         if (this.poseGoal || this.poseGoalID) {
             if (this.poseGoalID) {
                 this.trajectoryClient.cancelGoal(this.poseGoalID);
