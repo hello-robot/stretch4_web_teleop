@@ -57,6 +57,8 @@
         "deploy:rules": "node scripts/deployRules.js",
         "firebase:login": "firebase login --reauth",
         "test:p1-p2": "node --test test/p1-p2-regressions.test.js",
+        "test:rails": "node --test test/rails/rail-backend.test.mjs",
+        "test:rails:hosting": "node test/rails/runHostingRoutes.mjs",
         "test:security:source": "node --test test/security/source-security.test.js",
         "test:firebase-rules": "firebase emulators:exec --only database --project demo-interface-rules \"node --test test/security/firebase-database-rules.test.mjs\"",
         "test:security": "npm run test:security:source && npm run test:firebase-rules",
