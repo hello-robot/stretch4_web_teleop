@@ -53,9 +53,9 @@ class RailManifestPlugin {
                         .PROCESS_ASSETS_STAGE_ADDITIONAL,
                 },
                 () => {
-                    // describe is what the checkout really was. For a
-                    // release it equals tag; for a preview rail built off a
-                    // branch it does not, and the difference stays visible.
+                    // A rail is built only from a clean release checkout,
+                    // so describe equals tag. It is recorded anyway: it is
+                    // what git itself says the bytes came from.
                     const manifest = {
                         tag: this.tag,
                         commit: git(this.repoRoot, ["rev-parse", "HEAD"]),

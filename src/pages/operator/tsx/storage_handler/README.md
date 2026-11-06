@@ -438,32 +438,27 @@ run. See [Primer: Launching the Interface](../../../../primer_launch.md) for the
 ### Testing rails and staging releases (`npm run deploy:hosting`)
 
 Whereas `./launch_interface.sh -f` publishes a flat single-version build to `branch-<branch>`,
-`npm run deploy:hosting` always builds a multi-version site containing the lobby (`/`) and a versioned
-rail (`/r/<tag>/operator/`). Because it always builds `/r/<tag>/operator/` from `HEAD`, it always needs
-two things:
+`npm run deploy:hosting` builds the multi-version site: the lobby (`/`), the unversioned operator page
+(`/operator/`), and, on a live deploy, a versioned rail (`/r/<tag>/operator/`) built from `HEAD`.
 
-1. **Where to publish** — the live site (`https://YOUR_PROJECT_ID.web.app`) or a preview channel
-   (`rails-<branch|tag>`).
-2. **Which `<tag>` to name the rail built from `HEAD`** — either read automatically from git when `HEAD`
-   is a clean `v*` release tag, or supplied explicitly with `--tag` when working on a branch or dirty
-   tree.
+It needs one thing from you: **where to publish** — the live site (`https://YOUR_PROJECT_ID.web.app`)
+or a preview channel (`rails-<branch|tag>`).
+
+The rail's name is never supplied by hand. It is read from git, and a live deploy requires `HEAD` to be
+a clean `v*` release tag listed in `release.json`. That is what makes a rail reproducible: the name it
+is served under is the name you check out to rebuild it.
 
 | Goal | Checkout state | Command | Where it publishes |
 | :--- | :--- | :--- | :--- |
 | **Publish a release live** | Clean `v*` tag in `release.json` | `npm run deploy:hosting` | Live site (`YOUR_PROJECT_ID.web.app`), serving `/r/<tag>/operator/` |
-| **Stage a release tag before going live** | Clean `v*` tag | `npm run deploy:hosting -- --preview` | Preview channel `rails-<tag>`, using the tag at `HEAD` |
-| **Test rail routing from a branch or dirty tree** | Any branch or uncommitted edits | `npm run deploy:hosting -- --preview --tag v0.0.0-alpha1` | Preview channel `rails-<branch>`, building `HEAD` under `/r/v0.0.0-alpha1/operator/` |
+| **Inspect a release before going live** | Clean `v*` tag | `npm run deploy:hosting -- --preview` | Preview channel `rails-<tag>`: the lobby and `/operator/`, which is that tag's interface |
+| **Test a branch or a dirty tree** | Any branch or uncommitted edits | `npm run deploy:hosting -- --preview` | Preview channel `rails-<branch>`: the lobby and `/operator/`, built from `HEAD` |
 
-Why both flags exist:
-
-- **`--preview` chooses the destination.** It publishes to a temporary `rails-<branch|tag>` preview
-  channel instead of the live site. Use `--preview` on its own when `HEAD` is already a clean release
-  tag that you want to inspect before publishing live.
-- **`--tag <vX.Y.Z...>` supplies a stand-in rail name when `HEAD` is not a release tag.** On a branch
-  or dirty working tree, git has no release tag at `HEAD` to name `/r/<tag>/operator/`. Passing
-  `--tag v0.0.0-alpha1` (any valid `vX.Y.Z` tag string) tells the build what path to mount your current
-  checkout under. Because a branch build can never be published to the live site, using `--tag` on a
-  non-tag checkout automatically implies `--preview`.
+**What `--preview` does.** It publishes to a temporary `rails-<branch|tag>` channel instead of the live
+site. A preview channel carries one interface, so it publishes no rails and routes every card to
+`/operator/` — the build that channel is already serving, which is why there is nothing there to
+version. Use it to look at a change from a branch, from a dirty tree, or from a release tag you have
+not published yet.
 
 Preview channel URLs look like `https://YOUR_PROJECT_ID--<channel>-<hash>.web.app`. `deploy:hosting`
 uses the `rails-` channel prefix so manual rail previews never overwrite the `branch-` preview channels
@@ -487,10 +482,10 @@ operations:
 
 ## Troubleshooting
 
-**`this checkout is not a supported rail: …`**
-`npm run deploy:hosting` builds `/r/<tag>/operator/` from `HEAD`, so it needs a release tag name. For a
-live deploy, check out a clean `v*` tag listed in `release.json`. To preview a branch or dirty working
-tree instead, give the build a temporary tag name with `npm run deploy:hosting -- --preview --tag v0.0.0-alpha1`.
+**`this checkout is not a release: …`**
+A live deploy builds `/r/<tag>/operator/` from `HEAD`, so `HEAD` must be a clean `v*` tag listed in
+`release.json`. Check one out, or publish this checkout to a preview channel instead with
+`npm run deploy:hosting -- --preview`.
 
 **Connect is disabled, with a notice that the release is missing.**
 The robot reports a tag that `release.json` no longer retains, so `/r/<tag>/` is not on the site.

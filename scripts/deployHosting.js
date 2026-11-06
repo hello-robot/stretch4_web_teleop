@@ -15,7 +15,6 @@
  * Usage:
  *   node scripts/deployHosting.js                    publish the live site
  *   node scripts/deployHosting.js --preview          publish to rails-<branch|tag>
- *   node scripts/deployHosting.js --tag v0.9.9-rc1   preview a temporary rail
  *   node scripts/deployHosting.js --dry-run          assemble and check only
  *   node scripts/deployHosting.js --rail-only        build and cache this tag's rail
  */
@@ -223,15 +222,13 @@ function npmConfigFlag(name) {
  * `--preview` still honours the flag instead of publishing live.
  *
  * @param {string[]} argv Arguments after the script name.
- * @returns {{preview: boolean, tag: string|null, cache: string,
- *     origin: string|null, dryRun: boolean, railOnly: boolean,
- *     log: string, verbose: boolean, republish: boolean, site: string|null}}
- *     Parsed options.
+ * @returns {{preview: boolean, cache: string, origin: string|null,
+ *     dryRun: boolean, railOnly: boolean, log: string, verbose: boolean,
+ *     republish: boolean, site: string|null}} Parsed options.
  */
 function parseArgs(argv) {
     const options = {
         preview: npmConfigFlag("npm_config_preview"),
-        tag: null,
         cache: path.join(repoRoot, ".rails-cache"),
         origin: null,
         dryRun:
@@ -251,8 +248,6 @@ function parseArgs(argv) {
             options.preview = true;
         } else if (arg === "--rail-only") {
             options.railOnly = true;
-        } else if (arg === "--tag") {
-            options.tag = argv[++i];
         } else if (arg === "--cache") {
             options.cache = path.resolve(argv[++i]);
         } else if (arg === "--origin") {
@@ -275,40 +270,34 @@ function parseArgs(argv) {
 /**
  * The rail this run builds, and what it was really built from.
  *
- * Normally the checkout names its own rail: a clean tree on a release tag
- * publishes that release, and the bytes correspond to a commit anyone can
- * check out. --tag overrides the name, which is how a branch gets a routable
- * rail to test with; builtFrom then records the checkout, as does the rail's
- * manifest, and the caller confines it to a preview channel.
+ * The checkout names its own rail and nothing overrides it: a clean tree on a
+ * release tag publishes that release, and the bytes correspond to a commit
+ * anyone can check out again. That is what makes a rail reproducible from its
+ * name alone.
  *
  * A checkout that names no rail is not an error here. A preview serves one
  * interface under no release name and needs none, so the tag comes back null
  * and the caller decides whether this run required one.
  *
- * @param {string|null} requested Tag named with --tag, if any.
- * @returns {{tag: string|null, builtFrom: string|null}} The rail name or null,
- *     and the describe it was built from when that is not the tag itself.
- * @throws {Error} When --tag names something that is not a release tag.
+ * Exactly one of the two fields is set.
+ *
+ * @returns {{tag: string|null, builtFrom: string|null}} The release tag this
+ *     checkout sits on, or null and the describe of a checkout that is not a
+ *     release.
  */
-function checkoutTag(requested) {
+function checkoutTag() {
     const dirty = git(["status", "--porcelain"]) !== "";
     const tag = git(["describe", "--tags", "--exact-match", "--match", "v*"]);
-    const describe =
-        git(["describe", "--tags", "--always", "--dirty", "--match", "v*"]) ??
-        "(git cannot answer)";
 
     // The ordinary case: this checkout is a release, so it names its own rail.
-    if (!dirty && isReleaseTag(tag) && (!requested || requested === tag)) {
+    if (!dirty && isReleaseTag(tag)) {
         return { tag, builtFrom: null };
     }
 
-    if (!requested) {
-        return { tag: null, builtFrom: describe };
-    }
-    if (!isReleaseTag(requested)) {
-        throw new Error(`--tag ${requested} is not a release tag`);
-    }
-    return { tag: requested, builtFrom: describe };
+    const describe =
+        git(["describe", "--tags", "--always", "--dirty", "--match", "v*"]) ??
+        "(git cannot answer)";
+    return { tag: null, builtFrom: describe };
 }
 
 /**
@@ -624,19 +613,17 @@ function buildRailOnly(tag, cacheDir) {
  * checkout and its own node_modules -- and an old tag predates the rail
  * support entirely, so it cannot build itself as one.
  *
- * Temporary rails (built off a branch or dirty tree with --tag) are never
- * written into .rails-cache/, so a branch build cannot overwrite a cached
- * release tag.
+ * Only a clean release checkout reaches this function, so the rail it builds
+ * is always a release and is always worth caching.
  *
  * @param {string[]} rails Tags to assemble.
  * @param {string} tag Tag this checkout builds.
  * @param {string} cacheDir Directory of previously built rails.
- * @param {boolean} [temporary=false] True when built from a non-tag checkout.
  * @returns {{assembled: string[], missing: string[]}} What landed, and what
  *     had no local copy to land from.
  * @throws {Error} When a rail is present but incomplete.
  */
-function assembleRails(rails, tag, cacheDir, temporary = false) {
+function assembleRails(rails, tag, cacheDir) {
     const assembled = [];
     const missing = [];
     for (const rail of rails) {
@@ -651,16 +638,14 @@ function assembleRails(rails, tag, cacheDir, temporary = false) {
                 "--env",
                 `rail=${rail}`,
             ]);
-            if (!temporary) {
-                fs.rmSync(path.join(cacheDir, rail), {
-                    recursive: true,
-                    force: true,
-                });
-                fs.mkdirSync(cacheDir, { recursive: true });
-                fs.cpSync(target, path.join(cacheDir, rail), {
-                    recursive: true,
-                });
-            }
+            fs.rmSync(path.join(cacheDir, rail), {
+                recursive: true,
+                force: true,
+            });
+            fs.mkdirSync(cacheDir, { recursive: true });
+            fs.cpSync(target, path.join(cacheDir, rail), {
+                recursive: true,
+            });
         } else {
             const cached = path.join(cacheDir, rail);
             if (!fs.existsSync(cached)) {
@@ -683,11 +668,10 @@ async function main() {
     childOutput.file = options.log;
     if (!options.verbose) openLog(options.log);
 
-    const { tag, builtFrom } = checkoutTag(options.tag);
-    const temporary = Boolean(builtFrom);
+    const { tag, builtFrom } = checkoutTag();
 
     if (options.railOnly) {
-        if (temporary) {
+        if (!tag) {
             throw new Error(
                 `--rail-only requires a clean checkout of a release tag (current checkout: ${builtFrom})`,
             );
@@ -707,9 +691,9 @@ async function main() {
 
     syncFirebaseRc(envProjectId());
 
-    // A non-tag build always targets a preview channel unless --dry-run was
-    // given with an explicit preview --origin.
-    if (temporary && !options.preview && !options.origin) {
+    // A non-release build always targets a preview channel unless --dry-run
+    // was given with an explicit preview --origin.
+    if (!tag && !options.preview && !options.origin) {
         options.preview = true;
     }
     const channel = options.preview ? previewChannelId() : null;
@@ -739,45 +723,20 @@ async function main() {
         throw new Error(
             `this checkout is not a release: ${builtFrom}\n` +
                 "          Check out a release tag to publish it, or pass " +
-                "--tag <release> to build a\n" +
-                "          temporary rail under that name. A preview needs " +
-                "neither.",
+                "--preview to publish\n" +
+                `          this checkout to preview channel ${previewChannelId()}.`,
         );
     }
-
-    // A rail whose contents do not match its name is temporary. It may never
-    // be published to the live site, and even on a dry run it may not use a
-    // retained release name against the live origin.
-    if (temporary && !preview) {
-        if (!options.dryRun || rails.includes(tag)) {
-            throw new Error(
-                `--tag ${tag} would build a rail from ${builtFrom}, and ${
-                    rails.includes(tag)
-                        ? `${tag} is a supported release`
-                        : "the target is the live site"
-                }.\n` +
-                    "          Publishing a branch build to the live site would " +
-                    "overwrite production with commits no tag reproduces.\n" +
-                    "          Pass --preview (or omit --origin) to deploy to " +
-                    `preview channel ${previewChannelId()}, or check out ${tag} cleanly.`,
-            );
-        }
-    }
-    if (!temporary && !rails.includes(tag) && !preview) {
+    if (!preview && !rails.includes(tag)) {
         throw new Error(
             `release.json does not retain ${tag}; add it first, or pass --preview`,
         );
     }
 
-    // A preview assembles no rails at all. Off a preview this checkout's rail
-    // rides alongside the kept set rather than replacing it, whether it was
-    // built from a tag or from a branch: a dry run may legitimately assemble a
-    // tag release.json does not retain.
-    const assembling = preview
-        ? []
-        : rails.includes(tag)
-          ? rails
-          : [...rails, tag];
+    // A preview assembles no rails at all. Off a preview the set is exactly
+    // what release.json retains, this checkout's own tag among them, because a
+    // tag it does not retain was refused above.
+    const assembling = preview ? [] : rails;
 
     const site = channel
         ? `${origin} (preview channel ${channel})`
@@ -804,7 +763,7 @@ async function main() {
         row("interface", builtFrom ?? tag, "/operator/");
         row("rails", "none (a preview serves one build)");
     } else {
-        row("rail", `${tag}${temporary ? " (temporary)" : ""}`, `/r/${tag}/`);
+        row("rail", tag, `/r/${tag}/`);
         row("rails kept", rails.join(", "));
     }
     if (!options.verbose) row("build log", options.log);
@@ -814,11 +773,6 @@ async function main() {
         pass(
             "Preview publishes one interface, under no release name",
             `${builtFrom ?? tag} -> /operator/`,
-        );
-    } else if (temporary) {
-        pass(
-            "Temporary rail targets a preview build",
-            `${tag} from ${builtFrom}`,
         );
     } else {
         pass(
@@ -861,17 +815,7 @@ async function main() {
     }
 
     if (!preview) {
-        if (temporary) {
-            warn(
-                `rail ${tag} is built from ${builtFrom}, not from a release.`,
-                [
-                    "Its manifest.json records that. It is not cached in .rails-cache/",
-                    "and is not retained by release.json.",
-                ],
-            );
-        } else {
-            pass("Rail built from its own release tag", tag);
-        }
+        pass("Rail built from its own release tag", tag);
         // A rail is immutable, so its name may not change hands. A preview
         // publishes no rail, and rebuilding a branch is the whole point.
         await checkPublishedRail(origin, tag, channel, options.republish);
@@ -888,7 +832,6 @@ async function main() {
         assembling,
         tag,
         options.cache,
-        temporary,
     );
 
     // Both live and preview publishes clone retained rails from the live
