@@ -45,7 +45,7 @@ export const HomingBanner = (props: HomingBannerProps) => {
     // Previous `robotIsHomed` to detect false → true (start success timer only on transition)
     const prevHomedRef = useRef(props.robotIsHomed);
 
-    // When the driver mode changes, update `driverIsHoming`. 
+    // When the driver mode changes, update `driverIsHoming`.
     useEffect(() => {
         return homeTheRobotFunctionProvider.setDriverModeCallback((mode) => {
             if (mode === "homing") driverIsHomingSet(true);
