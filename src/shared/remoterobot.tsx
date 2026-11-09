@@ -41,6 +41,9 @@ export class RemoteRobot extends React.Component<{}, any> {
     mapPose: Transform;
     moveBaseState?: string;
     private mapPoseListeners: Set<(pose: Transform) => void> = new Set();
+    // Nav2 path being followed, flat map-frame [x0, y0, x1, y1, ...]; empty when none
+    navPlan: number[] = [];
+    private navPlanListeners: Set<(points: number[]) => void> = new Set();
 
     constructor(props: { robotChannel: robotMessageChannel }) {
         super(props);
@@ -291,6 +294,27 @@ export class RemoteRobot extends React.Component<{}, any> {
         this.mapPoseListeners.add(listener);
         return () => {
             this.mapPoseListeners.delete(listener);
+        };
+    }
+
+    setNavPlan(points: number[]) {
+        this.navPlan = points;
+        this.navPlanListeners.forEach((listener) => {
+            try {
+                listener(points);
+            } catch (err) {
+                console.warn("navPlan listener failed:", err);
+            }
+        });
+    }
+
+    /**
+     * Subscribe to Nav2 path updates. Returns an unsubscribe function.
+     */
+    addNavPlanListener(listener: (points: number[]) => void): () => void {
+        this.navPlanListeners.add(listener);
+        return () => {
+            this.navPlanListeners.delete(listener);
         };
     }
 

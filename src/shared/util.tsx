@@ -92,6 +92,7 @@ export type WebRTCMessage =
     | OccupancyGridMessage
     | OccupancyGridUnavailableMessage
     | MapPoseMessage
+    | NavPlanMessage
     | StopTrajectoryMessage
     | StopMoveBaseMessage
     | BatteryStateMessage
@@ -228,6 +229,15 @@ export interface MapPoseMessage {
     message: Transform;
 }
 
+/**
+ * Robot -> operator: the Nav2 path being followed, as flat map-frame
+ * [x0, y0, x1, y1, ...] in meters. Empty when no path is being followed.
+ */
+export interface NavPlanMessage {
+    type: "navPlan";
+    points: number[];
+}
+
 export interface BatteryStateMessage {
     type: "batteryState";
     percentage: number;
@@ -255,6 +265,11 @@ export interface ROSQuaternion extends Message {
 export interface ROSPose extends Message {
     position: ROSPoint;
     orientation: ROSQuaternion;
+}
+
+/** nav_msgs/msg/Path; only the fields this interface reads. */
+export interface ROSPath extends Message {
+    poses: { pose: ROSPose }[];
 }
 
 export interface ROSMapMetaData extends Message {

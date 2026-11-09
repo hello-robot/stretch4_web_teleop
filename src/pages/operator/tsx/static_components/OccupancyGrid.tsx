@@ -28,6 +28,10 @@ const SAVED_POSE_SCREEN_PX = 22;
 const LABEL_GEOM_SIZE = 40;
 /** Hover label size on screen (CSS px). */
 const LABEL_SCREEN_PX = 14;
+/** Nav2 path line width on screen (CSS px). */
+const NAV_PLAN_SCREEN_PX = 4;
+/** White outline around the Nav2 path line on screen (CSS px). */
+const NAV_PLAN_OUTLINE_SCREEN_PX = 2;
 
 type Point2 = { x: number; y: number };
 
@@ -121,6 +125,12 @@ export class OccupancyGrid extends React.Component {
     private setPoseInterval?: ReturnType<typeof setInterval>;
     // Unsubscribe from RemoteRobot map-pose listeners
     private mapPoseUnsubscribe?: () => void;
+    // The createjs shape for the Nav2 path being followed
+    private navPlanShape?: createjs.Shape;
+    // Last drawn Nav2 path, flat map-frame [x0, y0, x1, y1, ...]
+    private navPlanPoints: number[] = [];
+    // Unsubscribe from RemoteRobot nav-plan listeners
+    private navPlanUnsubscribe?: () => void;
     // Re-apply marker scales when the canvas CSS size changes
     private resizeObserver?: ResizeObserver;
     // Goal-marker pulse tick handler (must be removable!)
@@ -233,6 +243,8 @@ export class OccupancyGrid extends React.Component {
                 LABEL_SCREEN_PX,
             );
         });
+        // Line width depends on the canvas CSS size
+        this.drawNavPlan(this.navPlanPoints);
         this.rootObject.update();
     }
 
@@ -634,6 +646,62 @@ export class OccupancyGrid extends React.Component {
         this.updateRobotMarker(FunctionProvider.getMapPose());
     }
 
+    private trySubscribeNavPlanUpdates() {
+        if (this.navPlanUnsubscribe) {
+            return;
+        }
+        this.navPlanUnsubscribe = FunctionProvider.subscribeNavPlan((points) => {
+            this.drawNavPlan(points);
+            this.rootObject.update();
+        });
+    }
+
+    /**
+     * Draw the Nav2 path (flat map-frame [x0, y0, x1, y1, ...]) as a line above
+     * the map and below all markers. An empty array removes the line.
+     */
+    private drawNavPlan(points: number[]) {
+        this.navPlanPoints = points;
+        if (this.navPlanShape) {
+            this.rootObject.removeChild(this.navPlanShape);
+            this.navPlanShape = undefined;
+        }
+        if (points.length < 4 || !this.origin) return;
+
+        // Stroke widths are in stage-local units; convert from CSS px.
+        const localPerCssPx =
+            1 / ((this.rootObject.scaleX || 1) * this.cssPxPerStagePx());
+        const g = new createjs.Graphics();
+        const tracePath = () => {
+            for (let i = 0; i < points.length; i += 2) {
+                const p = this.rosToGlobal({
+                    x: points[i],
+                    y: points[i + 1],
+                    z: 0,
+                } as Vector3);
+                if (i === 0) g.moveTo(p.x, p.y);
+                else g.lineTo(p.x, p.y);
+            }
+        };
+        g.setStrokeStyle(
+            (NAV_PLAN_SCREEN_PX + 2 * NAV_PLAN_OUTLINE_SCREEN_PX) * localPerCssPx,
+            "round",
+            "round",
+        ).beginStroke(createjs.Graphics.getRGB(255, 255, 255, 0.7));
+        tracePath();
+        g.endStroke();
+        g.setStrokeStyle(NAV_PLAN_SCREEN_PX * localPerCssPx, "round", "round")
+            .beginStroke("#2EE4C8");
+        tracePath();
+        g.endStroke();
+
+        this.navPlanShape = new createjs.Shape(g);
+        const aboveMap = this.bitmap
+            ? this.rootObject.getChildIndex(this.bitmap) + 1
+            : 0;
+        this.rootObject.addChildAt(this.navPlanShape, Math.max(aboveMap, 0));
+    }
+
     /**
      * Adds a marker for the robot's current pose and updates it from amclPose
      * events (with a slow null-safe poll as backup).
@@ -644,8 +712,10 @@ export class OccupancyGrid extends React.Component {
         this.rootObject.addChild(this.robotMarker);
 
         this.trySubscribeMapPoseUpdates();
+        this.trySubscribeNavPlanUpdates();
         this.setPoseInterval = setInterval(() => {
             this.trySubscribeMapPoseUpdates();
+            this.trySubscribeNavPlanUpdates();
             try {
                 const pose = this.functs.GetPose();
                 this.updateRobotMarker(pose);
@@ -821,12 +891,13 @@ export class OccupancyGrid extends React.Component {
         this.goalPositionSet(undefined);
         this.goal_yaw = undefined;
         this.goalYawListeners.forEach(cb => cb(undefined));
+        this.drawNavPlan([]);
         if (this.goalMarker) {
             this.stopGoalPulse();
             this.rootObject.removeChild(this.goalMarker);
             this.goalMarker = undefined;
-            this.rootObject.update();
         }
+        this.rootObject.update();
     }
 
     /** Tear down observers/timers/listeners owned by this map instance. */
@@ -841,6 +912,11 @@ export class OccupancyGrid extends React.Component {
             this.mapPoseUnsubscribe();
             this.mapPoseUnsubscribe = undefined;
         }
+        if (this.navPlanUnsubscribe) {
+            this.navPlanUnsubscribe();
+            this.navPlanUnsubscribe = undefined;
+        }
+        this.drawNavPlan([]);
         this.stopGoalPulse();
         if (this.goalMarker) {
             this.rootObject.removeChild(this.goalMarker);

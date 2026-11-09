@@ -362,6 +362,9 @@ function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
         case "amclPose":
             remoteRobot.setMapPose(message.message);
             break;
+        case "navPlan":
+            remoteRobot.setNavPlan(message.points);
+            break;
         case "moveBaseState":
             console.log("moveBaseState", message.message);
             underMapFunctionProvider.setMoveBaseState(message.message);
