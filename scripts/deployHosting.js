@@ -135,12 +135,13 @@ function openLog(logFile) {
  * Read a git value, or null when git cannot answer.
  *
  * @param {string[]} args Arguments to git.
+ * @param {string} [cwd] Checkout to read, defaulting to this repository.
  * @returns {string|null} Trimmed stdout, or null.
  */
-function git(args) {
+function git(args, cwd = repoRoot) {
     try {
         return execFileSync("git", args, {
-            cwd: repoRoot,
+            cwd,
             encoding: "utf8",
             stdio: ["ignore", "pipe", "ignore"],
         }).trim();
@@ -281,13 +282,17 @@ function parseArgs(argv) {
  *
  * Exactly one of the two fields is set.
  *
+ * @param {string} [root] Checkout to inspect, defaulting to this repository.
  * @returns {{tag: string|null, builtFrom: string|null}} The release tag this
  *     checkout sits on, or null and the describe of a checkout that is not a
  *     release.
  */
-function checkoutTag() {
-    const dirty = git(["status", "--porcelain"]) !== "";
-    const tag = git(["describe", "--tags", "--exact-match", "--match", "v*"]);
+function checkoutTag(root = repoRoot) {
+    const dirty = git(["status", "--porcelain"], root) !== "";
+    const tag = git(
+        ["describe", "--tags", "--exact-match", "--match", "v*"],
+        root,
+    );
 
     // The ordinary case: this checkout is a release, so it names its own rail.
     if (!dirty && isReleaseTag(tag)) {
@@ -295,19 +300,23 @@ function checkoutTag() {
     }
 
     const describe =
-        git(["describe", "--tags", "--always", "--dirty", "--match", "v*"]) ??
-        "(git cannot answer)";
+        git(
+            ["describe", "--tags", "--always", "--dirty", "--match", "v*"],
+            root,
+        ) ?? "(git cannot answer)";
     return { tag: null, builtFrom: describe };
 }
 
 /**
  * Rails this release keeps deployed.
  *
+ * @param {string} [root] Repository whose release.json is read, defaulting to
+ *     this one.
  * @returns {string[]} Tags listed in release.json.
  * @throws {Error} When the file is missing or names a non-release tag.
  */
-function retainedRails() {
-    const file = path.join(repoRoot, "release.json");
+function retainedRails(root = repoRoot) {
+    const file = path.join(root, "release.json");
     const rails = JSON.parse(fs.readFileSync(file, "utf8")).rails;
     if (!Array.isArray(rails) || rails.length === 0) {
         throw new Error("release.json lists no rails");
@@ -416,15 +425,16 @@ function resolveOrigin(options) {
  * A tag checkout has no branch, so it names the channel instead, which is how
  * a release is staged for inspection with --preview before it goes live.
  *
+ * @param {string} [root] Checkout to inspect, defaulting to this repository.
  * @returns {string} A channel id Hosting will accept.
  */
-function previewChannelId() {
-    const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+function previewChannelId(root = repoRoot) {
+    const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], root);
     const name =
         branch && branch !== "HEAD"
             ? branch
-            : (git(["describe", "--tags", "--exact-match", "--match", "v*"]) ??
-              git(["rev-parse", "--short", "HEAD"]) ??
+            : (git(["describe", "--tags", "--exact-match", "--match", "v*"], root) ??
+              git(["rev-parse", "--short", "HEAD"], root) ??
               "unknown");
     // Hosting ids are letters, numbers, hyphens and underscores, so the dots a
     // tag carries are folded the way branchSlug folds slashes.
@@ -619,25 +629,29 @@ function buildRailOnly(tag, cacheDir) {
  * @param {string[]} rails Tags to assemble.
  * @param {string} tag Tag this checkout builds.
  * @param {string} cacheDir Directory of previously built rails.
+ * @param {string} [outDir] Output tree directory, defaulting to `dist-firebase`.
+ * @param {(rail: string, target: string) => void} [buildRail] Builder for the
+ *     current tag's rail, defaulting to `npm run build:operator -- --env rail=<tag>`.
  * @returns {{assembled: string[], missing: string[]}} What landed, and what
  *     had no local copy to land from.
  * @throws {Error} When a rail is present but incomplete.
  */
-function assembleRails(rails, tag, cacheDir) {
+function assembleRails(
+    rails,
+    tag,
+    cacheDir,
+    outDir = distDir,
+    buildRail = (rail) =>
+        run("npm", ["run", "build:operator", "--", "--env", `rail=${rail}`]),
+) {
     const assembled = [];
     const missing = [];
     for (const rail of rails) {
-        const target = path.join(distDir, "r", rail);
+        const target = path.join(outDir, "r", rail);
         if (rail === tag) {
             // The same operator build; --env rail moves it under r/<tag>/ and
             // points its assets there.
-            run("npm", [
-                "run",
-                "build:operator",
-                "--",
-                "--env",
-                `rail=${rail}`,
-            ]);
+            buildRail(rail, target);
             fs.rmSync(path.join(cacheDir, rail), {
                 recursive: true,
                 force: true,
@@ -893,11 +907,14 @@ async function main() {
 }
 
 module.exports = {
+    assembleRails,
+    checkoutTag,
     isPreviewOrigin,
     parseArgs,
     previewChannelId,
     publishedManifest,
     checkPublishedRail,
+    retainedRails,
 };
 
 // Guarded so the helpers above can be required without running a release.

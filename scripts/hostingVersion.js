@@ -197,6 +197,17 @@ async function servedAt(origin, servedPath) {
 }
 
 /**
+ * Build the regex inclusion list that retains only `/r/<tag>/` prefixes when
+ * cloning a Hosting version.
+ *
+ * @param {string[]} retainedRails Rail tags to preserve from the source version.
+ * @returns {string[]} Anchored regular expressions with regex metacharacters escaped.
+ */
+function railCloneRegexes(retainedRails) {
+    return retainedRails.map((rail) => `^/r/${escapeRegex(rail)}/`);
+}
+
+/**
  * Clone a Hosting version server-side, filtering the clone to retain only the
  * /r/<tag>/ trees for the specified rails.
  *
@@ -217,7 +228,7 @@ async function cloneFilteredVersion(
     sourceVersion,
     retainedRails,
 ) {
-    const regexes = retainedRails.map((rail) => `^/r/${escapeRegex(rail)}/`);
+    const regexes = railCloneRegexes(retainedRails);
     const body = {
         sourceVersion,
         finalize: false,
@@ -380,6 +391,7 @@ module.exports = {
     authenticate,
     hostingVersionConfig,
     publishAdditively,
+    railCloneRegexes,
     servedAt,
     servedFiles,
     siteFromOrigin,

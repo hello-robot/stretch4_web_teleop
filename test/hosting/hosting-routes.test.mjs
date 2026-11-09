@@ -3,18 +3,18 @@
  * Hosting emulator.
  *
  * The routing and the caching of a multi-rail site live in firebase.json, not
- * in any script, so nothing in rail-backend.test.mjs can confirm them. This
+ * in any script, so nothing in hosting-backend.test.mjs can confirm them. This
  * file asks a real Hosting server the questions the lobby and an operator's
  * browser ask: is the rail there, is the lobby still at the root, and is the
  * manifest exempt from the year-long cache the rail beside it carries.
  *
- * It is started by test/rails/runHostingRoutes.mjs, which stands the emulator
+ * It is started by test/hosting/runHostingRoutes.mjs, which stands the emulator
  * up over a tree and exports the two variables read here. Run it through
- * `npm run test:rails:hosting`.
+ * `npm run test:hosting:routes`.
  */
 
-import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { before, suite, test } from "node:test";
 
 const origin = process.env.RAIL_TEST_ORIGIN;
 const rail = process.env.RAIL_TEST_TAG;
@@ -39,7 +39,7 @@ before(() => {
     );
 });
 
-describe("what the site serves", () => {
+suite("the site serves the lobby at /, fallback operator at /operator/, and rails under /r/<tag>/operator/", () => {
     test("the lobby is at the root", async () => {
         const response = await get("/");
         assert.equal(response.status, 200);
@@ -66,7 +66,7 @@ describe("what the site serves", () => {
     });
 });
 
-describe("what the lobby's rail probe sees", () => {
+suite("a published rail serves its manifest and a retired rail responds 404", () => {
     test("a published rail answers its manifest, naming itself", async () => {
         const response = await get(`/r/${rail}/manifest.json`);
         assert.equal(response.status, 200);
@@ -85,7 +85,7 @@ describe("what the lobby's rail probe sees", () => {
     });
 });
 
-describe("what browsers are told to keep", () => {
+suite("rail assets are cached for a year while manifests and root pages are not cached", () => {
     test("a rail's assets are immutable for a year", async () => {
         const response = await get(`/r/${rail}/operator/`);
         assert.equal(

@@ -18,4 +18,26 @@ function isReleaseTag(tag) {
     return typeof tag === "string" && RELEASE_TAG.test(tag);
 }
 
-module.exports = { RELEASE_TAG, isReleaseTag };
+/**
+ * The build fields a checkout publishes to robots/<fleetId>/build.
+ *
+ * A describe carrying a commit count or -dirty names a commit no rail was cut
+ * from, so rail is set only where the describe is exactly a release tag. A
+ * build with no rail is still published: the lobby distinguishes a robot on an
+ * unreleased checkout from one that has never reported a build at all, and it
+ * can only do that if the unreleased case says so.
+ *
+ * @param {string|null|undefined} describe Output of git describe.
+ * @returns {{describe: string, rail?: string}|null} Build fields, or null when
+ *     there is no describe to publish.
+ */
+function buildFromDescribe(describe) {
+    if (typeof describe !== "string") return null;
+    const trimmed = describe.trim();
+    if (!trimmed) return null;
+    return isReleaseTag(trimmed)
+        ? { describe: trimmed, rail: trimmed }
+        : { describe: trimmed };
+}
+
+module.exports = { RELEASE_TAG, buildFromDescribe, isReleaseTag };

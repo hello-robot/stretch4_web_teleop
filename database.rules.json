@@ -44,6 +44,7 @@
         },
         "build": {
           ".write": "auth != null && root.child('assignments').child(auth.uid).child('role').val() === 'robot' && root.child('assignments').child(auth.uid).child('name').val() === $fleetId && root.child('robots').child($fleetId).child('uid').val() === auth.uid",
+          ".validate": "newData.hasChildren(['describe'])",
           "describe": {
             ".validate": "newData.isString() && newData.val().length <= 128"
           },

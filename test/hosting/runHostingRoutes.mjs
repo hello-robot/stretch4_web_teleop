@@ -4,7 +4,7 @@
  * runHostingRoutes.mjs
  *
  * Stand the Firebase Hosting emulator up over a multi-rail tree and run
- * test/rails/hosting-routes.test.mjs against it.
+ * test/hosting/hosting-routes.test.mjs against it.
  *
  * The emulator is given a configuration derived from the repository's own
  * firebase.json -- the same headers, the same ignore list -- with only the
@@ -15,8 +15,8 @@
  * seconds with no webpack build and no Firebase credentials. Point it at a
  * real assembled tree to check the thing a release would actually publish:
  *
- *   node test/rails/runHostingRoutes.mjs
- *   node test/rails/runHostingRoutes.mjs --tree dist-firebase --rail v0.1.0
+ *   node test/hosting/runHostingRoutes.mjs
+ *   node test/hosting/runHostingRoutes.mjs --tree dist-firebase --rail v0.1.0
  *
  * A demo project id is used throughout, so nothing here can reach, read or
  * write a real Firebase project.
@@ -204,7 +204,7 @@ async function main() {
             DEMO_PROJECT,
             "--config",
             config,
-            `node --test ${path.join(repoRoot, "test", "rails", "hosting-routes.test.mjs")}`,
+            `node --test ${path.join(repoRoot, "test", "hosting", "hosting-routes.test.mjs")}`,
         ],
         {
             cwd: repoRoot,

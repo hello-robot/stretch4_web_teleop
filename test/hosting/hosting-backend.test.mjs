@@ -4,26 +4,27 @@
  * Every case here runs without a network, without Firebase credentials and
  * without a webpack build, so the whole file is a gate that can run anywhere.
  * What it covers is the part of a release that decides *what* is published:
- * the tag grammar, the flags, the origin and channel resolution, the bundle
- * guards, the immutability check, and the webpack wiring that puts a rail
- * under /r/<tag>/.
+ * the tag grammar, the flags, the origin and channel resolution, the stable
+ * release the fleet defaults to, the bundle guards, the immutability check,
+ * and the webpack wiring that puts a rail under /r/<tag>/.
  *
- * What it deliberately does not cover, because neither can be decided without
- * a Hosting site: the server-side clone in hostingVersion.js, and the lobby's
- * runtime routing in the browser. Those are test/rails/hosting-routes.test.mjs
- * and the manual stages in test/rails/README.md.
+ * What it deliberately does not cover: the server-side clone in
+ * hostingVersion.js, which cannot be decided without a Hosting site, and the
+ * guards that refuse a release outright, which need a checkout to refuse.
+ * Those are test/hosting/hosting-routes.test.mjs and
+ * test/hosting/release-guards.test.mjs.
  *
- * Run through `npm run test:rails`.
+ * Run through `npm run test:hosting:backend`.
  */
 
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { after, afterEach, before, beforeEach, suite, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { after, afterEach, before, describe, test } from "node:test";
-import assert from "node:assert/strict";
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(
@@ -41,16 +42,24 @@ const {
 } = require("../../scripts/hostingBundleReady");
 const {
     hostingVersionConfig,
+    railCloneRegexes,
+    servedAt,
     servedFiles,
     siteFromOrigin,
 } = require("../../scripts/hostingVersion");
 const {
+    assembleRails,
     checkPublishedRail,
     isPreviewOrigin,
     parseArgs,
     previewChannelId,
     publishedManifest,
 } = require("../../scripts/deployHosting");
+const { repoSlug, stableRail } = require("../../scripts/stableRail");
+const {
+    PUBLIC_WEBPACK_ENV_KEYS,
+    webpackPublicEnvDefinitions,
+} = require("../../scripts/webpackPublicEnv");
 const makeWebpackConfig = require("../../webpack.config");
 
 /** Tags the rails may be named with. */
@@ -90,6 +99,13 @@ const NPM_CONFIG_KEYS = [
     "npm_config_skip_deploy",
 ];
 
+/** Directories built for a case, removed when the file finishes. */
+const built = [];
+
+after(() => {
+    for (const dir of built) fs.rmSync(dir, { recursive: true, force: true });
+});
+
 /**
  * Create an empty directory under the OS temp root.
  *
@@ -97,7 +113,9 @@ const NPM_CONFIG_KEYS = [
  * @returns {string} Absolute path to the new directory.
  */
 function tempDir(label) {
-    return fs.mkdtempSync(path.join(os.tmpdir(), `rails-${label}-`));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), `rails-${label}-`));
+    built.push(dir);
+    return dir;
 }
 
 /**
@@ -146,7 +164,7 @@ function normalizePattern(source) {
     return source.replace(/\\d/g, "[0-9]").replace(/\\\./g, "[.]");
 }
 
-describe("the rail tag grammar", () => {
+suite("a rail tag is a semver release", () => {
     test("accepts a release tag and nothing that merely looks like one", () => {
         for (const tag of VALID_TAGS) {
             assert.equal(isReleaseTag(tag), true, `${tag} should be a rail`);
@@ -209,7 +227,7 @@ describe("the rail tag grammar", () => {
     });
 });
 
-describe("release.json", () => {
+suite("release.json retains only valid, distinct rail tags", () => {
     test("retains a non-empty set of distinct release tags", () => {
         const rails = JSON.parse(
             fs.readFileSync(path.join(repoRoot, "release.json"), "utf8"),
@@ -228,7 +246,133 @@ describe("release.json", () => {
     });
 });
 
-describe("deploy flags", () => {
+suite("the stable rail is the latest GitHub release", () => {
+    /** Answers GitHub gives, so no case here reaches the network. */
+    let realFetch;
+
+    /** The URL the last stubbed request was sent to. */
+    let asked;
+
+    /** Headers the last stubbed request carried. */
+    let sentHeaders;
+
+    before(() => (realFetch = globalThis.fetch));
+
+    after(() => {
+        globalThis.fetch = realFetch;
+    });
+
+    afterEach(() => {
+        globalThis.fetch = realFetch;
+        delete process.env.GITHUB_TOKEN;
+    });
+
+    /**
+     * Answer the releases/latest request with one status and body.
+     *
+     * @param {{status?: number, body?: object, throws?: boolean}} answer What
+     *     GitHub does.
+     * @returns {void}
+     */
+    const githubAnswers = (answer) => {
+        globalThis.fetch = async (url, init) => {
+            asked = url;
+            sentHeaders = init?.headers ?? {};
+            if (answer.throws) throw new Error("network unreachable");
+            const status = answer.status ?? 200;
+            return {
+                ok: status >= 200 && status < 300,
+                status,
+                json: async () => answer.body,
+            };
+        };
+    };
+
+    /**
+     * A repository whose origin points somewhere named.
+     *
+     * @param {string|null} url Remote URL, or null for no origin at all.
+     * @returns {string} Path to the repository.
+     */
+    const withOrigin = (url) => {
+        const root = tempDir("slug");
+        const git = (...args) =>
+            execFileSync("git", args, {
+                cwd: root,
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "pipe"],
+            });
+        git("init", "--initial-branch", "main");
+        if (url) git("remote", "add", "origin", url);
+        return root;
+    };
+
+    test("names the repository from any spelling of the remote", () => {
+        for (const url of [
+            "https://github.com/hello-robot/stretch4_web_teleop.git",
+            "https://github.com/hello-robot/stretch4_web_teleop",
+            "git@github.com:hello-robot/stretch4_web_teleop.git",
+            "ssh://git@github.com/hello-robot/stretch4_web_teleop.git",
+        ]) {
+            assert.equal(
+                repoSlug(withOrigin(url)),
+                "hello-robot/stretch4_web_teleop",
+                `${url} should name the repository`,
+            );
+        }
+    });
+
+    test("refuses a remote it cannot ask GitHub about", () => {
+        assert.throws(
+            () => repoSlug(withOrigin("https://gitlab.com/a/b.git")),
+            /not a GitHub remote/,
+        );
+        assert.throws(() => repoSlug(withOrigin(null)));
+    });
+
+    test("a published release becomes the default rail", async () => {
+        githubAnswers({ status: 200, body: { tag_name: "v0.2.0" } });
+        assert.equal(await stableRail(repoRoot), "v0.2.0");
+        assert.match(asked, /\/repos\/[^/]+\/[^/]+\/releases\/latest$/);
+    });
+
+    test("a repository with no release yet has no default", async () => {
+        // Pushing a tag publishes nothing, so a repository can retain rails
+        // long before one of them is marked latest. Robots reporting no rail
+        // keep the unversioned page until then.
+        githubAnswers({ status: 404 });
+        assert.equal(await stableRail(repoRoot), null);
+    });
+
+    test("a release tagged outside the grammar stops the release", async () => {
+        // The tag becomes PUBLIC_STABLE_RAIL and then a /r/<tag>/ path, so a
+        // release named anything else is refused here rather than built.
+        githubAnswers({ status: 200, body: { tag_name: "latest" } });
+        await assert.rejects(() => stableRail(repoRoot), /is not a rail name/);
+    });
+
+    test("rejects on a 5xx response or network error instead of returning null", async () => {
+        // Reading a fault as "no release" would quietly publish a lobby that
+        // routes the whole fleet to the unversioned page.
+        githubAnswers({ status: 500 });
+        await assert.rejects(() => stableRail(repoRoot), /returned 500/);
+        githubAnswers({ throws: true });
+        await assert.rejects(() => stableRail(repoRoot), /network unreachable/);
+    });
+
+    test("a token is sent when one is set, and not invented when it is not", async () => {
+        githubAnswers({ status: 200, body: { tag_name: "v0.2.0" } });
+        await stableRail(repoRoot);
+        assert.equal(sentHeaders.Authorization, undefined);
+
+        process.env.GITHUB_TOKEN = "a-token";
+        githubAnswers({ status: 200, body: { tag_name: "v0.2.0" } });
+        await stableRail(repoRoot);
+        assert.equal(sentHeaders.Authorization, "Bearer a-token");
+    });
+});
+
+suite("a Hosting deploy accepts only known flags", () => {
     /** npm_config_* values this process started with, restored after each test. */
     const saved = {};
 
@@ -336,23 +480,61 @@ describe("deploy flags", () => {
     });
 });
 
-describe("the preview channel a checkout publishes to", () => {
+suite("a preview channel is named after the checkout", () => {
+    /**
+     * Build a throwaway repository on a branch, detached tag, or detached commit.
+     *
+     * @param {{branch?: string, tag?: string, detach?: boolean}} options Checkout state.
+     * @returns {string} Path to the repository.
+     */
+    const channelRepo = ({ branch = "main", tag, detach = false } = {}) => {
+        const root = tempDir("channel");
+        const git = (...args) =>
+            execFileSync("git", args, {
+                cwd: root,
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "pipe"],
+            });
+        git("init", "--initial-branch", branch);
+        git("config", "user.email", "trial@example.com");
+        git("config", "user.name", "Rail Trial");
+        writeFile(path.join(root, "README.md"), "channel\n");
+        git("add", "-A");
+        git("commit", "-m", "init");
+        if (tag) git("tag", tag);
+        if (detach) git("checkout", "--detach", "HEAD");
+        return root;
+    };
+
     test("folds a branch name into something Hosting accepts", () => {
         assert.equal(branchSlug("feature/multi-rail"), "feature-multi-rail");
         assert.equal(branchSlug("a_b:c#d"), "a-b-c-d");
     });
 
-    test("is named for this checkout, under the rails- prefix", () => {
-        const id = previewChannelId();
-        assert.match(id, /^rails-[A-Za-z0-9_-]+$/);
-        assert.ok(id.length <= 63, `channel id is ${id.length} characters`);
-        // The prefix is what keeps a rails preview clear of the branch-<slug>
-        // channel a robot's autodeploy owns; they carry different trees.
+    test("derives rails-<branch> from an active branch and truncates at 63 characters", () => {
+        const root = channelRepo({ branch: "feature/multi-rail" });
+        assert.equal(previewChannelId(root), "rails-feature-multi-rail");
+
+        const longBranch = `feature/${"a".repeat(80)}`;
+        const longRoot = channelRepo({ branch: longBranch });
+        const id = previewChannelId(longRoot);
+        assert.equal(id.length, 63);
+        assert.ok(id.startsWith("rails-feature-a"));
         assert.ok(!id.startsWith("rails-branch-"));
+    });
+
+    test("folds dots into hyphens when detached on a release tag", () => {
+        const root = channelRepo({ tag: "v1.2.3", detach: true });
+        assert.equal(previewChannelId(root), "rails-v1-2-3");
+    });
+
+    test("falls back to the short commit hash when detached with no release tag", () => {
+        const root = channelRepo({ detach: true });
+        assert.match(previewChannelId(root), /^rails-[0-9a-f]{7,}$/);
     });
 });
 
-describe("telling a preview origin from the live site", () => {
+suite("a preview origin is distinct from the live site", () => {
     test("a resolved channel id settles it without inspecting the origin", () => {
         assert.equal(isPreviewOrigin("https://site.web.app", "rails-x"), true);
     });
@@ -376,7 +558,7 @@ describe("telling a preview origin from the live site", () => {
     });
 });
 
-describe("naming the Hosting site behind an origin", () => {
+suite("a Firebase Hosting origin encodes its site ID", () => {
     test("reads the site id from a web.app or firebaseapp.com origin", () => {
         assert.equal(siteFromOrigin("https://my-site.web.app"), "my-site");
         assert.equal(
@@ -398,7 +580,7 @@ describe("naming the Hosting site behind an origin", () => {
     });
 });
 
-describe("the file set a version publishes", () => {
+suite("a published version hashes and retains only its rail and root files", () => {
     let dir;
 
     before(() => {
@@ -410,8 +592,6 @@ describe("the file set a version publishes", () => {
         writeFile(path.join(dir, "node_modules", "pkg", "index.js"));
         writeFile(path.join(dir, "firebase.json"));
     });
-
-    after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
     test("maps every deployable file to the path it is served at", () => {
         const files = servedFiles(dir);
@@ -428,9 +608,51 @@ describe("the file set a version publishes", () => {
         assert.equal(files["/node_modules/pkg/index.js"], undefined);
         assert.equal(files["/firebase.json"], undefined);
     });
+
+    test("railCloneRegexes builds anchored regexes with escaped dots for retained rails", () => {
+        const regexes = railCloneRegexes(["v1.2.3", "v2.0.0-rc1"]).map(
+            (source) => new RegExp(source),
+        );
+        assert.equal(regexes[0].test("/r/v1.2.3/manifest.json"), true);
+        assert.equal(regexes[0].test("/r/v1X2Y3/manifest.json"), false);
+        assert.equal(regexes[0].test("/operator/index.html"), false);
+        assert.equal(regexes[1].test("/r/v2.0.0-rc1/operator/index.html"), true);
+    });
+
+    test("servedAt probes with HEAD and cache: no-store, returning false on 404 or network failure", async () => {
+        const realFetch = globalThis.fetch;
+        try {
+            const seen = [];
+            globalThis.fetch = async (url, init) => {
+                seen.push([url, init]);
+                return { ok: true, status: 200 };
+            };
+            assert.equal(
+                await servedAt("https://site.web.app", "/r/v1.0.0/manifest.json"),
+                true,
+            );
+            assert.equal(seen[0][0], "https://site.web.app/r/v1.0.0/manifest.json");
+            assert.equal(seen[0][1].method, "HEAD");
+            assert.equal(seen[0][1].cache, "no-store");
+
+            globalThis.fetch = stubFetch({ status: 404 });
+            assert.equal(
+                await servedAt("https://site.web.app", "/r/v1.0.0/manifest.json"),
+                false,
+            );
+
+            globalThis.fetch = stubFetch({ throws: true });
+            assert.equal(
+                await servedAt("https://site.web.app", "/r/v1.0.0/manifest.json"),
+                false,
+            );
+        } finally {
+            globalThis.fetch = realFetch;
+        }
+    });
 });
 
-describe("the serving config a version is finalized with", () => {
+suite("a finalized version translates firebase.json into Hosting cache rules", () => {
     test("carries the cache rules firebase.json states", () => {
         // The REST API is handed this directly, so a header that is wrong
         // here is wrong on the site: rails cached for a year, and the
@@ -456,15 +678,13 @@ describe("the serving config a version is finalized with", () => {
         assert.deepEqual(hostingVersionConfig(dir), {});
         fs.writeFileSync(path.join(dir, "firebase.json"), "{}");
         assert.deepEqual(hostingVersionConfig(dir), {});
-        fs.rmSync(dir, { recursive: true, force: true });
     });
 });
 
-describe("the guards on an assembled tree", () => {
+suite("a bundle is ready only when its entrypoint and manifest exist", () => {
     let dir;
 
     before(() => (dir = tempDir("bundles")));
-    after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
     test("a lobby is ready only once it has emitted the root page", () => {
         const lobby = path.join(dir, "lobby");
@@ -507,12 +727,83 @@ describe("the guards on an assembled tree", () => {
     });
 });
 
-describe("a rail is immutable", () => {
+suite("a release builds the current rail and copies retained rails from the cache", () => {
+    /**
+     * Write a complete rail bundle into a directory.
+     *
+     * @param {string} target Directory for the rail.
+     * @returns {void}
+     */
+    const writeCompleteRail = (target) => {
+        writeFile(path.join(target, "operator", "index.html"));
+        writeFile(path.join(target, "manifest.json"), "{}\n");
+    };
+
+    test("builds and caches the current tag, copies cached rails, and lists uncached rails as missing", () => {
+        const cacheDir = tempDir("cache");
+        const outDir = tempDir("dist");
+        writeCompleteRail(path.join(cacheDir, "v0.1.0"));
+
+        const result = assembleRails(
+            ["v0.1.0", "v0.2.0", "v0.3.0"],
+            "v0.3.0",
+            cacheDir,
+            outDir,
+            (_rail, target) => writeCompleteRail(target),
+        );
+
+        assert.deepEqual(result, {
+            assembled: ["v0.1.0", "v0.3.0"],
+            missing: ["v0.2.0"],
+        });
+        assert.equal(railBundleReady(path.join(outDir, "r", "v0.1.0")), true);
+        assert.equal(railBundleReady(path.join(outDir, "r", "v0.3.0")), true);
+        assert.equal(railBundleReady(path.join(cacheDir, "v0.3.0")), true);
+    });
+
+    test("throws when a cached rail is incomplete and succeeds once its manifest is present", () => {
+        const cacheDir = tempDir("badcache");
+        const outDir = tempDir("baddist");
+        writeFile(path.join(cacheDir, "v0.1.0", "operator", "index.html"));
+
+        assert.throws(
+            () =>
+                assembleRails(
+                    ["v0.1.0"],
+                    "v0.2.0",
+                    cacheDir,
+                    outDir,
+                    (_rail, target) => writeCompleteRail(target),
+                ),
+            /rail v0\.1\.0 is incomplete/,
+        );
+
+        // Positive control: adding the missing manifest.json allows assembly to succeed.
+        writeFile(path.join(cacheDir, "v0.1.0", "manifest.json"), "{}\n");
+        assert.deepEqual(
+            assembleRails(
+                ["v0.1.0"],
+                "v0.2.0",
+                cacheDir,
+                outDir,
+                (_rail, target) => writeCompleteRail(target),
+            ),
+            { assembled: ["v0.1.0"], missing: [] },
+        );
+    });
+});
+
+suite("a rail is immutable", () => {
     const origin = "https://site.web.app";
     const preview = "https://site--rails-x-a1b2c3.web.app";
     const tag = "v1.2.3";
     let head;
     let realFetch;
+    let realLog;
+    let realWarn;
+
+    /** What checkPublishedRail reported, kept for a case that wants to read it. */
+    let reported;
 
     before(() => {
         head = execFileSync("git", ["rev-parse", "HEAD"], {
@@ -520,6 +811,23 @@ describe("a rail is immutable", () => {
             encoding: "utf8",
         }).trim();
         realFetch = globalThis.fetch;
+        realLog = console.log;
+        realWarn = console.warn;
+    });
+
+    beforeEach(() => {
+        // checkPublishedRail narrates to the terminal, because during a
+        // release its marks are the record of what was checked. Here that
+        // narration lands in the middle of the reporter's own output, where
+        // it reads as part of the results. It is collected instead.
+        reported = [];
+        console.log = (...args) => reported.push(args.join(" "));
+        console.warn = (...args) => reported.push(args.join(" "));
+    });
+
+    afterEach(() => {
+        console.log = realLog;
+        console.warn = realWarn;
     });
 
     after(() => {
@@ -532,7 +840,7 @@ describe("a rail is immutable", () => {
         await checkPublishedRail(origin, tag, null, false);
     });
 
-    test("a fault that says nothing is not read as unpublished", async () => {
+    test("returns undefined on network or 5xx errors and skips the immutability check", async () => {
         // null means the origin answered "nothing here". undefined means it
         // did not answer. Collapsing them would let an outage wave through a
         // republish of a name that is already taken.
@@ -582,10 +890,15 @@ describe("a rail is immutable", () => {
             body: { commit: "0000000000000000000000000000000000000000" },
         });
         await checkPublishedRail(origin, tag, null, true);
+
+        // Deliberately is the word that matters: the flag lets the release
+        // past a rail that is already taken, so the override says on screen
+        // what it is doing rather than passing in silence.
+        assert.match(reported.join("\n"), /about to change content/);
     });
 });
 
-describe("how webpack places a rail", () => {
+suite("webpack isolates a rail under /r/<tag>/ and shares the root across unversioned pages", () => {
     const production = { mode: "production" };
 
     /**
@@ -712,22 +1025,112 @@ describe("how webpack places a rail", () => {
         );
     });
 
-    test("a rail built with the whole page set is caught by the tree guard", () => {
-        // webpack permits it: --env rail only moves the output. What stops it
-        // reaching the site is railBundleReady, which refuses a rail carrying
-        // a root page. This records that the pair is the guard, not the
-        // webpack config alone.
+    test("a rail built without --env pages=operator emits index.html and is rejected by railBundleReady", () => {
+        // webpack permits --env rail without --env pages=operator; railBundleReady
+        // rejects the resulting output because htmlPages(config) includes index.html.
         const config = makeWebpackConfig(
             { storage: "firebase", rail: "v1.2.3" },
             production,
         );
-        assert.ok(htmlPages(config).includes("index.html"));
-
         const dir = tempDir("railpages");
-        writeFile(path.join(dir, "operator", "index.html"));
         writeFile(path.join(dir, "manifest.json"), "{}");
-        writeFile(path.join(dir, "index.html"));
+        for (const page of htmlPages(config)) {
+            writeFile(path.join(dir, page));
+        }
         assert.equal(railBundleReady(dir), false);
-        fs.rmSync(dir, { recursive: true, force: true });
+    });
+});
+
+suite("the lobby bundle receives only allowlisted PUBLIC_ environment variables", () => {
+    /** The two values that decide whether a lobby routes to rails at all. */
+    const RAIL_KEYS = ["PUBLIC_HOSTING_ORIGIN", "PUBLIC_STABLE_RAIL"];
+
+    /** Values this process started with, restored after each test. */
+    const saved = {};
+
+    before(() => {
+        for (const key of RAIL_KEYS) saved[key] = process.env[key];
+    });
+
+    afterEach(() => {
+        for (const key of RAIL_KEYS) {
+            if (saved[key] === undefined) delete process.env[key];
+            else process.env[key] = saved[key];
+        }
+    });
+
+    test("both rail keys may enter a browser bundle", () => {
+        // servesRails() and the stable rail in robotModel.ts read nothing
+        // else. A key missing from this list is a lobby that serves no rails
+        // however the release was built.
+        for (const key of RAIL_KEYS) {
+            assert.ok(
+                PUBLIC_WEBPACK_ENV_KEYS.includes(key),
+                `${key} cannot reach the bundle`,
+            );
+        }
+    });
+
+    test("a release may set them for one build without editing .env", () => {
+        // deployHosting.js passes them to the child build in its environment,
+        // so the process environment has to win over the file on disk.
+        process.env.PUBLIC_HOSTING_ORIGIN = "https://from-env.web.app";
+        process.env.PUBLIC_STABLE_RAIL = "v0.2.0";
+        const definitions = webpackPublicEnvDefinitions({
+            PUBLIC_HOSTING_ORIGIN: "https://from-dotenv.web.app",
+            PUBLIC_STABLE_RAIL: "v0.1.0",
+        });
+        assert.equal(
+            definitions["process.env.PUBLIC_HOSTING_ORIGIN"],
+            '"https://from-env.web.app"',
+        );
+        assert.equal(definitions["process.env.PUBLIC_STABLE_RAIL"], '"v0.2.0"');
+    });
+
+    test("the .env file answers where the environment does not", () => {
+        for (const key of RAIL_KEYS) delete process.env[key];
+        const definitions = webpackPublicEnvDefinitions({
+            PUBLIC_HOSTING_ORIGIN: "https://from-dotenv.web.app",
+        });
+        assert.equal(
+            definitions["process.env.PUBLIC_HOSTING_ORIGIN"],
+            '"https://from-dotenv.web.app"',
+        );
+    });
+
+    test("a key neither of them sets becomes the literal undefined", () => {
+        // Not the string "undefined": the lobby compares it with an origin,
+        // and a preview must fail that comparison rather than match a site
+        // that happens to be named for it.
+        for (const key of RAIL_KEYS) delete process.env[key];
+        const definitions = webpackPublicEnvDefinitions({});
+        for (const key of RAIL_KEYS) {
+            assert.equal(definitions[`process.env.${key}`], "undefined");
+        }
+    });
+
+    test("values are injected as quoted literals, not as bare text", () => {
+        process.env.PUBLIC_STABLE_RAIL = "v0.2.0";
+        const definitions = webpackPublicEnvDefinitions({});
+        assert.equal(definitions["process.env.PUBLIC_STABLE_RAIL"], '"v0.2.0"');
+    });
+
+    test("a build carries them into the bundle through DefinePlugin", () => {
+        // The plugin list is where the two leave the release scripts and
+        // become part of the lobby.
+        const config = makeWebpackConfig(
+            { storage: "firebase", pages: "home" },
+            { mode: "production" },
+        );
+        const define = config.plugins.find(
+            (plugin) => plugin.constructor.name === "DefinePlugin",
+        );
+        assert.ok(define, "no DefinePlugin in the lobby build");
+        for (const key of RAIL_KEYS) {
+            assert.ok(
+                `process.env.${key}` in define.definitions,
+                `${key} is not defined for the bundle`,
+            );
+        }
     });
 });

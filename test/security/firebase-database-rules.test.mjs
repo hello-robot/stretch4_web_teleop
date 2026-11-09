@@ -4,11 +4,24 @@
  * Run through `npm run test:firebase-rules`, which starts the emulator and
  * supplies the demo project id this file expects. The rules are uploaded from
  * the repository copy, so a case here fails on the file that would be deployed.
+ *
+ * A passing run prints a FIREBASE WARNING line for every write the rules were
+ * meant to refuse. They are the client SDK reporting a denial, not failures:
+ * there is one per refusal, and the writes that are meant to succeed print
+ * none. A run with no warnings at all would be the thing to look into.
+ *
+ * The database answers every refusal with PERMISSION_DENIED, whether a .write
+ * rule refused the writer or a .validate rule refused the value. assertFails
+ * therefore cannot say which happened, and a case that only refuses is a case
+ * that would still pass if the rule it names were deleted and some other rule
+ * did the refusing. Each refusal here is paired with the nearest write that
+ * must still succeed, so the pair locates the rule between them.
  */
 
-import { readFileSync } from "node:fs";
-import { after, before, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { after, before, beforeEach, suite, test } from "node:test";
+
 import {
     assertFails,
     assertSucceeds,
@@ -19,7 +32,9 @@ const PROJECT_ID = "demo-interface-rules";
 const RULES_PATH = new URL("../../database.rules.json", import.meta.url);
 
 const FLEET_ID = "stretch-se4-9999";
+const OTHER_FLEET_ID = "stretch-se4-0001";
 const ROBOT_UID = "robot-auth-uid";
+const OTHER_ROBOT_UID = "other-robot-auth-uid";
 const OPERATOR_UID = "operator-auth-uid";
 const STRANGER_UID = "stranger-auth-uid";
 
@@ -62,12 +77,18 @@ async function seedFleet() {
         await context.database().ref().set({
             assignments: {
                 [ROBOT_UID]: { role: "robot", name: FLEET_ID },
+                [OTHER_ROBOT_UID]: { role: "robot", name: OTHER_FLEET_ID },
                 [OPERATOR_UID]: { robots: { [FLEET_ID]: true } },
             },
             robots: {
                 [FLEET_ID]: {
                     uid: ROBOT_UID,
                     name: FLEET_ID,
+                    status: "standby",
+                },
+                [OTHER_FLEET_ID]: {
+                    uid: OTHER_ROBOT_UID,
+                    name: OTHER_FLEET_ID,
                     status: "standby",
                 },
             },
@@ -121,7 +142,7 @@ beforeEach(async () => {
     await seedFleet();
 });
 
-describe("robots/$fleetId/build", () => {
+suite("only the assigned robot may write a valid build record", () => {
     test("the robot publishes its own tagged build", async () => {
         await assertSucceeds(
             asUser(ROBOT_UID).ref(`robots/${FLEET_ID}/build`).set(TAGGED_BUILD),
@@ -133,6 +154,34 @@ describe("robots/$fleetId/build", () => {
             asUser(ROBOT_UID)
                 .ref(`robots/${FLEET_ID}/build`)
                 .set(UNTAGGED_BUILD),
+        );
+    });
+
+    test("overwriting a tagged build with an untagged build clears rail", async () => {
+        await assertSucceeds(
+            asUser(ROBOT_UID).ref(`robots/${FLEET_ID}/build`).set(TAGGED_BUILD),
+        );
+        await assertSucceeds(
+            asUser(ROBOT_UID).ref(`robots/${FLEET_ID}/build`).set(UNTAGGED_BUILD),
+        );
+        assert.deepEqual(
+            await readAsAdmin(`robots/${FLEET_ID}/build`),
+            UNTAGGED_BUILD,
+        );
+    });
+
+    test("a build payload without describe is refused", async () => {
+        await assertFails(
+            asUser(ROBOT_UID)
+                .ref(`robots/${FLEET_ID}/build`)
+                .set({ rail: "v0.4.2" }),
+        );
+
+        // Positive control: adding describe to the same rail succeeds.
+        await assertSucceeds(
+            asUser(ROBOT_UID)
+                .ref(`robots/${FLEET_ID}/build`)
+                .set(TAGGED_BUILD),
         );
     });
 
@@ -152,6 +201,16 @@ describe("robots/$fleetId/build", () => {
                     .set({ describe: "v1.0.0", rail }),
             );
         }
+
+        // The same writer, the same path, the same shape, one valid rail: this
+        // is what makes the refusals above evidence about the rail rather than
+        // about the writer. Without it, taking .write away from build entirely
+        // would leave every case above passing.
+        await assertSucceeds(
+            asUser(ROBOT_UID)
+                .ref(`robots/${FLEET_ID}/build`)
+                .set({ describe: "v1.0.0", rail: "v1.0.0" }),
+        );
     });
 
     test("a describe past the length cap is refused", async () => {
@@ -160,6 +219,16 @@ describe("robots/$fleetId/build", () => {
                 .ref(`robots/${FLEET_ID}/build`)
                 .set({ describe: "v".repeat(129) }),
         );
+
+        // One character shorter is the longest describe the rules accept, so
+        // the pair puts the cap where it is written rather than somewhere
+        // under it, and shows the refusal above was the length and not the
+        // writer.
+        await assertSucceeds(
+            asUser(ROBOT_UID)
+                .ref(`robots/${FLEET_ID}/build`)
+                .set({ describe: "v".repeat(128) }),
+        );
     });
 
     test("an unrecognised field under build is refused", async () => {
@@ -167,6 +236,29 @@ describe("robots/$fleetId/build", () => {
             asUser(ROBOT_UID)
                 .ref(`robots/${FLEET_ID}/build`)
                 .set({ describe: "v1.0.0", channel: "branch-main" }),
+        );
+
+        // The same write without the field it does not know is accepted, so
+        // what was refused above is the extra field.
+        await assertSucceeds(
+            asUser(ROBOT_UID)
+                .ref(`robots/${FLEET_ID}/build`)
+                .set({ describe: "v1.0.0" }),
+        );
+    });
+
+    test("a robot cannot write another robot's build", async () => {
+        await assertFails(
+            asUser(ROBOT_UID)
+                .ref(`robots/${OTHER_FLEET_ID}/build`)
+                .set(TAGGED_BUILD),
+        );
+
+        // Positive control: the robot assigned to OTHER_FLEET_ID can write it.
+        await assertSucceeds(
+            asUser(OTHER_ROBOT_UID)
+                .ref(`robots/${OTHER_FLEET_ID}/build`)
+                .set(TAGGED_BUILD),
         );
     });
 
@@ -209,7 +301,7 @@ describe("robots/$fleetId/build", () => {
     });
 });
 
-describe("robots/$fleetId multi-path update", () => {
+suite("an invalid build in a multi-path update rejects the entire update", () => {
     test("a rejected build in a status update discards the status", async () => {
         // update() is atomic. The daemon publishes build in a call of its own so
         // that a rejected build cannot stop the robot reporting its status.

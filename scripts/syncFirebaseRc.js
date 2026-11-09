@@ -24,11 +24,14 @@ const repoRoot = path.join(__dirname, "..");
 const rcPath = path.join(repoRoot, ".firebaserc");
 
 /**
- * @returns {string} projectId from .env, or "" when it is absent
+ * Read the configured Firebase project ID from `.env` or `process.env`.
+ *
+ * @param {string} [root] Repository root containing `.env`.
+ * @returns {string} Project ID from `.env` or environment, or `""` when absent.
  */
-function envProjectId() {
+function envProjectId(root = repoRoot) {
     const parsed =
-        dotenv.config({ path: path.join(repoRoot, ".env") }).parsed || {};
+        dotenv.config({ path: path.join(root, ".env") }).parsed || {};
     // A release runner has no .env; its values arrive as environment entries.
     const value =
         parsed.PUBLIC_FIREBASE_PROJECT_ID ||
@@ -38,30 +41,37 @@ function envProjectId() {
 }
 
 /**
- * @returns {object} parsed .firebaserc, or an empty object when missing/invalid
+ * Parse `.firebaserc` from disk.
+ *
+ * @param {string} [file] Path to `.firebaserc`.
+ * @returns {Record<string, unknown>} Parsed `.firebaserc`, or `{}` when missing or invalid.
  */
-function readRc() {
+function readRc(file = rcPath) {
     try {
-        return JSON.parse(fs.readFileSync(rcPath, "utf8"));
+        return JSON.parse(fs.readFileSync(file, "utf8"));
     } catch {
+        // Missing or malformed .firebaserc is treated as empty and overwritten on sync.
         return {};
     }
 }
 
 /**
- * @param {string} projectId
- * @returns {"unchanged" | "written" | "skipped"}
+ * Synchronize `projects.default` in `.firebaserc` with `projectId`, preserving other keys.
+ *
+ * @param {string} projectId Target Firebase project ID.
+ * @param {string} [file] Path to `.firebaserc`.
+ * @returns {"unchanged" | "written" | "skipped"} Sync outcome.
  */
-function syncFirebaseRc(projectId) {
+function syncFirebaseRc(projectId, file = rcPath) {
     if (!projectId) return "skipped";
-    const rc = readRc();
+    const rc = readRc(file);
     if (rc.projects && rc.projects.default === projectId) return "unchanged";
     rc.projects = { ...rc.projects, default: projectId };
-    fs.writeFileSync(rcPath, `${JSON.stringify(rc, null, 2)}\n`);
+    fs.writeFileSync(file, `${JSON.stringify(rc, null, 2)}\n`);
     return "written";
 }
 
-module.exports = { envProjectId, syncFirebaseRc };
+module.exports = { envProjectId, readRc, syncFirebaseRc };
 
 if (require.main === module) {
     const projectId = envProjectId();

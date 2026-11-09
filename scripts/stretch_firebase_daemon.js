@@ -17,7 +17,7 @@ const {
     spawnProcessGroup,
     terminateProcessGroup,
 } = require('./launchProcessGroup');
-const { isReleaseTag } = require('./releaseTag');
+const { buildFromDescribe } = require('./releaseTag');
 
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithEmailAndPassword } = require('firebase/auth');
@@ -298,9 +298,9 @@ function publishBranch() {
 /**
  * Read the build identity of the checkout the interface launches from.
  *
- * A describe carrying a commit count or -dirty matches no deployed rail, so
- * rail is set only when the describe is exactly a release tag. --match keeps
- * tags outside the release grammar out of the answer.
+ * --match keeps tags outside the release grammar out of the answer;
+ * buildFromDescribe decides whether what git said names a rail, so the daemon
+ * and the lobby read a describe the same way.
  *
  * @returns {Promise<{describe: string, rail?: string}|null>} Build fields, or
  *     null when git cannot answer.
@@ -313,13 +313,7 @@ function readGitBuild() {
             { cwd: repoRoot },
             (error, stdout) => {
                 if (error) return resolve(null);
-                const describe = stdout.trim();
-                if (!describe) return resolve(null);
-                return resolve(
-                    isReleaseTag(describe)
-                        ? { describe, rail: describe }
-                        : { describe },
-                );
+                return resolve(buildFromDescribe(stdout));
             },
         );
     });
