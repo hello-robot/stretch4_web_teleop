@@ -27,6 +27,8 @@ const SAVED_POSE_SCREEN_PX = 22;
 const LABEL_GEOM_SIZE = 40;
 /** Hover label size on screen (CSS px). */
 const LABEL_SCREEN_PX = 14;
+/** Drag distance (CSS px) before a press on the map starts aiming the goal heading. */
+const GOAL_AIM_MIN_DRAG_PX = 20;
 
 type Point2 = { x: number; y: number };
 
@@ -135,6 +137,10 @@ export class OccupancyGrid extends React.Component {
     private functs: MapFunctions;
     // The current goal position in ROS coordinates
     private goal_position?: ROSPoint;
+    // The current goal heading in the map frame
+    private goal_yaw?: number;
+    // Stage coords of the press that placed the goal, while the pointer is held
+    private goalPressPoint?: Point2;
 
     // Listeners for goal_position changes
     private goalPositionListeners: ((pos: ROSPoint | undefined) => void)[] = [];
@@ -783,9 +789,15 @@ export class OccupancyGrid extends React.Component {
      */
     play() {
         if (this.goal_position) {
+            const yaw = this.goal_yaw ?? 0;
             this.functs.MoveBase({
                 position: this.goal_position,
-                orientation: { x: 0, y: 0, z: -0.45, w: 0.893 },
+                orientation: {
+                    x: 0,
+                    y: 0,
+                    z: Math.sin(yaw / 2),
+                    w: Math.cos(yaw / 2),
+                },
             } as ROSPose);
         }
         this.goalPositionSet(undefined);
@@ -797,6 +809,8 @@ export class OccupancyGrid extends React.Component {
      */
     removeGoalMarker() {
         this.goalPositionSet(undefined);
+        this.goal_yaw = undefined;
+        this.goalPressPoint = undefined;
         if (this.goalMarker) {
             this.stopGoalPulse();
             this.rootObject.removeChild(this.goalMarker);
@@ -844,13 +858,63 @@ export class OccupancyGrid extends React.Component {
             this.resizeObserver.observe(canvas);
         }
 
+        // Press places the goal; dragging before release aims its heading.
         this.rootObject.on("mousedown", (event) => {
-            if (!this.functs.SelectGoal()) return
-            else {
-                let evt = event as createjs.MouseEvent;
-                this.goalPositionSet(this.globalToRos(evt.stageX, evt.stageY));
-                this.createGoalMarker(evt.stageX / 5, evt.stageY / 5, false);
-            }
+            if (!this.functs.SelectGoal()) return;
+            const evt = event as createjs.MouseEvent;
+            const goal = this.globalToRos(evt.stageX, evt.stageY);
+            this.goalPositionSet(goal);
+            this.createGoalMarker(evt.stageX / 5, evt.stageY / 5, false);
+            this.setGoalYaw(this.defaultGoalYaw(goal));
+            this.goalPressPoint = { x: evt.stageX, y: evt.stageY };
         });
+        this.rootObject.on("stagemousemove", (event) => {
+            if (!this.goalPressPoint || !this.goalMarker) return;
+            const evt = event as createjs.MouseEvent;
+            const dx = evt.stageX - this.goalPressPoint.x;
+            const dy = evt.stageY - this.goalPressPoint.y;
+            if (Math.hypot(dx, dy) * this.cssPxPerStagePx() < GOAL_AIM_MIN_DRAG_PX) return;
+            // Canvas y points down; map y points up.
+            this.setGoalYaw(Math.atan2(-dy, dx));
+        });
+        this.rootObject.on("stagemouseup", () => {
+            this.goalPressPoint = undefined;
+        });
+    }
+
+    /** CSS pixels per stage pixel for the displayed canvas. */
+    private cssPxPerStagePx(): number {
+        const canvas = this.rootObject.canvas as HTMLCanvasElement | undefined;
+        return canvas && canvas.width > 0 && canvas.clientWidth > 0
+            ? canvas.clientWidth / canvas.width
+            : 1;
+    }
+
+    /**
+     * Heading for a freshly tapped goal: the direction of travel from the robot,
+     * or the robot's current heading if the goal is on top of it.
+     */
+    private defaultGoalYaw(goal: ROSPoint): number {
+        try {
+            const pose = this.functs.GetPose();
+            if (!pose?.translation) return 0;
+            const dx = goal.x - pose.translation.x;
+            const dy = goal.y - pose.translation.y;
+            if (Math.hypot(dx, dy) > 0.05) return Math.atan2(dy, dx);
+            if (pose.rotation) {
+                return (-this.rosQuaternionToGlobalTheta(pose.rotation) * Math.PI) / 180;
+            }
+        } catch {
+            // Pose may be unavailable before WebRTC map TF arrives.
+        }
+        return 0;
+    }
+
+    /** Set the goal heading (map-frame yaw, radians) and rotate the goal marker to match. */
+    private setGoalYaw(yaw: number) {
+        this.goal_yaw = yaw;
+        if (!this.goalMarker) return;
+        this.goalMarker.rotation = (-yaw * 180) / Math.PI - 90.0;
+        this.rootObject.update();
     }
 }
