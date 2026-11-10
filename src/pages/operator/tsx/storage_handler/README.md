@@ -374,7 +374,8 @@ active robots.
 
 The site serves two things:
 
-- **The lobby (`/`)** — the fleet dashboard, built from the current checkout.
+- **The lobby (`/`) and the unversioned operator page (`/operator/`)** — the fleet dashboard and its
+  fallback interface, built from the GitHub release marked **Latest** and from nothing else.
 - **Rails (`/r/<tag>/operator/`)** — immutable copies of each released operator interface, served side
   by side so robots running different software versions can share one dashboard.
 
@@ -390,8 +391,18 @@ is not a release and opens the default rail instead.
 { "rails": ["v0.1.0-alpha1", "v0.1.0"] }
 ```
 
-Every `npm run deploy:hosting` run builds the lobby, builds the rail for the current checkout, carries
-forward the other rails listed in `release.json`, and removes any rail no longer in that list.
+Every `npm run deploy:hosting` run builds the rail for the current checkout, carries forward the other
+rails listed in `release.json`, and removes any rail no longer in that list. What it does with the
+lobby and `/operator/` depends on the tag being deployed:
+
+| Tag being deployed | Lobby and `/operator/` | Rails |
+| :--- | :--- | :--- |
+| The GitHub release marked **Latest** | Rebuilt from this tag | `/r/<tag>/` built, the rest carried |
+| Any other tag (an alpha, beta, rc, or an older release) | Left exactly as the live site serves them | `/r/<tag>/` built, the rest carried |
+
+A deploy that leaves the lobby in place prints `lobby  unchanged (carried from the live version)` and
+publishes nothing outside `/r/`. The one exception is a Firebase project with no live release at all,
+which has no lobby to keep, so its first deploy builds one from whichever tag is deployed.
 
 To cut and publish a release, add the new tag to `release.json` **before** tagging (the file is read
 from the tagged commit):
@@ -403,9 +414,15 @@ git checkout <tag>
 npm run deploy:hosting
 ```
 
-The default rail (used when a robot reports no release tag of its own) comes from the GitHub release
-marked **Latest** and is read when the lobby is built. Publishing that GitHub release and then running
-`npm run deploy:hosting` are both required; pushing a git tag on its own changes nothing.
+To make a release the one the lobby is built from, publish its GitHub release as **Latest** first and
+then run `npm run deploy:hosting` from its tag. Deploying before the GitHub release is published adds
+the rail and leaves the lobby alone; run the deploy again afterwards to update the lobby. A fix to the
+lobby itself therefore ships as a new **Latest** release.
+
+The default rail (used when a robot reports no release tag of its own) is that same **Latest** release,
+baked into the lobby when it is built. The lobby publishes what it was built from at `/lobby.json`
+(`tag`, `commit`, `stable`, `built`). A deploy that leaves the lobby in place reads that file and
+refuses to retire the rail the lobby defaults to.
 
 Rails are immutable on the live site: a deploy that would overwrite an existing `/r/<tag>/` from a
 different commit refuses rather than replacing it.
@@ -438,8 +455,10 @@ run. See [Primer: Launching the Interface](../../../../primer_launch.md) for the
 ### Testing rails and staging releases (`npm run deploy:hosting`)
 
 Whereas `./launch_interface.sh -f` publishes a flat single-version build to `branch-<branch>`,
-`npm run deploy:hosting` builds the multi-version site: the lobby (`/`), the unversioned operator page
-(`/operator/`), and, on a live deploy, a versioned rail (`/r/<tag>/operator/`) built from `HEAD`.
+`npm run deploy:hosting` builds the multi-version site: on a live deploy, a versioned rail
+(`/r/<tag>/operator/`) built from `HEAD`, plus the lobby (`/`) and the unversioned operator page
+(`/operator/`) when `HEAD` is the **Latest** release (see [Releases and rails](#releases-and-rails)).
+A preview always builds its own lobby and `/operator/`.
 
 It needs one thing from you: **where to publish** — the live site (`https://YOUR_PROJECT_ID.web.app`)
 or a preview channel (`rails-<branch|tag>`).
@@ -450,7 +469,7 @@ is served under is the name you check out to rebuild it.
 
 | Goal | Checkout state | Command | Where it publishes |
 | :--- | :--- | :--- | :--- |
-| **Publish a release live** | Clean `v*` tag in `release.json` | `npm run deploy:hosting` | Live site (`YOUR_PROJECT_ID.web.app`), serving `/r/<tag>/operator/` |
+| **Publish a release live** | Clean `v*` tag in `release.json` | `npm run deploy:hosting` | Live site (`YOUR_PROJECT_ID.web.app`), serving `/r/<tag>/operator/`; the lobby and `/operator/` change only if the tag is **Latest** |
 | **Inspect a release before going live** | Clean `v*` tag | `npm run deploy:hosting -- --preview` | Preview channel `rails-<tag>`: the lobby and `/operator/`, which is that tag's interface |
 | **Test a branch or a dirty tree** | Any branch or uncommitted edits | `npm run deploy:hosting -- --preview` | Preview channel `rails-<branch>`: the lobby and `/operator/`, built from `HEAD` |
 
@@ -486,6 +505,15 @@ operations:
 A live deploy builds `/r/<tag>/operator/` from `HEAD`, so `HEAD` must be a clean `v*` tag listed in
 `release.json`. Check one out, or publish this checkout to a preview channel instead with
 `npm run deploy:hosting -- --preview`.
+
+**`the live lobby routes to <tag> by default, and release.json does not retain it`**
+The tag being deployed is not the **Latest** release, so the live lobby stays in place, and that lobby
+sends robots with no release of their own to `<tag>`. Add `<tag>` back to `release.json`, or deploy the
+**Latest** release first so the lobby is rebuilt against it.
+
+**The lobby did not change after a deploy.**
+The deployed tag is not the GitHub release marked **Latest**. Publish it as **Latest** and run
+`npm run deploy:hosting` from the tag again.
 
 **Connect is disabled, with a notice that the release is missing.**
 The robot reports a tag that `release.json` no longer retains, so `/r/<tag>/` is not on the site.

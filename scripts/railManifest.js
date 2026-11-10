@@ -49,6 +49,20 @@ function git(repoRoot, args) {
 function railManifest({ tag, repoRoot }) {
     return {
         tag,
+        ...checkoutIdentity(repoRoot),
+        built: new Date().toISOString(),
+    };
+}
+
+/**
+ * What git says a checkout is.
+ *
+ * @param {string} repoRoot Checkout to read.
+ * @returns {{commit: string|null, describe: string|null}} HEAD commit and
+ *     git describe, each null when git cannot answer.
+ */
+function checkoutIdentity(repoRoot) {
+    return {
         commit: git(repoRoot, ["rev-parse", "HEAD"]),
         describe: git(repoRoot, [
             "describe",
@@ -58,8 +72,35 @@ function railManifest({ tag, repoRoot }) {
             "--match",
             "v*",
         ]),
-        built: new Date().toISOString(),
     };
+}
+
+/**
+ * Emit a JSON asset into every compilation of a compiler.
+ *
+ * @param {import("webpack").Compiler} compiler Webpack compiler.
+ * @param {string} pluginName Name the taps are registered under.
+ * @param {string} filename Asset path relative to the output directory.
+ * @param {() => object} produce Builds the asset's contents per compilation.
+ * @returns {void}
+ */
+function emitJsonAsset(compiler, pluginName, filename, produce) {
+    const { RawSource } = compiler.webpack.sources;
+    compiler.hooks.thisCompilation.tap(pluginName, (compilation) => {
+        compilation.hooks.processAssets.tap(
+            {
+                name: pluginName,
+                stage: compiler.webpack.Compilation
+                    .PROCESS_ASSETS_STAGE_ADDITIONAL,
+            },
+            () => {
+                compilation.emitAsset(
+                    filename,
+                    new RawSource(`${JSON.stringify(produce(), null, 2)}\n`)
+                );
+            }
+        );
+    });
 }
 
 class RailManifestPlugin {
@@ -73,31 +114,21 @@ class RailManifestPlugin {
     }
 
     /**
+     * Emit manifest.json at the rail's root.
+     *
      * @param {import("webpack").Compiler} compiler Webpack compiler.
      * @returns {void}
      */
     apply(compiler) {
-        const { RawSource } = compiler.webpack.sources;
-        compiler.hooks.thisCompilation.tap(PLUGIN, (compilation) => {
-            compilation.hooks.processAssets.tap(
-                {
-                    name: PLUGIN,
-                    stage: compiler.webpack.Compilation
-                        .PROCESS_ASSETS_STAGE_ADDITIONAL,
-                },
-                () => {
-                    const manifest = railManifest({
-                        tag: this.tag,
-                        repoRoot: this.repoRoot,
-                    });
-                    compilation.emitAsset(
-                        "manifest.json",
-                        new RawSource(`${JSON.stringify(manifest, null, 2)}\n`),
-                    );
-                },
-            );
-        });
+        emitJsonAsset(compiler, PLUGIN, "manifest.json", () =>
+            railManifest({ tag: this.tag, repoRoot: this.repoRoot })
+        );
     }
 }
 
-module.exports = { RailManifestPlugin, railManifest };
+module.exports = {
+    RailManifestPlugin,
+    checkoutIdentity,
+    emitJsonAsset,
+    railManifest,
+};

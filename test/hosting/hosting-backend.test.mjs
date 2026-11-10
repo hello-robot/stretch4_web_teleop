@@ -5,8 +5,9 @@
  * without a webpack build, so the whole file is a gate that can run anywhere.
  * What it covers is the part of a release that decides *what* is published:
  * the tag grammar, the flags, the origin and channel resolution, the stable
- * release the fleet defaults to, the bundle guards, the immutability check,
- * and the webpack wiring that puts a rail under /r/<tag>/.
+ * release the fleet defaults to, which releases may replace the lobby, the
+ * filter a clone is requested with, the bundle guards, the immutability
+ * check, and the webpack wiring that puts a rail under /r/<tag>/.
  *
  * What it deliberately does not cover: the server-side clone in
  * hostingVersion.js, which cannot be decided without a Hosting site, and the
@@ -41,7 +42,12 @@ const {
     railBundleReady,
 } = require("../../scripts/hostingBundleReady");
 const {
+    ROOT_CLONE_REGEX,
+    cloneIncludeRegexes,
+    cloneRequestBody,
     hostingVersionConfig,
+    pathsOutsideRails,
+    publishAdditively,
     railCloneRegexes,
     servedAt,
     servedFiles,
@@ -49,8 +55,10 @@ const {
 } = require("../../scripts/hostingVersion");
 const {
     assembleRails,
+    checkCarriedLobby,
     checkPublishedRail,
     isPreviewOrigin,
+    lobbyPlan,
     parseArgs,
     previewChannelId,
     publishedManifest,
@@ -147,6 +155,21 @@ function stubFetch(answer) {
             json: async () => answer.body,
         };
     };
+}
+
+/**
+ * Whether Hosting's versions:clone keeps a path for a filter regex.
+ *
+ * The API keeps a path only when the regex matches the whole of it: a clone
+ * filtered by `^/r/v0\.1\.0/` kept no rail file, and `^/r/v0\.1\.0/.*` kept
+ * all of them.
+ *
+ * @param {string} source Filter regex source, as sent in include.regexes.
+ * @param {string} served Served path, beginning with a slash.
+ * @returns {boolean} True when the clone would keep the path.
+ */
+function cloneKeeps(source, served) {
+    return new RegExp(`^(?:${source})$`).test(served);
 }
 
 /**
@@ -609,14 +632,17 @@ suite("a published version hashes and retains only its rail and root files", () 
         assert.equal(files["/firebase.json"], undefined);
     });
 
-    test("railCloneRegexes builds anchored regexes with escaped dots for retained rails", () => {
-        const regexes = railCloneRegexes(["v1.2.3", "v2.0.0-rc1"]).map(
-            (source) => new RegExp(source),
+    test("railCloneRegexes match the whole path of every file in a retained rail, with dots escaped", () => {
+        const [first, second] = railCloneRegexes(["v1.2.3", "v2.0.0-rc1"]);
+        assert.equal(cloneKeeps(first, "/r/v1.2.3/manifest.json"), true);
+        assert.equal(cloneKeeps(first, "/r/v1.2.3/operator/bundle.js"), true);
+        assert.equal(cloneKeeps(first, "/r/v1X2Y3/manifest.json"), false);
+        assert.equal(cloneKeeps(first, "/operator/index.html"), false);
+        assert.equal(cloneKeeps(first, "/x/r/v1.2.3/manifest.json"), false);
+        assert.equal(
+            cloneKeeps(second, "/r/v2.0.0-rc1/operator/index.html"),
+            true
         );
-        assert.equal(regexes[0].test("/r/v1.2.3/manifest.json"), true);
-        assert.equal(regexes[0].test("/r/v1X2Y3/manifest.json"), false);
-        assert.equal(regexes[0].test("/operator/index.html"), false);
-        assert.equal(regexes[1].test("/r/v2.0.0-rc1/operator/index.html"), true);
     });
 
     test("servedAt probes with HEAD and cache: no-store, returning false on 404 or network failure", async () => {
@@ -898,8 +924,371 @@ suite("a rail is immutable", () => {
     });
 });
 
+suite("a release replaces the lobby only when its tag is the latest release", () => {
+    /** A live release of a tag that is not the latest, on a site with a lobby. */
+    const carried = {
+        tag: "v0.2.0-alpha1",
+        stable: "v0.1.0",
+        preview: false,
+        liveHasRelease: true,
+    };
+
+    test("carries the live lobby for a pre-release and rebuilds it for the latest release", () => {
+        assert.equal(lobbyPlan(carried), "carry");
+        assert.equal(lobbyPlan({ ...carried, tag: "v0.1.0" }), "rebuild");
+    });
+
+    test("carries the live lobby for a release that is not a pre-release but is not the latest", () => {
+        assert.equal(
+            lobbyPlan({ ...carried, tag: "v0.1.1", stable: "v0.2.0" }),
+            "carry"
+        );
+    });
+
+    test("carries the live lobby when no GitHub release is published", () => {
+        assert.equal(lobbyPlan({ ...carried, stable: null }), "carry");
+        // A checkout on no tag and a repository with no release are both
+        // null, and must not read as the tag being the latest release.
+        assert.equal(
+            lobbyPlan({ ...carried, tag: null, stable: null }),
+            "carry"
+        );
+    });
+
+    test("builds a lobby for a site with no live release, and only when the API said so", () => {
+        assert.equal(
+            lobbyPlan({ ...carried, liveHasRelease: false }),
+            "rebuild"
+        );
+        assert.equal(
+            lobbyPlan({ ...carried, liveHasRelease: undefined }),
+            "carry"
+        );
+    });
+
+    test("a preview builds its own lobby whatever the tag", () => {
+        assert.equal(lobbyPlan({ ...carried, preview: true }), "rebuild");
+        assert.equal(
+            lobbyPlan({ tag: null, stable: null, preview: true }),
+            "rebuild"
+        );
+    });
+});
+
+suite("a release that carries the lobby clones every path outside /r/", () => {
+    /** Paths the lobby, /operator/ and their shared assets are served at. */
+    const ROOT_PATHS = [
+        "/index.html",
+        "/lobby.json",
+        "/operator/index.html",
+        "/operator/bundle.js",
+        "/home/bundle.js",
+        "/187/bundle.js",
+        "/robot/index.html",
+        "/r.png",
+        "/r",
+        "/0a5126619d82983b375a8671a721b309.svg",
+    ];
+
+    /** Paths that belong to a rail, retained or not. */
+    const RAIL_PATHS = [
+        "/r/v1.2.3/manifest.json",
+        "/r/v1.2.3/operator/index.html",
+        "/r/v0.9.0/operator/bundle.js",
+    ];
+
+    test("the root filter matches every root path and no rail path", () => {
+        for (const served of ROOT_PATHS) {
+            assert.equal(
+                cloneKeeps(ROOT_CLONE_REGEX, served),
+                true,
+                `${served} is not carried`
+            );
+        }
+        for (const served of RAIL_PATHS) {
+            assert.equal(
+                cloneKeeps(ROOT_CLONE_REGEX, served),
+                false,
+                `${served} is carried as root`
+            );
+        }
+    });
+
+    test("the root filter uses nothing RE2 refuses", () => {
+        // Hosting evaluates the filter with RE2: no lookaround, no
+        // backreferences.
+        assert.doesNotMatch(ROOT_CLONE_REGEX, /\(\?[=!<]|\\[1-9]/);
+    });
+
+    test("carrying the root adds the root filter to the retained rails", () => {
+        const carrying = cloneIncludeRegexes(["v1.2.3"], true);
+        const matched = (served) =>
+            carrying.some((source) => cloneKeeps(source, served));
+        assert.equal(matched("/index.html"), true);
+        assert.equal(matched("/r/v1.2.3/manifest.json"), true);
+        // A rail release.json no longer retains is still pruned.
+        assert.equal(matched("/r/v0.9.0/operator/bundle.js"), false);
+
+        // Without it the root is not requested, so it must be built.
+        assert.deepEqual(
+            cloneIncludeRegexes(["v1.2.3"], false),
+            railCloneRegexes(["v1.2.3"])
+        );
+        assert.deepEqual(
+            cloneIncludeRegexes(["v1.2.3"]),
+            railCloneRegexes(["v1.2.3"])
+        );
+    });
+
+    test("the clone request names the source and leaves the version open", () => {
+        const body = cloneRequestBody("sites/s/versions/abc", ["v1.2.3"], true);
+        assert.equal(body.sourceVersion, "sites/s/versions/abc");
+        assert.equal(body.finalize, false);
+        assert.deepEqual(body.include.regexes, [
+            ROOT_CLONE_REGEX,
+            ...railCloneRegexes(["v1.2.3"]),
+        ]);
+    });
+
+    test("a clone with nothing to filter sends no include, and carrying the root always sends one", () => {
+        // An empty include list would be read as a filter that matches nothing.
+        assert.equal(
+            "include" in cloneRequestBody("sites/s/versions/abc", []),
+            false
+        );
+        assert.deepEqual(
+            cloneRequestBody("sites/s/versions/abc", [], true).include.regexes,
+            [ROOT_CLONE_REGEX]
+        );
+    });
+
+    test("pathsOutsideRails lists what a rails-only tree may not contain", () => {
+        assert.deepEqual(
+            pathsOutsideRails([
+                ...RAIL_PATHS,
+                "/operator/index.html",
+                "/index.html",
+            ]),
+            ["/index.html", "/operator/index.html"]
+        );
+        assert.deepEqual(pathsOutsideRails(RAIL_PATHS), []);
+    });
+
+    test("a carried release refuses a tree that holds a root page", async () => {
+        // The origin is a custom domain with no --site, so a call that gets
+        // past the tree check stops at the site id, before any credential or
+        // network is touched.
+        const origin = "https://teleop.example.com";
+        const report = () => {};
+
+        const withRoot = tempDir("carry-root");
+        writeFile(path.join(withRoot, "index.html"));
+        writeFile(path.join(withRoot, "r", "v1.2.3", "manifest.json"));
+        await assert.rejects(
+            () =>
+                publishAdditively({
+                    origin,
+                    distDir: withRoot,
+                    carryRoot: true,
+                    report,
+                }),
+            /1 path\(s\) outside \/r\/ \(\/index\.html\)/
+        );
+
+        // Positive control: the same call over a rails-only tree gets past
+        // the tree check.
+        const railsOnly = tempDir("carry-rails");
+        writeFile(path.join(railsOnly, "r", "v1.2.3", "manifest.json"));
+        await assert.rejects(
+            () =>
+                publishAdditively({
+                    origin,
+                    distDir: railsOnly,
+                    carryRoot: true,
+                    report,
+                }),
+            /cannot read a Hosting site id/
+        );
+
+        // And a release that rebuilds the lobby is expected to hold one.
+        await assert.rejects(
+            () => publishAdditively({ origin, distDir: withRoot, report }),
+            /cannot read a Hosting site id/
+        );
+    });
+});
+
+suite("a carried lobby must keep the rail it routes to by default", () => {
+    const origin = "https://site.web.app";
+
+    /** What a lobby built from the latest release publishes about itself. */
+    const lobby = {
+        tag: "v0.1.0",
+        commit: "1111111111111111111111111111111111111111",
+        describe: "v0.1.0",
+        stable: "v0.1.0",
+        built: "2026-11-06T23:25:12.000Z",
+    };
+
+    let realFetch;
+    let realLog;
+    let realWarn;
+
+    /** What checkCarriedLobby printed, collected so it stays out of the reporter. */
+    let reported;
+
+    before(() => {
+        realFetch = globalThis.fetch;
+        realLog = console.log;
+        realWarn = console.warn;
+    });
+
+    beforeEach(() => {
+        reported = [];
+        console.log = (...args) => reported.push(args.join(" "));
+        console.warn = (...args) => reported.push(args.join(" "));
+    });
+
+    afterEach(() => {
+        console.log = realLog;
+        console.warn = realWarn;
+        globalThis.fetch = realFetch;
+    });
+
+    test("reads /lobby.json from the origin without a cache", async () => {
+        const seen = [];
+        globalThis.fetch = async (url, init) => {
+            seen.push([url, init]);
+            return { ok: true, status: 200, json: async () => lobby };
+        };
+        await checkCarriedLobby(origin, ["v0.1.0"], "v0.1.0");
+        assert.equal(seen[0][0], "https://site.web.app/lobby.json");
+        assert.equal(seen[0][1].cache, "no-store");
+    });
+
+    test("refuses to retire the rail the live lobby defaults to", async () => {
+        globalThis.fetch = stubFetch({ status: 200, body: lobby });
+        await assert.rejects(
+            () => checkCarriedLobby(origin, ["v0.2.0-alpha1"], "v0.1.0"),
+            /routes to v0\.1\.0 by default, and release\.json does not retain it/
+        );
+
+        // Positive control: the same lobby with its default rail retained.
+        assert.deepEqual(
+            await checkCarriedLobby(
+                origin,
+                ["v0.1.0", "v0.2.0-alpha1"],
+                "v0.1.0"
+            ),
+            lobby
+        );
+        assert.match(
+            reported.join("\n"),
+            /built from v0\.1\.0, default rail v0\.1\.0/
+        );
+    });
+
+    test("a lobby with no default rail has nothing to keep", async () => {
+        globalThis.fetch = stubFetch({
+            status: 200,
+            body: { ...lobby, stable: null },
+        });
+        await checkCarriedLobby(origin, ["v0.2.0-alpha1"], null);
+        assert.match(reported.join("\n"), /default rail none/);
+    });
+
+    test("warns when the latest release is not the one the lobby was built from", async () => {
+        globalThis.fetch = stubFetch({ status: 200, body: lobby });
+        await checkCarriedLobby(origin, ["v0.1.0", "v0.2.0"], "v0.2.0");
+        assert.match(
+            reported.join("\n"),
+            /the latest release is v0\.2\.0, and the live lobby was built from v0\.1\.0/
+        );
+
+        // Positive control: no warning when they agree.
+        reported.length = 0;
+        await checkCarriedLobby(origin, ["v0.1.0", "v0.2.0"], "v0.1.0");
+        assert.doesNotMatch(reported.join("\n"), /the latest release is/);
+    });
+
+    test("a lobby published before /lobby.json existed is carried, and says so", async () => {
+        globalThis.fetch = stubFetch({ status: 404 });
+        assert.equal(
+            await checkCarriedLobby(origin, ["v0.2.0-alpha1"], "v0.1.0"),
+            null
+        );
+        assert.match(reported.join("\n"), /publishes no \/lobby\.json/);
+    });
+
+    test("an origin that does not answer is reported as unidentified, not as absent", async () => {
+        for (const answer of [{ throws: true }, { status: 500 }]) {
+            reported.length = 0;
+            globalThis.fetch = stubFetch(answer);
+            assert.equal(
+                await checkCarriedLobby(origin, ["v0.2.0-alpha1"], "v0.1.0"),
+                undefined
+            );
+            assert.match(reported.join("\n"), /not identified/);
+        }
+    });
+});
+
 suite("webpack isolates a rail under /r/<tag>/ and shares the root across unversioned pages", () => {
     const production = { mode: "production" };
+
+    /**
+     * The plugin that emits lobby.json, if a config attaches one.
+     *
+     * @param {import("webpack").Configuration} config Built configuration.
+     * @returns {object|undefined} The LobbyManifestPlugin instance.
+     */
+    const lobbyManifestPlugin = (config) =>
+        config.plugins.find(
+            (plugin) => plugin.constructor.name === "LobbyManifestPlugin"
+        );
+
+    test("only the lobby-only firebase build emits lobby.json", () => {
+        assert.ok(
+            lobbyManifestPlugin(
+                makeWebpackConfig(
+                    { storage: "firebase", pages: "home" },
+                    production
+                )
+            ),
+            "the lobby build emits no lobby.json"
+        );
+        for (const env of [
+            { storage: "firebase" },
+            { storage: "firebase", pages: "operator" },
+            { storage: "firebase", pages: "home,operator" },
+            { storage: "firebase", pages: "operator", rail: "v1.2.3" },
+            { storage: "localstorage", pages: "home" },
+        ]) {
+            assert.equal(
+                lobbyManifestPlugin(makeWebpackConfig(env, production)),
+                undefined,
+                `${JSON.stringify(env)} emits lobby.json`
+            );
+        }
+    });
+
+    test("lobby.json records the stable rail the release exported for the build", () => {
+        const saved = process.env.PUBLIC_STABLE_RAIL;
+        try {
+            process.env.PUBLIC_STABLE_RAIL = "v0.2.0";
+            const plugin = lobbyManifestPlugin(
+                makeWebpackConfig(
+                    { storage: "firebase", pages: "home" },
+                    production
+                )
+            );
+            assert.equal(plugin.stable, "v0.2.0");
+            assert.equal(plugin.repoRoot, repoRoot);
+        } finally {
+            if (saved === undefined) delete process.env.PUBLIC_STABLE_RAIL;
+            else process.env.PUBLIC_STABLE_RAIL = saved;
+        }
+    });
 
     /**
      * Filenames the HtmlWebpackPlugin instances in a config will emit.

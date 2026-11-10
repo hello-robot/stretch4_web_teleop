@@ -12,6 +12,10 @@
  * or carried across server-side by cloning the retained /r/<tag>/ trees from
  * the currently live Hosting version.
  *
+ * The lobby and /operator/ are built only from the tag GitHub marks as the
+ * latest release. A live release of any other tag clones them from the live
+ * version too, so it adds its rail and changes nothing outside /r/.
+ *
  * Usage:
  *   node scripts/deployHosting.js                    publish the live site
  *   node scripts/deployHosting.js --preview          publish to rails-<branch|tag>
@@ -33,10 +37,12 @@ const {
     railBundleReady,
 } = require("./hostingBundleReady");
 const {
+    liveVersionName,
     publishAdditively,
     servedAt,
     siteFromOrigin,
 } = require("./hostingVersion");
+const { LOBBY_MANIFEST } = require("./lobbyManifest");
 const { syncFirebaseRc, envProjectId } = require("./syncFirebaseRc");
 
 const repoRoot = path.join(__dirname, "..");
@@ -475,16 +481,102 @@ function isPreviewOrigin(origin, channel) {
  * @returns {Promise<object|null|undefined>} Manifest, null, or undefined.
  */
 async function publishedManifest(origin, tag) {
+    return publishedJson(origin, `/r/${tag}/manifest.json`);
+}
+
+/**
+ * A JSON document already published at this origin.
+ *
+ * @param {string} origin Origin to look on.
+ * @param {string} servedPath Path of the document, beginning with a slash.
+ * @returns {Promise<object|null|undefined>} The document, null when the origin
+ *     answers 404, and undefined when the origin could not be read.
+ */
+async function publishedJson(origin, servedPath) {
     try {
-        const response = await fetch(`${origin}/r/${tag}/manifest.json`, {
+        const response = await fetch(`${origin}${servedPath}`, {
             cache: "no-store",
         });
         if (response.status === 404) return null;
         if (!response.ok) return undefined;
         return await response.json();
     } catch {
+        // A request that never completed says nothing about what is published.
         return undefined;
     }
+}
+
+/**
+ * Whether a run rebuilds the lobby and /operator/ or carries the live ones.
+ *
+ * @param {object} state What the run has established.
+ * @param {string|null} state.tag Release tag this checkout sits on.
+ * @param {string|null} state.stable Tag of the latest GitHub release, or null
+ *     when none is published.
+ * @param {boolean} state.preview True when publishing to a preview channel.
+ * @param {boolean} [state.liveHasRelease] False when the live channel serves
+ *     no version; omitted when the Hosting API was not asked.
+ * @returns {"rebuild"|"carry"} rebuild for a preview, for the latest release,
+ *     and for a site with nothing live; carry otherwise.
+ */
+function lobbyPlan({ tag, stable, preview, liveHasRelease }) {
+    if (preview) return "rebuild";
+    if (tag !== null && tag === stable) return "rebuild";
+    if (liveHasRelease === false) return "rebuild";
+    return "carry";
+}
+
+/**
+ * Check the live lobby a release is about to carry across unchanged.
+ *
+ * The lobby's default rail is baked into it at build time, so a carried lobby
+ * keeps routing there whatever release.json now says.
+ *
+ * @param {string} origin Origin the live lobby is served from.
+ * @param {string[]} rails Tags release.json retains.
+ * @param {string|null} stable Tag of the latest GitHub release, or null.
+ * @returns {Promise<object|null|undefined>} The live lobby's manifest, null
+ *     when it publishes none, and undefined when the origin could not be read.
+ * @throws {Error} When the lobby's default rail is not retained.
+ */
+async function checkCarriedLobby(origin, rails, stable) {
+    const lobby = await publishedJson(origin, `/${LOBBY_MANIFEST}`);
+
+    if (lobby === undefined) {
+        console.log("- Live lobby carried across unchanged: not identified");
+        console.log(`    /${LOBBY_MANIFEST} could not be read at this origin`);
+        return lobby;
+    }
+    if (lobby === null) {
+        pass(
+            "Live lobby carried across unchanged",
+            `it publishes no /${LOBBY_MANIFEST}, so its build is not identified`
+        );
+        return lobby;
+    }
+    if (lobby.stable && !rails.includes(lobby.stable)) {
+        throw new Error(
+            `the live lobby routes to ${lobby.stable} by default, and ` +
+                "release.json does not retain it.\n" +
+                "          This release leaves that lobby in place, so " +
+                "retiring the rail would break its default.\n" +
+                "          Add the tag back to release.json, or retire it " +
+                "once the latest release has been deployed."
+        );
+    }
+
+    const from = lobby.tag ?? lobby.describe ?? "an unrecorded checkout";
+    pass(
+        "Live lobby carried across unchanged",
+        `built from ${from}, default rail ${lobby.stable ?? "none"}`
+    );
+    if (stable && lobby.tag !== stable) {
+        warn(
+            `the latest release is ${stable}, and the live lobby was built from ${from}`,
+            [`Deploy ${stable} from its own tag to update the lobby.`]
+        );
+    }
+    return lobby;
 }
 
 /**
@@ -676,6 +768,14 @@ function assembleRails(
     return { assembled, missing };
 }
 
+/**
+ * Assemble one Hosting version from this checkout and publish it.
+ *
+ * @returns {Promise<void>} Resolves when the release is published, or
+ *     assembled for a dry run.
+ * @throws {Error} When the checkout, release.json, the stable release, or the
+ *     live site rules the release out, or a build or publish step fails.
+ */
 async function main() {
     const options = parseArgs(process.argv.slice(2));
     childOutput.verbose = options.verbose;
@@ -752,6 +852,26 @@ async function main() {
     // tag it does not retain was refused above.
     const assembling = preview ? [] : rails;
 
+    // The stable release decides which rail a robot reporting none falls back
+    // to, and whether this run may replace the lobby. A preview routes every
+    // card to /operator/, so it has nothing to ask GitHub about.
+    const stable = preview ? null : await stableRail(repoRoot);
+
+    // Only the Hosting API can say the site has nothing live to carry. A dry
+    // run publishes nothing, so it does not ask.
+    let liveHasRelease;
+    if (publishingLive && tag !== stable) {
+        const siteId = options.site ?? siteFromOrigin(origin);
+        if (!siteId) {
+            throw new Error(
+                `cannot read a Hosting site id from ${origin}; pass --site`
+            );
+        }
+        liveHasRelease = (await liveVersionName(siteId)) !== null;
+    }
+    const carry =
+        lobbyPlan({ tag, stable, preview, liveHasRelease }) === "carry";
+
     const site = channel
         ? `${origin} (preview channel ${channel})`
         : `${origin} (${preview ? "a preview channel" : "the live site"})`;
@@ -772,7 +892,11 @@ async function main() {
     console.log(
         options.dryRun ? `Assembling only, for ${site}` : `Deploying to ${site}`,
     );
-    row("lobby", builtFrom ?? tag, "/");
+    if (carry) {
+        row("lobby", "unchanged (carried from the live version)");
+    } else {
+        row("lobby", builtFrom ?? tag, "/");
+    }
     if (preview) {
         row("interface", builtFrom ?? tag, "/operator/");
         row("rails", "none (a preview serves one build)");
@@ -795,10 +919,6 @@ async function main() {
         );
     }
 
-    // The stable release decides which rail a robot reporting none falls back
-    // to. A preview routes every card to /operator/, so it has nothing to ask
-    // GitHub about.
-    const stable = preview ? null : await stableRail(repoRoot);
     if (preview) {
         pass(
             "Preview does not consult the fleet's stable release",
@@ -835,13 +955,32 @@ async function main() {
         await checkPublishedRail(origin, tag, channel, options.republish);
     }
 
-    buildLobby(origin, stable, preview);
-    pass("Lobby emits the only page at the root", "index.html");
-    buildFallbackOperator(origin, stable);
-    pass(
-        "Unversioned operator page assembled",
-        "/operator/ (where cards link while no rail resolves)",
-    );
+    if (carry) {
+        pass(
+            "Lobby and /operator/ stay as the live site serves them",
+            `${tag} is not the latest release (${stable ?? "none is published"})`
+        );
+        await checkCarriedLobby(origin, rails, stable);
+        // Anything left at the root of the tree would be published over the
+        // files the clone carries.
+        fs.rmSync(distDir, { recursive: true, force: true });
+    } else {
+        if (!preview) {
+            pass(
+                tag === stable
+                    ? "Lobby and /operator/ rebuilt from the latest release"
+                    : "Lobby and /operator/ built because the site has no live release",
+                tag
+            );
+        }
+        buildLobby(origin, stable, preview);
+        pass("Lobby emits the only page at the root", "index.html");
+        buildFallbackOperator(origin, stable);
+        pass(
+            "Unversioned operator page assembled",
+            "/operator/ (where cards link while no rail resolves)"
+        );
+    }
     const { assembled, missing } = assembleRails(
         assembling,
         tag,
@@ -901,6 +1040,7 @@ async function main() {
         distDir,
         site: options.site,
         retainedRails: rails,
+        carryRoot: carry,
         channel: channel ?? "live",
         report: pass,
     });
@@ -908,8 +1048,10 @@ async function main() {
 
 module.exports = {
     assembleRails,
+    checkCarriedLobby,
     checkoutTag,
     isPreviewOrigin,
+    lobbyPlan,
     parseArgs,
     previewChannelId,
     publishedManifest,

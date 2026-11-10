@@ -35,6 +35,11 @@ const webpack = require("webpack");
 const { checkPublishedRail } = require("../../scripts/deployHosting");
 const { buildFromDescribe } = require("../../scripts/releaseTag");
 const { RailManifestPlugin, railManifest } = require("../../scripts/railManifest");
+const {
+    LOBBY_MANIFEST,
+    LobbyManifestPlugin,
+    lobbyManifest,
+} = require("../../scripts/lobbyManifest");
 
 /** Directories built for a case, removed when the file finishes. */
 const built = [];
@@ -79,11 +84,14 @@ function checkout({ tag = "v1.2.3", dirty = false } = {}) {
  * own, so a plugin that emits the wrong kind of asset, or at a stage that does
  * not exist, fails here rather than in a release.
  *
- * @param {object} options Plugin options: the rail tag and the checkout.
+ * @param {object} options Plugin options: the checkout, and the rail tag or
+ *     the stable rail.
+ * @param {new (options: object) => {apply: Function}} [Plugin] Plugin class
+ *     to run, defaulting to RailManifestPlugin.
  * @returns {{assets: Record<string, string>, stages: number[]}} Emitted asset
  *     text by name, and the processAssets stages the plugin asked for.
  */
-function emitted(options) {
+function emitted(options, Plugin = RailManifestPlugin) {
     const assets = {};
     const stages = [];
     const compilation = {
@@ -125,7 +133,7 @@ function emitted(options) {
         },
     };
 
-    new RailManifestPlugin(options).apply(compiler);
+    new Plugin(options).apply(compiler);
     return { assets, stages };
 }
 
@@ -224,6 +232,67 @@ suite("RailManifestPlugin emits manifest.json into the compilation", () => {
         const { assets } = emitted({ tag: "v1.2.3", repoRoot: root });
         assert.match(assets["manifest.json"], /^\{\n  "tag": "v1\.2\.3",\n/);
         assert.match(assets["manifest.json"], /\}\n$/);
+    });
+});
+
+suite("a lobby manifest records the release it was built from and its default rail", () => {
+    test("names the tag, commit and stable rail of a lobby built from a release", () => {
+        const { root, head } = checkout({ tag: "v1.2.3" });
+        const manifest = lobbyManifest({ repoRoot: root, stable: "v1.2.3" });
+
+        assert.deepEqual(Object.keys(manifest), [
+            "tag",
+            "commit",
+            "describe",
+            "stable",
+            "built",
+        ]);
+        assert.equal(manifest.tag, "v1.2.3");
+        assert.equal(manifest.commit, head);
+        assert.equal(manifest.describe, "v1.2.3");
+        assert.equal(manifest.stable, "v1.2.3");
+        assert.equal(new Date(manifest.built).toISOString(), manifest.built);
+    });
+
+    test("names no tag for a checkout that is not exactly a release", () => {
+        const { root } = checkout({ tag: "v1.2.3", dirty: true });
+        const manifest = lobbyManifest({ repoRoot: root, stable: "v1.2.3" });
+        assert.equal(manifest.tag, null);
+        assert.equal(manifest.describe, "v1.2.3-dirty");
+    });
+
+    test("records a stable rail only when it is a release tag", () => {
+        const { root } = checkout();
+        for (const stable of [undefined, null, "", "main", "v1.2"]) {
+            assert.equal(
+                lobbyManifest({ repoRoot: root, stable }).stable,
+                null
+            );
+        }
+        // Positive control: the same checkout with a release tag keeps it.
+        assert.equal(
+            lobbyManifest({ repoRoot: root, stable: "v2.0.0-rc1" }).stable,
+            "v2.0.0-rc1"
+        );
+    });
+
+    test("LobbyManifestPlugin emits lobby.json with the checkout's metadata", () => {
+        const { root, head } = checkout({ tag: "v1.2.3" });
+        const { assets, stages } = emitted(
+            { repoRoot: root, stable: "v1.2.3" },
+            LobbyManifestPlugin
+        );
+
+        assert.equal(LOBBY_MANIFEST, "lobby.json");
+        assert.deepEqual(Object.keys(assets), [LOBBY_MANIFEST]);
+        const manifest = JSON.parse(assets[LOBBY_MANIFEST]);
+        assert.equal(manifest.tag, "v1.2.3");
+        assert.equal(manifest.commit, head);
+        assert.equal(manifest.stable, "v1.2.3");
+        assert.match(assets[LOBBY_MANIFEST], /\}\n$/);
+        assert.deepEqual(stages, [
+            webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL,
+        ]);
     });
 });
 

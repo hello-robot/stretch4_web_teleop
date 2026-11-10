@@ -8,6 +8,9 @@
  * that requirement while ensuring retired or temporary rails and stale root
  * assets are pruned automatically.
  *
+ * With carryRoot the clone also keeps every path outside /r/, so the lobby and
+ * /operator/ in the new version are the live version's own files.
+ *
  * On a brand-new Firebase project where the live channel serves no version
  * yet, publishAdditively falls back to creating a fresh version.
  */
@@ -197,28 +200,96 @@ async function servedAt(origin, servedPath) {
 }
 
 /**
- * Build the regex inclusion list that retains only `/r/<tag>/` prefixes when
+ * Build the regex inclusion list that retains only `/r/<tag>/` trees when
  * cloning a Hosting version.
  *
+ * Hosting keeps a path only when a regex matches the whole of it, so each
+ * pattern runs to the end of the path.
+ *
  * @param {string[]} retainedRails Rail tags to preserve from the source version.
- * @returns {string[]} Anchored regular expressions with regex metacharacters escaped.
+ * @returns {string[]} Whole-path regular expressions with regex
+ *     metacharacters in the tags escaped.
  */
 function railCloneRegexes(retainedRails) {
-    return retainedRails.map((rail) => `^/r/${escapeRegex(rail)}/`);
+    return retainedRails.map((rail) => `^/r/${escapeRegex(rail)}/.*$`);
+}
+
+/**
+ * Clone filter matching the whole of every served path outside /r/.
+ *
+ * Hosting evaluates clone filters with RE2, which has no lookahead, so the
+ * exclusion of /r/ is spelled as alternatives.
+ */
+const ROOT_CLONE_REGEX = "^/(r|[^r].*|r[^/].*)$";
+
+/**
+ * Regex inclusion list for cloning a Hosting version.
+ *
+ * @param {string[]} retainedRails Rail tags to preserve from the source version.
+ * @param {boolean} [carryRoot=false] Also preserve every path outside /r/.
+ * @returns {string[]} Whole-path RE2 regular expressions.
+ */
+function cloneIncludeRegexes(retainedRails, carryRoot = false) {
+    const rails = railCloneRegexes(retainedRails);
+    return carryRoot ? [ROOT_CLONE_REGEX, ...rails] : rails;
+}
+
+/**
+ * Request body for a versions:clone call.
+ *
+ * @param {string} sourceVersion Resource name of the version to clone.
+ * @param {string[]} retainedRails Rail tags to preserve from the source version.
+ * @param {boolean} [carryRoot=false] Also preserve every path outside /r/.
+ * @returns {{sourceVersion: string, finalize: boolean,
+ *     include?: {regexes: string[]}}} The request body; include is omitted
+ *     when nothing is filtered.
+ */
+function cloneRequestBody(sourceVersion, retainedRails, carryRoot = false) {
+    const regexes = cloneIncludeRegexes(retainedRails, carryRoot);
+    return {
+        sourceVersion,
+        finalize: false,
+        ...(regexes.length > 0 ? { include: { regexes } } : {}),
+    };
+}
+
+/**
+ * Served paths that lie outside the rails tree.
+ *
+ * @param {string[]} paths Served paths, each beginning with a slash.
+ * @returns {string[]} The paths not under /r/, sorted.
+ */
+function pathsOutsideRails(paths) {
+    return paths.filter((served) => !served.startsWith("/r/")).sort();
+}
+
+/**
+ * Resource name of the version the live channel serves.
+ *
+ * @param {string} siteId Hosting site id.
+ * @returns {Promise<string|null>} The version name, or null when the site has
+ *     no live release.
+ * @throws {Error} When not authenticated to Firebase.
+ */
+async function liveVersionName(siteId) {
+    await authenticate();
+    const live = await getChannel("-", siteId, "live");
+    return live?.release?.version?.name ?? null;
 }
 
 /**
  * Clone a Hosting version server-side, filtering the clone to retain only the
- * /r/<tag>/ trees for the specified rails.
+ * /r/<tag>/ trees for the specified rails and, with carryRoot, every path
+ * outside /r/.
  *
- * Root files (/ and /operator/) are always built fresh in dist-firebase/, and
- * any rail removed from release.json (or uploaded temporarily) is omitted from
- * the include filter so it is pruned in the new version.
+ * A rail absent from retainedRails is omitted from the include filter, so it
+ * is pruned in the new version.
  *
  * @param {Client} api Authenticated Hosting v1beta1 client.
  * @param {string} siteId Hosting site id.
  * @param {string} sourceVersion Resource name of the version to clone.
  * @param {string[]} retainedRails Rail tags to preserve from the source version.
+ * @param {boolean} [carryRoot=false] Also preserve every path outside /r/.
  * @returns {Promise<string>} Resource name of the cloned version.
  * @throws {Error} When the clone operation returns no version name.
  */
@@ -227,13 +298,9 @@ async function cloneFilteredVersion(
     siteId,
     sourceVersion,
     retainedRails,
+    carryRoot = false
 ) {
-    const regexes = railCloneRegexes(retainedRails);
-    const body = {
-        sourceVersion,
-        finalize: false,
-        ...(regexes.length > 0 ? { include: { regexes } } : {}),
-    };
+    const body = cloneRequestBody(sourceVersion, retainedRails, carryRoot);
     const res = await api.post(
         `/projects/-/sites/${siteId}/versions:clone`,
         body,
@@ -252,24 +319,46 @@ async function cloneFilteredVersion(
  * Publish a directory onto a Hosting channel (live or preview), carrying over
  * retained rails from the current live version when one exists.
  *
+ * With carryRoot the live version's paths outside /r/ and its serving config
+ * are carried too, and distDir may hold nothing but rails.
+ *
  * @param {object} args Publish arguments.
  * @param {string} args.origin Origin the site is served from.
  * @param {string} args.distDir Directory to publish.
  * @param {string|null} [args.site] Site id, when the origin cannot name it.
  * @param {string[]} [args.retainedRails] Rails to retain from the live version clone.
+ * @param {boolean} [args.carryRoot] Carry the lobby and /operator/ from the
+ *     live version instead of publishing them from distDir.
  * @param {string} [args.channel] Target channel id ("live" by default).
  * @param {(message: string, detail?: string) => void} args.report Progress sink.
  * @returns {Promise<{version: string, url: string|null}>} Released version and channel URL.
- * @throws {Error} When the site cannot be identified or upload fails.
+ * @throws {Error} When the site cannot be identified, upload fails, or
+ *     carryRoot is set and distDir holds a path outside /r/ or the site has
+ *     no live version.
  */
 async function publishAdditively({
     origin,
     distDir,
     site,
     retainedRails = [],
+    carryRoot = false,
     channel = "live",
     report,
 }) {
+    const files = servedFiles(distDir);
+    if (carryRoot) {
+        // populateFiles overwrites any path it is handed, so a root path here
+        // would replace the file the clone carried.
+        const outside = pathsOutsideRails(Object.keys(files));
+        if (outside.length > 0) {
+            throw new Error(
+                `${distDir} holds ${outside.length} path(s) outside /r/ ` +
+                    `(${outside.slice(0, 3).join(", ")}); publishing them ` +
+                    "would replace the lobby this release carries unchanged"
+            );
+        }
+    }
+
     const siteId = site ?? siteFromOrigin(origin);
     if (!siteId) {
         throw new Error(
@@ -288,10 +377,17 @@ async function publishAdditively({
 
     const live = await getChannel("-", siteId, "live");
     const source = live?.release?.version?.name;
+    if (carryRoot && !source) {
+        throw new Error(
+            `${siteId} has no live version to carry the lobby from`
+        );
+    }
     let version;
-    if (source && retainedRails.length > 0) {
+    if (source && (carryRoot || retainedRails.length > 0)) {
         report(
-            "Cloning retained rails from the live version",
+            carryRoot
+                ? "Cloning the lobby, /operator/ and retained rails from the live version"
+                : "Cloning retained rails from the live version",
             `${source.split("/").pop()} (${retainedRails.join(", ")})`,
         );
         version = await cloneFilteredVersion(
@@ -299,6 +395,7 @@ async function publishAdditively({
             siteId,
             source,
             retainedRails,
+            carryRoot
         );
     } else {
         report(
@@ -309,7 +406,6 @@ async function publishAdditively({
         if (!version) throw new Error("createVersion returned no version");
     }
 
-    const files = servedFiles(distDir);
     const hashes = {};
     const bodies = {};
     for (const [served, local] of Object.entries(files)) {
@@ -347,7 +443,11 @@ async function publishAdditively({
         }
     }
 
-    const config = hostingVersionConfig();
+    // Serving config applies to the whole version, the root included, so a
+    // carried root keeps the config it was released with.
+    const config = carryRoot
+        ? (await api.get(`/${source}`)).body.config ?? {}
+        : hostingVersionConfig();
     await updateVersion(siteId, version.split("/").pop(), {
         status: "FINALIZED",
         ...(Object.keys(config).length > 0 ? { config } : {}),
@@ -388,8 +488,13 @@ async function publishAdditively({
 }
 
 module.exports = {
+    ROOT_CLONE_REGEX,
     authenticate,
+    cloneIncludeRegexes,
+    cloneRequestBody,
     hostingVersionConfig,
+    liveVersionName,
+    pathsOutsideRails,
     publishAdditively,
     railCloneRegexes,
     servedAt,

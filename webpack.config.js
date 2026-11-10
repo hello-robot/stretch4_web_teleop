@@ -6,6 +6,7 @@ const { webpackPublicEnvDefinitions } = require("./scripts/webpackPublicEnv");
 const { envVarName, loadFeatures, FEATURES_PATH } = require("./feature-flags");
 const { isReleaseTag } = require("./scripts/releaseTag");
 const { RailManifestPlugin } = require("./scripts/railManifest");
+const { LobbyManifestPlugin } = require("./scripts/lobbyManifest");
 
 const ALL_PAGES = ["robot", "operator", "home"];
 
@@ -38,6 +39,16 @@ function selectPages(webpackEnv) {
 const env = dotenv.config().parsed || {};
 const envKeys = webpackPublicEnvDefinitions(env);
 
+/**
+ * Build the webpack configuration for one invocation.
+ *
+ * @param {Record<string, unknown>} webpackEnv Values passed with --env:
+ *     storage, pages, and rail.
+ * @param {{mode?: string}} argv Parsed webpack CLI arguments.
+ * @returns {import("webpack").Configuration} The configuration to build.
+ * @throws {Error} When --env rail is not a release tag, is combined with a
+ *     storage other than firebase, or --env pages names an unknown page.
+ */
 module.exports = (webpackEnv, argv) => {
     const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
     const isProduction = argv && argv.mode === "production";
@@ -52,6 +63,23 @@ module.exports = (webpackEnv, argv) => {
     if (rail && storageValue !== "firebase") {
         throw new Error("--env rail requires --env storage=firebase");
     }
+    // Only the lobby-only build a release runs emits lobby.json. A whole-site
+    // build is hashed by the robot's autodeploy to skip unchanged uploads, and
+    // the manifest's build time would change that hash on every build.
+    const lobbyOnly =
+        !rail &&
+        storageValue === "firebase" &&
+        pages.length === 1 &&
+        pages[0] === "home";
+    const lobbyPlugins = lobbyOnly
+        ? [
+              new LobbyManifestPlugin({
+                  repoRoot: __dirname,
+                  stable:
+                      process.env.PUBLIC_STABLE_RAIL ?? env.PUBLIC_STABLE_RAIL,
+              }),
+          ]
+        : [];
     envKeys["process.env.storage"] = JSON.stringify(storageValue);
     // Feature flags become boolean literals in the bundle, so `if (FEATURE_X)`
     // guards fold away when the flag is off. See features.json.
@@ -122,7 +150,7 @@ module.exports = (webpackEnv, argv) => {
             new webpack.DefinePlugin(envKeys),
         ].concat(
             rail ? [new RailManifestPlugin({ tag: rail, repoRoot: __dirname })] : []
-        ).concat(
+        ).concat(lobbyPlugins).concat(
             pages.map(
                 (page) =>
                     new HtmlWebpackPlugin({
