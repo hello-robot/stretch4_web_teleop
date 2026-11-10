@@ -404,9 +404,12 @@ export const RobotCard = ({
                 )}
 
                 <div className="hr-card__actions">
-                    {warning && (
-                        <p className="hr-card__build-warning">{warning}</p>
-                    )}
+                    <p
+                        className="hr-card__build-warning"
+                        aria-hidden={!warning || Boolean(refusal)}
+                    >
+                        {refusal ? null : warning}
+                    </p>
                     <TeleopButton
                         status={status}
                         seat={seat}
@@ -442,7 +445,10 @@ export const RobotCard = ({
                         branch={buildLabel(robot)}
                         title={buildTitle(robot, wanted, rail)}
                         tone={tone}
-                        dirty={servesRails() && isUnreleasedBuild(robot)}
+                        dirty={
+                            servesRails() &&
+                            (isUnreleasedBuild(robot) || wanted !== rail)
+                        }
                     />
                 </div>
             </div>

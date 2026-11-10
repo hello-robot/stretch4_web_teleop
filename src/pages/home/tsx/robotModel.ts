@@ -236,14 +236,8 @@ export const isUnreleasedBuild = (robot: RobotRecord): boolean =>
     Boolean(robot.build) && !(robot.build?.rail && RAIL.test(robot.build.rail));
 
 /**
- * The line the card shows when the interface it opens may not match the
- * robot, or null for silence.
- *
- * A robot whose release is not deployed names that release and the interface
- * the card opens in its place. A checkout with changes on top of a deployed
- * release names that release. Any other unreleased checkout names its
- * destination: a rail when a stable release is set, and the unversioned page
- * when it is not.
+ * Two-line warning shown when the interface a card opens may not match the
+ * robot's checkout, or null when they match.
  *
  * @param robot Record the card was rendered from.
  * @param wanted Rail the robot routes to, from railFor.
@@ -255,33 +249,21 @@ export const buildWarning = (
     wanted: string | null,
     rail: string | null = wanted
 ): string | null => {
-    // A channel that serves no rails serves one interface, built from one
-    // branch. There is no release here for a robot to disagree with, so there
-    // is nothing to warn about: bending that rule is what a preview is for.
     if (!servesRails()) return null;
     const behind = releaseBehind(robot);
+    const defaultLine = rail
+        ? `→ Defaults to stable (${rail})`
+        : "→ Defaults to default interface";
     if (wanted !== null && wanted !== rail) {
-        const opens = rail
-            ? `the stable interface (${rail})`
-            : "the default interface";
         return behind === wanted
-            ? `This robot has changes outside of ${wanted}, which is not deployed. This card opens ${opens} — test this branch on its preview channel instead.`
-            : `Release ${wanted} is not deployed. This card opens ${opens}, which may not match what the robot is running.`;
+            ? `${wanted} not deployed (dirty)\n${defaultLine}`
+            : `Release ${wanted} not deployed\n${defaultLine}`;
     }
     if (!isUnreleasedBuild(robot)) return null;
     if (behind && behind === rail) {
-        return (
-            `This robot has changes outside of ${behind}. That release's` +
-            " interface may not match what the robot is running — test this" +
-            " branch on its preview channel instead."
-        );
+        return `Unreleased changes on ${behind}\n→ Routes to ${behind}`;
     }
-    const tail =
-        "which may not match what the robot is running — test this branch on" +
-        " its preview channel instead.";
-    return rail
-        ? `This checkout is not a release. This card opens the stable interface (${rail}), ${tail}`
-        : `This checkout is not a release. This card opens the default interface, ${tail}`;
+    return `Checkout is not a release\n${defaultLine}`;
 };
 
 /**

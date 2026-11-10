@@ -523,32 +523,31 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
         for (const [describe, rail] of PAST_A_RELEASE) {
             const record = robot({ describe });
             const warning = buildWarning(record, railFor(record));
-            assert.ok(
-                warning.startsWith(
-                    `This robot has changes outside of ${rail}. `
-                ),
+            assert.equal(
+                warning,
+                `Unreleased changes on ${rail}\n→ Routes to ${rail}`,
                 `${describe}: ${warning}`
             );
-            assert.doesNotMatch(warning, /stable interface/);
+            assert.doesNotMatch(warning, /Defaults to stable/);
         }
     });
 
     test("buildWarning names the stable release when no release is behind the checkout", () => {
         const record = robot({ describe: "abc1234-dirty" });
         const warning = buildWarning(record, railFor(record));
-        assert.match(
+        assert.equal(
             warning,
-            /not a release\. This card opens the stable interface \(v0\.2\.0\)/
+            "Checkout is not a release\n→ Defaults to stable (v0.2.0)"
         );
-        assert.doesNotMatch(warning, /changes outside of/);
+        assert.doesNotMatch(warning, /Unreleased changes/);
     });
 
     test("buildWarning names the default interface when no stable release is set", () => {
         servedFrom(LIVE, null);
         const record = robot({ describe: "abc1234" });
-        assert.match(
+        assert.equal(
             buildWarning(record, railFor(record)),
-            /not a release\. This card opens the default interface/,
+            "Checkout is not a release\n→ Defaults to default interface",
         );
     });
 
@@ -562,8 +561,7 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
         const wanted = railFor(record);
         assert.equal(
             buildWarning(record, wanted, routedRail(wanted, false)),
-            "Release v0.3.0-alpha1 is not deployed. This card opens the stable" +
-                " interface (v0.2.0), which may not match what the robot is running."
+            "Release v0.3.0-alpha1 not deployed\n→ Defaults to stable (v0.2.0)"
         );
 
         // Control: the same robot with its rail deployed has nothing to warn about.
@@ -576,16 +574,14 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
             const wanted = railFor(record);
             assert.equal(
                 buildWarning(record, wanted, routedRail(wanted, false)),
-                `This robot has changes outside of ${behind}, which is not deployed.` +
-                    " This card opens the stable interface (v0.2.0) — test this" +
-                    " branch on its preview channel instead.",
+                `${behind} not deployed (dirty)\n→ Defaults to stable (v0.2.0)`,
                 describe
             );
 
             // Control: with that rail deployed, the warning does not claim otherwise.
             assert.doesNotMatch(
                 buildWarning(record, wanted, routedRail(wanted, true)),
-                /not deployed|stable interface/,
+                /not deployed|Defaults to stable/,
                 describe
             );
         }
@@ -597,8 +593,7 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
         const wanted = railFor(record);
         assert.equal(
             buildWarning(record, wanted, routedRail(wanted, false)),
-            "Release v0.3.0-alpha1 is not deployed. This card opens the default" +
-                " interface, which may not match what the robot is running."
+            "Release v0.3.0-alpha1 not deployed\n→ Defaults to default interface"
         );
     });
 
