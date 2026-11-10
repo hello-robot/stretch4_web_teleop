@@ -33,6 +33,7 @@ const {
     isUnreleasedBuild,
     operatorHref,
     railFor,
+    releaseBehind,
     servesRails,
 } = await import("../../src/pages/home/tsx/robotModel.ts");
 const { probeRail } = await import("../../src/pages/home/tsx/useRail.ts");
@@ -84,6 +85,36 @@ function robot({ describe, rail, branch } = {}) {
     }
     return record;
 }
+
+/**
+ * Describes of checkouts with changes on top of a release, each with the
+ * release behind it: uncommitted changes, commits after the tag, and both.
+ */
+const PAST_A_RELEASE = [
+    ["v0.1.0-dirty", "v0.1.0"],
+    ["v0.1.0-7-gabc1234", "v0.1.0"],
+    ["v0.1.0-7-gabc1234-dirty", "v0.1.0"],
+    ["v0.3.0-alpha2-1-g0123abc", "v0.3.0-alpha2"],
+    ["v1.0.0-rc10-12-gdeadbeef12-dirty", "v1.0.0-rc10"],
+];
+
+/**
+ * Describes that name no release tag to route to. The tag parsed out of a
+ * describe becomes a URL path segment, so the list leans on shapes that are
+ * nearly right.
+ */
+const NO_RELEASE_BEHIND = [
+    "abc1234",
+    "abc1234-dirty",
+    "v1.2-3-gabc1234",
+    "v0.1.0-dev1-2-gabc1234",
+    "v0.1.0-7",
+    "v0.1.0-7-gxyz",
+    "v0.1.0-dirty-dirty",
+    "v0.1.0-7-gabc1234/../../etc",
+    "../v0.1.0-7-gabc1234",
+    "x",
+];
 
 /** Rail names are handed out one per case, since a probe caches by name. */
 let railCounter = 0;
@@ -213,9 +244,32 @@ suite("a robot card routes to its release rail or falls back to the stable rail"
         assert.equal(railFor(robot({ describe: "v0.0.1", rail: "v0.0.1" })), "v0.0.1");
     });
 
-    test("falls back to the stable release when a robot is on an unreleased checkout", () => {
-        const unreleased = robot({ describe: "v0.1.0-7-gabc1234-dirty" });
-        assert.equal(railFor(unreleased), STABLE);
+    test("routes a checkout with changes on top of a release to that release's rail", () => {
+        for (const [describe, rail] of PAST_A_RELEASE) {
+            assert.equal(railFor(robot({ describe })), rail, describe);
+        }
+    });
+
+    test("falls back to the stable release when the describe has no release tag behind it", () => {
+        for (const describe of NO_RELEASE_BEHIND) {
+            assert.equal(railFor(robot({ describe })), STABLE, describe);
+        }
+    });
+
+    test("releaseBehind names the tag only for a checkout that has moved past it", () => {
+        for (const [describe, rail] of PAST_A_RELEASE) {
+            assert.equal(releaseBehind(robot({ describe })), rail, describe);
+        }
+        for (const describe of NO_RELEASE_BEHIND) {
+            assert.equal(releaseBehind(robot({ describe })), null, describe);
+        }
+        // A robot exactly on a tag reports that tag as its rail, and a robot
+        // that reports no build has no describe to read.
+        assert.equal(
+            releaseBehind(robot({ describe: "v0.1.0", rail: "v0.1.0" })),
+            null
+        );
+        assert.equal(releaseBehind(robot({ branch: "main" })), null);
     });
 
     test("falls back to the stable release when a robot reports no build", () => {
@@ -234,7 +288,12 @@ suite("a robot card routes to its release rail or falls back to the stable rail"
     test("returns null for the unversioned page when no stable release is set", () => {
         servedFrom(LIVE, null);
         assert.equal(railFor(robot({ branch: "main" })), null);
-        assert.equal(railFor(robot({ describe: "v0.1.0-7-gabc1234" })), null);
+        assert.equal(railFor(robot({ describe: "abc1234" })), null);
+        // A release behind the checkout is still named by the describe.
+        assert.equal(
+            railFor(robot({ describe: "v0.1.0-7-gabc1234" })),
+            "v0.1.0"
+        );
     });
 
     test("ignores PUBLIC_STABLE_RAIL when it does not match the release tag grammar", () => {
@@ -245,6 +304,7 @@ suite("a robot card routes to its release rail or falls back to the stable rail"
     test("returns null for all robots when the origin does not serve rails", () => {
         servedFrom(PREVIEW);
         assert.equal(railFor(robot({ describe: "v0.1.0", rail: "v0.1.0" })), null);
+        assert.equal(railFor(robot({ describe: "v0.1.0-7-gabc1234" })), null);
         assert.equal(railFor(robot({ branch: "main" })), null);
     });
 });
@@ -254,6 +314,16 @@ suite("an operator link targets /r/<rail>/operator/ when a rail resolves and /op
         assert.equal(
             operatorHref(robot({ describe: "v0.1.0", rail: "v0.1.0" }), "stretch-se4-4017"),
             "/r/v0.1.0/operator/?robot=stretch-se4-4017",
+        );
+    });
+
+    test("builds the URL of the release behind a checkout that has moved past it", () => {
+        assert.equal(
+            operatorHref(
+                robot({ describe: "v0.1.0-7-gabc1234-dirty" }),
+                "stretch-se4-4017"
+            ),
+            "/r/v0.1.0/operator/?robot=stretch-se4-4017"
         );
     });
 
@@ -325,11 +395,19 @@ suite("a card tooltip states which interface the card will open", () => {
         );
     });
 
-    test("explains that an unreleased checkout opens the stable release", () => {
+    test("names the release a checkout has changes outside of", () => {
         const record = robot({ describe: "v0.1.0-7-gabc1234-dirty" });
+        assert.equal(
+            buildTitle(record, railFor(record)),
+            "v0.1.0-7-gabc1234-dirty has changes outside of v0.1.0 — this card opens the v0.1.0 interface"
+        );
+    });
+
+    test("explains that a checkout with no release behind it opens the stable release", () => {
+        const record = robot({ describe: "abc1234-dirty" });
         assert.match(
             buildTitle(record, railFor(record)),
-            /v0\.1\.0-7-gabc1234-dirty is not a release .* the stable release, v0\.2\.0/,
+            /abc1234-dirty is not a release .* the stable release, v0\.2\.0/
         );
     });
 
@@ -371,17 +449,33 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
         assert.equal(isUnreleasedBuild(robot({ branch: "main" })), false);
     });
 
-    test("buildWarning names the stable release when warning about an unreleased checkout", () => {
-        const record = robot({ describe: "v0.1.0-7-gabc1234-dirty" });
+    test("buildWarning names the release a checkout has changes outside of", () => {
+        for (const [describe, rail] of PAST_A_RELEASE) {
+            const record = robot({ describe });
+            const warning = buildWarning(record, railFor(record));
+            assert.ok(
+                warning.startsWith(
+                    `This robot has changes outside of ${rail}. `
+                ),
+                `${describe}: ${warning}`
+            );
+            assert.doesNotMatch(warning, /stable interface/);
+        }
+    });
+
+    test("buildWarning names the stable release when no release is behind the checkout", () => {
+        const record = robot({ describe: "abc1234-dirty" });
+        const warning = buildWarning(record, railFor(record));
         assert.match(
-            buildWarning(record, railFor(record)),
-            /not a release\. This card opens the stable interface \(v0\.2\.0\)/,
+            warning,
+            /not a release\. This card opens the stable interface \(v0\.2\.0\)/
         );
+        assert.doesNotMatch(warning, /changes outside of/);
     });
 
     test("buildWarning names the default interface when no stable release is set", () => {
         servedFrom(LIVE, null);
-        const record = robot({ describe: "v0.1.0-7-gabc1234" });
+        const record = robot({ describe: "abc1234" });
         assert.match(
             buildWarning(record, railFor(record)),
             /not a release\. This card opens the default interface/,

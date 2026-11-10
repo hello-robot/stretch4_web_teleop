@@ -111,6 +111,7 @@ export const buildLabel = (robot: RobotRecord): string => {
  *
  * @param robot Record the card was rendered from.
  * @param rail Rail the card resolved, from railFor.
+ * @returns One sentence naming the build and the interface the card opens.
  */
 export const buildTitle = (robot: RobotRecord, rail: string | null): string => {
     if (!servesRails()) {
@@ -118,6 +119,9 @@ export const buildTitle = (robot: RobotRecord, rail: string | null): string => {
     }
     if (rail && robot.build?.rail === rail) {
         return `Release ${rail} — this card opens that version of the interface`;
+    }
+    if (rail && releaseBehind(robot) === rail) {
+        return `${buildLabel(robot)} has changes outside of ${rail} — this card opens the ${rail} interface`;
     }
     if (rail && isUnreleasedBuild(robot)) {
         return `${buildLabel(robot)} is not a release — this card opens the stable release, ${rail}`;
@@ -146,23 +150,49 @@ const stableRail = (): string | null => {
 };
 
 /**
+ * A git describe of a checkout with changes on top of a release tag: commits
+ * after it (`-<count>-g<commit>`), uncommitted changes (`-dirty`), or both.
+ * The first group is the tag, held to the RAIL grammar.
+ */
+const PAST_RELEASE = new RegExp(
+    `^(${RAIL.source.slice(1, -1)})(?:-\\d+-g[0-9a-f]+(?:-dirty)?|-dirty)$`
+);
+
+/**
+ * The release a robot's checkout has changes on top of.
+ *
+ * Read from the describe the daemon publishes, which names the nearest
+ * release tag reachable from the robot's HEAD.
+ *
+ * @param robot Record the card was rendered from.
+ * @returns The release tag, or null when the robot reports no build, sits
+ *     exactly on a tag, or its describe names no release tag.
+ */
+export const releaseBehind = (robot: RobotRecord): string | null =>
+    robot.build?.describe?.match(PAST_RELEASE)?.[1] ?? null;
+
+/**
  * The rail a robot routes to, or null for the unversioned page.
  *
- * A robot reporting a release tag routes to that rail. Everything else — a
- * robot that predates the tag system, and a robot on a checkout no rail was
- * cut from — takes the stable release, which is a named and pinned interface
- * where the unversioned page is neither.
+ * A robot reporting a release tag routes to that rail. A robot whose checkout
+ * has changes on top of a release tag routes to that tag's rail. Everything
+ * else — a robot that predates the tag system, and a checkout with no release
+ * tag behind it — takes the stable release.
  *
  * Only the Hosting origin serves rails. In firebase mode `server.js` mounts
  * `dist-firebase` at `/`, so the robot serves this same lobby at its own
  * address, where no `r/` tree exists and the operator page already comes from
  * the robot's own checkout. Preview channels are whole-site builds on their
  * own origin. Both keep the unversioned path.
+ *
+ * @param robot Record the card was rendered from.
+ * @returns The release tag naming the rail, or null for the unversioned page.
  */
 export const railFor = (robot: RobotRecord): string | null => {
     if (!servesRails()) return null;
     const rail = robot.build?.rail;
-    return rail && RAIL.test(rail) ? rail : stableRail();
+    if (rail && RAIL.test(rail)) return rail;
+    return releaseBehind(robot) ?? stableRail();
 };
 
 
@@ -180,11 +210,13 @@ export const isUnreleasedBuild = (robot: RobotRecord): boolean =>
 /**
  * The line the card shows about an unreleased checkout, or null for silence.
  *
- * Names the destination, which differs by deployment: a rail when a stable
- * release is set, and the unversioned page when it is not.
+ * A checkout with changes on top of a release names that release. Any other
+ * unreleased checkout names its destination: a rail when a stable release is
+ * set, and the unversioned page when it is not.
  *
  * @param robot Record the card was rendered from.
  * @param rail Rail the card resolved, from railFor.
+ * @returns The warning text, or null when the card has nothing to warn about.
  */
 export const buildWarning = (
     robot: RobotRecord,
@@ -195,6 +227,14 @@ export const buildWarning = (
     // is nothing to warn about: bending that rule is what a preview is for.
     if (!servesRails()) return null;
     if (!isUnreleasedBuild(robot)) return null;
+    const behind = releaseBehind(robot);
+    if (behind && behind === rail) {
+        return (
+            `This robot has changes outside of ${behind}. That release's` +
+            " interface may not match what the robot is running — test this" +
+            " branch on its preview channel instead."
+        );
+    }
     const tail =
         "which may not match what the robot is running — test this branch on" +
         " its preview channel instead.";

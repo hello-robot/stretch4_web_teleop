@@ -397,6 +397,9 @@ export const RobotCard = ({
                 )}
 
                 <div className="hr-card__actions">
+                    {warning && (
+                        <p className="hr-card__build-warning">{warning}</p>
+                    )}
                     <TeleopButton
                         status={status}
                         seat={seat}
@@ -428,9 +431,6 @@ export const RobotCard = ({
                                 });
                         }}
                     />
-                    {warning && (
-                        <p className="hr-card__build-warning">{warning}</p>
-                    )}
                     <BranchTag
                         branch={buildLabel(robot)}
                         title={buildTitle(robot, rail)}

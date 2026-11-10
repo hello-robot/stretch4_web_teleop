@@ -382,8 +382,14 @@ The site serves two things:
 Which rail an operator gets is decided per robot. The robot's daemon publishes the tag its checkout is
 sitting on to `robots/<fleetId>/build`, and clicking **Connect** on its card opens `/r/<tag>/operator/`.
 If a robot is on a release tag that the site does not serve, **Connect** is disabled (`Release <tag> is
-not deployed`). If a robot is on a branch or has uncommitted changes, its card warns that the checkout
-is not a release and opens the default rail instead.
+not deployed`).
+
+A robot with commits or uncommitted changes on top of a release tag is treated as that tag. The daemon
+publishes `git describe`, which names the nearest release tag behind the checkout (for example
+`v0.2.0-alpha2-3-g46cf732-dirty`), and the card routes to that tag's rail: **Connect** opens
+`/r/<tag>/operator/`, or is disabled if that rail is not on the site. A warning above the buttons says
+the robot has changes outside of the tag. A checkout with no release tag behind it warns that it is not
+a release and opens the default rail instead.
 
 [`release.json`](../../../../../release.json) lists the tags that stay published on the site:
 
@@ -516,12 +522,18 @@ The deployed tag is not the GitHub release marked **Latest**. Publish it as **La
 `npm run deploy:hosting` from the tag again.
 
 **Connect is disabled, with a notice that the release is missing.**
-The robot reports a tag that `release.json` no longer retains, so `/r/<tag>/` is not on the site.
-Either add the tag back and redeploy, or check the robot out onto a tag that is still served.
+The robot is on, or has changes on top of, a tag that `release.json` no longer retains, so `/r/<tag>/`
+is not on the site. Either add the tag back and redeploy, or check the robot out onto a tag that is
+still served.
+
+**A card warns that the robot has changes outside of a tag.**
+The robot has commits or uncommitted changes on top of that release tag, and the card opens that tag's
+interface, which may not match what the robot is running. Expected on a development robot; test the
+branch on its preview channel, or check out a release tag.
 
 **A card warns that the robot's checkout is not a release.**
-The robot is on a branch or has uncommitted changes, so no rail matches it and the card opens the
-default interface instead. Expected on a development robot; check out a release tag on any other.
+No release tag is behind the robot's checkout, so no rail matches it and the card opens the default
+interface instead.
 
 **`ERROR: robot sign-in failed`** during onboarding.
 The `ROBOT_USERNAME` / `ROBOT_PASSWORD` pair in `.env` does not match a user in **Authentication** → **Users**,
