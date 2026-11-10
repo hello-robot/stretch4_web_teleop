@@ -36,6 +36,7 @@ const {
     railGate,
     railNotice,
     releaseBehind,
+    routedRail,
     servesRails,
 } = await import("../../src/pages/home/tsx/robotModel.ts");
 const { probeRail } = await import("../../src/pages/home/tsx/useRail.ts");
@@ -311,10 +312,50 @@ suite("a robot card routes to its release rail or falls back to the stable rail"
     });
 });
 
+suite("a robot whose release is not deployed opens the stable release", () => {
+    test("opens the stable rail when the robot's own rail is absent", () => {
+        const record = robot({ describe: "v0.3.0-alpha1", rail: "v0.3.0-alpha1" });
+        const wanted = railFor(record);
+        assert.equal(routedRail(wanted, false), STABLE);
+        assert.equal(
+            operatorHref(routedRail(wanted, false), "stretch-se4-4017"),
+            `/r/${STABLE}/operator/?robot=stretch-se4-4017`
+        );
+
+        // Control: the same robot with its rail deployed keeps it.
+        assert.equal(routedRail(wanted, true), "v0.3.0-alpha1");
+        assert.equal(
+            operatorHref(routedRail(wanted, true), "stretch-se4-4017"),
+            "/r/v0.3.0-alpha1/operator/?robot=stretch-se4-4017"
+        );
+    });
+
+    test("opens the stable rail when the release behind a checkout is absent", () => {
+        const wanted = railFor(robot({ describe: "v0.1.0-7-gabc1234-dirty" }));
+        assert.equal(routedRail(wanted, false), STABLE);
+        assert.equal(routedRail(wanted, true), "v0.1.0");
+    });
+
+    test("keeps the robot's own rail while the probe is outstanding", () => {
+        assert.equal(routedRail("v0.3.0-alpha1", null), "v0.3.0-alpha1");
+    });
+
+    test("opens the unversioned page when the rail is absent and no stable release is set", () => {
+        servedFrom(LIVE, null);
+        assert.equal(routedRail("v0.3.0-alpha1", false), null);
+        assert.equal(routedRail("v0.3.0-alpha1", true), "v0.3.0-alpha1");
+    });
+
+    test("leaves a card on the unversioned page there", () => {
+        assert.equal(routedRail(null, true), null);
+        assert.equal(routedRail(null, false), null);
+    });
+});
+
 suite("an operator link targets /r/<rail>/operator/ when a rail resolves and /operator/ otherwise", () => {
     test("builds a versioned /r/<rail>/operator/ URL when a rail resolves", () => {
         assert.equal(
-            operatorHref(robot({ describe: "v0.1.0", rail: "v0.1.0" }), "stretch-se4-4017"),
+            operatorHref("v0.1.0", "stretch-se4-4017"),
             "/r/v0.1.0/operator/?robot=stretch-se4-4017",
         );
     });
@@ -322,7 +363,7 @@ suite("an operator link targets /r/<rail>/operator/ when a rail resolves and /op
     test("builds the URL of the release behind a checkout that has moved past it", () => {
         assert.equal(
             operatorHref(
-                robot({ describe: "v0.1.0-7-gabc1234-dirty" }),
+                railFor(robot({ describe: "v0.1.0-7-gabc1234-dirty" })),
                 "stretch-se4-4017"
             ),
             "/r/v0.1.0/operator/?robot=stretch-se4-4017"
@@ -332,19 +373,18 @@ suite("an operator link targets /r/<rail>/operator/ when a rail resolves and /op
     test("builds an unversioned /operator/ URL when no rail resolves", () => {
         servedFrom(LIVE, null);
         assert.equal(
-            operatorHref(robot({ branch: "main" }), "stretch-se4-4017"),
+            operatorHref(railFor(robot({ branch: "main" })), "stretch-se4-4017"),
             "/operator/?robot=stretch-se4-4017",
         );
     });
 
     test("URL-encodes the robot query parameter on both versioned and unversioned paths", () => {
         assert.equal(
-            operatorHref(robot({ describe: "v0.1.0", rail: "v0.1.0" }), "a robot&x=1"),
+            operatorHref("v0.1.0", "a robot&x=1"),
             "/r/v0.1.0/operator/?robot=a%20robot%26x%3D1",
         );
-        servedFrom(LIVE, null);
         assert.equal(
-            operatorHref(robot({ branch: "main" }), "a robot&x=1"),
+            operatorHref(null, "a robot&x=1"),
             "/operator/?robot=a%20robot%26x%3D1",
         );
     });
@@ -352,7 +392,10 @@ suite("an operator link targets /r/<rail>/operator/ when a rail resolves and /op
     test("links to /operator/ on a preview channel even when the robot reports a release rail", () => {
         servedFrom(PREVIEW);
         assert.equal(
-            operatorHref(robot({ describe: "v0.1.0", rail: "v0.1.0" }), "stretch-se4-4017"),
+            operatorHref(
+                railFor(robot({ describe: "v0.1.0", rail: "v0.1.0" })),
+                "stretch-se4-4017"
+            ),
             "/operator/?robot=stretch-se4-4017",
         );
     });
@@ -430,6 +473,31 @@ suite("a card tooltip states which interface the card will open", () => {
         );
     });
 
+    test("names the stable release a card opens when the robot's release is not deployed", () => {
+        const record = robot({ describe: "v0.3.0-alpha1", rail: "v0.3.0-alpha1" });
+        const wanted = railFor(record);
+        assert.equal(
+            buildTitle(record, wanted, routedRail(wanted, false)),
+            "Release v0.3.0-alpha1 is not deployed — this card opens the stable release, v0.2.0"
+        );
+
+        // Control: with the rail deployed, the title names the robot's own.
+        assert.equal(
+            buildTitle(record, wanted, routedRail(wanted, true)),
+            "Release v0.3.0-alpha1 — this card opens that version of the interface"
+        );
+    });
+
+    test("names the default interface when the release is not deployed and no stable release is set", () => {
+        servedFrom(LIVE, null);
+        const record = robot({ describe: "v0.3.0-alpha1", rail: "v0.3.0-alpha1" });
+        const wanted = railFor(record);
+        assert.equal(
+            buildTitle(record, wanted, routedRail(wanted, false)),
+            "Release v0.3.0-alpha1 is not deployed and no stable release is set — this card opens the default interface"
+        );
+    });
+
     test("states that a preview channel serves a single interface", () => {
         servedFrom(PREVIEW);
         const record = robot({ describe: "v0.1.0", rail: "v0.1.0", branch: "main" });
@@ -489,6 +557,51 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
         assert.equal(buildWarning(record, railFor(record)), null);
     });
 
+    test("buildWarning names an undeployed release and the stable interface opened in its place", () => {
+        const record = robot({ describe: "v0.3.0-alpha1", rail: "v0.3.0-alpha1" });
+        const wanted = railFor(record);
+        assert.equal(
+            buildWarning(record, wanted, routedRail(wanted, false)),
+            "Release v0.3.0-alpha1 is not deployed. This card opens the stable" +
+                " interface (v0.2.0), which may not match what the robot is running."
+        );
+
+        // Control: the same robot with its rail deployed has nothing to warn about.
+        assert.equal(buildWarning(record, wanted, routedRail(wanted, true)), null);
+    });
+
+    test("buildWarning says the release behind a checkout is not deployed", () => {
+        for (const [describe, behind] of PAST_A_RELEASE) {
+            const record = robot({ describe });
+            const wanted = railFor(record);
+            assert.equal(
+                buildWarning(record, wanted, routedRail(wanted, false)),
+                `This robot has changes outside of ${behind}, which is not deployed.` +
+                    " This card opens the stable interface (v0.2.0) — test this" +
+                    " branch on its preview channel instead.",
+                describe
+            );
+
+            // Control: with that rail deployed, the warning does not claim otherwise.
+            assert.doesNotMatch(
+                buildWarning(record, wanted, routedRail(wanted, true)),
+                /not deployed|stable interface/,
+                describe
+            );
+        }
+    });
+
+    test("buildWarning names the default interface when the release is not deployed and no stable release is set", () => {
+        servedFrom(LIVE, null);
+        const record = robot({ describe: "v0.3.0-alpha1", rail: "v0.3.0-alpha1" });
+        const wanted = railFor(record);
+        assert.equal(
+            buildWarning(record, wanted, routedRail(wanted, false)),
+            "Release v0.3.0-alpha1 is not deployed. This card opens the default" +
+                " interface, which may not match what the robot is running."
+        );
+    });
+
     test("buildWarning returns null when the robot reports no build", () => {
         assert.equal(buildWarning(robot({ branch: "main" }), STABLE), null);
     });
@@ -518,12 +631,15 @@ suite("a card says a rail is not deployed only once the origin has said so", () 
         assert.equal(railNotice(null, true), null);
     });
 
-    test("names the release behind a checkout whose rail is absent", () => {
-        const record = robot({ describe: "v0.1.0-7-gabc1234-dirty" });
+    test("names the stable release when the rail a card fell back to is absent too", () => {
+        const wanted = railFor(robot({ describe: "v0.1.0-7-gabc1234-dirty" }));
         assert.equal(
-            railNotice(railFor(record), false),
-            "Release v0.1.0 is not deployed"
+            railNotice(routedRail(wanted, false), false),
+            `Release ${STABLE} is not deployed`
         );
+
+        // Control: a fallback that is deployed gives the card nothing to say.
+        assert.equal(railNotice(routedRail(wanted, false), true), null);
     });
 });
 
@@ -550,9 +666,9 @@ suite("a refusal replaces the controls that start or open the interface", () => 
         assert.equal(railGate("start", null, null), "open");
     });
 
-    test("a card whose rail is absent refuses, and one whose rail is confirmed does not", () => {
-        const record = robot({ describe: "v0.1.0-7-gabc1234-dirty" });
-        const rail = railFor(record);
+    test("a card refuses only when the stable release it fell back to is absent", () => {
+        const wanted = railFor(robot({ describe: "v0.1.0-7-gabc1234-dirty" }));
+        const rail = routedRail(wanted, false);
         assert.equal(railGate("enter", false, railNotice(rail, false)), "refused");
         assert.equal(railGate("enter", true, railNotice(rail, true)), "open");
     });

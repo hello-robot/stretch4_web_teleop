@@ -474,8 +474,7 @@ const controlFor = (
     }
     // A connection would be refused, so the reason takes the place of the
     // control that starts or opens the interface. Stopping an interface that
-    // is already up stays available: relaunching on a deployed release is the
-    // way out.
+    // is already up stays available.
     if (treatment === "refused") {
         return (
             <>

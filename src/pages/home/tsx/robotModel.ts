@@ -110,12 +110,22 @@ export const buildLabel = (robot: RobotRecord): string => {
  * depends on the origin, and on whether the rail was reported or defaulted.
  *
  * @param robot Record the card was rendered from.
- * @param rail Rail the card resolved, from railFor.
+ * @param wanted Rail the robot routes to, from railFor.
+ * @param rail Rail the card opens, from routedRail.
  * @returns One sentence naming the build and the interface the card opens.
  */
-export const buildTitle = (robot: RobotRecord, rail: string | null): string => {
+export const buildTitle = (
+    robot: RobotRecord,
+    wanted: string | null,
+    rail: string | null = wanted
+): string => {
     if (!servesRails()) {
         return `${buildLabel(robot)} — this channel serves one interface, and this card opens it`;
+    }
+    if (wanted !== null && wanted !== rail) {
+        return rail
+            ? `Release ${wanted} is not deployed — this card opens the stable release, ${rail}`
+            : `Release ${wanted} is not deployed and no stable release is set — this card opens the default interface`;
     }
     if (rail && robot.build?.rail === rail) {
         return `Release ${rail} — this card opens that version of the interface`;
@@ -195,6 +205,24 @@ export const railFor = (robot: RobotRecord): string | null => {
     return releaseBehind(robot) ?? stableRail();
 };
 
+/**
+ * The rail a card opens, once the origin has said whether the robot's own is
+ * deployed.
+ *
+ * A robot whose release is not on the site takes the stable release, the same
+ * as a robot with no release of its own.
+ *
+ * @param wanted Rail the robot routes to, from railFor.
+ * @param wantedAvailable Whether that rail is deployed, from useRailAvailable;
+ *     null while the probe is outstanding.
+ * @returns The stable release when the wanted rail is absent, which is null
+ *     for the unversioned page when none is set; otherwise the wanted rail.
+ */
+export const routedRail = (
+    wanted: string | null,
+    wantedAvailable: boolean | null
+): string | null =>
+    wanted !== null && wantedAvailable === false ? stableRail() : wanted;
 
 /**
  * True when a robot reports a build that names no release.
@@ -208,26 +236,39 @@ export const isUnreleasedBuild = (robot: RobotRecord): boolean =>
     Boolean(robot.build) && !(robot.build?.rail && RAIL.test(robot.build.rail));
 
 /**
- * The line the card shows about an unreleased checkout, or null for silence.
+ * The line the card shows when the interface it opens may not match the
+ * robot, or null for silence.
  *
- * A checkout with changes on top of a release names that release. Any other
- * unreleased checkout names its destination: a rail when a stable release is
- * set, and the unversioned page when it is not.
+ * A robot whose release is not deployed names that release and the interface
+ * the card opens in its place. A checkout with changes on top of a deployed
+ * release names that release. Any other unreleased checkout names its
+ * destination: a rail when a stable release is set, and the unversioned page
+ * when it is not.
  *
  * @param robot Record the card was rendered from.
- * @param rail Rail the card resolved, from railFor.
+ * @param wanted Rail the robot routes to, from railFor.
+ * @param rail Rail the card opens, from routedRail.
  * @returns The warning text, or null when the card has nothing to warn about.
  */
 export const buildWarning = (
     robot: RobotRecord,
-    rail: string | null
+    wanted: string | null,
+    rail: string | null = wanted
 ): string | null => {
     // A channel that serves no rails serves one interface, built from one
     // branch. There is no release here for a robot to disagree with, so there
     // is nothing to warn about: bending that rule is what a preview is for.
     if (!servesRails()) return null;
-    if (!isUnreleasedBuild(robot)) return null;
     const behind = releaseBehind(robot);
+    if (wanted !== null && wanted !== rail) {
+        const opens = rail
+            ? `the stable interface (${rail})`
+            : "the default interface";
+        return behind === wanted
+            ? `This robot has changes outside of ${wanted}, which is not deployed. This card opens ${opens} — test this branch on its preview channel instead.`
+            : `Release ${wanted} is not deployed. This card opens ${opens}, which may not match what the robot is running.`;
+    }
+    if (!isUnreleasedBuild(robot)) return null;
     if (behind && behind === rail) {
         return (
             `This robot has changes outside of ${behind}. That release's` +
@@ -244,9 +285,12 @@ export const buildWarning = (
 };
 
 /**
- * The line the card shows when the rail it routes to is not on the site.
+ * The line the card shows when the rail it opens is not on the site.
  *
- * @param rail Rail the card resolved, from railFor.
+ * routedRail has already replaced a robot's own undeployed release with the
+ * stable one, so this is the stable release itself being absent.
+ *
+ * @param rail Rail the card opens, from routedRail.
  * @param railAvailable Whether that rail is deployed, from useRailAvailable;
  *     null while the probe is outstanding.
  * @returns The notice text, or null when the rail is deployed, is still being
@@ -295,13 +339,16 @@ export const railGate = (
 /**
  * Where the Connect control sends the operator.
  *
- * A card that resolves no rail keeps the unversioned page, which is every card
+ * A card that opens no rail keeps the unversioned page, which is every card
  * until a stable release is set, and every card on an origin that serves no
  * rails at all.
+ *
+ * @param rail Rail the card opens, from routedRail.
+ * @param name Robot name the operator page is asked to connect to.
+ * @returns The operator page's path and query on this origin.
  */
-export const operatorHref = (robot: RobotRecord, name: string): string => {
+export const operatorHref = (rail: string | null, name: string): string => {
     const query = `?robot=${encodeURIComponent(name)}`;
-    const rail = railFor(robot);
     return rail ? `/r/${rail}/operator/${query}` : `/operator/${query}`;
 };
 

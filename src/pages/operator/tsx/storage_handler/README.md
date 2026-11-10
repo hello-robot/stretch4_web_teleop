@@ -381,16 +381,20 @@ The site serves two things:
 
 Which rail an operator gets is decided per robot. The robot's daemon publishes the tag its checkout is
 sitting on to `robots/<fleetId>/build`, and clicking **Connect** on its card opens `/r/<tag>/operator/`.
-If a robot is on a release tag that the site does not serve, the card shows an outlined box reading
-`Release <tag> is not deployed` in place of **Start Interface** and **Connect**. **Stop Interface** stays
-available while the interface is running.
+If a robot is on a release tag that the site does not serve, its card opens the default rail instead,
+which is the rail of the **Latest** release the lobby was built from, and a warning above the buttons
+names the tag that is not deployed.
 
 A robot with commits or uncommitted changes on top of a release tag is treated as that tag. The daemon
 publishes `git describe`, which names the nearest release tag behind the checkout (for example
 `v0.2.0-alpha2-3-g46cf732-dirty`), and the card routes to that tag's rail: **Connect** opens
-`/r/<tag>/operator/`, or is replaced by the same box if that rail is not on the site. A warning above the
+`/r/<tag>/operator/`, or the default rail if that tag's rail is not on the site. A warning above the
 buttons says the robot has changes outside of the tag, and the tag name under them turns red. A checkout
 with no release tag behind it warns that it is not a release and opens the default rail instead.
+
+Only a missing default rail stops a card from connecting. The card then shows an outlined box reading
+`Release <tag> is not deployed` in place of **Start Interface** and **Connect**, and **Stop Interface**
+stays available while the interface is running.
 
 [`release.json`](../../../../../release.json) lists the tags that stay published on the site:
 
@@ -522,10 +526,14 @@ sends robots with no release of their own to `<tag>`. Add `<tag>` back to `relea
 The deployed tag is not the GitHub release marked **Latest**. Publish it as **Latest** and run
 `npm run deploy:hosting` from the tag again.
 
+**A card warns that a release is not deployed and opens the stable interface.**
+The robot is on, or has changes on top of, a tag that `release.json` does not retain, so `/r/<tag>/` is
+not on the site and the card opens the default rail, which may not match what the robot is running.
+Either add the tag to `release.json` and deploy it, or check the robot out onto a tag that is served.
+
 **A card shows `Release <tag> is not deployed` instead of Start Interface or Connect.**
-The robot is on, or has changes on top of, a tag that `release.json` no longer retains, so `/r/<tag>/`
-is not on the site. Either add the tag back and redeploy, or check the robot out onto a tag that is
-still served.
+`<tag>` is the default rail, and it is not on the site, so the card has no interface to open. Add the
+tag back to `release.json` and redeploy it.
 
 **A card warns that the robot has changes outside of a tag.**
 The robot has commits or uncommitted changes on top of that release tag, and the card opens that tag's

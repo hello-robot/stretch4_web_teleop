@@ -84,6 +84,16 @@ export const probeRail = (rail: string): Promise<RailProbe> => {
 };
 
 /**
+ * What is known about a rail without asking the origin.
+ *
+ * @param rail Release tag to check, or null for the unversioned page.
+ * @returns True for the unversioned page and for a rail already confirmed
+ *     deployed, null for a rail that still needs a probe.
+ */
+const settled = (rail: string | null): boolean | null =>
+    rail === null ? true : deployed.get(rail) ?? null;
+
+/**
  * Whether the rail a card routes to is deployed.
  *
  * A null rail is the unversioned page, which needs no probe and answers true
@@ -95,33 +105,34 @@ export const probeRail = (rail: string): Promise<RailProbe> => {
  * the card has no grounds to withhold Connect or to claim a release was never
  * deployed, and a page that turns out to be missing says so in the browser.
  *
+ * An answer is kept with the rail it is about. A card that moves to another
+ * rail, as one falling back to the stable release does, would otherwise read
+ * the previous rail's answer for the render before its own probe starts.
+ *
  * @param rail Release tag to check, or null for the unversioned page.
  * @returns True or false once known, null while a probe is outstanding.
  */
 export const useRailAvailable = (rail: string | null): boolean | null => {
-    const [available, availableSet] = useState<boolean | null>(() =>
-        rail === null ? true : deployed.get(rail) ?? null,
-    );
+    const [answer, answerSet] = useState<{
+        rail: string | null;
+        available: boolean | null;
+    }>(() => ({ rail, available: settled(rail) }));
 
     useEffect(() => {
-        if (rail === null) {
-            availableSet(true);
-            return;
-        }
-        if (deployed.get(rail)) {
-            availableSet(true);
-            return;
-        }
+        const known = settled(rail);
+        answerSet({ rail, available: known });
+        if (rail === null || known !== null) return;
 
-        availableSet(null);
         let cancelled = false;
         probeRail(rail).then((result) => {
-            if (!cancelled) availableSet(result !== "absent");
+            if (!cancelled) {
+                answerSet({ rail, available: result !== "absent" });
+            }
         });
         return () => {
             cancelled = true;
         };
     }, [rail]);
 
-    return available;
+    return answer.rail === rail ? answer.available : settled(rail);
 };

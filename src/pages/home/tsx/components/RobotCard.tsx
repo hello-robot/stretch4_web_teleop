@@ -13,6 +13,7 @@ import {
     buildWarning,
     CardTone,
     holdsOperatorSeat,
+    isUnreleasedBuild,
     MapIndex,
     normalizeStatus,
     operatorHref,
@@ -23,6 +24,8 @@ import {
     robotDisplayId,
     RobotRecord,
     RobotStatus,
+    routedRail,
+    servesRails,
     toneForStatus,
 } from "../robotModel";
 import { useLaunchingBeat } from "../useLaunchingBeat";
@@ -150,8 +153,10 @@ export const RobotCard = ({
     }, [robot.uid]);
 
     const name = robot.name || uid;
-    const rail = railFor(robot);
-    const warning = buildWarning(robot, rail);
+    // A robot whose own release is not on the site opens the stable one.
+    const wanted = railFor(robot);
+    const rail = routedRail(wanted, useRailAvailable(wanted));
+    const warning = buildWarning(robot, wanted, rail);
     const railAvailable = useRailAvailable(rail);
     const refusal = railNotice(rail, railAvailable);
     const status = normalizeStatus(robot.status);
@@ -411,7 +416,7 @@ export const RobotCard = ({
                         logsOpen={expanded}
                         restarting={restart !== null}
                         onOpenLogs={openLogs}
-                        operatorHref={operatorHref(robot, name)}
+                        operatorHref={operatorHref(rail, name)}
                         ownerKey={uid}
                         railAvailable={railAvailable}
                         refusal={refusal}
@@ -435,9 +440,9 @@ export const RobotCard = ({
                     />
                     <BranchTag
                         branch={buildLabel(robot)}
-                        title={buildTitle(robot, rail)}
+                        title={buildTitle(robot, wanted, rail)}
                         tone={tone}
-                        dirty={warning !== null}
+                        dirty={servesRails() && isUnreleasedBuild(robot)}
                     />
                 </div>
             </div>
