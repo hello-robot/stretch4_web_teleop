@@ -244,6 +244,55 @@ export const buildWarning = (
 };
 
 /**
+ * The line the card shows when the rail it routes to is not on the site.
+ *
+ * @param rail Rail the card resolved, from railFor.
+ * @param railAvailable Whether that rail is deployed, from useRailAvailable;
+ *     null while the probe is outstanding.
+ * @returns The notice text, or null when the rail is deployed, is still being
+ *     probed, or the card routes to no rail.
+ */
+export const railNotice = (
+    rail: string | null,
+    railAvailable: boolean | null
+): string | null =>
+    rail !== null && railAvailable === false
+        ? `Release ${rail} is not deployed`
+        : null;
+
+/**
+ * What a card's control does: "start" launches the interface, "enter" opens
+ * the operator page, and "other" is any control that does neither.
+ */
+export type CardControl = "start" | "enter" | "other";
+
+/** What the state of a card's rail does to the control the card would show. */
+export type RailGate = "open" | "pending" | "refused";
+
+/**
+ * Decide whether a card's control is shown, waits on the rail probe, or is
+ * replaced by the reason a connection would be refused.
+ *
+ * @param control What the control the card would show does.
+ * @param railAvailable Whether the card's rail is deployed, from
+ *     useRailAvailable; null while the probe is outstanding.
+ * @param refusal Why a connection would be refused, or null when it would
+ *     not be.
+ * @returns "refused" for a start or enter control when there is a refusal,
+ *     "pending" for an enter control while the probe is outstanding, and
+ *     "open" otherwise.
+ */
+export const railGate = (
+    control: CardControl,
+    railAvailable: boolean | null,
+    refusal: string | null
+): RailGate => {
+    if (control === "other") return "open";
+    if (refusal !== null) return "refused";
+    return control === "enter" && railAvailable === null ? "pending" : "open";
+};
+
+/**
  * Where the Connect control sends the operator.
  *
  * A card that resolves no rail keeps the unversioned page, which is every card

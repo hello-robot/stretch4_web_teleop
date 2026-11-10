@@ -381,15 +381,16 @@ The site serves two things:
 
 Which rail an operator gets is decided per robot. The robot's daemon publishes the tag its checkout is
 sitting on to `robots/<fleetId>/build`, and clicking **Connect** on its card opens `/r/<tag>/operator/`.
-If a robot is on a release tag that the site does not serve, **Connect** is disabled (`Release <tag> is
-not deployed`).
+If a robot is on a release tag that the site does not serve, the card shows an outlined box reading
+`Release <tag> is not deployed` in place of **Start Interface** and **Connect**. **Stop Interface** stays
+available while the interface is running.
 
 A robot with commits or uncommitted changes on top of a release tag is treated as that tag. The daemon
 publishes `git describe`, which names the nearest release tag behind the checkout (for example
 `v0.2.0-alpha2-3-g46cf732-dirty`), and the card routes to that tag's rail: **Connect** opens
-`/r/<tag>/operator/`, or is disabled if that rail is not on the site. A warning above the buttons says
-the robot has changes outside of the tag. A checkout with no release tag behind it warns that it is not
-a release and opens the default rail instead.
+`/r/<tag>/operator/`, or is replaced by the same box if that rail is not on the site. A warning above the
+buttons says the robot has changes outside of the tag, and the tag name under them turns red. A checkout
+with no release tag behind it warns that it is not a release and opens the default rail instead.
 
 [`release.json`](../../../../../release.json) lists the tags that stay published on the site:
 
@@ -521,7 +522,7 @@ sends robots with no release of their own to `<tag>`. Add `<tag>` back to `relea
 The deployed tag is not the GitHub release marked **Latest**. Publish it as **Latest** and run
 `npm run deploy:hosting` from the tag again.
 
-**Connect is disabled, with a notice that the release is missing.**
+**A card shows `Release <tag> is not deployed` instead of Start Interface or Connect.**
 The robot is on, or has changes on top of, a tag that `release.json` no longer retains, so `/r/<tag>/`
 is not on the site. Either add the tag back and redeploy, or check the robot out onto a tag that is
 still served.

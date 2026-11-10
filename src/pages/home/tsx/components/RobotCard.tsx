@@ -19,6 +19,7 @@ import {
     OperatorSeat,
     presenceFor,
     railFor,
+    railNotice,
     robotDisplayId,
     RobotRecord,
     RobotStatus,
@@ -152,6 +153,7 @@ export const RobotCard = ({
     const rail = railFor(robot);
     const warning = buildWarning(robot, rail);
     const railAvailable = useRailAvailable(rail);
+    const refusal = railNotice(rail, railAvailable);
     const status = normalizeStatus(robot.status);
     const presence = presenceFor(status, seat !== null);
     const tone = toneForStatus(robot.status);
@@ -412,7 +414,7 @@ export const RobotCard = ({
                         operatorHref={operatorHref(robot, name)}
                         ownerKey={uid}
                         railAvailable={railAvailable}
-                        railLabel={rail}
+                        refusal={refusal}
                         onLaunch={() =>
                             loginHandler
                                 .requestRobotLaunch(uid, robot.map_id ?? null)
@@ -435,6 +437,7 @@ export const RobotCard = ({
                         branch={buildLabel(robot)}
                         title={buildTitle(robot, rail)}
                         tone={tone}
+                        dirty={warning !== null}
                     />
                 </div>
             </div>

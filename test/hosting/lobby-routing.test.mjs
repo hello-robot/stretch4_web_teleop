@@ -33,6 +33,8 @@ const {
     isUnreleasedBuild,
     operatorHref,
     railFor,
+    railGate,
+    railNotice,
     releaseBehind,
     servesRails,
 } = await import("../../src/pages/home/tsx/robotModel.ts");
@@ -495,6 +497,64 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
         servedFrom(PREVIEW);
         const record = robot({ describe: "v0.1.0-7-gabc1234", branch: "feature/rails" });
         assert.equal(buildWarning(record, railFor(record)), null);
+    });
+});
+
+suite("a card says a rail is not deployed only once the origin has said so", () => {
+    test("names the release when the probe found the rail absent", () => {
+        assert.equal(
+            railNotice("v0.2.0-alpha2", false),
+            "Release v0.2.0-alpha2 is not deployed"
+        );
+    });
+
+    test("stays silent while the probe is outstanding and once the rail is confirmed", () => {
+        assert.equal(railNotice("v0.2.0-alpha2", null), null);
+        assert.equal(railNotice("v0.2.0-alpha2", true), null);
+    });
+
+    test("stays silent for a card that routes to the unversioned page", () => {
+        assert.equal(railNotice(null, false), null);
+        assert.equal(railNotice(null, true), null);
+    });
+
+    test("names the release behind a checkout whose rail is absent", () => {
+        const record = robot({ describe: "v0.1.0-7-gabc1234-dirty" });
+        assert.equal(
+            railNotice(railFor(record), false),
+            "Release v0.1.0 is not deployed"
+        );
+    });
+});
+
+suite("a refusal replaces the controls that start or open the interface", () => {
+    const REFUSAL = "Release v0.2.0-alpha2 is not deployed";
+
+    test("replaces a start control and an enter control with the refusal", () => {
+        assert.equal(railGate("start", false, REFUSAL), "refused");
+        assert.equal(railGate("enter", false, REFUSAL), "refused");
+
+        // Control: the same controls with nothing to refuse are shown.
+        assert.equal(railGate("start", true, null), "open");
+        assert.equal(railGate("enter", true, null), "open");
+    });
+
+    test("leaves every other control in place, so a running interface can still be stopped", () => {
+        assert.equal(railGate("other", false, REFUSAL), "open");
+        assert.equal(railGate("other", null, null), "open");
+    });
+
+    test("holds an enter control back while the rail probe is outstanding", () => {
+        assert.equal(railGate("enter", null, null), "pending");
+        // Starting the interface does not wait on the probe.
+        assert.equal(railGate("start", null, null), "open");
+    });
+
+    test("a card whose rail is absent refuses, and one whose rail is confirmed does not", () => {
+        const record = robot({ describe: "v0.1.0-7-gabc1234-dirty" });
+        const rail = railFor(record);
+        assert.equal(railGate("enter", false, railNotice(rail, false)), "refused");
+        assert.equal(railGate("enter", true, railNotice(rail, true)), "open");
     });
 });
 
