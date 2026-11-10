@@ -253,11 +253,9 @@ export const buildWarning = (
     const behind = releaseBehind(robot);
     const defaultLine = rail
         ? `→ Defaults to stable (${rail})`
-        : "→ Defaults to default interface";
+        : "→ Defaults to stable";
     if (wanted !== null && wanted !== rail) {
-        return behind === wanted
-            ? `${wanted} not deployed (dirty)\n${defaultLine}`
-            : `Release ${wanted} not deployed\n${defaultLine}`;
+        `Release ${wanted} not deployed\n${defaultLine}`;
     }
     if (!isUnreleasedBuild(robot)) return null;
     if (behind && behind === rail) {

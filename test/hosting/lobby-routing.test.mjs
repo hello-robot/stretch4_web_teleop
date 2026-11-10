@@ -574,7 +574,7 @@ suite("an unreleased build warns the operator only when the lobby routes by rail
             const wanted = railFor(record);
             assert.equal(
                 buildWarning(record, wanted, routedRail(wanted, false)),
-                `${behind} not deployed (dirty)\n→ Defaults to stable (v0.2.0)`,
+                `Release ${behind} not deployed\n→ Defaults to stable (v0.2.0)`,
                 describe
             );
 
