@@ -335,17 +335,45 @@ function retainedRails(root = repoRoot) {
 }
 
 /**
+ * The origin of a URL, in the form a browser reports as location.origin.
+ *
+ * The lobby compares the origin it was built against with location.origin,
+ * which carries no trailing slash and no path.
+ *
+ * @param {string} value URL or origin, as configured or typed.
+ * @param {string} source Name of the setting the value came from, used in
+ *     the error message.
+ * @returns {string} Scheme, host and port, with no trailing slash.
+ * @throws {Error} When the value is not an http or https URL.
+ */
+function normalizeOrigin(value, source) {
+    let url;
+    try {
+        url = new URL(value);
+    } catch (error) {
+        throw new Error(`${source} is not a URL: ${value}`, { cause: error });
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+        throw new Error(`${source} is not an http or https URL: ${value}`);
+    }
+    return url.origin;
+}
+
+/**
  * Configured live Hosting origin from process.env or .env, if present.
  *
- * @returns {string|null} The live origin, or null when unset.
+ * @returns {string|null} The live origin with no trailing slash or path, or
+ *     null when unset.
+ * @throws {Error} When the configured value is not an http or https URL.
  */
 function configuredLiveOrigin() {
-    return (
+    const configured =
         process.env.PUBLIC_HOSTING_ORIGIN ||
         (dotenv.config({ path: path.join(repoRoot, ".env") }).parsed || {})
-            .PUBLIC_HOSTING_ORIGIN ||
-        null
-    );
+            .PUBLIC_HOSTING_ORIGIN;
+    return configured
+        ? normalizeOrigin(configured, "PUBLIC_HOSTING_ORIGIN")
+        : null;
 }
 
 /**
@@ -356,11 +384,13 @@ function configuredLiveOrigin() {
  * build rather than after, and its URL is baked into the lobby.
  *
  * @param {{channel: string|null, origin: string|null}} options Channel and origin options.
- * @returns {string} The origin to build the lobby against.
- * @throws {Error} When no origin can be resolved.
+ * @returns {string} The origin to build the lobby against, with no trailing
+ *     slash or path.
+ * @throws {Error} When no origin can be resolved, or the one given is not an
+ *     http or https URL.
  */
 function resolveOrigin(options) {
-    if (options.origin) return options.origin;
+    if (options.origin) return normalizeOrigin(options.origin, "--origin");
     if (!options.channel) {
         const fromEnv = configuredLiveOrigin();
         if (!fromEnv) {
@@ -1052,10 +1082,12 @@ module.exports = {
     checkoutTag,
     isPreviewOrigin,
     lobbyPlan,
+    normalizeOrigin,
     parseArgs,
     previewChannelId,
     publishedManifest,
     checkPublishedRail,
+    resolveOrigin,
     retainedRails,
 };
 

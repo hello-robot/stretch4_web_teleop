@@ -69,9 +69,23 @@ export const branchLabel = (branch: string | undefined): string =>
  * there, and so it does in firebase mode where the robot serves this same
  * lobby at its own address. Both serve exactly one interface, which is the
  * one they published, and neither has a release to measure a robot against.
+ *
+ * The configured value is reduced to its origin before comparing, because
+ * location.origin carries no trailing slash and no path.
+ *
+ * @returns True when this page's origin is the configured Hosting origin;
+ *     false when they differ, or the configured value is unset or not a URL.
  */
-export const servesRails = (): boolean =>
-    location.origin === process.env.PUBLIC_HOSTING_ORIGIN;
+export const servesRails = (): boolean => {
+    const configured = process.env.PUBLIC_HOSTING_ORIGIN;
+    if (!configured) return false;
+    try {
+        return new URL(configured).origin === location.origin;
+    } catch {
+        // new URL throws on a value that is not a URL, which names no origin.
+        return false;
+    }
+};
 
 /**
  * What the tag on a card shows: the build the robot reported, else its branch.

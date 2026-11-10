@@ -166,6 +166,31 @@ suite("only the live Hosting origin serves rails", () => {
         assert.equal(servesRails(), false);
     });
 
+    test("returns true when the configured origin ends in a slash or carries a path", () => {
+        // location.origin never ends in a slash, so a configured value that
+        // does must still name the same origin.
+        for (const configured of [`${LIVE}/`, `${LIVE}/index.html`]) {
+            servedFrom(LIVE);
+            process.env.PUBLIC_HOSTING_ORIGIN = configured;
+            assert.equal(servesRails(), true, `${configured} serves no rails`);
+        }
+
+        // Control: the slash is ignored, not the origin before it.
+        servedFrom(LIVE);
+        process.env.PUBLIC_HOSTING_ORIGIN = `${PREVIEW}/`;
+        assert.equal(servesRails(), false);
+    });
+
+    test("returns false when the configured origin is not a URL", () => {
+        servedFrom(LIVE);
+        process.env.PUBLIC_HOSTING_ORIGIN = "stretch4-web-interface.web.app";
+        assert.equal(servesRails(), false);
+
+        // Control: the same host with its scheme is the live origin.
+        process.env.PUBLIC_HOSTING_ORIGIN = LIVE;
+        assert.equal(servesRails(), true);
+    });
+
     test("returns false when PUBLIC_HOSTING_ORIGIN is unset", () => {
         // PUBLIC_HOSTING_ORIGIN unset becomes the literal undefined in the
         // bundle. location.origin is always a string, so the comparison fails

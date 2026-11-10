@@ -59,9 +59,11 @@ const {
     checkPublishedRail,
     isPreviewOrigin,
     lobbyPlan,
+    normalizeOrigin,
     parseArgs,
     previewChannelId,
     publishedManifest,
+    resolveOrigin,
 } = require("../../scripts/deployHosting");
 const { repoSlug, stableRail } = require("../../scripts/stableRail");
 const {
@@ -578,6 +580,85 @@ suite("a preview origin is distinct from the live site", () => {
         // Guessing wrong in this direction publishes a preview build to the
         // live site, so the fallback must be the strict one.
         assert.equal(isPreviewOrigin("not-a-url", null), false);
+    });
+});
+
+suite("the origin a lobby is built against matches what location.origin reports", () => {
+    /** Value this process started with, restored after each test. */
+    let saved;
+
+    before(() => {
+        saved = process.env.PUBLIC_HOSTING_ORIGIN;
+    });
+
+    afterEach(() => {
+        if (saved === undefined) delete process.env.PUBLIC_HOSTING_ORIGIN;
+        else process.env.PUBLIC_HOSTING_ORIGIN = saved;
+    });
+
+    test("drops a trailing slash, a path and a query, and keeps the port", () => {
+        // The lobby compares this value with location.origin, which is
+        // scheme, host and port and nothing after them.
+        for (const [value, origin] of [
+            ["https://site.web.app", "https://site.web.app"],
+            ["https://site.web.app/", "https://site.web.app"],
+            ["https://site.web.app/operator/?robot=x", "https://site.web.app"],
+            ["https://SITE.web.app/", "https://site.web.app"],
+            ["http://localhost:5000/", "http://localhost:5000"],
+        ]) {
+            assert.equal(normalizeOrigin(value, "--origin"), origin);
+        }
+    });
+
+    test("refuses a value that is not an http or https URL, naming where it came from", () => {
+        assert.throws(
+            () => normalizeOrigin("site.web.app", "PUBLIC_HOSTING_ORIGIN"),
+            /PUBLIC_HOSTING_ORIGIN is not a URL: site\.web\.app/
+        );
+        assert.throws(
+            () => normalizeOrigin("localhost:5000", "--origin"),
+            /--origin is not an http or https URL: localhost:5000/
+        );
+
+        // Positive control: the same hosts with a scheme are accepted.
+        assert.equal(
+            normalizeOrigin("https://site.web.app", "PUBLIC_HOSTING_ORIGIN"),
+            "https://site.web.app"
+        );
+        assert.equal(
+            normalizeOrigin("http://localhost:5000", "--origin"),
+            "http://localhost:5000"
+        );
+    });
+
+    test("an origin given with --origin is normalised before it is used", () => {
+        assert.equal(
+            resolveOrigin({ channel: null, origin: "https://site.web.app/" }),
+            "https://site.web.app"
+        );
+    });
+
+    test("the configured live origin is normalised before it is baked into the lobby", () => {
+        process.env.PUBLIC_HOSTING_ORIGIN = "https://from-env.web.app/";
+        assert.equal(
+            resolveOrigin({ channel: null, origin: null }),
+            "https://from-env.web.app"
+        );
+    });
+
+    test("a configured live origin that is not a URL stops the release", () => {
+        process.env.PUBLIC_HOSTING_ORIGIN = "from-env.web.app";
+        assert.throws(
+            () => resolveOrigin({ channel: null, origin: null }),
+            /PUBLIC_HOSTING_ORIGIN is not a URL/
+        );
+
+        // Positive control: the same host with its scheme resolves.
+        process.env.PUBLIC_HOSTING_ORIGIN = "https://from-env.web.app";
+        assert.equal(
+            resolveOrigin({ channel: null, origin: null }),
+            "https://from-env.web.app"
+        );
     });
 });
 
