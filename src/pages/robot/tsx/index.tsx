@@ -19,6 +19,7 @@ import {
     LeaseStatusMessage,
     MapPoseMessage,
     MaxEeSpeedMessage,
+    NavPlanMessage,
     ModeMessage,
     navigationProps,
     OccupancyGridMessage,
@@ -51,6 +52,7 @@ export const robot = new Robot({
     playbackPosesResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "playbackPosesState"),
     amclPoseCallback: forwardAMCLPose,
+    navPlanCallback: forwardNavPlan,
     modeCallback: forwardMode,
     isHomedCallback: forwardIsHomed,
     isRunStoppedCallback: forwardIsRunStopped,
@@ -386,6 +388,15 @@ function forwardAMCLPose(transform: Transform) {
         type: "amclPose",
         message: transform,
     } as MapPoseMessage);
+}
+
+function forwardNavPlan(points: number[]) {
+    if (!connection) throw "WebRTC connection undefined";
+
+    connection.sendData({
+        type: "navPlan",
+        points: points,
+    } as NavPlanMessage);
 }
 
 function handleMessage(message: WebRTCMessage) {

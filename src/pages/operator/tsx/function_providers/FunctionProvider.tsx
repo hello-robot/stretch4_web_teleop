@@ -88,6 +88,16 @@ export abstract class FunctionProvider {
         return FunctionProvider.remoteRobot.addMapPoseListener(listener);
     }
 
+    /** Subscribe to Nav2 path updates; undefined until the remote robot exists. */
+    static subscribeNavPlan(
+        listener: (points: number[]) => void,
+    ): (() => void) | undefined {
+        if (!FunctionProvider.remoteRobot) {
+            return undefined;
+        }
+        return FunctionProvider.remoteRobot.addNavPlanListener(listener);
+    }
+
     /** Latest cached map pose, if the remote robot is connected. */
     static getMapPose(): Transform | undefined {
         return FunctionProvider.remoteRobot?.getMapPose();

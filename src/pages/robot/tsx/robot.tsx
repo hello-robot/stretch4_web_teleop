@@ -27,6 +27,7 @@ import {
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
+    ROSPath,
     ROSPose,
     setMaxEeSpeed,
     updateJointIncrements,
@@ -80,6 +81,42 @@ export enum GoalStatus {
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
+// Path Nav2's FollowPath is given (no smoother in the BT)
+const navPlanTopicName = "/plan";
+/** Minimum spacing (m) between forwarded path points. */
+const NAV_PLAN_MIN_SPACING_M = 0.05;
+/** Maximum number of forwarded path points; longer paths are evenly thinned. */
+const NAV_PLAN_MAX_POINTS = 400;
+
+/**
+ * Reduce a nav_msgs/Path to flat [x0, y0, x1, y1, ...] (cm precision), dropping
+ * points closer than NAV_PLAN_MIN_SPACING_M and capping at NAV_PLAN_MAX_POINTS.
+ * The last pose is always kept so the line reaches the goal.
+ */
+function thinNavPlan(path: ROSPath): number[] {
+    const poses = path.poses ?? [];
+    const kept: { x: number; y: number }[] = [];
+    poses.forEach((stamped, i) => {
+        const p = stamped.pose.position;
+        const last = kept[kept.length - 1];
+        const isLast = i === poses.length - 1;
+        if (
+            !last ||
+            isLast ||
+            Math.hypot(p.x - last.x, p.y - last.y) >= NAV_PLAN_MIN_SPACING_M
+        ) {
+            kept.push({ x: p.x, y: p.y });
+        }
+    });
+    const stride = Math.ceil(kept.length / NAV_PLAN_MAX_POINTS) || 1;
+    const points: number[] = [];
+    kept.forEach((p, i) => {
+        if (i % stride === 0 || i === kept.length - 1) {
+            points.push(Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100);
+        }
+    });
+    return points;
+}
 
 export class Robot extends React.Component {
     private ros: Ros;
@@ -159,6 +196,9 @@ export class Robot extends React.Component {
     private moveBaseResultCallback: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
+    private navPlanCallback: (points: number[]) => void;
+    // True while a move-base goal is executing; /plan is only forwarded then
+    private navPlanActive = false;
     private modeCallback: (mode: string) => void;
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
@@ -189,6 +229,7 @@ export class Robot extends React.Component {
         moveBaseResultCallback: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
+        navPlanCallback: (points: number[]) => void;
         modeCallback: (mode: string) => void;
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
@@ -204,17 +245,24 @@ export class Robot extends React.Component {
             props.occupancyGridUnavailableCallback;
         this.odomCallback = props.odomCallback;
         this.moveBaseResultCallback = (goalState) => {
-            if (goalState.state !== "Navigation executing!") {
+            if (goalState.state === "Navigation executing!") {
+                this.navPlanActive = true;
+            } else {
                 this.moveBaseGoalID = undefined;
                 this.moveBaseGoal = undefined;
                 this.moveBaseStatusWatching = false;
                 this.moveBaseStatusSeenActive = false;
                 this.moveBaseTerminalBaseline = undefined;
+                if (this.navPlanActive) {
+                    this.navPlanActive = false;
+                    this.navPlanCallback([]);
+                }
             }
             props.moveBaseResultCallback(goalState);
         };
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
+        this.navPlanCallback = props.navPlanCallback;
         this.modeCallback = props.modeCallback;
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
@@ -362,6 +410,7 @@ export class Robot extends React.Component {
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
         this.subscribeToOdom();
+        this.subscribeToNavPlan();
         this.subscribeToMode();
         this.subscribeToIsRunStopped();
         this.subscribetoJointStateDiagnostics();
@@ -489,6 +538,24 @@ export class Robot extends React.Component {
 
         odomTopic.subscribe((msg: ROSOdometry) => {
             if (this.odomCallback) this.odomCallback(msg);
+        });
+    }
+
+    /**
+     * Forward the Nav2 path as flat map-frame [x, y, ...] points while a
+     * move-base goal is executing.
+     */
+    subscribeToNavPlan() {
+        const planTopic: Topic<ROSPath> = new Topic({
+            ros: this.ros,
+            name: navPlanTopicName,
+            messageType: "nav_msgs/msg/Path",
+        });
+        this.subscriptions.push(planTopic);
+
+        planTopic.subscribe((msg: ROSPath) => {
+            if (!this.navPlanActive || !this.navPlanCallback) return;
+            this.navPlanCallback(thinNavPlan(msg));
         });
     }
 
