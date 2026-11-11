@@ -67,6 +67,7 @@ let savedEnv;
  */
 function servedFrom(origin, stable = STABLE) {
     globalThis.location = { origin };
+    globalThis.window = { location: globalThis.location };
     process.env.PUBLIC_HOSTING_ORIGIN = LIVE;
     if (stable === null) delete process.env.PUBLIC_STABLE_RAIL;
     else process.env.PUBLIC_STABLE_RAIL = stable;
@@ -170,6 +171,7 @@ beforeEach(() => servedFrom(LIVE));
 afterEach(() => {
     globalThis.fetch = realFetch;
     delete globalThis.location;
+    delete globalThis.window;
     for (const [key, value] of [
         ["PUBLIC_HOSTING_ORIGIN", savedEnv.origin],
         ["PUBLIC_STABLE_RAIL", savedEnv.stable],
@@ -230,6 +232,7 @@ suite("only the live Hosting origin serves rails", () => {
         // bundle. location.origin is always a string, so the comparison fails
         // and every card keeps the unversioned page.
         globalThis.location = { origin: LIVE };
+        globalThis.window = { location: globalThis.location };
         delete process.env.PUBLIC_HOSTING_ORIGIN;
         assert.equal(servesRails(), false);
     });
