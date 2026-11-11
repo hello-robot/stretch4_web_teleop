@@ -10,6 +10,7 @@ import React, {
     Dispatch,
     SetStateAction,
     useEffect,
+    useLayoutEffect,
     useRef,
     useState,
 } from 'react';
@@ -23,6 +24,7 @@ import {
 import '../../css/AutoNav.css';
 import { UnderMapButton } from '../function_providers/UnderMapFunctionProvider';
 import { Canvas } from "../static_components/Canvas";
+import { GoalHeadingClock } from '../static_components/GoalHeadingClock';
 import { OccupancyGrid } from '../static_components/OccupancyGrid';
 import { SharedState } from './CustomizableComponent';
 import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
@@ -139,6 +141,33 @@ const AutoNav: React.FC<AutoNavProps> = ({
             if (unsubscribeOnUnmount) unsubscribeOnUnmount();
         };
     }, [occupancyGrid]);
+
+    // Goal heading (map-frame yaw, radians), as shown on the goal marker
+    const [goalYaw, goalYawSet] = useState<number | undefined>(undefined);
+    useEffect(() => {
+        return occupancyGrid?.goalYawSubscribe(goalYawSet);
+    }, [occupancyGrid]);
+
+    // Goal marker position inside .map-wrapper (CSS px), where the heading clock is drawn
+    const mapWrapperRef = useRef<HTMLDivElement>(null);
+    const [goalCenter, goalCenterSet] = useState<{ x: number; y: number }>();
+    useLayoutEffect(() => {
+        const wrapper = mapWrapperRef.current;
+        const update = () => {
+            const point = occupancyGrid?.goalClientPoint();
+            if (!wrapper || !point || !goalPosition) {
+                goalCenterSet(undefined);
+                return;
+            }
+            const rect = wrapper.getBoundingClientRect();
+            goalCenterSet({ x: point.x - rect.left, y: point.y - rect.top });
+        };
+        update();
+        if (!wrapper || !goalPosition || typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(update);
+        observer.observe(wrapper);
+        return () => observer.disconnect();
+    }, [occupancyGrid, goalPosition]);
 
     useEffect(() => {
         return subscribeOccupancyGridStatus(mapStatusSet);
@@ -339,15 +368,22 @@ const AutoNav: React.FC<AutoNavProps> = ({
     useEffect(() => {
         if (swipeableViewsIdx !== 1 || !mapReady) return;
         const timer = window.setTimeout(() => {
-            addToast('info', 'Click on the map to navigate');
+            addToast('info', 'Tap a location in the map');
         }, 500);
         return () => window.clearTimeout(timer);
     }, [swipeableViewsIdx, mapReady, addToast])
 
     return (
         <div className='auto-nav'>
-            <div className="map-wrapper">
+            <div className="map-wrapper" ref={mapWrapperRef}>
                 <Map />
+                {goalPosition && goalYaw !== undefined && goalCenter && (
+                    <GoalHeadingClock
+                        yaw={goalYaw}
+                        center={goalCenter}
+                        onSelect={(yaw) => occupancyGrid?.setGoalYaw(yaw)}
+                    />
+                )}
                 {mapStatus !== "ready" && (
                     <div
                         className="map-loading-overlay"
