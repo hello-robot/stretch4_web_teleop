@@ -37,6 +37,7 @@ const {
     railBundleReady,
 } = require("./hostingBundleReady");
 const {
+    authenticate,
     liveVersionName,
     publishAdditively,
     servedAt,
@@ -845,12 +846,16 @@ async function main() {
     // The CLI is only consulted to resolve a preview channel's origin when no
     // explicit --origin was supplied.
     const needsCli = (Boolean(channel) && !options.origin) || !options.dryRun;
-    if (needsCli && !envProjectId()) {
-        throw new Error(
-            "no Firebase project: set PUBLIC_FIREBASE_PROJECT_ID in .env.\n" +
-                "          Assembling without one needs --dry-run and an " +
-                "explicit --origin.",
-        );
+    if (needsCli) {
+        const projectId = envProjectId();
+        if (!projectId) {
+            throw new Error(
+                "no Firebase project: set PUBLIC_FIREBASE_PROJECT_ID in .env.\n" +
+                    "          Assembling without one needs --dry-run and an " +
+                    "explicit --origin.",
+            );
+        }
+        await authenticate(projectId);
     }
     const origin = resolveOrigin({ channel, origin: options.origin });
     const preview = isPreviewOrigin(origin, channel);

@@ -31,7 +31,11 @@ const {
 const { Client } = require("firebase-tools/lib/apiv2");
 const { hostingApiOrigin } = require("firebase-tools/lib/api");
 const operationPoller = require("firebase-tools/lib/operation-poller");
-const { selectAccount, setActiveAccount } = require("firebase-tools/lib/auth");
+const {
+    selectAccount,
+    setActiveAccount,
+} = require("firebase-tools/lib/auth");
+const { getFirebaseProject } = require("firebase-tools/lib/management/projects");
 const { requireAuth } = require("firebase-tools/lib/requireAuth");
 
 /** Paths per :populateFiles call, matching the CLI's own batch size. */
@@ -49,11 +53,13 @@ const defaultRepoRoot = path.join(__dirname, "..");
  * requireAuth reads options.user and options.tokens when an interactive login
  * exists in the credential store, and falls back to autoAuth() (which reads
  * GOOGLE_APPLICATION_CREDENTIALS) when no interactive account is present.
+ * When `projectId` is given, verifies the credentials against the project.
  *
+ * @param {string} [projectId] Project ID to verify access against.
  * @returns {Promise<string>} The authenticated account or service account name.
  * @throws {Error} When neither a stored login nor service-account credentials work.
  */
-async function authenticate() {
+async function authenticate(projectId) {
     const options = {};
     const account = selectAccount(undefined, process.cwd());
     if (account) {
@@ -61,12 +67,18 @@ async function authenticate() {
     }
     try {
         const email = await requireAuth(options);
+        if (projectId) {
+            await getFirebaseProject(projectId);
+        }
         return email ?? account?.user?.email ?? "service account";
     } catch (error) {
+        const detail = error.original?.message
+            ? `${error.message} (${error.original.message})`
+            : error.message;
         throw new Error(
-            "not authenticated to Firebase. Run ./node_modules/.bin/firebase login " +
+            "not authenticated to Firebase. Run ./node_modules/.bin/firebase login --reauth " +
                 "or set GOOGLE_APPLICATION_CREDENTIALS.\n" +
-                `          (${error.message})`,
+                `          (${detail})`,
         );
     }
 }
