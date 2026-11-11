@@ -1,11 +1,11 @@
-/* Centered on the goal marker, kept fully inside the map area. */
+/* Centered on the goal marker, kept fully inside the map area.
+   --clock-size and --hole-size are set by GoalHeadingClock. */
 .goal-heading-clock {
-    --clock-size: 148px;
-    --hour-size: 32px;
-    --clock-radius: calc((var(--clock-size) - var(--hour-size)) / 2);
     --clock-edge-gap: 4px;
-    --clock-text: hsl(184deg 60% 87%);
-    --clock-accent: #2ee4c8;
+    --clock-accent: hsl(184deg 25% 32.5% / 50%);
+    --clock-accent-hover: hsl(171deg 60% 50% / 35%);
+    --clock-accent-selected: hsl(171deg 100% 55% / 80%);
+    --clock-accent-selected-hover: hsl(171deg 100% 60% / 60%);
 
     position: absolute;
     left: clamp(
@@ -25,73 +25,103 @@
     padding: 0;
     box-sizing: border-box;
     transform: translate(-50%, -50%);
-    /* Ring through the hour centers; the face itself stays see-through. */
-    border: none;
     border-radius: 50%;
-    background: radial-gradient(
-        circle,
-        transparent calc(var(--clock-radius) - 1.5px),
-        hsla(184deg 60% 87% / 45%) calc(var(--clock-radius) - 1px),
-        hsla(184deg 60% 87% / 45%) calc(var(--clock-radius) + 1px),
-        transparent calc(var(--clock-radius) + 1.5px)
-    );
-    /* Map taps pass through everywhere except the hour buttons. */
     pointer-events: none;
+    animation: goal-heading-emerge 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.goal-heading-clock__hour {
+/* White separators. The hole stays clear so the canvas arrow shows through. */
+.goal-heading-clock::before {
+    content: "";
     position: absolute;
-    left: calc(50% - var(--hour-size) / 2);
-    top: calc(50% - var(--hour-size) / 2);
-    width: var(--hour-size);
-    height: var(--hour-size);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    inset: 0;
     border-radius: 50%;
+    background: hsl(184deg 50% 20% / 15%);
+    pointer-events: none;
+    -webkit-mask: radial-gradient(
+        circle at center,
+        transparent calc(var(--hole-size) / 2),
+        #000 calc(var(--hole-size) / 2 + 1px)
+    );
+    mask: radial-gradient(
+        circle at center,
+        transparent calc(var(--hole-size) / 2),
+        #000 calc(var(--hole-size) / 2 + 1px)
+    );
+}
+
+/* Full wedge. Hidden from Voice Control so it does not get its own number. */
+.goal-heading-clock__hit {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    background: var(--clock-accent);
     pointer-events: auto;
     cursor: pointer;
-    color: var(--clock-text);
-    background: hsla(204deg 100% 5% / 85%);
-    box-shadow: 0 1px 4px hsla(0deg 0% 0% / 40%);
-    font-size: 14px;
-    font-weight: 600;
-    transform: rotate(var(--hour-angle))
-        translateY(calc(-1 * var(--clock-radius)))
-        rotate(calc(-1 * var(--hour-angle)));
     transition: background-color 0.15s ease-in-out;
 }
 
-.goal-heading-clock__hour:hover {
-    background: hsla(204deg 60% 20% / 92%);
+.goal-heading-clock__wedge:hover .goal-heading-clock__hit {
+    background: var(--clock-accent-hover);
 }
 
-.goal-heading-clock__hour:has(input:checked) {
-    background: var(--clock-accent);
-    color: hsl(204deg 100% 5%);
+.goal-heading-clock__wedge--selected .goal-heading-clock__hit {
+    background: var(--clock-accent-selected);
 }
 
-.goal-heading-clock__hour:has(input:focus-visible) {
-    outline: 2px solid #fff;
-    outline-offset: 2px;
+.goal-heading-clock__wedge--selected:hover .goal-heading-clock__hit {
+    background: var(--clock-accent-selected-hover);
 }
 
-/* Native radio stays in the accessibility tree and keyboard order; the label is the visual. */
-.goal-heading-clock__hour input {
+/* Inset box Voice Control badges. Transparent, so the wedge color shows through. */
+.goal-heading-clock__segment {
     position: absolute;
-    inset: 0;
+    z-index: 1;
     margin: 0;
-    opacity: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    pointer-events: auto;
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
-.goal-heading-clock__sr-only {
+/* Name is for Voice Control / VoiceOver. The wedge itself stays unlabeled on screen. */
+.goal-heading-clock__name {
     position: absolute;
     width: 1px;
     height: 1px;
     padding: 0;
+    margin: -1px;
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
     border: 0;
+}
+
+.goal-heading-clock__segment:focus {
+    outline: none;
+}
+
+.goal-heading-clock__segment:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+@keyframes goal-heading-emerge {
+    from {
+        transform: translate(-50%, -50%) scale(0.15);
+        opacity: 0;
+    }
+    to {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .goal-heading-clock {
+        animation: none;
+    }
 }

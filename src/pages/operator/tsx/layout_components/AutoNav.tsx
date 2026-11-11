@@ -368,7 +368,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
     useEffect(() => {
         if (swipeableViewsIdx !== 1 || !mapReady) return;
         const timer = window.setTimeout(() => {
-            addToast('info', 'Tap the map to set a goal, then pick a direction (1-8) to face');
+            addToast('info', 'Tap a location in the map');
         }, 500);
         return () => window.clearTimeout(timer);
     }, [swipeableViewsIdx, mapReady, addToast])
