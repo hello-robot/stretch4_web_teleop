@@ -17,7 +17,6 @@ class Joint(Enum):
     Joint names of Stretch.
     """
 
-    BASE_ROTATION = "mobile_base_rotation_joint"
     ARM_LIFT = "lift_joint"
     ARM_L0 = "arm_l0_joint"
     ARM_L1 = "arm_l1_joint"
@@ -31,10 +30,6 @@ class Joint(Enum):
     WRIST_ROLL = "wrist_roll_joint"
     GRIPPER_RIGHT = "gripper_finger_right_joint"
     GRIPPER_LEFT = "stretch_gripper_joint"
-    RIGHT_WHEEL = "right_wheel_joint"
-    LEFT_WHEEL = "left_wheel_joint"
-    HEAD_PAN = "head_pan_joint"
-    HEAD_TILT = "head_tilt_joint"
 
     @staticmethod
     def get_arm_joints():

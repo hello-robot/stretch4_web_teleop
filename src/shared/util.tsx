@@ -2,8 +2,6 @@ import { Message, Transform } from "roslib";
 import { cmd } from "./commands";
 
 export type ValidJoints =
-    | "head_tilt_joint"
-    | "head_pan_joint"
     | "gripper_joint"
     | "arm_joint"
     | "wrist_extension"
@@ -359,16 +357,13 @@ const TOOL_SPEED_PER_UNIT: { [key in ValidJoints]?: number } = {
 };
 
 /**
- * Medium-profile velocities for the head and gripper, in URDF units/s. The limiter cannot see
- * either of them, so nothing downstream bounds these and they are the only thing deciding how
- * fast those axes move.
+ * Medium-profile velocity for the gripper, in URDF units/s. The limiter cannot see it, so nothing
+ * downstream bounds it and this is the only thing deciding how fast the gripper moves.
  *
  * The gripper's URDF units depend on the attached tool, so its entry is only nominal; its jog
  * increment is normalized to the tool's travel in updateJointIncrements().
  */
 const UNLIMITED_JOINT_VELOCITIES: { [key in ValidJoints]?: number } = {
-    head_tilt_joint: 0.3,
-    head_pan_joint: 0.3,
     gripper_joint: 0.075,
 };
 
@@ -450,8 +445,6 @@ export const TASK_SPACE_LINEAR_VEL = 0.04;
  * tool_info.urdf_range, since the right step depends on which tool is attached.
  */
 export const JOINT_INCREMENTS: { [key in ValidJoints]?: number } = {
-    head_tilt_joint: 0.1,
-    head_pan_joint: 0.1,
     gripper_joint: 0.1,
     arm_joint: 0.1,
     lift_joint: 0.1,
@@ -493,7 +486,7 @@ const MOVE_TO_POSE_PLAYBACK_GAIN = 1.25;  // Gain factor for move-to-pose playba
  */
 export function getPlaybackJointVelocity(jointName: ValidJoints): number {
     let resolvedJoint: ValidJoints = jointName;
-    if (jointName === "stretch_gripper_joint" || (jointName as string) === "gripper_aperture") {
+    if ((jointName as string) === "stretch_gripper_joint" || (jointName as string) === "gripper_aperture") {
         resolvedJoint = "gripper_joint";
     } else if (
         jointName === "wrist_extension" ||
