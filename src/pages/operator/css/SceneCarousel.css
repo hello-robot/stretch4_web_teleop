@@ -125,7 +125,7 @@
     align-items: center;
     padding: 2px;
     gap: 50px;
-    background: hsl(204 80% 10% / 0.5);
+    background: hsl(204deg 100% 7% / 50%);
     border-radius: 14px;
 }
 
