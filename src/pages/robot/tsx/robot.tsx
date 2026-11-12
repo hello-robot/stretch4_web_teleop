@@ -183,7 +183,6 @@ export class Robot extends React.Component {
     private mapFrameTfClient?: ROS2TFClient;
     private linkGripperFingerLeftTF?: Transform;
     private linkWristYawTF?: Transform;
-    private linkHeadTiltTF?: Transform;
     private jointStateCallback: (
         robotPose: RobotPose,
         jointValues: ValidJointStateDict,
@@ -441,7 +440,6 @@ export class Robot extends React.Component {
         this.toggleBaseOnlyCollision(true);
         // this.createRobotFrameTFClient();
         // this.createMapFrameTFClient();
-        // this.subscribeToHeadTiltTF();
         // this.subscribeToMapTF();
         this.createHomeTheRobotService();
         this.createSeedLocalizationService();
@@ -1263,12 +1261,6 @@ export class Robot extends React.Component {
     subscribeToWristYawTF() {
         this.robotFrameTfClient?.subscribe("wrist_yaw_link", (transform) => {
             this.linkWristYawTF = transform;
-        });
-    }
-
-    subscribeToHeadTiltTF() {
-        this.robotFrameTfClient?.subscribe("head_tilt_link", (transform) => {
-            this.linkHeadTiltTF = transform;
         });
     }
 

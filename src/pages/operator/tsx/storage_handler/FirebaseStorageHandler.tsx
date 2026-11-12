@@ -22,7 +22,7 @@ import {
     update,
     push,
 } from "firebase/database";
-import { ArucoMarkersInfo, RobotPose } from "shared/util";
+import { RobotPose } from "shared/util";
 import { Transform } from "roslib";
 
 function stripUndefined(value: unknown): unknown {
@@ -59,7 +59,6 @@ export class FirebaseStorageHandler extends StorageHandler {
     private recordings: { [name: string]: RobotPose[] };
     private markerNames: string[];
     private markerIDs: string[];
-    private markerInfo: ArucoMarkersInfo;
 
     constructor(
         onStorageHandlerReadyCallback: () => void,
@@ -82,7 +81,6 @@ export class FirebaseStorageHandler extends StorageHandler {
         this.recordings = {};
         this.markerNames = [];
         this.markerIDs = [];
-        this.markerInfo = {} as ArucoMarkersInfo;
         onAuthStateChanged(this.auth, (user) =>
             this.handleAuthStateChange(user)
         );
