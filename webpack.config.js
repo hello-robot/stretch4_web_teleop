@@ -37,7 +37,6 @@ function selectPages(webpackEnv) {
 // Only explicitly public Firebase client configuration and the fleet identifier
 // may enter browser bundles. Robot credentials and every other .env value stay local.
 const env = dotenv.config().parsed || {};
-const envKeys = webpackPublicEnvDefinitions(env);
 
 /**
  * Build the webpack configuration for one invocation.
@@ -80,6 +79,12 @@ module.exports = (webpackEnv, argv) => {
               }),
           ]
         : [];
+    const envKeys = webpackPublicEnvDefinitions(env);
+    if (storageValue === "firebase" && !pages.includes("robot")) {
+        // Cloud-hosted lobby and operator bundles resolve fleet membership per
+        // signed-in user; only the robot-local bundle reads HELLO_FLEET_ID.
+        envKeys["process.env.HELLO_FLEET_ID"] = "undefined";
+    }
     envKeys["process.env.storage"] = JSON.stringify(storageValue);
     // Feature flags become boolean literals in the bundle, so `if (FEATURE_X)`
     // guards fold away when the flag is off. See features.json.
@@ -93,7 +98,7 @@ module.exports = (webpackEnv, argv) => {
             type: "filesystem",
             version: JSON.stringify({
                 flags: loadFeatures(),
-                storage: env.storage,
+                storage: storageValue,
                 pages,
                 rail,
             }),

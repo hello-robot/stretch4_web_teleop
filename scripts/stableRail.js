@@ -34,7 +34,9 @@ function repoSlug(repoRoot) {
         cwd: repoRoot,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    })
+        .trim()
+        .replace(/\/+$/, "");
     const match = url.match(/github\.com[:/]+([^/]+)\/(.+?)(?:\.git)?$/);
     if (!match) {
         throw new Error(`origin is not a GitHub remote: ${url}`);
@@ -50,8 +52,8 @@ function repoSlug(repoRoot) {
  *
  * @param {string} repoRoot Directory whose origin names the repository.
  * @returns {Promise<string|null>} The tag, or null when nothing is published.
- * @throws {Error} When GitHub answers with anything but 200 or 404, or when
- *     the released tag does not match the rail grammar.
+ * @throws {Error} When the repository cannot be read, GitHub answers with an
+ *     unexpected status, or the released tag does not match the rail grammar.
  */
 async function stableRail(repoRoot) {
     const slug = repoSlug(repoRoot);
@@ -67,7 +69,21 @@ async function stableRail(repoRoot) {
         `${GITHUB_API}/repos/${slug}/releases/latest`,
         { headers },
     );
-    if (response.status === 404) return null;
+    if (response.status === 404) {
+        // GitHub answers 404 both when an accessible repository has no
+        // published release and when a private repository is queried without a
+        // token that can read it. Probe the repository root to distinguish them.
+        const repoResponse = await fetch(`${GITHUB_API}/repos/${slug}`, {
+            headers,
+        });
+        if (repoResponse.ok) return null;
+        const tokenHint = process.env.GITHUB_TOKEN
+            ? "check GITHUB_TOKEN permissions"
+            : "set GITHUB_TOKEN for private repositories";
+        throw new Error(
+            `GitHub returned ${repoResponse.status} for ${slug} (${tokenHint})`,
+        );
+    }
     if (!response.ok) {
         throw new Error(
             `GitHub returned ${response.status} for ${slug} releases/latest`,

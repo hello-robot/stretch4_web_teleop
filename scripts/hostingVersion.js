@@ -310,14 +310,15 @@ async function cloneFilteredVersion(
     siteId,
     sourceVersion,
     retainedRails,
-    carryRoot = false
+    carryRoot = false,
+    pollOperation = (opts) => operationPoller.pollOperation(opts),
 ) {
     const body = cloneRequestBody(sourceVersion, retainedRails, carryRoot);
     const res = await api.post(
         `/projects/-/sites/${siteId}/versions:clone`,
         body,
     );
-    const cloned = await operationPoller.pollOperation({
+    const cloned = await pollOperation({
         apiOrigin: hostingApiOrigin(),
         apiVersion: "v1beta1",
         operationResourceName: res.body.name,
@@ -327,12 +328,25 @@ async function cloneFilteredVersion(
     return cloned.name;
 }
 
+const defaultPublishDeps = {
+    authenticate,
+    createChannel,
+    createClient: (opts) => new Client(opts),
+    createRelease,
+    createVersion,
+    getChannel,
+    pollOperation: (opts) => operationPoller.pollOperation(opts),
+    repoRoot: defaultRepoRoot,
+    updateChannelTtl,
+    updateVersion,
+};
+
 /**
  * Publish a directory onto a Hosting channel (live or preview), carrying over
  * retained rails from the current live version when one exists.
  *
- * With carryRoot the live version's paths outside /r/ and its serving config
- * are carried too, and distDir may hold nothing but rails.
+ * With carryRoot the live version's paths outside /r/ are carried too, and
+ * distDir may hold nothing but rails.
  *
  * @param {object} args Publish arguments.
  * @param {string} args.origin Origin the site is served from.
@@ -343,20 +357,25 @@ async function cloneFilteredVersion(
  *     live version instead of publishing them from distDir.
  * @param {string} [args.channel] Target channel id ("live" by default).
  * @param {(message: string, detail?: string) => void} args.report Progress sink.
+ * @param {object} [deps] Optional API collaborators for offline testing.
  * @returns {Promise<{version: string, url: string|null}>} Released version and channel URL.
  * @throws {Error} When the site cannot be identified, upload fails, or
  *     carryRoot is set and distDir holds a path outside /r/ or the site has
  *     no live version.
  */
-async function publishAdditively({
-    origin,
-    distDir,
-    site,
-    retainedRails = [],
-    carryRoot = false,
-    channel = "live",
-    report,
-}) {
+async function publishAdditively(
+    {
+        origin,
+        distDir,
+        site,
+        retainedRails = [],
+        carryRoot = false,
+        channel = "live",
+        report,
+    },
+    deps = {},
+) {
+    const runtime = { ...defaultPublishDeps, ...deps };
     const files = servedFiles(distDir);
     if (carryRoot) {
         // populateFiles overwrites any path it is handed, so a root path here
@@ -378,16 +397,16 @@ async function publishAdditively({
         );
     }
 
-    const email = await authenticate();
+    const email = await runtime.authenticate();
     report("Authenticated to Hosting", email);
 
-    const api = new Client({
+    const api = runtime.createClient({
         urlPrefix: hostingApiOrigin(),
         apiVersion: "v1beta1",
         auth: true,
     });
 
-    const live = await getChannel("-", siteId, "live");
+    const live = await runtime.getChannel("-", siteId, "live");
     const source = live?.release?.version?.name;
     if (carryRoot && !source) {
         throw new Error(
@@ -407,14 +426,15 @@ async function publishAdditively({
             siteId,
             source,
             retainedRails,
-            carryRoot
+            carryRoot,
+            runtime.pollOperation,
         );
     } else {
         report(
             "Creating a fresh Hosting version",
             source ? "no prior rails requested" : `initial version on ${siteId}`,
         );
-        version = await createVersion("-", siteId, { status: "CREATED" });
+        version = await runtime.createVersion(siteId, { status: "CREATED" });
         if (!version) throw new Error("createVersion returned no version");
     }
 
@@ -445,31 +465,46 @@ async function publishAdditively({
     );
 
     if (required.length > 0) {
-        const uploader = new Client({ urlPrefix: uploadUrl, auth: true });
+        const uploader = runtime.createClient({
+            urlPrefix: uploadUrl,
+            auth: true,
+        });
         for (const hash of required) {
-            await uploader.request({
+            const uploadRes = await uploader.request({
                 method: "POST",
                 path: `/${hash}`,
                 body: bodies[hash],
+                resolveOnHTTPError: true,
+                responseType: "stream",
             });
+            if (uploadRes.status !== 200) {
+                const chunks = [];
+                if (uploadRes.body) {
+                    for await (const chunk of uploadRes.body) {
+                        chunks.push(Buffer.from(chunk));
+                    }
+                }
+                const detail = Buffer.concat(chunks).toString("utf8").trim();
+                throw new Error(
+                    `upload failed for ${hash} (HTTP ${uploadRes.status})` +
+                        (detail ? `: ${detail}` : ""),
+                );
+            }
+            uploadRes.body?.resume?.();
         }
     }
 
-    // Serving config applies to the whole version, the root included, so a
-    // carried root keeps the config it was released with.
-    const config = carryRoot
-        ? (await api.get(`/${source}`)).body.config ?? {}
-        : hostingVersionConfig();
-    await updateVersion("-", siteId, version.split("/").pop(), {
+    const config = hostingVersionConfig(runtime.repoRoot);
+    await runtime.updateVersion(siteId, version.split("/").pop(), {
         status: "FINALIZED",
         ...(Object.keys(config).length > 0 ? { config } : {}),
     });
 
     let channelUrl = null;
     if (channel !== "live") {
-        const existing = await getChannel("-", siteId, channel);
+        const existing = await runtime.getChannel("-", siteId, channel);
         if (!existing) {
-            const created = await createChannel(
+            const created = await runtime.createChannel(
                 "-",
                 siteId,
                 channel,
@@ -477,7 +512,7 @@ async function publishAdditively({
             );
             channelUrl = created?.url ?? null;
         } else {
-            const updated = await updateChannelTtl(
+            const updated = await runtime.updateChannelTtl(
                 "-",
                 siteId,
                 channel,
@@ -487,7 +522,7 @@ async function publishAdditively({
         }
     }
 
-    await createRelease("-", siteId, channel, version);
+    await runtime.createRelease(siteId, channel, version, {});
     report(
         channel === "live"
             ? "Released to the live channel"

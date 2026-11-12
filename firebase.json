@@ -39,6 +39,24 @@
         ]
       },
       {
+        "source": "/r/*/operator/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/r/**/bundle.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
         "source": "**/*.mp4",
         "headers": [
           {

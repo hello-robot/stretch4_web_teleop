@@ -85,20 +85,33 @@ suite("a published rail serves its manifest and a retired rail responds 404", ()
     });
 });
 
-suite("rail assets are cached for a year while manifests and root pages are not cached", () => {
-    test("a rail's assets are immutable for a year", async () => {
-        const response = await get(`/r/${rail}/operator/`);
+suite("hashed rail assets are cached for a year while entrypoints, bundles, and manifests revalidate", () => {
+    test("content-hashed rail assets are immutable for a year", async () => {
+        const response = await get(
+            `/r/${rail}/09feeb2dab41b0e57c1d9964af896a01.svg`,
+        );
+        assert.equal(response.status, 200);
         assert.equal(
             response.headers.get("cache-control"),
             "public, max-age=31536000, immutable",
         );
     });
 
-    test("the manifest is carved back out of that cache", async () => {
-        // This is the one file that has to stay fresh: it is how the lobby
-        // notices a rail that has been withdrawn.
-        const response = await get(`/r/${rail}/manifest.json`);
-        assert.equal(response.headers.get("cache-control"), "no-cache");
+    test("rail entrypoints, JS bundles, and manifests revalidate with no-cache", async () => {
+        for (const servedPath of [
+            `/r/${rail}/operator/`,
+            `/r/${rail}/operator/bundle.js`,
+            `/r/${rail}/415/bundle.js`,
+            `/r/${rail}/manifest.json`,
+        ]) {
+            const response = await get(servedPath);
+            assert.equal(response.status, 200, `${servedPath} did not answer 200`);
+            assert.equal(
+                response.headers.get("cache-control"),
+                "no-cache",
+                `${servedPath} is cached immutably`,
+            );
+        }
     });
 
     test("the lobby and the unversioned page are never cached", async () => {

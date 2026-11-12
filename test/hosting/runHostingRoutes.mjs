@@ -124,6 +124,11 @@ function buildFixtureTree(dir, rail) {
         )}\n`,
     );
     writeFile(path.join(dir, "r", rail, "operator", "bundle.js"), "// fixture\n");
+    writeFile(path.join(dir, "r", rail, "415", "bundle.js"), "// chunk fixture\n");
+    writeFile(
+        path.join(dir, "r", rail, "09feeb2dab41b0e57c1d9964af896a01.svg"),
+        "<svg></svg>\n",
+    );
 }
 
 /**
@@ -209,6 +214,7 @@ async function main() {
             stdio: "inherit",
             env: {
                 ...process.env,
+                CHOKIDAR_USEPOLLING: "1",
                 RAIL_TEST_ORIGIN: origin,
                 RAIL_TEST_TAG: rail,
             },

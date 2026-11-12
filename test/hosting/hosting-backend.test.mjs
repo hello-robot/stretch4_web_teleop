@@ -57,6 +57,7 @@ const {
     assembleRails,
     checkCarriedLobby,
     checkPublishedRail,
+    clonedRails,
     isPreviewOrigin,
     lobbyPlan,
     normalizeOrigin,
@@ -293,10 +294,10 @@ suite("the stable rail is the latest GitHub release", () => {
     });
 
     /**
-     * Answer the releases/latest request with one status and body.
+     * Answer GitHub API requests with per-endpoint status and body.
      *
-     * @param {{status?: number, body?: object, throws?: boolean}} answer What
-     *     GitHub does.
+     * @param {{status?: number, repoStatus?: number, body?: object, throws?: boolean}} answer
+     *     Stubbed GitHub response configuration.
      * @returns {void}
      */
     const githubAnswers = (answer) => {
@@ -304,7 +305,10 @@ suite("the stable rail is the latest GitHub release", () => {
             asked = url;
             sentHeaders = init?.headers ?? {};
             if (answer.throws) throw new Error("network unreachable");
-            const status = answer.status ?? 200;
+            const isRepoProbe = !url.endsWith("/releases/latest");
+            const status = isRepoProbe
+                ? (answer.repoStatus ?? 200)
+                : (answer.status ?? 200);
             return {
                 ok: status >= 200 && status < 300,
                 status,
@@ -336,6 +340,7 @@ suite("the stable rail is the latest GitHub release", () => {
         for (const url of [
             "https://github.com/hello-robot/stretch4_web_teleop.git",
             "https://github.com/hello-robot/stretch4_web_teleop",
+            "https://github.com/hello-robot/stretch4_web_teleop/",
             "git@github.com:hello-robot/stretch4_web_teleop.git",
             "ssh://git@github.com/hello-robot/stretch4_web_teleop.git",
         ]) {
@@ -365,8 +370,23 @@ suite("the stable rail is the latest GitHub release", () => {
         // Pushing a tag publishes nothing, so a repository can retain rails
         // long before one of them is marked latest. Robots reporting no rail
         // keep the unversioned page until then.
-        githubAnswers({ status: 404 });
+        githubAnswers({ status: 404, repoStatus: 200 });
         assert.equal(await stableRail(repoRoot), null);
+    });
+
+    test("rejects when a 404 comes from an inaccessible or private repository", async () => {
+        githubAnswers({ status: 404, repoStatus: 404 });
+        await assert.rejects(
+            () => stableRail(repoRoot),
+            /set GITHUB_TOKEN for private repositories/,
+        );
+
+        process.env.GITHUB_TOKEN = "insufficient-token";
+        githubAnswers({ status: 404, repoStatus: 404 });
+        await assert.rejects(
+            () => stableRail(repoRoot),
+            /check GITHUB_TOKEN permissions/,
+        );
     });
 
     test("a release tagged outside the grammar stops the release", async () => {
@@ -761,9 +781,8 @@ suite("a published version hashes and retains only its rail and root files", () 
 
 suite("a finalized version translates firebase.json into Hosting cache rules", () => {
     test("carries the cache rules firebase.json states", () => {
-        // The REST API is handed this directly, so a header that is wrong
-        // here is wrong on the site: rails cached for a year, and the
-        // manifest that reports them carved back out to no-cache.
+        // Content-hashed rail assets stay cached for a year while un-hashed
+        // rail entrypoints, JS bundles, and manifests revalidate with ETag.
         const { headers } = hostingVersionConfig(repoRoot);
         const byGlob = Object.fromEntries(
             headers.map((rule) => [rule.glob, rule.headers["Cache-Control"]]),
@@ -771,13 +790,22 @@ suite("a finalized version translates firebase.json into Hosting cache rules", (
         assert.equal(byGlob["**"], "no-cache");
         assert.equal(byGlob["/r/**"], "public, max-age=31536000, immutable");
         assert.equal(byGlob["/r/*/manifest.json"], "no-cache");
-        // Hosting applies the last matching rule, so the manifest carve-out
-        // is only a carve-out while it sits after the /r/** rule.
+        assert.equal(byGlob["/r/*/operator/**"], "no-cache");
+        assert.equal(byGlob["/r/**/bundle.js"], "no-cache");
+        // Hosting applies the last matching rule, so every no-cache carve-out
+        // must sit after /r/**.
         const order = headers.map((rule) => rule.glob);
-        assert.ok(
-            order.indexOf("/r/*/manifest.json") > order.indexOf("/r/**"),
-            "the manifest rule must come after /r/** or it is overridden",
-        );
+        const railRuleIndex = order.indexOf("/r/**");
+        for (const carveOut of [
+            "/r/*/manifest.json",
+            "/r/*/operator/**",
+            "/r/**/bundle.js",
+        ]) {
+            assert.ok(
+                order.indexOf(carveOut) > railRuleIndex,
+                `${carveOut} must come after /r/** or it is overridden`,
+            );
+        }
     });
 
     test("answers an empty config where there is nothing to say", () => {
@@ -785,6 +813,209 @@ suite("a finalized version translates firebase.json into Hosting cache rules", (
         assert.deepEqual(hostingVersionConfig(dir), {});
         fs.writeFileSync(path.join(dir, "firebase.json"), "{}");
         assert.deepEqual(hostingVersionConfig(dir), {});
+    });
+});
+
+suite("publishAdditively calls firebase-tools Hosting APIs with their exact parameter order", () => {
+    const hostingApi = require("firebase-tools/lib/hosting/api");
+
+    test("firebase-tools version and release helpers take siteId first without a leading project argument", () => {
+        assert.equal(hostingApi.createVersion.length, 2);
+        assert.equal(hostingApi.updateVersion.length, 3);
+        assert.equal(hostingApi.createRelease.length, 4);
+    });
+
+    test("creates, uploads, finalizes, and releases a fresh preview version", async () => {
+        const dist = tempDir("preview-dist");
+        writeFile(path.join(dist, "index.html"), "<!doctype html><title>lobby</title>");
+        writeFile(
+            path.join(dist, "operator", "index.html"),
+            "<!doctype html><title>operator</title>",
+        );
+
+        const calls = {
+            createVersion: [],
+            updateVersion: [],
+            createChannel: [],
+            createRelease: [],
+            uploads: [],
+            posts: [],
+        };
+
+        const result = await publishAdditively(
+            {
+                origin: "https://my-site--rails-feat-abc123.web.app",
+                distDir: dist,
+                retainedRails: [],
+                carryRoot: false,
+                channel: "rails-feat",
+                report: () => {},
+            },
+            {
+                authenticate: async () => "dev@example.com",
+                getChannel: async (_project, _site, channelId) =>
+                    channelId === "live"
+                        ? {
+                              release: {
+                                  version: {
+                                      name: "projects/-/sites/my-site/versions/v-live",
+                                  },
+                              },
+                          }
+                        : null,
+                createVersion: async (...args) => {
+                    calls.createVersion.push(args);
+                    return "projects/-/sites/my-site/versions/v-fresh";
+                },
+                createClient: (opts) => {
+                    if (opts.apiVersion === "v1beta1") {
+                        return {
+                            post: async (apiPath, body) => {
+                                calls.posts.push([apiPath, body]);
+                                const hashes = Object.values(body.files);
+                                return {
+                                    body: {
+                                        uploadUrl: "https://upload.example.test",
+                                        uploadRequiredHashes: [hashes[0]],
+                                    },
+                                };
+                            },
+                        };
+                    }
+                    return {
+                        request: async (req) => {
+                            calls.uploads.push(req);
+                            let resumed = false;
+                            return {
+                                status: 200,
+                                body: { resume: () => (resumed = true), get resumed() { return resumed; } },
+                            };
+                        },
+                    };
+                },
+                updateVersion: async (...args) => {
+                    calls.updateVersion.push(args);
+                    return {};
+                },
+                createChannel: async (...args) => {
+                    calls.createChannel.push(args);
+                    return { url: "https://my-site--rails-feat-abc123.web.app" };
+                },
+                createRelease: async (...args) => {
+                    calls.createRelease.push(args);
+                    return {};
+                },
+            },
+        );
+
+        assert.deepEqual(calls.createVersion, [
+            ["my-site", { status: "CREATED" }],
+        ]);
+        assert.equal(calls.uploads.length, 1);
+        assert.equal(calls.uploads[0].method, "POST");
+        assert.equal(calls.uploads[0].responseType, "stream");
+        assert.equal(calls.uploads[0].resolveOnHTTPError, true);
+        assert.deepEqual(calls.updateVersion, [
+            [
+                "my-site",
+                "v-fresh",
+                {
+                    status: "FINALIZED",
+                    config: hostingVersionConfig(repoRoot),
+                },
+            ],
+        ]);
+        assert.equal(calls.createChannel.length, 1);
+        assert.equal(calls.createChannel[0][0], "-");
+        assert.equal(calls.createChannel[0][1], "my-site");
+        assert.equal(calls.createChannel[0][2], "rails-feat");
+        assert.deepEqual(calls.createRelease, [
+            [
+                "my-site",
+                "rails-feat",
+                "projects/-/sites/my-site/versions/v-fresh",
+                {},
+            ],
+        ]);
+        assert.deepEqual(result, {
+            version: "projects/-/sites/my-site/versions/v-fresh",
+            url: "https://my-site--rails-feat-abc123.web.app",
+        });
+    });
+
+    test("applies current firebase.json headers when carrying the live root", async () => {
+        const dist = tempDir("carry-dist");
+        writeFile(path.join(dist, "r", "v0.2.0-alpha1", "manifest.json"), "{}\n");
+
+        const updates = [];
+        const releases = [];
+        const posts = [];
+
+        await publishAdditively(
+            {
+                origin: "https://my-site.web.app",
+                distDir: dist,
+                retainedRails: ["v0.1.0"],
+                carryRoot: true,
+                channel: "live",
+                report: () => {},
+            },
+            {
+                authenticate: async () => "dev@example.com",
+                getChannel: async () => ({
+                    release: {
+                        version: {
+                            name: "projects/-/sites/my-site/versions/v-live",
+                        },
+                    },
+                }),
+                createClient: () => ({
+                    post: async (apiPath, body) => {
+                        posts.push([apiPath, body]);
+                        if (apiPath.endsWith(":clone")) {
+                            return { body: { name: "operations/op-1" } };
+                        }
+                        return {
+                            body: {
+                                uploadUrl: "https://upload.example.test",
+                                uploadRequiredHashes: [],
+                            },
+                        };
+                    },
+                }),
+                pollOperation: async () => ({
+                    name: "projects/-/sites/my-site/versions/v-cloned",
+                }),
+                updateVersion: async (...args) => {
+                    updates.push(args);
+                    return {};
+                },
+                createRelease: async (...args) => {
+                    releases.push(args);
+                    return {};
+                },
+            },
+        );
+
+        assert.equal(posts[0][0], "/projects/-/sites/my-site/versions:clone");
+        assert.deepEqual(updates, [
+            [
+                "my-site",
+                "v-cloned",
+                {
+                    status: "FINALIZED",
+                    config: hostingVersionConfig(repoRoot),
+                },
+            ],
+        ]);
+        assert.deepEqual(releases, [
+            [
+                "my-site",
+                "live",
+                "projects/-/sites/my-site/versions/v-cloned",
+                {},
+            ],
+        ]);
     });
 });
 
@@ -1002,6 +1233,21 @@ suite("a rail is immutable", () => {
         // past a rail that is already taken, so the override says on screen
         // what it is doing rather than passing in silence.
         assert.match(reported.join("\n"), /about to change content/);
+    });
+
+    test("--republish omits the rebuilt rail from the live clone filter", () => {
+        assert.deepEqual(
+            clonedRails(["v0.1.0", "v0.2.0"], "v0.2.0", false),
+            ["v0.1.0", "v0.2.0"],
+        );
+        assert.deepEqual(
+            clonedRails(["v0.1.0", "v0.2.0"], "v0.2.0", true),
+            ["v0.1.0"],
+        );
+        assert.deepEqual(
+            clonedRails(["v0.1.0", "v0.2.0"], null, true),
+            ["v0.1.0", "v0.2.0"],
+        );
     });
 });
 
@@ -1509,6 +1755,18 @@ suite("webpack isolates a rail under /r/<tag>/ and shares the root across unvers
         }
         assert.equal(railBundleReady(dir), false);
     });
+
+    test("filesystem cache version separates localstorage and firebase builds", () => {
+        const local = makeWebpackConfig(
+            { storage: "localstorage", pages: "operator" },
+            production,
+        );
+        const firebase = makeWebpackConfig(
+            { storage: "firebase", pages: "operator" },
+            production,
+        );
+        assert.notEqual(local.cache.version, firebase.cache.version);
+    });
 });
 
 suite("the lobby bundle receives only allowlisted PUBLIC_ environment variables", () => {
@@ -1600,6 +1858,53 @@ suite("the lobby bundle receives only allowlisted PUBLIC_ environment variables"
             assert.ok(
                 `process.env.${key}` in define.definitions,
                 `${key} is not defined for the bundle`,
+            );
+        }
+    });
+
+    test("cloud Hosting bundles omit HELLO_FLEET_ID while robot-inclusive builds keep it", () => {
+        const savedFleet = process.env.HELLO_FLEET_ID;
+        try {
+            process.env.HELLO_FLEET_ID = "dev-fleet-from-env";
+            const defineOf = (webpackEnv) =>
+                makeWebpackConfig(webpackEnv, {
+                    mode: "production",
+                }).plugins.find(
+                    (plugin) => plugin.constructor.name === "DefinePlugin",
+                ).definitions;
+
+            for (const cloudEnv of [
+                { storage: "firebase", pages: "home" },
+                { storage: "firebase", pages: "operator" },
+                { storage: "firebase", pages: "operator", rail: "v1.2.3" },
+            ]) {
+                assert.equal(
+                    defineOf(cloudEnv)["process.env.HELLO_FLEET_ID"],
+                    "undefined",
+                    `${JSON.stringify(cloudEnv)} leaked HELLO_FLEET_ID`,
+                );
+            }
+
+            assert.equal(
+                defineOf({ storage: "firebase" })["process.env.HELLO_FLEET_ID"],
+                '"dev-fleet-from-env"',
+            );
+        } finally {
+            if (savedFleet === undefined) delete process.env.HELLO_FLEET_ID;
+            else process.env.HELLO_FLEET_ID = savedFleet;
+        }
+    });
+
+    test("HTML templates do not poll bundle ETags on Firebase Hosting domains", () => {
+        for (const relPath of [
+            "src/pages/operator/html/index.html",
+            "src/pages/home/html/index.html",
+        ]) {
+            const html = fs.readFileSync(path.join(repoRoot, relPath), "utf8");
+            assert.doesNotMatch(
+                html,
+                /setInterval[\s\S]*bundle\.js/,
+                `${relPath} still polls bundle.js`,
             );
         }
     });

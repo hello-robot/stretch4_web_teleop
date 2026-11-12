@@ -800,6 +800,25 @@ function assembleRails(
 }
 
 /**
+ * Rails to clone from the live version into the next Hosting version.
+ *
+ * When republishing `tag`, its directory in `distDir` replaces the live copy
+ * outright; excluding `tag` from the clone filter omits stale chunk paths from
+ * the prior build under `/r/<tag>/`.
+ *
+ * @param {string[]} rails Retained rails from release.json.
+ * @param {string|null} tag Release tag assembled on this run, if any.
+ * @param {boolean} [republish=false] True when `--republish` was passed.
+ * @returns {string[]} Rails to include in the server-side clone filter.
+ */
+function clonedRails(rails, tag, republish = false) {
+    if (republish && tag) {
+        return rails.filter((rail) => rail !== tag);
+    }
+    return rails;
+}
+
+/**
  * Assemble one Hosting version from this checkout and publish it.
  *
  * @returns {Promise<void>} Resolves when the release is published, or
@@ -1074,7 +1093,11 @@ async function main() {
         origin,
         distDir,
         site: options.site,
-        retainedRails: rails,
+        retainedRails: clonedRails(
+            rails,
+            preview ? null : tag,
+            options.republish,
+        ),
         carryRoot: carry,
         channel: channel ?? "live",
         report: pass,
@@ -1085,6 +1108,7 @@ module.exports = {
     assembleRails,
     checkCarriedLobby,
     checkoutTag,
+    clonedRails,
     isPreviewOrigin,
     lobbyPlan,
     normalizeOrigin,
