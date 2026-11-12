@@ -52,34 +52,6 @@
     animation: modal-slide-down 250ms var(--anim-timing-ease-out-silky) forwards;
 }
 
-.main-menu-modal-header {
-    display: flex;
-    gap: 3px;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    padding: 0px 20px 20px 20px;
-    font-weight: 800;
-}
-
-.main-menu-modal-header .chevron-wrapper {
-    position: relative;
-    top: -3px;
-    width: 59px;
-    height: 16px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: hsl(204deg 100% 5% / 90%);
-    box-shadow: 0 2px 8px hsl(204, 100%, 7.5%);
-    border-radius: 5px;
-}
-
-.main-menu-modal-header .chevron-wrapper .chevron {
-    width: 13px;
-    height: 7px;
-}
-
 .main-menu-modal-subtitle {
     color: hsl(204, 86%, 47%);
     font-size: 12px;

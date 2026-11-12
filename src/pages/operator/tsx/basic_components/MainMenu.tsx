@@ -84,17 +84,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
                 className={`main-menu-modal-content-wrapper ${animState} ${modalClassName} ${hasBgColor ? "has-bg-color" : ""}`}
                 onAnimationEnd={onAnimationEnd} // Listen to modal slide animation
             >
-                <div className="main-menu-modal-header">
-                    <div className="chevron-wrapper">
-                        <img
-                            className="chevron"
-                            src={chevronIcon}
-                            alt=""
-                            aria-hidden="true"
-                            role="presentation"
-                        />
-                    </div>
-                </div>
                 <div className="main-menu-modal-body">{children}</div>
                 {footer && (
                     <div className="main-menu-modal-footer">{footer}</div>
