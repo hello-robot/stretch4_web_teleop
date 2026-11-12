@@ -365,6 +365,22 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 <MainMenu
                     isOpen={isMainMenuOpen}
                     title="Main Menu"
+                    onClose={() => isMainMenuOpenSet(false)}
+                    footer={
+                        <MagneticWrapper>
+                            <button
+                                type="button"
+                                className="btn btn-tertiary"
+                                aria-label="Close main menu"
+                                onClick={() => {
+                                    FunctionProvider.stopAllActions(true);
+                                    isMainMenuOpenSet(false);
+                                }}
+                            >
+                                Close
+                            </button>
+                        </MagneticWrapper>
+                    }
                     children={
                         <SceneCarousel
                             scenes={scenes}
