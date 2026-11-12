@@ -1,0 +1,52 @@
+name: test
+
+on:
+  # Run on push to main
+  push:
+    branches:
+      - main
+  # Run on pull request actions
+  pull_request:
+    types: [opened, reopened, synchronize]
+  # Manual trigger
+  workflow_dispatch:
+
+# Prevent parallel runs
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  offline:
+    name: offline suites
+    runs-on: ubuntu-latest
+    steps:
+      # The rail suites read git describe and build throwaway repositories, so
+      # the checkout needs its history and its tags rather than one commit.
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: "24.x"
+
+      - name: Cache NPM
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install devDependencies
+        run: npm install --legacy-peer-deps
+
+      # Everything that needs no emulator, no credentials and no build. The
+      # emulator suites (test:hosting:routes, test:firebase-rules) and the live
+      # stages stay manual.
+      - name: Run the offline suites
+        run: npm run test:offline

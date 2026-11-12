@@ -3,11 +3,11 @@
 Firebase is a set of application development platforms and backend cloud computing services. This
 project uses three of them:
 
-| Service               | What it is used for                                                              |
-| --------------------- | -------------------------------------------------------------------------------- |
-| **Hosting**           | Serves the dashboard, operator, and robot pages at `https://<project-id>.web.app` |
-| **Authentication**    | Sign-in for human operators and for each robot's own machine account              |
-| **Realtime Database** | Fleet state, robot ownership, launch requests, and WebRTC signaling               |
+| Service               | What it is used for                                                       |
+| --------------------- | ------------------------------------------------------------------------- |
+| **Hosting**           | Serves the dashboard and operator pages at `https://<project-id>.web.app` |
+| **Authentication**    | Sign-in for human operators and for each robot's own machine account       |
+| **Realtime Database** | Fleet state, robot ownership, launch requests, and WebRTC signaling        |
 
 Setting up your own Firebase project will allow you to host a dashboard and grant users permission
 to launch and access the web interface without a direct robot connection.
@@ -21,25 +21,28 @@ is likely more than sufficient for your project.
 - [Adding more users](#adding-more-users)
 - [Database layout](#database-layout)
 - [Security rules](#security-rules)
+- [Releases and rails](#releases-and-rails)
 - [Day-to-day development](#day-to-day-development)
 - [Troubleshooting](#troubleshooting)
 
 ## Set-up
 
-### Step 1: Check out `main`
+### Step 1: Check out a release tag
 
-In a checkout of this repository:
-
-```bash
-git checkout main
-git pull
-```
-
-If you don't have one, clone it with
+If you do not have a checkout of this repository yet, clone it with
 `git clone https://github.com/hello-robot/stretch4_web_teleop.git`.
 
-The live site will only deploy if the local branch is `main` with no uncommitted changes or unpushed commits (it matches `origin/main` exactly). Other branches and dirty changes can be deployed to preview channels instead with a unique temporary URL — see
-[Day-to-day development](#day-to-day-development).
+The live site deploys from a clean checkout of a release tag listed in
+[`release.json`](../../../../../release.json) (see [Releases and rails](#releases-and-rails)). Fetch
+tags and check out a listed release tag:
+
+```bash
+git fetch --tags
+git checkout <tag>
+```
+
+If you are setting up a brand-new fork where that tag does not exist yet, create it first with
+`git tag -a <tag> -m "Release <tag>" && git checkout <tag>`.
 
 ### Step 2: Create a Firebase project
 
@@ -70,12 +73,12 @@ The account you create the project with becomes its **Owner**. You can add more 
 1. Enable **Google**, set a public-facing name and support email, and save.
 1. Leave **Anonymous** disabled.
 
-### Step 6: Configure `.env` and `.firebaserc`
+### Step 6: Configure `.env`
 
 If there is no `.env` in the repository root yet, create one from
 [`.env.example`](../../../../../.env.example), which documents every field.
 
-Fill in the Firebase values from Steps 3 and 4:
+Fill in the Firebase values from Steps 3 and 4, plus your Hosting origin:
 
 ```env
 PUBLIC_FIREBASE_API_KEY=YOUR_API_KEY
@@ -86,24 +89,23 @@ PUBLIC_FIREBASE_STORAGE_BUCKET=YOUR_PROJECT_ID.firebasestorage.app
 PUBLIC_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID
 PUBLIC_FIREBASE_APP_ID=YOUR_APP_ID
 PUBLIC_FIREBASE_MEASUREMENT_ID=YOUR_MEASUREMENT_ID
+PUBLIC_HOSTING_ORIGIN=https://YOUR_PROJECT_ID.web.app
 ```
 
-These values are public and the same for every robot using your project. Each robot's `.env` will need them to connect (Step 9).
-
-Then generate `.firebaserc`:
-
-```bash
-node scripts/syncFirebaseRc.js
-```
+These values are public and the same for every robot using your project. Each robot's `.env` will need
+them to connect (Step 9). `.firebaserc` is synced automatically from `PUBLIC_FIREBASE_PROJECT_ID` when
+you deploy or onboard a robot (or manually with `node scripts/syncFirebaseRc.js`).
 
 ### Step 7: Deploy the site
 
-Sign in with the Google account you created the project with in Step 2:
+Sign in with the Google account you created the project with in Step 2 and deploy the database rules
+and Hosting bundle:
 
 ```bash
 npm install --legacy-peer-deps
 npm run firebase:login
-npm run deploy:firebase
+npm run deploy:rules
+npm run deploy:hosting
 ```
 
 If you are running headless, use `./node_modules/.bin/firebase login --reauth --no-localhost` instead of
@@ -130,7 +132,8 @@ Get the robot's fleet ID:
 cat /etc/hello-robot/hello-robot.conf | grep HELLO_FLEET_ID
 ```
 
-First add the 8 shared `PUBLIC_FIREBASE_*` lines to the robot's .env file. Then, fill in the robot specific account details:
+First copy the shared `PUBLIC_*` lines from Step 6 into the robot's `.env` file. Then fill in the
+robot-specific account details:
 
 ```env
 # The robot's account from Step 8
@@ -154,7 +157,7 @@ From the robot's terminal:
 When prompted:
 
 1. Enter your email to give yourself permission to access the robot.
-1. Sign in to the Firebase CLI. Open the output URL and sign in with the Google account used to created the project.
+1. Sign in to the Firebase CLI. Open the output URL and sign in with the Google account used to create the project.
 1. Enter the robot's `sudo` password to install the background service.
 
 The script is safe to re-run. When it finishes, the robot will appear on your dashboard.
@@ -165,11 +168,12 @@ without `systemd`, `--skip-daemon` does the Firebase work and installs no servic
 be launched by hand with `./launch_interface.sh -f`, it just cannot be started from your
 dashboard. Run `./onboard_firebase_robot.sh --help` for the full list.
 
-It does not touch the checkout. The daemon it installs runs this working tree directly, so whatever
-branch is checked out is what the robot runs. Changing the code a robot runs is ordinary git work —
-`git checkout`, `git pull`, rebuild, relaunch — and needs nothing from Firebase or `.env`. The daemon
-publishes the live branch to `robots/<fleetId>/branch`, so each robot's card shows what it is
-running; a detached HEAD or an unreadable tree shows `unknown`.
+Onboarding does not modify the git checkout. The daemon runs whatever commit is checked out in this
+working tree and publishes its git build description to `robots/<fleetId>/build` (and branch name to
+`robots/<fleetId>/branch`) so each robot's card shows what version it is running. Keep fielded robots
+checked out on a release tag listed in `release.json`; changing the version a robot runs is ordinary
+git work (`git fetch --tags`, `git checkout <tag>`, rebuild, relaunch) and needs no changes in Firebase
+or `.env`.
 
 ### Step 11: Teleoperate
 
@@ -177,10 +181,12 @@ running; a detached HEAD or an unreadable tree shows `unknown`.
    checks in, and **Offline** when it has not.
 1. Set its map with **Change map**, and turn features on or off with **Edit config**. Changing config
    while the interface is running offers **Apply and Restart Interface**.
-1. Press **Start Interface**. The card stays **Idle** while it launches, then turns **Ready**.
+1. Press **Start Interface**. While it launches, the status stays **Idle** and **LOGS** streams the
+   startup output; once the interface is up, the card turns **Ready** and opens the operator page (or
+   waits for **Connect** if you opened **LOGS**).
 1. Press **Connect** to take the operator seat and drive. **Stop Interface** tears it back down.
 1. One person drives at a time. Everyone else sees the card as **In Use** and the button as
-   **In use by \<their email>**, and cannot take the seat until the session ends.
+   **Stop Interface** (**In use by \<their email>**), and cannot take the seat until the session ends.
 
 ## Adding a map
 
@@ -310,7 +316,7 @@ takes a grant of its own.
 | `assignments/<identity>` | administrator | `{ robots: { <fleetId>: true }, maps: { <mapId>: true } }` for a human; `identity` is an Auth uid or an alias |
 | `assignments/<robotUid>` | administrator | `{ role: "robot", name: "<fleetId>" }` — the robot's machine account                            |
 | `robots/<fleetId>/uid`   | administrator | The robot's Auth uid; must match the `assignments` entry above                                  |
-| `robots/<fleetId>`       | robot         | `status`, `last_updated`, `branch`, `name`                                                      |
+| `robots/<fleetId>`       | robot         | `status`, `last_updated`, `branch`, `build`, `name`                                             |
 | `robots/<fleetId>`       | operator      | `map_id`, `config/<flag>`, and one-shot `control` launch/stop requests                          |
 | `launch_logs/<fleetId>`  | robot         | Streamed launch output, readable by assigned humans                                             |
 | `maps/<mapId>`           | administrator | Map metadata, with `owner_uid` and `allowed_users`                                              |
@@ -338,23 +344,105 @@ Signaling deliberately fails closed when a robot's assignment and fleet binding 
 If you ever restore a database from a backup or migrate projects, verify that for every robot
 `assignments/<robotUid>.name` and `robots/<fleetId>/uid` agree before expecting robots to come online.
 
-Rules are deployed separately from the application code:
+Deploy database rules separately from the site with:
 
 ```bash
-./node_modules/.bin/firebase deploy --only database --dry-run
+npm run deploy:rules
 ```
+
+This syncs `.firebaserc`, pulls the ruleset the project is currently enforcing, and prints a line by
+line diff of it against `database.rules.json`. Nothing is uploaded until you agree to the diff at the
+prompt. On a yes it runs the rules test suite (`npm run test:firebase-rules`) against the local
+emulator and uploads `database.rules.json` when the suite passes.
+
+A deploy replaces the whole ruleset rather than patching it, so a repository copy that has fallen
+behind reverts whatever it is missing. Read the removed lines in the diff before answering: they are
+rules the project enforces today. The suite gates only what it covers, so it will not catch a rule it
+has no case for.
+
+Pass `--no-check` to skip the diff and the prompt, for an unattended deploy:
 
 ```bash
-./node_modules/.bin/firebase deploy --only database
+npm run deploy:rules -- --no-check
 ```
 
-Note that `npm run deploy:firebase` and `npm run deploy:firebase-preview-channel` both deploy the
-database rules alongside the bundle. If you are testing a rules change, validate it in a separate
-staging Firebase project before running either of those against the project your robots use.
+Without it, a run with no terminal to ask stops rather than assuming consent. Validate rules changes
+in a separate staging Firebase project before running `npm run deploy:rules` against a project with
+active robots.
+
+## Releases and rails
+
+The site serves two things:
+
+- **The lobby (`/`) and the unversioned operator page (`/operator/`)** — the fleet dashboard and its
+  fallback interface, built from the GitHub release marked **Latest** and from nothing else.
+- **Rails (`/r/<tag>/operator/`)** — immutable copies of each released operator interface, served side
+  by side so robots running different software versions can share one dashboard.
+
+Which rail an operator gets is decided per robot. The robot's daemon publishes the tag its checkout is
+sitting on to `robots/<fleetId>/build`, and clicking **Connect** on its card opens `/r/<tag>/operator/`.
+If a robot is on a release tag that the site does not serve, its card opens the default rail instead,
+which is the rail of the **Latest** release the lobby was built from, and a warning above the buttons
+names the tag that is not deployed.
+
+A robot with commits or uncommitted changes on top of a release tag is treated as that tag. The daemon
+publishes `git describe`, which names the nearest release tag behind the checkout (for example
+`v0.2.0-alpha2-3-g46cf732-dirty`), and the card routes to that tag's rail: **Connect** opens
+`/r/<tag>/operator/`, or the default rail if that tag's rail is not on the site. A warning above the
+buttons says the robot has changes outside of the tag, and the tag name under them turns red. A checkout
+with no release tag behind it warns that it is not a release and opens the default rail instead.
+
+Only a missing default rail stops a card from connecting. The card then shows an outlined box reading
+`Release <tag> is not deployed` in place of **Start Interface** and **Connect**, and **Stop Interface**
+stays available while the interface is running.
+
+[`release.json`](../../../../../release.json) lists the tags that stay published on the site:
+
+```json
+{ "rails": ["v0.1.0-alpha1", "v0.1.0"] }
+```
+
+Every `npm run deploy:hosting` run builds the rail for the current checkout, carries forward the other
+rails listed in `release.json`, and removes any rail no longer in that list. What it does with the
+lobby and `/operator/` depends on the tag being deployed:
+
+| Tag being deployed | Lobby and `/operator/` | Rails |
+| :--- | :--- | :--- |
+| The GitHub release marked **Latest** | Rebuilt from this tag | `/r/<tag>/` built, the rest carried |
+| Any other tag (an alpha, beta, rc, or an older release) | Left exactly as the live site serves them | `/r/<tag>/` built, the rest carried |
+
+A deploy that leaves the lobby in place prints `lobby  unchanged (carried from the live version)` and
+publishes nothing outside `/r/`. The one exception is a Firebase project with no live release at all,
+which has no lobby to keep, so its first deploy builds one from whichever tag is deployed.
+
+To cut and publish a release, add the new tag to `release.json` **before** tagging (the file is read
+from the tagged commit):
+
+```bash
+git add release.json && git commit -m "retain <tag>" && git push
+git tag -a <tag> -m "Release <tag>" && git push origin <tag>
+git checkout <tag>
+npm run deploy:hosting
+```
+
+To make a release the one the lobby is built from, publish its GitHub release as **Latest** first and
+then run `npm run deploy:hosting` from its tag. Deploying before the GitHub release is published adds
+the rail and leaves the lobby alone; run the deploy again afterwards to update the lobby. A fix to the
+lobby itself therefore ships as a new **Latest** release.
+
+The default rail (used when a robot reports no release tag of its own) is that same **Latest** release,
+baked into the lobby when it is built. The lobby publishes what it was built from at `/lobby.json`
+(`tag`, `commit`, `stable`, `built`). A deploy that leaves the lobby in place reads that file and
+refuses to retire the rail the lobby defaults to.
+
+Rails are immutable on the live site: a deploy that would overwrite an existing `/r/<tag>/` from a
+different commit refuses rather than replacing it.
 
 ## Day-to-day development
 
 `src/pages/home` is the dashboard; `src/pages/operator` is the teleop interface.
+
+### Live development on a robot (`./launch_interface.sh -f`)
 
 On an onboarded robot, pass `-f` / `--firebase` (or set `HOSTING_MODE=firebase` in `.env`) to run both
 the local and the Firebase webpack watchers:
@@ -363,8 +451,11 @@ the local and the Firebase webpack watchers:
 ./launch_interface.sh -f
 ```
 
-The no-login local operator stays at `https://<robot_ip>/local/operator/`, and the Firebase build is
-served at `https://<robot_ip>/operator/` and published to a preview channel for the current checkout.
+- The no-login local operator stays at `https://<robot_ip>/local/operator/`.
+- The Firebase build is served at `https://<robot_ip>/operator/` and automatically published to a
+  preview channel (`branch-<branch>` or `local-branch-<branch>`) for the current checkout.
+- Saving a file rebuilds webpack and redeploys that preview channel automatically.
+
 Both URLs connect to the same robot browser and share one operator seat, so opening one blocks the
 other until teleoperation ends.
 
@@ -372,20 +463,43 @@ Without `-f` (or `HOSTING_MODE=firebase`), `./launch_interface.sh` defaults to `
 `--local` (or `--hosting local`) to override a standing `HOSTING_MODE=firebase` for a single local-only
 run. See [Primer: Launching the Interface](../../../../primer_launch.md) for the full resolution rules.
 
-To publish a one-off build to the preview channel:
+### Testing rails and staging releases (`npm run deploy:hosting`)
 
-```bash
-npm run deploy:firebase-preview-channel
-```
+Whereas `./launch_interface.sh -f` publishes a flat single-version build to `branch-<branch>`,
+`npm run deploy:hosting` builds the multi-version site: on a live deploy, a versioned rail
+(`/r/<tag>/operator/`) built from `HEAD`, plus the lobby (`/`) and the unversioned operator page
+(`/operator/`) when `HEAD` is the **Latest** release (see [Releases and rails](#releases-and-rails)).
+A preview always builds its own lobby and `/operator/`.
 
-Preview channel URLs look like `https://YOUR_PROJECT_ID--<channel>-<hash>.web.app`, where the hash is
-assigned the first time that channel is deployed. While the development interface is running, saving a
-file redeploys the same preview channel: the local tab reloads from webpack, and the preview tab reloads
-after the deploy finishes.
+It needs one thing from you: **where to publish** — the live site (`https://YOUR_PROJECT_ID.web.app`)
+or a preview channel (`rails-<branch|tag>`).
+
+The rail's name is never supplied by hand. It is read from git, and a live deploy requires `HEAD` to be
+a clean `v*` release tag listed in `release.json`. That is what makes a rail reproducible: the name it
+is served under is the name you check out to rebuild it.
+
+| Goal | Checkout state | Command | Where it publishes |
+| :--- | :--- | :--- | :--- |
+| **Publish a release live** | Clean `v*` tag in `release.json` | `npm run deploy:hosting` | Live site (`YOUR_PROJECT_ID.web.app`), serving `/r/<tag>/operator/`; the lobby and `/operator/` change only if the tag is **Latest** |
+| **Inspect a release before going live** | Clean `v*` tag | `npm run deploy:hosting -- --preview` | Preview channel `rails-<tag>`: the lobby and `/operator/`, which is that tag's interface |
+| **Test a branch or a dirty tree** | Any branch or uncommitted edits | `npm run deploy:hosting -- --preview` | Preview channel `rails-<branch>`: the lobby and `/operator/`, built from `HEAD` |
+
+**What `--preview` does.** It publishes to a temporary `rails-<branch|tag>` channel instead of the live
+site. A preview channel carries one interface, so it publishes no rails and routes every card to
+`/operator/` — the build that channel is already serving, which is why there is nothing there to
+version. Use it to look at a change from a branch, from a dirty tree, or from a release tag you have
+not published yet.
+
+Preview channel URLs look like `https://YOUR_PROJECT_ID--<channel>-<hash>.web.app`. `deploy:hosting`
+uses the `rails-` channel prefix so manual rail previews never overwrite the `branch-` preview channels
+used by a robot's `./launch_interface.sh -f` autodeploy.
+
+### Production robot runtime and maintenance
 
 For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`. Launch then creates
 one-shot bundles for whichever hosting mode you asked for, instead of starting webpack watchers.
-Publishing the live site stays an explicit, separate `npm run deploy:firebase` from clean `main`.
+Publishing the live site stays an explicit, separate `npm run deploy:hosting` from a clean release
+tag.
 
 [`firebase_console_config.sh`](../../../../../firebase_console_config.sh) collects the common maintenance
 operations:
@@ -398,9 +512,37 @@ operations:
 
 ## Troubleshooting
 
-**`Refusing to publish the live site. This checkout is local-branch-… , not clean origin/main.`**
-The live deploy requires a branch named `main`, a clean working tree, and `HEAD` equal to `origin/main`.
-Commit and push your changes to your fork, or deploy to a preview channel instead.
+**`this checkout is not a release: …`**
+A live deploy builds `/r/<tag>/operator/` from `HEAD`, so `HEAD` must be a clean `v*` tag listed in
+`release.json`. Check one out, or publish this checkout to a preview channel instead with
+`npm run deploy:hosting -- --preview`.
+
+**`the live lobby routes to <tag> by default, and release.json does not retain it`**
+The tag being deployed is not the **Latest** release, so the live lobby stays in place, and that lobby
+sends robots with no release of their own to `<tag>`. Add `<tag>` back to `release.json`, or deploy the
+**Latest** release first so the lobby is rebuilt against it.
+
+**The lobby did not change after a deploy.**
+The deployed tag is not the GitHub release marked **Latest**. Publish it as **Latest** and run
+`npm run deploy:hosting` from the tag again.
+
+**A card warns that a release is not deployed and opens the stable interface.**
+The robot is on, or has changes on top of, a tag that `release.json` does not retain, so `/r/<tag>/` is
+not on the site and the card opens the default rail, which may not match what the robot is running.
+Either add the tag to `release.json` and deploy it, or check the robot out onto a tag that is served.
+
+**A card shows `Release <tag> is not deployed` instead of Start Interface or Connect.**
+`<tag>` is the default rail, and it is not on the site, so the card has no interface to open. Add the
+tag back to `release.json` and redeploy it.
+
+**A card warns that the robot has changes outside of a tag.**
+The robot has commits or uncommitted changes on top of that release tag, and the card opens that tag's
+interface, which may not match what the robot is running. Expected on a development robot; test the
+branch on its preview channel, or check out a release tag.
+
+**A card warns that the robot's checkout is not a release.**
+No release tag is behind the robot's checkout, so no rail matches it and the card opens the default
+interface instead.
 
 **`ERROR: robot sign-in failed`** during onboarding.
 The `ROBOT_USERNAME` / `ROBOT_PASSWORD` pair in `.env` does not match a user in **Authentication** → **Users**,
@@ -431,7 +573,8 @@ journalctl -u stretch-web-teleop-daemon.service -n 100 --no-pager
 ```
 
 **A deploy or a database command targets the wrong project.**
-Check the `default` entry in `.firebaserc`, and confirm which account the CLI is using:
+Check `PUBLIC_FIREBASE_PROJECT_ID` in `.env`, run `node scripts/syncFirebaseRc.js` to sync `.firebaserc`,
+and confirm which account the CLI is using:
 
 ```bash
 ./node_modules/.bin/firebase login:list
