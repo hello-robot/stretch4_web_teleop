@@ -39,8 +39,7 @@
     border-top-right-radius: 16px;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
     box-sizing: border-box;
-    background-color: hsl(204deg 100% 5% / 90%);
-    backdrop-filter: blur(5px);
+    background-color: hsl(204 50% 12.5% / 1);
 }
 
 .main-menu-modal-content-wrapper.enter {

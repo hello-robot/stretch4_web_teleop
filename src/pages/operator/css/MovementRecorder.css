@@ -371,7 +371,6 @@ button.mrecord-stop-button .stop-button-red-square {
 .joints-list {
     width: 100%;
     overflow-x: hidden;
-    background-color: hsl(204, 51%, 14%);
 }
 
 .joints-list ul.checkboxes {
