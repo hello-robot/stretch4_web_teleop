@@ -94,9 +94,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
                             role="presentation"
                         />
                     </div>
-                    <h2 className="main-menu-modal-title" aria-hidden="true">
-                        {title}
-                    </h2>
                 </div>
                 <div className="main-menu-modal-body">{children}</div>
                 {footer && (
