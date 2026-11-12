@@ -95,11 +95,23 @@
     padding: 0 20px 20px;
 }
 
+.main-menu-modal-content-wrapper:has(.main-menu-modal-footer) .main-menu-modal-body {
+    padding-bottom: 0;
+}
+
 .main-menu-modal-footer {
     display: flex;
-    justify-content: flex-end;
-    /* Default for generic, can be overridden */
-    margin-top: 20px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 0 20px 20px;
+}
+
+/* Match the scene pager buttons: same fill, brand blue label. */
+.main-menu-modal-footer .btn-tertiary,
+.main-menu-modal-footer .btn-tertiary:hover,
+.main-menu-modal-footer .btn-tertiary:active {
+    background-color: hsl(204deg 30% 20%) !important;
+    color: var(--blue);
 }
 
 /* Keyframes for modal animations */
