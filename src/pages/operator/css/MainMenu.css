@@ -94,7 +94,8 @@
     padding: 0 20px 20px;
 }
 
-.main-menu-modal-content-wrapper:has(.main-menu-modal-footer) .main-menu-modal-body {
+.main-menu-modal-content-wrapper:has(.main-menu-modal-footer)
+    .main-menu-modal-body {
     padding-bottom: 0;
 }
 
