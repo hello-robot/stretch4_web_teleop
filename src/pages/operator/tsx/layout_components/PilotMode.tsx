@@ -12,6 +12,10 @@ import { MovementRecorder } from "./MovementRecorder";
 import { SharedState } from "./CustomizableComponent";
 import { PilotControlsToggle } from "../static_components/PilotControlsToggle";
 import FlyingGripperPad from "../static_components/FlyingGripperPad";
+import { PlaybackStatusbar, StatusbarType } from "../basic_components/PlaybackStatusbar";
+import { ButtonCancelPlayback } from "../static_components/ButtonCancelPlayback";
+import Ellipsis from "../basic_components/Ellipsis";
+import { ActionState } from "shared/util";
 import "../../css/PilotMode.css";
 
 const PAD_SWAP_TRANSITION = { duration: 0.3, ease: "easeOut" } as const;
@@ -38,6 +42,8 @@ interface PilotModeProps {
     sharedState?: SharedState;
     isFlyingGripper: boolean;
     onExitFlyingGripper: () => void;
+    autoDockState?: ActionState;
+    onStopAutoDock?: () => void;
 }
 
 const PilotMode: React.FC<PilotModeProps> = ({
@@ -61,8 +67,18 @@ const PilotMode: React.FC<PilotModeProps> = ({
     sharedState,
     isFlyingGripper,
     onExitFlyingGripper,
+    autoDockState,
+    onStopAutoDock,
 }) => {
     const [isRecording, isRecordingSet] = React.useState<boolean>(false);
+
+    const isAutoDockActive = autoDockState?.alert_type === "info";
+    const autoDockStatusbarType: StatusbarType =
+        autoDockState?.alert_type === "warning"
+            ? "warning"
+            : autoDockState?.alert_type === "error"
+              ? "error"
+              : "success";
 
     const wrapperClassName = [
         "pilot-mode-wrapper",
@@ -174,6 +190,29 @@ const PilotMode: React.FC<PilotModeProps> = ({
                     onChange={setPilotControlsCurrent}
                     isCameraVeilVisible={isCameraVeilVisible || isFlyingGripper}
                     pilotControlsCurrent={pilotControlsCurrent}
+                />
+                <PlaybackStatusbar
+                    isVisible={Boolean(autoDockState)}
+                    type={autoDockStatusbarType}
+                >
+                    {autoDockState && (
+                        <div className="mrecord-statusbar-row mrecord-statusbar-row--loose">
+                            AutoDock{" "}
+                            <span className="mrecord-statusbar-muted">
+                                {autoDockState.state}
+                                {isAutoDockActive && (
+                                    <>
+                                        &nbsp;
+                                        <Ellipsis />
+                                    </>
+                                )}
+                            </span>
+                        </div>
+                    )}
+                </PlaybackStatusbar>
+                <ButtonCancelPlayback
+                    isRecordingPlaying={isAutoDockActive}
+                    handlePlaybackCancel={() => onStopAutoDock?.()}
                 />
             </div>
             <FooterPilotMode

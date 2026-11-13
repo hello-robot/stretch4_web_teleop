@@ -13,6 +13,7 @@ import {
 import {
     buttonFunctionProvider,
     homeTheRobotFunctionProvider,
+    mapFunctionProvider,
     movementRecorderFunctionProvider,
     runStopFunctionProvider,
     subscribeToolMetadata,
@@ -40,7 +41,7 @@ import {
 // import Swipe from "./static_components/Swipe";
 import SwipeableViews from "react-swipeable-views";
 import { TabGroup } from "./basic_components/TabGroup";
-import AutoNav from "./layout_components/AutoNav";
+import AutoNav, { MapFunction } from "./layout_components/AutoNav";
 
 import { HomingBanner } from "./basic_components/HomingBanner";
 import FooterGlobal from "./layout_components/FooterGlobal";
@@ -77,6 +78,7 @@ export const MobileOperator = (props: {
         ButtonPadButton[]
     >([]);
     const [moveBaseState, setMoveBaseState] = React.useState<MoveBaseState>();
+    const [autoDockState, setAutoDockState] = React.useState<ActionState>();
     const [playbackPosesState, setPlaybackPosesState] = React.useState<ActionState>(undefined);
     const [cameraID, setCameraID] = React.useState<CameraViewId>(
         CameraViewId.overhead
@@ -434,6 +436,40 @@ export const MobileOperator = (props: {
         }
     }, [moveBaseState]);
 
+    React.useEffect(() => {
+        let autoDockClearTimeout: ReturnType<typeof setTimeout> | undefined;
+        const unsubscribe = mapFunctionProvider.setAutoDockCallback(
+            (state: ActionState) => {
+                if (autoDockClearTimeout) {
+                    clearTimeout(autoDockClearTimeout);
+                }
+                setAutoDockState(state);
+                if (state.alert_type === "info") {
+                    isCameraVeilVisibleSet(true);
+                    return;
+                }
+                const holdMs = state.alert_type === "error" ? 2500 : 1500;
+                autoDockClearTimeout = setTimeout(() => {
+                    setAutoDockState(undefined);
+                    isCameraVeilVisibleSet(false);
+                }, holdMs);
+            },
+        );
+        return () => {
+            unsubscribe();
+            if (autoDockClearTimeout) {
+                clearTimeout(autoDockClearTimeout);
+            }
+        };
+    }, []);
+
+    const handleStopAutoDock = React.useCallback(() => {
+        const stopAutoDock = mapFunctionProvider?.provideFunctions(
+            MapFunction.StopAutoDock,
+        ) as (() => void) | undefined;
+        stopAutoDock?.();
+    }, []);
+
     // Callback for when the move base state is updated (e.g., the ROS2 action returns)
     // Used to render alerts to the operator.
     function playbackPosesCallback(state: ActionState) {
@@ -631,6 +667,8 @@ export const MobileOperator = (props: {
                             sharedState={sharedState}
                             isFlyingGripper={isFlyingGripper}
                             onExitFlyingGripper={exitFlyingGripper}
+                            autoDockState={autoDockState}
+                            onStopAutoDock={handleStopAutoDock}
                         />
                         <GripperCamPIP
                             cameraID={CameraViewId.gripper}

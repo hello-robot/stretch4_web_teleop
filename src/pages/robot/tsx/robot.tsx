@@ -124,10 +124,11 @@ export class Robot extends React.Component {
     private moveBaseClient?: Action;
     private dockRobotClient?: Action;
     private dockRobotGoalID?: string;
-    private dockRobotFinishCallback?: (res: {
-        success: boolean;
-        message: string;
-    }) => void;
+    private dockRobotStatusWatching = false;
+    private dockRobotStatusSeenActive = false;
+    private dockRobotStatusLastEmitted?: number;
+    private dockRobotTerminalBaseline?: number;
+    private dockRobotSessionEpoch = 0;
     /** Drive with obstacle stopping: collision_monitor forwards this to /cmd_vel. */
     private cmdVelNavTopic?: Topic;
     /** Drive straight to the driver (or to /teleop/cmd_vel when velocity limiter is active). */
@@ -163,6 +164,7 @@ export class Robot extends React.Component {
     private occupancyGridUnavailableCallback: () => void;
     private odomCallback: (odom: ROSOdometry) => void;
     private moveBaseResultCallback: (goalState: ActionState) => void;
+    private autoDockResultCallback?: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
     private modeCallback: (mode: string) => void;
@@ -193,6 +195,7 @@ export class Robot extends React.Component {
         occupancyGridUnavailableCallback: () => void;
         odomCallback: (odom: ROSOdometry) => void;
         moveBaseResultCallback: (goalState: ActionState) => void;
+        autoDockResultCallback?: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
         modeCallback: (mode: string) => void;
@@ -218,6 +221,15 @@ export class Robot extends React.Component {
                 this.moveBaseTerminalBaseline = undefined;
             }
             props.moveBaseResultCallback(goalState);
+        };
+        this.autoDockResultCallback = (goalState) => {
+            if (goalState.alert_type !== "info") {
+                this.dockRobotGoalID = undefined;
+                this.dockRobotStatusWatching = false;
+                this.dockRobotStatusSeenActive = false;
+                this.dockRobotTerminalBaseline = undefined;
+            }
+            props.autoDockResultCallback?.(goalState);
         };
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
@@ -384,6 +396,16 @@ export class Robot extends React.Component {
             "Navigation canceled!",
             "Navigation succeeded!",
             "Navigation failed!",
+        );
+        this.subscribeToActionResult(
+            dockRobotActionName,
+            (goalState) => {
+                this.autoDockResultCallback?.(goalState);
+            },
+            "docking",
+            "canceled",
+            "succeeded",
+            "aborted",
         );
 
         this.createCmdVelTopics();
@@ -854,6 +876,18 @@ export class Robot extends React.Component {
                 return;
             }
 
+            if (actionName === dockRobotActionName) {
+                this.handleDockRobotActionStatus(
+                    statusList,
+                    callback,
+                    executingMsg!,
+                    cancelMsg!,
+                    successMsg!,
+                    failureMsg!,
+                );
+                return;
+            }
+
             // Generic (non-move-base) path: newest status only.
             const status = statusList[statusList.length - 1]?.status;
             console.log("For action ", actionName, "got status ", status);
@@ -895,6 +929,84 @@ export class Robot extends React.Component {
         successMsg: string,
         failureMsg: string,
     ) {
+        const state = {
+            watching: this.moveBaseStatusWatching,
+            seenActive: this.moveBaseStatusSeenActive,
+            lastEmitted: this.moveBaseStatusLastEmitted,
+            terminalBaseline: this.moveBaseTerminalBaseline,
+        };
+        this.processTrackedGoalStatus(
+            moveBaseActionName,
+            statusList,
+            state,
+            callback,
+            executingMsg,
+            cancelMsg,
+            successMsg,
+            failureMsg,
+            "error",
+            () => this.toggleBaseOnlyCollision(false),
+            () => this.toggleBaseOnlyCollision(true),
+        );
+        this.moveBaseStatusWatching = state.watching;
+        this.moveBaseStatusSeenActive = state.seenActive;
+        this.moveBaseStatusLastEmitted = state.lastEmitted;
+        this.moveBaseTerminalBaseline = state.terminalBaseline;
+    }
+
+    /**
+     * Interpret /dock_robot/_action/status without treating historical terminal
+     * entries as the current docking goal finishing.
+     */
+    private handleDockRobotActionStatus(
+        statusList: { status: number }[],
+        callback: (goalState: ActionState) => void,
+        executingMsg: string,
+        cancelMsg: string,
+        successMsg: string,
+        failureMsg: string,
+    ): void {
+        const state = {
+            watching: this.dockRobotStatusWatching,
+            seenActive: this.dockRobotStatusSeenActive,
+            lastEmitted: this.dockRobotStatusLastEmitted,
+            terminalBaseline: this.dockRobotTerminalBaseline,
+        };
+        this.processTrackedGoalStatus(
+            dockRobotActionName,
+            statusList,
+            state,
+            callback,
+            executingMsg,
+            cancelMsg,
+            successMsg,
+            failureMsg,
+            "warning",
+        );
+        this.dockRobotStatusWatching = state.watching;
+        this.dockRobotStatusSeenActive = state.seenActive;
+        this.dockRobotStatusLastEmitted = state.lastEmitted;
+        this.dockRobotTerminalBaseline = state.terminalBaseline;
+    }
+
+    private processTrackedGoalStatus(
+        actionName: string,
+        statusList: { status: number }[],
+        state: {
+            watching: boolean;
+            seenActive: boolean;
+            lastEmitted?: number;
+            terminalBaseline?: number;
+        },
+        callback: (goalState: ActionState) => void,
+        executingMsg: string,
+        cancelMsg: string,
+        successMsg: string,
+        failureMsg: string,
+        cancelAlertType: "error" | "warning",
+        onStartActive?: () => void,
+        onTerminal?: () => void,
+    ): void {
         // rosbridge may deliver status as string; coerce before compares.
         const statuses = statusList.map((entry) => Number(entry.status));
         const terminalCount = statuses.filter(
@@ -903,40 +1015,39 @@ export class Robot extends React.Component {
                 status === GoalStatus.STATUS_CANCELED ||
                 status === GoalStatus.STATUS_ABORTED,
         ).length;
-        if (this.moveBaseTerminalBaseline === undefined) {
-            this.moveBaseTerminalBaseline = terminalCount;
+        if (state.terminalBaseline === undefined) {
+            state.terminalBaseline = terminalCount;
         }
 
         const hasAccepted = statuses.includes(GoalStatus.STATUS_ACCEPTED);
         const hasExecuting = statuses.includes(GoalStatus.STATUS_EXECUTING);
         const hasCanceling = statuses.includes(GoalStatus.STATUS_CANCELING);
 
-        // Check if Nav2 action server is actively tracking a goal even if we weren't
-        // actively watching (e.g. app reload or mid-navigation session sync).
-        if (!this.moveBaseStatusWatching) {
+        // Sync mid-action if the server is already tracking an active goal on (re)load.
+        if (!state.watching) {
             if (hasAccepted || hasExecuting || hasCanceling) {
-                console.log("Nav2 action server has active goal on (re)load; activating watch session");
-                this.moveBaseStatusWatching = true;
-                this.moveBaseStatusSeenActive = true;
-                this.toggleBaseOnlyCollision(false);
+                console.log(`${actionName} has active goal on (re)load; activating watch session`);
+                state.watching = true;
+                state.seenActive = true;
+                onStartActive?.();
                 callback({
                     state: executingMsg,
                     alert_type: "info",
                 });
-                this.moveBaseStatusLastEmitted = GoalStatus.STATUS_EXECUTING;
+                state.lastEmitted = GoalStatus.STATUS_EXECUTING;
             }
             return;
         }
 
         if (hasAccepted || hasExecuting || hasCanceling) {
-            this.moveBaseStatusSeenActive = true;
+            state.seenActive = true;
             if (
                 hasExecuting &&
-                this.moveBaseStatusLastEmitted !== GoalStatus.STATUS_EXECUTING
+                state.lastEmitted !== GoalStatus.STATUS_EXECUTING
             ) {
                 console.log(
                     "For action ",
-                    moveBaseActionName,
+                    actionName,
                     "got status ",
                     GoalStatus.STATUS_EXECUTING,
                 );
@@ -944,7 +1055,7 @@ export class Robot extends React.Component {
                     state: executingMsg,
                     alert_type: "info",
                 });
-                this.moveBaseStatusLastEmitted = GoalStatus.STATUS_EXECUTING;
+                state.lastEmitted = GoalStatus.STATUS_EXECUTING;
             }
             return;
         }
@@ -952,14 +1063,14 @@ export class Robot extends React.Component {
         // Fallback when rosbridge never shows EXECUTING: a new terminal entry
         // appeared after this goal was sent.
         if (
-            !this.moveBaseStatusSeenActive &&
-            terminalCount > (this.moveBaseTerminalBaseline ?? 0)
+            !state.seenActive &&
+            terminalCount > (state.terminalBaseline ?? 0)
         ) {
-            this.moveBaseStatusSeenActive = true;
+            state.seenActive = true;
         }
 
-        // No in-progress goals. Ignore stale SUCCEEDED until we've seen ours active.
-        if (!this.moveBaseStatusSeenActive) {
+        // No in-progress goals. Ignore stale terminal entries until we've seen ours active.
+        if (!state.seenActive) {
             return;
         }
 
@@ -976,39 +1087,31 @@ export class Robot extends React.Component {
                 break;
             }
         }
-        if (terminal === undefined) {
-            return;
-        }
-        if (terminal === this.moveBaseStatusLastEmitted) {
+        if (terminal === undefined || terminal === state.lastEmitted) {
             return;
         }
 
-        console.log(
-            "For action ",
-            moveBaseActionName,
-            "got status ",
-            terminal,
-        );
+        console.log("For action ", actionName, "got status ", terminal);
         if (terminal === GoalStatus.STATUS_SUCCEEDED) {
             callback({
                 state: successMsg,
                 alert_type: "success",
             });
-            this.toggleBaseOnlyCollision(true);
+            onTerminal?.();
         } else if (terminal === GoalStatus.STATUS_CANCELED) {
             callback({
                 state: cancelMsg,
-                alert_type: "error",
+                alert_type: cancelAlertType,
             });
-            this.toggleBaseOnlyCollision(true);
+            onTerminal?.();
         } else if (terminal === GoalStatus.STATUS_ABORTED) {
             callback({
                 state: failureMsg,
                 alert_type: "error",
             });
-            this.toggleBaseOnlyCollision(true);
+            onTerminal?.();
         }
-        this.moveBaseStatusLastEmitted = terminal;
+        state.lastEmitted = terminal;
     }
 
     createTrajectoryClient() {
@@ -1407,43 +1510,48 @@ export class Robot extends React.Component {
      * Execute near-dock autonomous docking via /dock_robot (nav2_msgs/action/DockRobot).
      *
      * Switches stretch_driver to navigation mode before sending the goal with
-     * navigate_to_staging_pose and use_dock_id disabled.
-     *
-     * Args:
-     *     resultCallback: Optional callback invoked with completion status and message.
+     * navigate_to_staging_pose and use_dock_id disabled. Action lifecycle state
+     * is tracked durably via /dock_robot/_action/status.
      *
      * Returns:
      *     Promise resolving once the docking goal has been dispatched or rejected.
      */
-    async executeAutoDock(
-        resultCallback?: (result: { success: boolean; message: string }) => void
-    ): Promise<void> {
+    async executeAutoDock(): Promise<void> {
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
             console.warn("Ignoring executeAutoDock while robot is runstopped");
-            resultCallback?.({
-                success: false,
-                message: "Cannot dock while robot is runstopped.",
+            this.autoDockResultCallback?.({
+                state: "aborted",
+                alert_type: "error",
             });
             return;
         }
         if (!this.dockRobotClient) {
-            resultCallback?.({
-                success: false,
-                message: "Docking action client is not initialized.",
+            this.autoDockResultCallback?.({
+                state: "aborted",
+                alert_type: "error",
             });
             return;
         }
 
         await this.switchToNavigationMode();
         if (this.isRunStopped || robotMode === ("runstopped" as any)) {
-            resultCallback?.({
-                success: false,
-                message: "Cannot dock while robot is runstopped.",
+            this.autoDockResultCallback?.({
+                state: "aborted",
+                alert_type: "error",
             });
             return;
         }
 
-        this.stopExecution(true);
+        // Stop other motion without sending an async cancelAllGoals to /dock_robot
+        // right before sendGoal; docking_server.py preempts any incumbent goal.
+        this.stopTrajectoryClient();
+        const zeroTwist = {
+            linear: { x: 0, y: 0, z: 0 },
+            angular: { x: 0, y: 0, z: 0 },
+        };
+        this.cmdVelTopic?.publish(zeroTwist);
+        this.eeCmdVelTopic?.publish(zeroTwist);
+        this.stopMoveBaseClient();
 
         const goal = {
             use_dock_id: false,
@@ -1453,17 +1561,16 @@ export class Robot extends React.Component {
             navigate_to_staging_pose: false,
         };
 
-        let settled = false;
-        const finish = (res: { success: boolean; message: string }) => {
-            if (settled) return;
-            settled = true;
-            this.dockRobotGoalID = undefined;
-            if (this.dockRobotFinishCallback === finish) {
-                this.dockRobotFinishCallback = undefined;
-            }
-            resultCallback?.(res);
-        };
-        this.dockRobotFinishCallback = finish;
+        const sessionEpoch = ++this.dockRobotSessionEpoch;
+        this.dockRobotStatusWatching = true;
+        this.dockRobotStatusSeenActive = false;
+        this.dockRobotStatusLastEmitted = undefined;
+        this.dockRobotTerminalBaseline = undefined;
+
+        this.autoDockResultCallback?.({
+            state: "docking",
+            alert_type: "info",
+        });
 
         this.dockRobotGoalID = this.dockRobotClient.sendGoal(
             goal,
@@ -1473,38 +1580,60 @@ export class Robot extends React.Component {
                 error_msg?: string;
             }) => {
                 console.log("AutoDock result:", result);
+                if (
+                    sessionEpoch !== this.dockRobotSessionEpoch ||
+                    this.dockRobotStatusLastEmitted !== undefined
+                ) {
+                    return;
+                }
                 const ok = Boolean(result?.success);
-                finish({
-                    success: ok,
-                    message:
-                        result?.error_msg ||
-                        (ok ? "AutoDock succeeded!" : "AutoDock failed."),
+                this.dockRobotStatusLastEmitted = ok
+                    ? GoalStatus.STATUS_SUCCEEDED
+                    : GoalStatus.STATUS_ABORTED;
+                this.autoDockResultCallback?.({
+                    state: ok ? "succeeded" : "aborted",
+                    alert_type: ok ? "success" : "error",
                 });
             },
             (feedback: unknown) => {
+                if (sessionEpoch === this.dockRobotSessionEpoch) {
+                    this.dockRobotStatusSeenActive = true;
+                }
                 console.log("AutoDock feedback:", feedback);
             },
             (error: string) => {
                 console.warn("AutoDock failed/canceled:", error);
-                finish({
-                    success: false,
-                    message: error || "AutoDock failed or was canceled.",
+                if (
+                    sessionEpoch !== this.dockRobotSessionEpoch ||
+                    this.dockRobotStatusLastEmitted !== undefined
+                ) {
+                    return;
+                }
+                this.dockRobotStatusLastEmitted = GoalStatus.STATUS_ABORTED;
+                this.autoDockResultCallback?.({
+                    state: "aborted",
+                    alert_type: "error",
                 });
             },
         );
     }
 
     /**
-     * Cancel any active autonomous docking goal on /dock_robot.
+     * Request cancellation of any active autonomous docking goal on /dock_robot.
+     *
+     * Terminal state is emitted by /dock_robot/_action/status once the server
+     * finishes unwinding any in-flight stowing or seating routine.
      *
      * Returns:
      *     None.
      */
     stopDockRobotClient(): void {
-        if (!this.dockRobotClient) return;
-        const hadActiveGoal =
-            this.dockRobotGoalID !== undefined ||
-            this.dockRobotFinishCallback !== undefined;
+        if (
+            !this.dockRobotClient ||
+            (this.dockRobotGoalID === undefined && !this.dockRobotStatusWatching)
+        ) {
+            return;
+        }
         try {
             this.dockRobotClient.cancelAllGoals();
         } catch (e) {
@@ -1512,15 +1641,6 @@ export class Robot extends React.Component {
         }
         if (this.dockRobotGoalID) {
             this.dockRobotClient.cancelGoal(this.dockRobotGoalID);
-        }
-        if (hadActiveGoal) {
-            this.dockRobotGoalID = undefined;
-            const pendingFinish = this.dockRobotFinishCallback;
-            this.dockRobotFinishCallback = undefined;
-            pendingFinish?.({
-                success: false,
-                message: "AutoDock canceled.",
-            });
         }
     }
 

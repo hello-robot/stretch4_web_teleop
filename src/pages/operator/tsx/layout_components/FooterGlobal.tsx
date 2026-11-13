@@ -144,25 +144,37 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         }
     });
 
-    mapFunctionProvider?.setAutoDockCallback((state: ActionState) => {
-        if (autoDockStatusTimeoutRef.current) {
-            clearTimeout(autoDockStatusTimeoutRef.current);
-        }
-        if (state.alert_type === "success") {
-            autoDockStatusSet("success");
-            autoDockStatusTimeoutRef.current = setTimeout(() => {
+    useEffect(() => {
+        if (!mapFunctionProvider) return;
+        return mapFunctionProvider.setAutoDockCallback((state: ActionState) => {
+            if (autoDockStatusTimeoutRef.current) {
+                clearTimeout(autoDockStatusTimeoutRef.current);
+            }
+            if (state.alert_type === "info") {
+                autoDockStatusSet("loading");
                 isMainMenuOpenSet(false);
+                swipeableViewsIdxSet(0);
+                return;
+            }
+            if (state.alert_type === "success") {
+                autoDockStatusSet("success");
+                autoDockStatusTimeoutRef.current = setTimeout(() => {
+                    autoDockStatusSet("idle");
+                }, LOCALIZE_SUCCESS_HOLD_MS);
+                return;
+            }
+            if (state.alert_type === "warning") {
                 autoDockStatusSet("idle");
-            }, LOCALIZE_SUCCESS_HOLD_MS);
-            return;
-        }
-        if (state.alert_type === "error") {
-            autoDockStatusSet("error");
-            autoDockStatusTimeoutRef.current = setTimeout(() => {
-                autoDockStatusSet("idle");
-            }, AUTODOCK_STATUS_HOLD_MS);
-        }
-    });
+                return;
+            }
+            if (state.alert_type === "error") {
+                autoDockStatusSet("error");
+                autoDockStatusTimeoutRef.current = setTimeout(() => {
+                    autoDockStatusSet("idle");
+                }, AUTODOCK_STATUS_HOLD_MS);
+            }
+        });
+    }, [isMainMenuOpenSet, swipeableViewsIdxSet]);
 
     useEffect(() => {
         const unsubscribe = RobotAudioPlayer.getInstance().addMuteListener(
@@ -203,6 +215,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             clearTimeout(autoDockStatusTimeoutRef.current);
         }
         autoDockStatusSet("loading");
+        isMainMenuOpenSet(false);
+        swipeableViewsIdxSet(0);
         const autoDock = mapFunctionProvider?.provideFunctions(
             MapFunction.AutoDock
         ) as (() => void) | undefined;

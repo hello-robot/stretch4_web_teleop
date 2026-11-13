@@ -5,7 +5,7 @@ import { occupancyGrid, underMapFunctionProvider } from "operator/tsx/index";
 
 export class MapFunctionProvider extends FunctionProvider {
     private operatorCallback?: (state: ActionState) => void = undefined;
-    private autoDockCallback?: (state: ActionState) => void = undefined;
+    private autoDockCallbacks = new Set<(state: ActionState) => void>();
 
     constructor() {
         super();
@@ -31,7 +31,7 @@ export class MapFunctionProvider extends FunctionProvider {
      *     None.
      */
     public setAutoDockState(state: ActionState): void {
-        if (this.autoDockCallback) this.autoDockCallback(state);
+        this.autoDockCallbacks.forEach((callback) => callback(state));
     }
 
     /**
@@ -41,10 +41,15 @@ export class MapFunctionProvider extends FunctionProvider {
      *     callback: Handler receiving the updated ActionState.
      *
      * Returns:
-     *     None.
+     *     Unsubscribe function removing the registered callback.
      */
-    public setAutoDockCallback(callback: (state: ActionState) => void): void {
-        this.autoDockCallback = callback;
+    public setAutoDockCallback(
+        callback: (state: ActionState) => void
+    ): () => void {
+        this.autoDockCallbacks.add(callback);
+        return () => {
+            this.autoDockCallbacks.delete(callback);
+        };
     }
 
     /**

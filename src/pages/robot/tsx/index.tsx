@@ -48,6 +48,8 @@ export const robot = new Robot({
     odomCallback: forwardOdom,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
+    autoDockResultCallback: (goalState: ActionState) =>
+        forwardActionState(goalState, "autoDockState"),
     playbackPosesResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "playbackPosesState"),
     amclPoseCallback: forwardAMCLPose,
@@ -464,15 +466,7 @@ function handleMessage(message: WebRTCMessage) {
             });
             break;
         case "autoDock":
-            void robot.executeAutoDock((response) => {
-                forwardActionState(
-                    {
-                        state: response.message,
-                        alert_type: response.success ? "success" : "error",
-                    },
-                    "autoDockState"
-                );
-            });
+            void robot.executeAutoDock();
             break;
         case "stopAutoDock":
             robot.stopDockRobotClient();
