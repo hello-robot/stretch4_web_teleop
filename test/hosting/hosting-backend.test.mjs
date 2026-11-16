@@ -819,10 +819,10 @@ suite("a finalized version translates firebase.json into Hosting cache rules", (
 suite("publishAdditively calls firebase-tools Hosting APIs with their exact parameter order", () => {
     const hostingApi = require("firebase-tools/lib/hosting/api");
 
-    test("firebase-tools version and release helpers take siteId first without a leading project argument", () => {
-        assert.equal(hostingApi.createVersion.length, 2);
-        assert.equal(hostingApi.updateVersion.length, 3);
-        assert.equal(hostingApi.createRelease.length, 4);
+    test("firebase-tools version and release helpers take a leading project argument before siteId", () => {
+        assert.equal(hostingApi.createVersion.length, 3);
+        assert.equal(hostingApi.updateVersion.length, 4);
+        assert.equal(hostingApi.createRelease.length, 5);
     });
 
     test("creates, uploads, finalizes, and releases a fresh preview version", async () => {
@@ -909,7 +909,7 @@ suite("publishAdditively calls firebase-tools Hosting APIs with their exact para
         );
 
         assert.deepEqual(calls.createVersion, [
-            ["my-site", { status: "CREATED" }],
+            ["-", "my-site", { status: "CREATED" }],
         ]);
         assert.equal(calls.uploads.length, 1);
         assert.equal(calls.uploads[0].method, "POST");
@@ -917,6 +917,7 @@ suite("publishAdditively calls firebase-tools Hosting APIs with their exact para
         assert.equal(calls.uploads[0].resolveOnHTTPError, true);
         assert.deepEqual(calls.updateVersion, [
             [
+                "-",
                 "my-site",
                 "v-fresh",
                 {
@@ -931,6 +932,7 @@ suite("publishAdditively calls firebase-tools Hosting APIs with their exact para
         assert.equal(calls.createChannel[0][2], "rails-feat");
         assert.deepEqual(calls.createRelease, [
             [
+                "-",
                 "my-site",
                 "rails-feat",
                 "projects/-/sites/my-site/versions/v-fresh",
@@ -1000,6 +1002,7 @@ suite("publishAdditively calls firebase-tools Hosting APIs with their exact para
         assert.equal(posts[0][0], "/projects/-/sites/my-site/versions:clone");
         assert.deepEqual(updates, [
             [
+                "-",
                 "my-site",
                 "v-cloned",
                 {
@@ -1010,6 +1013,7 @@ suite("publishAdditively calls firebase-tools Hosting APIs with their exact para
         ]);
         assert.deepEqual(releases, [
             [
+                "-",
                 "my-site",
                 "live",
                 "projects/-/sites/my-site/versions/v-cloned",

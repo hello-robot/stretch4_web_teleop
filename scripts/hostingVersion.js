@@ -434,7 +434,7 @@ async function publishAdditively(
             "Creating a fresh Hosting version",
             source ? "no prior rails requested" : `initial version on ${siteId}`,
         );
-        version = await runtime.createVersion(siteId, { status: "CREATED" });
+        version = await runtime.createVersion("-", siteId, { status: "CREATED" });
         if (!version) throw new Error("createVersion returned no version");
     }
 
@@ -495,7 +495,7 @@ async function publishAdditively(
     }
 
     const config = hostingVersionConfig(runtime.repoRoot);
-    await runtime.updateVersion(siteId, version.split("/").pop(), {
+    await runtime.updateVersion("-", siteId, version.split("/").pop(), {
         status: "FINALIZED",
         ...(Object.keys(config).length > 0 ? { config } : {}),
     });
@@ -522,7 +522,7 @@ async function publishAdditively(
         }
     }
 
-    await runtime.createRelease(siteId, channel, version, {});
+    await runtime.createRelease("-", siteId, channel, version, {});
     report(
         channel === "live"
             ? "Released to the live channel"
