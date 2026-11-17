@@ -3,8 +3,10 @@ import { markOperatorTakeover } from "shared/signaling/operatorSeat";
 import { gravatarUrl } from "../gravatar";
 import { loginHandler } from "../index";
 import {
+    CardControl,
     holdsOperatorSeat,
     OperatorSeat,
+    railGate,
     RobotStatus,
 } from "../robotModel";
 
@@ -19,9 +21,22 @@ type Treatment =
     | "failed"
     | "connect"
     | "takeover"
-    | "in-use";
+    | "in-use"
+    | "rail-pending"
+    | "refused";
 
-const launchOwnerKey = (operatorHref: string) => `hr-launch-owner:${operatorHref}`;
+/**
+ * What the control for a treatment does, as the rail gate reads it.
+ *
+ * @param treatment State the card would present.
+ * @returns "start" for the controls that launch the interface, "enter" for
+ *     the ones that open the operator page, "other" for the rest.
+ */
+const controlKind = (treatment: Treatment): CardControl => {
+    if (treatment === "standby" || treatment === "failed") return "start";
+    if (treatment === "connect" || treatment === "takeover") return "enter";
+    return "other";
+};
 
 /** Controls that tear the interface down, and so swap to Ending while it happens. */
 const STOPPABLE: Treatment[] = [
@@ -137,6 +152,19 @@ const formatElapsed = (totalSeconds: number): string => {
 interface TeleopButtonProps {
     status: RobotStatus;
     operatorHref: string;
+    /**
+     * Identifies this robot's launch in sessionStorage. Keyed on the robot
+     * rather than on operatorHref, which moves when the robot republishes its
+     * build and would strand the entry under the old address.
+     */
+    ownerKey: string;
+    /** Whether the rail operatorHref points into is deployed; null while probing. */
+    railAvailable: boolean | null;
+    /**
+     * Why a connection to this robot would be refused, or null when it would
+     * not be. Shown in place of the controls that start or open the interface.
+     */
+    refusal: string | null;
     seat: OperatorSeat | null;
     beat: boolean;
     beatUntil: number;
@@ -156,9 +184,19 @@ interface TeleopButtonProps {
     onStop: () => void | Promise<void>;
 }
 
+/**
+ * The launch, connect and stop controls of one robot card.
+ *
+ * @param props What the card knows about the robot, its rail and its
+ *     operator seat, and the callbacks its controls trigger.
+ * @returns The LOGS control and the control for the robot's current state.
+ */
 export const TeleopButton = ({
     status,
     operatorHref,
+    ownerKey,
+    railAvailable,
+    refusal,
     seat,
     beat,
     beatUntil,
@@ -169,7 +207,6 @@ export const TeleopButton = ({
     onLaunch,
     onStop,
 }: TeleopButtonProps) => {
-    const ownerKey = launchOwnerKey(operatorHref);
     const [launchedHere, launchedHereSet] = useState(
         () => sessionStorage.getItem(ownerKey) === "1",
     );
@@ -181,11 +218,12 @@ export const TeleopButton = ({
     useEffect(() => {
         if (!launchedHere || manualLaunch) return;
         if (status !== "online" || beatUntil <= Date.now()) return;
+        if (railAvailable !== true) return;
         const timer = window.setTimeout(() => {
             window.location.assign(operatorHref);
         }, Math.max(0, beatUntil - Date.now()));
         return () => window.clearTimeout(timer);
-    }, [beatUntil, launchedHere, manualLaunch, operatorHref, status]);
+    }, [beatUntil, launchedHere, manualLaunch, operatorHref, railAvailable, status]);
 
     /**
      * The daemon reports a failed launch by dropping back to standby without
@@ -237,7 +275,15 @@ export const TeleopButton = ({
     );
     const [elapsedSec, elapsedSecSet] = useState(0);
     const [ending, endingSet] = useState(false);
-    const shown = ending && canStop(treatment) ? "ending" : treatment;
+    const gate = railGate(controlKind(treatment), railAvailable, refusal);
+    const shown: Treatment =
+        ending && canStop(treatment)
+            ? "ending"
+            : gate === "refused"
+              ? "refused"
+              : gate === "pending"
+                ? "rail-pending"
+                : treatment;
     const logsAvailable =
         !logsOpen &&
         (treatment === "starting" ||
@@ -305,11 +351,26 @@ export const TeleopButton = ({
                 },
                 launchReady,
                 seat?.email,
+                refusal,
             )}
         </div>
     );
 };
 
+/**
+ * The control a card shows for one treatment.
+ *
+ * @param treatment State the card is presenting.
+ * @param elapsed Time since the launch began, as mm:ss.
+ * @param onLaunch Starts the interface.
+ * @param onStop Stops the interface, or aborts a launch in flight.
+ * @param onEnter Opens the operator page on a free seat.
+ * @param onTakeover Opens the operator page, reclaiming the seat.
+ * @param launchReady Whether the interface is up, so it can be stopped.
+ * @param occupantEmail Email of the operator in the seat, when one is known.
+ * @param refusal Why a connection would be refused, shown for "refused".
+ * @returns The buttons for that treatment.
+ */
 const controlFor = (
     treatment: Treatment,
     elapsed: string,
@@ -319,6 +380,7 @@ const controlFor = (
     onTakeover: () => void,
     launchReady: boolean,
     occupantEmail?: string,
+    refusal?: string | null,
 ) => {
     if (treatment === "standby") {
         return (
@@ -399,6 +461,36 @@ const controlFor = (
                     </span>
                 </span>
             </button>
+        );
+    }
+    if (treatment === "rail-pending") {
+        return (
+            <div
+                className="hr-button hr-button--skeleton"
+                role="status"
+                aria-label="Checking the interface version"
+            />
+        );
+    }
+    // A connection would be refused, so the reason takes the place of the
+    // control that starts or opens the interface. Stopping an interface that
+    // is already up stays available.
+    if (treatment === "refused") {
+        return (
+            <>
+                <div className="hr-button hr-button--refused" role="status">
+                    {refusal}
+                </div>
+                {launchReady && (
+                    <button
+                        className="hr-button hr-button--ghost"
+                        type="button"
+                        onClick={onStop}
+                    >
+                        Stop Interface
+                    </button>
+                )}
+            </>
         );
     }
     // `takeover` is our own seat, or one being launched: claim it rather than

@@ -33,7 +33,10 @@ import {
     type SaveMapLocationResult,
 } from "./executeSaveMapLocation";
 import {
+    executeDeletePose,
+    executeEditPose,
     executeMoveToPose,
+    executePinPose,
     executeSavePose,
     executeSetSavedPosesModal,
 } from "./executePoseCommands";
@@ -59,6 +62,10 @@ import {
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    EDIT_POSE,
+    DELETE_POSE,
+    PIN_POSE,
+    PIN_POSE_ACTIONS,
     FLYING_GRIPPER_MODE_ACTIONS,
     FLYING_GRIPPER_MOVE_ACTIONS,
     SAVED_LOCATIONS_MODAL_ACTIONS,
@@ -80,6 +87,10 @@ import {
     type SetSavedPosesModalResult,
     type SavePoseResult,
     type MoveToPoseResult,
+    type EditPoseResult,
+    type DeletePoseResult,
+    type PinPoseResult,
+    type PinPoseAction,
     type MainMenuAction,
     type SetMainMenuResult,
     type ControlAutoNavAction,
@@ -363,6 +374,42 @@ function formatToolCallLog(
         } catch {
             //
         }
+    } else if (fc.name === EDIT_POSE) {
+        try {
+            const parsed = JSON.parse(fc.arguments || "{}") as Record<
+                string,
+                unknown
+            >;
+            argsSummary = JSON.stringify({
+                old_name: parsed.old_name,
+                new_name: parsed.new_name,
+            });
+        } catch {
+            //
+        }
+    } else if (fc.name === DELETE_POSE || fc.name === SAVE_POSE || fc.name === MOVE_TO_POSE) {
+        try {
+            const parsed = JSON.parse(fc.arguments || "{}") as Record<
+                string,
+                unknown
+            >;
+            argsSummary = JSON.stringify({ name: parsed.name });
+        } catch {
+            //
+        }
+    } else if (fc.name === PIN_POSE) {
+        try {
+            const parsed = JSON.parse(fc.arguments || "{}") as Record<
+                string,
+                unknown
+            >;
+            argsSummary = JSON.stringify({
+                action: parsed.action,
+                name: parsed.name,
+            });
+        } catch {
+            //
+        }
     }
     return `[Realtime] ${ts} Tool ${fc.name} ${fc.call_id} src=${source} args=${argsSummary}`;
 }
@@ -424,6 +471,25 @@ function parsedArgsCompleteForTool(
         nameVal === LOAD_AUTONAV_LOCATION
     ) {
         return typeof parsed.label === "string" && parsed.label.length > 0;
+    }
+    if (nameVal === EDIT_POSE) {
+        return (
+            typeof parsed.old_name === "string" &&
+            parsed.old_name.length > 0 &&
+            typeof parsed.new_name === "string" &&
+            parsed.new_name.length > 0
+        );
+    }
+    if (nameVal === DELETE_POSE || nameVal === SAVE_POSE || nameVal === MOVE_TO_POSE) {
+        return typeof parsed.name === "string" && parsed.name.length > 0;
+    }
+    if (nameVal === PIN_POSE) {
+        return (
+            typeof parsed.action === "string" &&
+            parsed.action.length > 0 &&
+            typeof parsed.name === "string" &&
+            parsed.name.length > 0
+        );
     }
     if (
         nameVal === SET_SAVED_LOCATIONS_MODAL ||
@@ -499,6 +565,12 @@ function accumulateFunctionCalls(
                 nameVal === SET_MAIN_MENU ||
                 nameVal === CONTROL_AUTONAV ||
                 nameVal === LOAD_AUTONAV_LOCATION ||
+                nameVal === SET_SAVED_POSES_MODAL ||
+                nameVal === SAVE_POSE ||
+                nameVal === MOVE_TO_POSE ||
+                nameVal === EDIT_POSE ||
+                nameVal === DELETE_POSE ||
+                nameVal === PIN_POSE ||
                 nameVal === SET_FLYING_GRIPPER_MODE ||
                 nameVal === EXECUTE_FLYING_GRIPPER_MOVE
             ) &&
@@ -737,6 +809,9 @@ export type RealtimeVoiceConnectOptions = {
     onSetSavedPosesModalFeedback?: (result: SetSavedPosesModalResult) => void;
     onSavePoseFeedback?: (result: SavePoseResult) => void;
     onMoveToPoseFeedback?: (result: MoveToPoseResult) => void;
+    onEditPoseFeedback?: (result: EditPoseResult) => void;
+    onDeletePoseFeedback?: (result: DeletePoseResult) => void;
+    onPinPoseFeedback?: (result: PinPoseResult) => void;
     /** Open or close Flying Gripper mode on Pilot screen. */
     onSetFlyingGripperMode?: (
         action: FlyingGripperModeAction,
@@ -1464,6 +1539,21 @@ export async function connectOpenAIRealtimeVoice(
         move_to_pose: (_voiceProvider, fc) => {
             const res = executeMoveToPose(fc.arguments);
             opts.onMoveToPoseFeedback?.(res);
+            return res;
+        },
+        edit_pose: (_voiceProvider, fc) => {
+            const res = executeEditPose(fc.arguments);
+            opts.onEditPoseFeedback?.(res);
+            return res;
+        },
+        delete_pose: (_voiceProvider, fc) => {
+            const res = executeDeletePose(fc.arguments);
+            opts.onDeletePoseFeedback?.(res);
+            return res;
+        },
+        pin_pose: (_voiceProvider, fc) => {
+            const res = executePinPose(fc.arguments);
+            opts.onPinPoseFeedback?.(res);
             return res;
         },
         set_flying_gripper_mode: (_voiceProvider, fc) => {

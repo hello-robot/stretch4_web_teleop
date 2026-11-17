@@ -60,3 +60,4 @@ ui-debug.log*
 
 # Cursor
 .cursor/*
+.rails-cache/

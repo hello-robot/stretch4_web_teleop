@@ -35,6 +35,9 @@ import {
     type LoadAutoNavLocationResult,
     type MainMenuAction,
     type MoveToPoseResult,
+    type EditPoseResult,
+    type DeletePoseResult,
+    type PinPoseResult,
     type SavedLocationsModalAction,
     type SavedPosesModalAction,
     type SavePoseResult,
@@ -293,6 +296,81 @@ export const VoiceCommandAssistant = ({
         [addToast],
     );
 
+    /**
+     * Toast feedback handler for edit_pose voice tool.
+     *
+     * Args:
+     *     result: Execution result containing status and user-facing detail.
+     *
+     * Returns:
+     *     None.
+     */
+    const handleEditPoseFeedback = useCallback(
+        (result: EditPoseResult) => {
+            if (result.ok) {
+                addToast(
+                    "info",
+                    result.detail,
+                    undefined,
+                    "voice",
+                );
+            } else {
+                addToast("error", result.detail, undefined, "voice");
+            }
+        },
+        [addToast],
+    );
+
+    /**
+     * Toast feedback handler for delete_pose voice tool.
+     *
+     * Args:
+     *     result: Execution result containing status and user-facing detail.
+     *
+     * Returns:
+     *     None.
+     */
+    const handleDeletePoseFeedback = useCallback(
+        (result: DeletePoseResult) => {
+            if (result.ok) {
+                addToast(
+                    "info",
+                    result.detail,
+                    undefined,
+                    "voice",
+                );
+            } else {
+                addToast("error", result.detail, undefined, "voice");
+            }
+        },
+        [addToast],
+    );
+
+    /**
+     * Toast feedback handler for pin_pose voice tool.
+     *
+     * Args:
+     *     result: Execution result containing status and user-facing detail.
+     *
+     * Returns:
+     *     None.
+     */
+    const handlePinPoseFeedback = useCallback(
+        (result: PinPoseResult) => {
+            if (result.ok) {
+                addToast(
+                    "info",
+                    result.detail,
+                    undefined,
+                    "voice",
+                );
+            } else {
+                addToast("error", result.detail, undefined, "voice");
+            }
+        },
+        [addToast],
+    );
+
     const handleControlAutoNav = useCallback(
         (action: ControlAutoNavAction): ControlAutoNavResult => {
             const result = onControlAutoNav(action);
@@ -361,6 +439,9 @@ export const VoiceCommandAssistant = ({
                 onSetSavedPosesModal: handleSetSavedPosesModal,
                 onSavePoseFeedback: handleSavePoseFeedback,
                 onMoveToPoseFeedback: handleMoveToPoseFeedback,
+                onEditPoseFeedback: handleEditPoseFeedback,
+                onDeletePoseFeedback: handleDeletePoseFeedback,
+                onPinPoseFeedback: handlePinPoseFeedback,
                 onSetFlyingGripperMode,
                 onSetFlyingGripperModeFeedback: handleSetFlyingGripperModeFeedback,
                 isFlyingGripperActive: () => isFlyingGripperActiveRef.current,
@@ -437,6 +518,9 @@ export const VoiceCommandAssistant = ({
         handleSetSavedPosesModal,
         handleSavePoseFeedback,
         handleMoveToPoseFeedback,
+        handleEditPoseFeedback,
+        handleDeletePoseFeedback,
+        handlePinPoseFeedback,
         handleControlAutoNav,
         handleCancelAutoNavOnStop,
         onCancelAutoNavOnStop,

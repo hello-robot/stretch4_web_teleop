@@ -585,6 +585,7 @@ export const MobileOperator = (props: {
             ) : null}
             <HomingBanner
                 robotIsHomed={robotIsHomed}
+                isRunStopped={isRunStopped}
                 homingBannerDismissedSet={homingBannerDismissedSet}
             />
             <div id="mobile-operator-body">

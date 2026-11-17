@@ -42,9 +42,9 @@ Once you're done with the interface, close the browser and run:
 
 ## Firebase (optional)
 
-The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted dashboard, user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project.
+The interface can optionally be backed by [Firebase](https://firebase.google.com/), which adds a hosted fleet dashboard (`https://<project-id>.web.app/`), user sign-in, fleet management, and WebRTC signaling that works over the public internet so no Tailscale or ngrok tunnel is required. A single dashboard hosts immutable release rails (`/r/<tag>/operator/`) side by side, routing each robot card to the operator interface matching the git release tag checked out on that robot so a mixed-version fleet can share one dashboard. This is entirely opt-in and self-hosted: you run it in a Firebase project you create under your own Google account (the no-cost Spark plan is sufficient), and sign-in, database access, and robot ownership are all scoped to that project.
 
-A plain `./launch_interface.sh` defaults to `local` hosting (serving the LAN door at `/local/operator/`). Once a robot is onboarded, pass `-f` / `--firebase` (or `--hosting firebase`, or set `HOSTING_MODE=firebase` in `.env` or the environment) to serve the interface through Firebase Hosting in addition to the robot's local LAN door. To override a standing `HOSTING_MODE=firebase` for a single local-only run, pass `--local` or `--hosting local` (a bare `--hosting` with no argument also defaults to `local`). Run `./launch_interface.sh --dry-run` to validate the installation and print the resolved launch configuration and provenance without starting ROS2 or PM2. See the [Firebase storage handler README](src/pages/operator/tsx/storage_handler/README.md) for instructions to set up Firebase hosting, and [Primer: Launching the Interface](src/primer_launch.md) for how a launch resolves `HOSTING_MODE`.
+A plain `./launch_interface.sh` defaults to `local` hosting (serving the LAN door at `/local/operator/`). Once a robot is onboarded, pass `-f` / `--firebase` (or `--hosting firebase`, or set `HOSTING_MODE=firebase` in `.env` or the environment) to open Firebase signaling in addition to the robot's local LAN door. To override a standing `HOSTING_MODE=firebase` for a single local-only run, pass `--local` or `--hosting local` (a bare `--hosting` with no argument also defaults to `local`). Run `./launch_interface.sh --dry-run` to validate the installation and print the resolved launch configuration and provenance without starting ROS2 or PM2. See [Firebase Setup and Multi-Rail Hosting](src/pages/operator/tsx/storage_handler/README.md) for instructions to create a Firebase project, onboard robots, and manage release rails.
 
 ## Feature flags
 
@@ -119,14 +119,15 @@ Now run `ngrok start stretch-web-teleop` to start the tunnel and navigate to `ht
 
 ## Developer Docs
 
-The following primers provide a high-level introduction to the codebase for developers.
+The following primers provide codebase architecture, contracts, and invariants for developers and coding agents:
 
-| Primer                                                       | Description                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the robot browser, operator browser, ROS2, and WebRTC fit together. Includes a render logic flow diagram showing how `MobileOperator` is structured into scenes, function providers, and the global footer.                             |
-| [Launching the Interface](src/primer_launch.md)              | How `launch_interface.sh` resolves `HOSTING_MODE`, validates the installation and Firebase readiness, prints the launch manifest, and brings up ROS2, the HTTPS server, and the robot browser.                                                                                      |
-| [Operator Page](src/primer_operator.md)                      | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`), the entry point (`index.tsx`), function providers, component folders, storage handler, and a step-by-step guide for adding new features. |
-| [Robot Page](src/primer_robot.md)                            | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and the full bidirectional data flow between ROS2 and the operator browser.                                                  |
+| Primer | Description |
+| --- | --- |
+| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the fleet lobby, operator browser, robot browser, ROS2, WebRTC, and signaling transports fit together, plus the `MobileOperator` render logic flow. |
+| [Launching the Interface](src/primer_launch.md) | How `launch_interface.sh` resolves `HOSTING_MODE`, validates the installation and Firebase readiness, prints the launch manifest, and brings up ROS2, the HTTPS server, and the robot browser. |
+| [Multi-Rail Hosting & Lobby](src/primer_rails.md) | How self-hosted Firebase Hosting serves the fleet lobby (`/`) alongside immutable release rails (`/r/<tag>/operator/`), webpack rail builds, release tag lockstep, deploy guards, RTDB rules compatibility, and test suites. |
+| [Operator Page](src/primer_operator.md) | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`, `signaling`), the entry point (`index.tsx`), function providers, component folders, storage handler, and adding new features. |
+| [Robot Page](src/primer_robot.md) | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and bidirectional data flow between ROS2 and the operator browser. |
 
 ## Contributing
 
@@ -134,6 +135,9 @@ The following primers provide a high-level introduction to the codebase for deve
   - Install pre-commit: `python3 -m pip install pre-commit`
   - Install the hooks locally: `cd` to the top-level of this repository and run `pre-commit install`.
   - Moving forward, pre-commit hooks will run before you create any commit.
+- Run automated Hosting, routing, and Realtime Database security suites before opening a pull request:
+  - Offline unit and release-guard suites (also run in CI): `npm test` (alias for `npm run test:offline`)
+  - Local Firebase Hosting and Database emulator suites (requires `java` on `PATH`): `npm run test:emulated`
 
 ## Troubleshooting
 

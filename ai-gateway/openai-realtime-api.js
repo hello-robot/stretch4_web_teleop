@@ -42,6 +42,9 @@ const {
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    EDIT_POSE,
+    DELETE_POSE,
+    PIN_POSE,
     EXECUTE_FLYING_GRIPPER_MOVE,
     SET_FLYING_GRIPPER_MODE,
     VOICE_MACRO_NAMES,
@@ -51,6 +54,7 @@ const {
     SAVED_POSES_MODAL_ACTIONS,
     FLYING_GRIPPER_MODE_ACTIONS,
     AUTONAV_NAV_ACTIONS,
+    PIN_POSE_ACTIONS,
     FLYING_GRIPPER_MOVE_ACTIONS,
     VOICE_WAKE_PHRASE_DISPLAY,
     VOICE_SLEEP_PHRASE_DISPLAY,
@@ -205,6 +209,9 @@ function buildRealtimeVoiceSessionPayload() {
                 `When the user wants to open or close the Saved Poses / Movement Recorder modal, call tool \`${SET_SAVED_POSES_MODAL}\` with \`action\`. Phrases: "open saved poses", "show saved poses", "open pose recorder", "close saved poses".`,
                 `When the user wants to save or bookmark the current pose, call tool \`${SAVE_POSE}\` with \`name\`. Phrases: "save pose as stow", "save pose as look down", "save this pose as grab cup". \`name\` must be the pose name only.`,
                 `When the user wants to move the robot to a saved pose, call tool \`${MOVE_TO_POSE}\` with \`name\`. Phrases: "move to pose stow", "go to pose look down", "play pose stow", "move to pose grab cup". \`name\` must be the pose name only.`,
+                `When the user wants to rename a saved pose, call tool \`${EDIT_POSE}\` with \`old_name\` and \`new_name\`. Phrases: "rename pose stow to parked", "change pose name stow to default", "rename pose look down to floor". \`old_name\` is the existing pose name and \`new_name\` is the new name for the pose.`,
+                `When the user wants to delete a saved pose, call tool \`${DELETE_POSE}\` with \`name\`. Phrases: "delete pose stow", "delete pose look down", "remove pose grab cup". \`name\` must be the pose name to delete only.`,
+                `When the user wants to pin or unpin a saved pose, call tool \`${PIN_POSE}\` with \`action\` ("pin" | "unpin") and \`name\`. Phrases: "pin pose stow", "pin pose look down" -> \`action="pin"\`; "unpin pose stow", "unpin pose look down" -> \`action="unpin"\`. \`name\` must be the pose name only.`,
 
                 // ── Flying Gripper Mode & Motions ──────────────────────────────────────────────────────────
                 `When the user wants to open or close the Flying Gripper screen/overlay on the pilot screen, call tool \`${SET_FLYING_GRIPPER_MODE}\` with \`action\`.`,
@@ -511,6 +518,66 @@ function buildRealtimeVoiceSessionPayload() {
                             },
                         },
                         required: ["name"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: EDIT_POSE,
+                    description:
+                        "Rename a saved pose. Use for requests like 'rename pose stow to parked' or 'change pose name stow to default'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            old_name: {
+                                type: "string",
+                                description: "The existing name of the saved pose to rename.",
+                            },
+                            new_name: {
+                                type: "string",
+                                description: "The new name for the pose.",
+                            },
+                        },
+                        required: ["old_name", "new_name"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: DELETE_POSE,
+                    description:
+                        "Delete a saved pose. Use for requests like 'delete pose stow' or 'remove pose look down'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            name: {
+                                type: "string",
+                                description: "Name of the saved pose to delete.",
+                            },
+                        },
+                        required: ["name"],
+                        additionalProperties: false,
+                    },
+                },
+                {
+                    type: "function",
+                    name: PIN_POSE,
+                    description:
+                        "Pin or unpin a saved pose in the pose list. Use for requests like 'pin pose stow' or 'unpin pose stow'.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action: {
+                                type: "string",
+                                enum: PIN_POSE_ACTIONS,
+                                description: "Whether to pin or unpin the pose.",
+                            },
+                            name: {
+                                type: "string",
+                                description: "Name of the saved pose to pin or unpin.",
+                            },
+                        },
+                        required: ["action", "name"],
                         additionalProperties: false,
                     },
                 },

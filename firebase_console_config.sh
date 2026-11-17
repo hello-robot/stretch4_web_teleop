@@ -93,17 +93,9 @@ if [ "$DEPLOY" = true ]; then
 	echo -e "Resolved Firebase Hosted URL:  ${GREEN}https://${HOSTED_URL}${NC}"
 	echo ""
 
-	node scripts/requireLiveHosting.js
-
-	# 2. Compile Production Assets
-	echo -e "${BLUE}Building production assets...${NC}"
-	npm run build:firebase
-	echo -e "${GREEN}✓ Production build complete${NC}"
-	echo ""
-
-	# 3. Deploy Static Files to Firebase Hosting
-	echo -e "${BLUE}Deploying to Firebase...${NC}"
-	./node_modules/.bin/firebase deploy --only hosting
+	# 2. Assemble and publish the release via deployHosting.js
+	echo -e "${BLUE}Assembling and deploying to Firebase Hosting...${NC}"
+	npm run deploy:hosting
 	echo -e "${GREEN}✓ Deployment successful!${NC}"
 	echo ""
 

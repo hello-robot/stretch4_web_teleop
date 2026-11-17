@@ -1,8 +1,7 @@
 import { Transform } from "roslib";
 import { BASIC_LAYOUT } from "../default_layouts/SIMPLE_LAYOUT";
 import { LayoutDefinition } from "operator/tsx/utils/component_definitions";
-import { ArucoMarkersInfo, RobotPose } from "shared/util";
-import { ARUCO_MARKER_INFO } from "../utils/aruco_markers_dict";
+import { RobotPose } from "shared/util";
 
 /** Type for all the possible names of default layouts. */
 export type DefaultLayoutName = "Basic Layout";

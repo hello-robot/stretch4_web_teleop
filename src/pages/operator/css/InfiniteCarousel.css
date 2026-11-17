@@ -1,13 +1,13 @@
 .infinite-carousel-container {
     position: relative;
-    gap: 10px;
+    gap: 15px;
     display: flex;
     flex-direction: column;
     width: 100%;
 }
 
 .infinite-carousel-viewport {
-    padding: 10px 0px;
+    padding: 20px 0px 0px;
     width: 100%;
     overflow: hidden;
 }

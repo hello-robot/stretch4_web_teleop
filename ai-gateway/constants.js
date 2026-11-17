@@ -86,6 +86,15 @@ const SAVE_POSE = "save_pose";
 /** Move robot to a previously saved pose by name. */
 const MOVE_TO_POSE = "move_to_pose";
 
+/** Edit/rename a saved pose. */
+const EDIT_POSE = "edit_pose";
+
+/** Delete a saved pose. */
+const DELETE_POSE = "delete_pose";
+
+/** Pin or unpin a saved pose. */
+const PIN_POSE = "pin_pose";
+
 /** Execute translation in the camera/tool frame when flying gripper mode is active. */
 const EXECUTE_FLYING_GRIPPER_MOVE = "execute_flying_gripper_move";
 
@@ -113,6 +122,9 @@ const FLYING_GRIPPER_MODE_ACTIONS = ["open", "close"];
 /** Valid control_autonav.action values. */
 const AUTONAV_NAV_ACTIONS = ["start", "cancel"];
 
+/** Valid actions for pin_pose. */
+const PIN_POSE_ACTIONS = ["pin", "unpin"];
+
 /** Valid actions for execute_flying_gripper_move. */
 const FLYING_GRIPPER_MOVE_ACTIONS = [
     "forward",
@@ -139,6 +151,9 @@ const VOICE_TOOLS = [
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    EDIT_POSE,
+    DELETE_POSE,
+    PIN_POSE,
     EXECUTE_FLYING_GRIPPER_MOVE,
     SET_FLYING_GRIPPER_MODE,
 ];
@@ -262,6 +277,9 @@ module.exports = {
     SET_SAVED_POSES_MODAL,
     SAVE_POSE,
     MOVE_TO_POSE,
+    EDIT_POSE,
+    DELETE_POSE,
+    PIN_POSE,
     EXECUTE_FLYING_GRIPPER_MOVE,
     SET_FLYING_GRIPPER_MODE,
     VOICE_MACRO_NAMES,
@@ -271,6 +289,7 @@ module.exports = {
     SAVED_POSES_MODAL_ACTIONS,
     FLYING_GRIPPER_MODE_ACTIONS,
     AUTONAV_NAV_ACTIONS,
+    PIN_POSE_ACTIONS,
     FLYING_GRIPPER_MOVE_ACTIONS,
 
     VOICE_TOOLS,

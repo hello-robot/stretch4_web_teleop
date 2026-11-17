@@ -27,6 +27,7 @@ import {
     ROSJointState,
     ROSOccupancyGrid,
     ROSOdometry,
+    ROSPath,
     ROSPose,
     setMaxEeSpeed,
     updateJointIncrements,
@@ -80,7 +81,46 @@ export enum GoalStatus {
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
+<<<<<<< HEAD
 const dockRobotActionName = "/dock_robot";
+=======
+// Path Nav2's FollowPath is given (no smoother in the BT)
+const navPlanTopicName = "/plan";
+/** Minimum spacing (m) between forwarded path points. */
+const NAV_PLAN_MIN_SPACING_M = 0.05;
+/** Maximum number of forwarded path points; longer paths are evenly thinned. */
+const NAV_PLAN_MAX_POINTS = 400;
+
+/**
+ * Reduce a nav_msgs/Path to flat [x0, y0, x1, y1, ...] (cm precision), dropping
+ * points closer than NAV_PLAN_MIN_SPACING_M and capping at NAV_PLAN_MAX_POINTS.
+ * The last pose is always kept so the line reaches the goal.
+ */
+function thinNavPlan(path: ROSPath): number[] {
+    const poses = path.poses ?? [];
+    const kept: { x: number; y: number }[] = [];
+    poses.forEach((stamped, i) => {
+        const p = stamped.pose.position;
+        const last = kept[kept.length - 1];
+        const isLast = i === poses.length - 1;
+        if (
+            !last ||
+            isLast ||
+            Math.hypot(p.x - last.x, p.y - last.y) >= NAV_PLAN_MIN_SPACING_M
+        ) {
+            kept.push({ x: p.x, y: p.y });
+        }
+    });
+    const stride = Math.ceil(kept.length / NAV_PLAN_MAX_POINTS) || 1;
+    const points: number[] = [];
+    kept.forEach((p, i) => {
+        if (i % stride === 0 || i === kept.length - 1) {
+            points.push(Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100);
+        }
+    });
+    return points;
+}
+>>>>>>> main
 
 export class Robot extends React.Component {
     private ros: Ros;
@@ -107,6 +147,7 @@ export class Robot extends React.Component {
     private jointState?: ROSJointState;
     private poseGoal?: Goal;
     private poseGoalID?: string;
+    private poseGoalWatchdogTimerID?: ReturnType<typeof setTimeout>;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
     private moveBaseGoalID?: string;
@@ -153,7 +194,6 @@ export class Robot extends React.Component {
     private mapFrameTfClient?: ROS2TFClient;
     private linkGripperFingerLeftTF?: Transform;
     private linkWristYawTF?: Transform;
-    private linkHeadTiltTF?: Transform;
     private jointStateCallback: (
         robotPose: RobotPose,
         jointValues: ValidJointStateDict,
@@ -167,6 +207,9 @@ export class Robot extends React.Component {
     private autoDockResultCallback?: (goalState: ActionState) => void;
     private playbackPosesResultCallback: (goalState: ActionState) => void;
     private amclPoseCallback: (pose: Transform) => void;
+    private navPlanCallback: (points: number[]) => void;
+    // True while a move-base goal is executing; /plan is only forwarded then
+    private navPlanActive = false;
     private modeCallback: (mode: string) => void;
     private isHomedCallback: (isHomed: boolean) => void;
     private isRunStoppedCallback: (isRunStopped: boolean) => void;
@@ -198,6 +241,7 @@ export class Robot extends React.Component {
         autoDockResultCallback?: (goalState: ActionState) => void;
         playbackPosesResultCallback: (goalState: ActionState) => void;
         amclPoseCallback: (pose: Transform) => void;
+        navPlanCallback: (points: number[]) => void;
         modeCallback: (mode: string) => void;
         isHomedCallback: (isHomed: boolean) => void;
         isRunStoppedCallback: (isRunStopped: boolean) => void;
@@ -213,12 +257,18 @@ export class Robot extends React.Component {
             props.occupancyGridUnavailableCallback;
         this.odomCallback = props.odomCallback;
         this.moveBaseResultCallback = (goalState) => {
-            if (goalState.state !== "Navigation executing!") {
+            if (goalState.state === "Navigation executing!") {
+                this.navPlanActive = true;
+            } else {
                 this.moveBaseGoalID = undefined;
                 this.moveBaseGoal = undefined;
                 this.moveBaseStatusWatching = false;
                 this.moveBaseStatusSeenActive = false;
                 this.moveBaseTerminalBaseline = undefined;
+                if (this.navPlanActive) {
+                    this.navPlanActive = false;
+                    this.navPlanCallback([]);
+                }
             }
             props.moveBaseResultCallback(goalState);
         };
@@ -233,6 +283,7 @@ export class Robot extends React.Component {
         };
         this.playbackPosesResultCallback = props.playbackPosesResultCallback;
         this.amclPoseCallback = props.amclPoseCallback;
+        this.navPlanCallback = props.navPlanCallback;
         this.modeCallback = props.modeCallback;
         this.isHomedCallback = props.isHomedCallback;
         this.isRunStoppedCallback = props.isRunStoppedCallback;
@@ -380,6 +431,7 @@ export class Robot extends React.Component {
         this.subscribeToJointLimits();
         this.subscribeToBatteryState();
         this.subscribeToOdom();
+        this.subscribeToNavPlan();
         this.subscribeToMode();
         this.subscribeToIsRunStopped();
         this.subscribetoJointStateDiagnostics();
@@ -421,7 +473,6 @@ export class Robot extends React.Component {
         this.toggleBaseOnlyCollision(true);
         // this.createRobotFrameTFClient();
         // this.createMapFrameTFClient();
-        // this.subscribeToHeadTiltTF();
         // this.subscribeToMapTF();
         this.createHomeTheRobotService();
         this.createSeedLocalizationService();
@@ -518,6 +569,24 @@ export class Robot extends React.Component {
 
         odomTopic.subscribe((msg: ROSOdometry) => {
             if (this.odomCallback) this.odomCallback(msg);
+        });
+    }
+
+    /**
+     * Forward the Nav2 path as flat map-frame [x, y, ...] points while a
+     * move-base goal is executing.
+     */
+    subscribeToNavPlan() {
+        const planTopic: Topic<ROSPath> = new Topic({
+            ros: this.ros,
+            name: navPlanTopicName,
+            messageType: "nav_msgs/msg/Path",
+        });
+        this.subscriptions.push(planTopic);
+
+        planTopic.subscribe((msg: ROSPath) => {
+            if (!this.navPlanActive || !this.navPlanCallback) return;
+            this.navPlanCallback(thinNavPlan(msg));
         });
     }
 
@@ -1320,12 +1389,6 @@ export class Robot extends React.Component {
     subscribeToWristYawTF() {
         this.robotFrameTfClient?.subscribe("wrist_yaw_link", (transform) => {
             this.linkWristYawTF = transform;
-        });
-    }
-
-    subscribeToHeadTiltTF() {
-        this.robotFrameTfClient?.subscribe("head_tilt_link", (transform) => {
-            this.linkHeadTiltTF = transform;
         });
     }
 
@@ -2184,35 +2247,57 @@ export class Robot extends React.Component {
             return;
         }
 
-        // check if at goal already
-        if (poses.length > 0) {
-            const finalPose = poses[poses.length - 1];
-            if (this.isAlreadyAtPose(finalPose)) {
-                console.log("Robot is already at final target pose, skipping execution.");
+        // Check if robot is already at all target poses in the sequence.
+        // For a multi-pose sequence, if the robot is only at the final pose but not the start,
+        // it must not be skipped; it should move to poses[0] and execute the full sequence.
+        if (poses.length > 0 && poses.every((pose) => this.isAlreadyAtPose(pose))) {
+            console.log("Robot is already at all target poses in sequence, skipping execution.");
+            this.playbackPosesResultCallback({
+                state: MovementState.Executing,
+                alert_type: "info",
+            });
+            setTimeout(() => {
                 this.playbackPosesResultCallback({
-                    state: MovementState.Executing,
+                    state: MovementState.Success,
                     alert_type: "info",
                 });
-                setTimeout(() => {
-                    this.playbackPosesResultCallback({
-                        state: MovementState.Success,
-                        alert_type: "info",
-                    });
-                }, 1000);
-                return;
-            }
+            }, 1000);
+            return;
         }
 
         this.stopExecution();
+        if (this.poseGoalWatchdogTimerID) {
+            clearTimeout(this.poseGoalWatchdogTimerID);
+            this.poseGoalWatchdogTimerID = undefined;
+        }
+
         this.poseGoal = this.makePoseGoals(poses, 1.5);
         this.playbackPosesResultCallback({
             state: MovementState.Executing,
             alert_type: "info",
-        })
+        });
+
+        // Compute cumulative trajectory duration and establish a watchdog timeout (+10%)
+        const trajectoryPoints = (this.poseGoal as any)?.trajectory?.points;
+        const lastPoint = trajectoryPoints && trajectoryPoints.length > 0
+            ? trajectoryPoints[trajectoryPoints.length - 1]
+            : undefined;
+        const cumulativeTime = lastPoint?.time_from_start
+            ? Number(lastPoint.time_from_start.sec || 0) + Number(lastPoint.time_from_start.nanosec || 0) / 1e9
+            : 0;
 
         this.poseGoalID = this.trajectoryClient.sendGoal(
             this.poseGoal,
             (result) => {
+                if (this.poseGoalWatchdogTimerID) {
+                    clearTimeout(this.poseGoalWatchdogTimerID);
+                    this.poseGoalWatchdogTimerID = undefined;
+                }
+                if (this.poseGoalID !== goalID) {
+                    return;
+                }
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
                 console.log(
                     "Result for action goal on " +
                     this.trajectoryClient.name +
@@ -2240,6 +2325,15 @@ export class Robot extends React.Component {
                 );
             },
             (error) => {
+                if (this.poseGoalWatchdogTimerID) {
+                    clearTimeout(this.poseGoalWatchdogTimerID);
+                    this.poseGoalWatchdogTimerID = undefined;
+                }
+                if (this.poseGoalID !== goalID) {
+                    return;
+                }
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
                 let error_code = -4; // default fallback error code
                 try {
                     error_code = JSON.parse(error.slice(error.indexOf("{"))).error_code;
@@ -2265,6 +2359,48 @@ export class Robot extends React.Component {
                 }
             }
         );
+
+        const goalID = this.poseGoalID;
+
+        // Arm the cumulativeTime + 10% watchdog
+        if (cumulativeTime > 0) {
+            const watchdogMs = Math.round(cumulativeTime * 1.1 * 1000);
+            this.poseGoalWatchdogTimerID = setTimeout(() => {
+                this.poseGoalWatchdogTimerID = undefined;
+                if (!this.poseGoalID || this.poseGoalID !== goalID) {
+                    return;
+                }
+                console.warn(
+                    `Trajectory watchdog expired (${(cumulativeTime * 1.1).toFixed(2)}s). Evaluating robot pose...`
+                );
+                const finalPose = poses.length > 0 ? poses[poses.length - 1] : undefined;
+                const isAtFinalPose = finalPose ? this.isAlreadyAtPose(finalPose) : false;
+
+                if (this.poseGoalID && this.trajectoryClient) {
+                    try {
+                        this.trajectoryClient.cancelGoal(this.poseGoalID);
+                    } catch (e) {
+                        console.warn("Could not cancel trajectory goal on watchdog timeout:", e);
+                    }
+                }
+                this.poseGoal = undefined;
+                this.poseGoalID = undefined;
+
+                if (isAtFinalPose) {
+                    console.log("Watchdog: robot reached final pose; treating as Success.");
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Success,
+                        alert_type: "info",
+                    });
+                } else {
+                    console.warn("Watchdog: robot did not reach final pose; treating as Fail.");
+                    this.playbackPosesResultCallback({
+                        state: MovementState.Fail,
+                        alert_type: "error",
+                    });
+                }
+            }, watchdogMs);
+        }
     }
 
     executeMoveBaseGoal(pose: ROSPose) {
@@ -2406,6 +2542,10 @@ export class Robot extends React.Component {
      */
     stopTrajectoryClient(): void {
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
+        if (this.poseGoalWatchdogTimerID) {
+            clearTimeout(this.poseGoalWatchdogTimerID);
+            this.poseGoalWatchdogTimerID = undefined;
+        }
         if (this.poseGoal || this.poseGoalID) {
             if (this.poseGoalID) {
                 this.trajectoryClient.cancelGoal(this.poseGoalID);

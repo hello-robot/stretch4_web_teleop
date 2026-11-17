@@ -34,7 +34,7 @@
 
 .modal-content-wrapper {
     text-align: left;
-    background: #122837;
+    background: hsl(204 50% 12.5% / 1);
     /* Dark background similar to original */
     color: #fff;
     /* Light text color */

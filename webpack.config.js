@@ -4,17 +4,87 @@ const webpack = require("webpack");
 const dotenv = require("dotenv");
 const { webpackPublicEnvDefinitions } = require("./scripts/webpackPublicEnv");
 const { envVarName, loadFeatures, FEATURES_PATH } = require("./feature-flags");
+const { isReleaseTag } = require("./scripts/releaseTag");
+const { RailManifestPlugin } = require("./scripts/railManifest");
+const { LobbyManifestPlugin } = require("./scripts/lobbyManifest");
 
-const pages = ["robot", "operator", "home"];
+const ALL_PAGES = ["robot", "operator", "home"];
+
+/**
+ * Entries this build emits.
+ *
+ * The lobby and each rail are built from the same config with different
+ * entries: `pages=home` emits the only root index.html there is, and
+ * `pages=operator` emits none, so no rail can displace the lobby.
+ *
+ * @param {Record<string, unknown>} webpackEnv Values passed with --env.
+ * @returns {string[]} Page names to build.
+ */
+function selectPages(webpackEnv) {
+    const requested = webpackEnv && webpackEnv.pages;
+    if (!requested) return ALL_PAGES;
+    const names = String(requested)
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean);
+    const unknown = names.filter((name) => !ALL_PAGES.includes(name));
+    if (unknown.length > 0) {
+        throw new Error(`--env pages: unknown page(s) ${unknown.join(", ")}`);
+    }
+    return names;
+}
 
 // Only explicitly public Firebase client configuration and the fleet identifier
 // may enter browser bundles. Robot credentials and every other .env value stay local.
 const env = dotenv.config().parsed || {};
-const envKeys = webpackPublicEnvDefinitions(env);
 
+/**
+ * Build the webpack configuration for one invocation.
+ *
+ * @param {Record<string, unknown>} webpackEnv Values passed with --env:
+ *     storage, pages, and rail.
+ * @param {{mode?: string}} argv Parsed webpack CLI arguments.
+ * @returns {import("webpack").Configuration} The configuration to build.
+ * @throws {Error} When --env rail is not a release tag, is combined with a
+ *     storage other than firebase, or --env pages names an unknown page.
+ */
 module.exports = (webpackEnv, argv) => {
     const storageValue = webpackEnv && webpackEnv.storage ? webpackEnv.storage : "localstorage";
     const isProduction = argv && argv.mode === "production";
+    const pages = selectPages(webpackEnv);
+    const rail = webpackEnv && webpackEnv.rail ? String(webpackEnv.rail) : null;
+    if (rail && !isReleaseTag(rail)) {
+        throw new Error(`--env rail: ${rail} is not a release tag`);
+    }
+    // A rail is only ever served from Hosting, and its assets resolve under
+    // /r/<tag>/. Built against the localstorage bundle they would resolve
+    // under /local/ and 404.
+    if (rail && storageValue !== "firebase") {
+        throw new Error("--env rail requires --env storage=firebase");
+    }
+    // Only the lobby-only build a release runs emits lobby.json. A whole-site
+    // build is hashed by the robot's autodeploy to skip unchanged uploads, and
+    // the manifest's build time would change that hash on every build.
+    const lobbyOnly =
+        !rail &&
+        storageValue === "firebase" &&
+        pages.length === 1 &&
+        pages[0] === "home";
+    const lobbyPlugins = lobbyOnly
+        ? [
+              new LobbyManifestPlugin({
+                  repoRoot: __dirname,
+                  stable:
+                      process.env.PUBLIC_STABLE_RAIL ?? env.PUBLIC_STABLE_RAIL,
+              }),
+          ]
+        : [];
+    const envKeys = webpackPublicEnvDefinitions(env);
+    if (storageValue === "firebase" && !pages.includes("robot")) {
+        // Cloud-hosted lobby and operator bundles resolve fleet membership per
+        // signed-in user; only the robot-local bundle reads HELLO_FLEET_ID.
+        envKeys["process.env.HELLO_FLEET_ID"] = "undefined";
+    }
     envKeys["process.env.storage"] = JSON.stringify(storageValue);
     // Feature flags become boolean literals in the bundle, so `if (FEATURE_X)`
     // guards fold away when the flag is off. See features.json.
@@ -28,7 +98,9 @@ module.exports = (webpackEnv, argv) => {
             type: "filesystem",
             version: JSON.stringify({
                 flags: loadFeatures(),
-                storage: env.storage,
+                storage: storageValue,
+                pages,
+                rail,
             }),
             buildDependencies: { config: [__filename, FEATURES_PATH] },
         },
@@ -38,20 +110,32 @@ module.exports = (webpackEnv, argv) => {
         }, {}),
         output: {
             filename: "[name]/bundle.js",
-            path: path.resolve(
-                __dirname,
-                storageValue === "firebase" ? "dist-firebase" : "dist",
-            ),
+            path: rail
+                ? path.resolve(__dirname, "dist-firebase", "r", rail)
+                : path.resolve(
+                      __dirname,
+                      storageValue === "firebase" ? "dist-firebase" : "dist",
+                  ),
             // The localstorage bundle is always served under /local/, in both
             // hosting modes, so dist/ is identical whichever mode built it and
             // never has to be rebuilt because the mode changed. server.js keeps
             // a /local/ mount in both modes for exactly this reason, which also
             // lets it serve the same bundle at / when no cloud door is open.
-            publicPath: storageValue === "localstorage" ? "/local/" : "/",
+            publicPath: rail
+                ? `/r/${rail}/`
+                : storageValue === "localstorage"
+                  ? "/local/"
+                  : "/",
             // Incremental watch builds reuse cached HTML/assets. Cleaning on
             // every rebuild can remove those cached files without re-emitting
             // them, leaving the local server with 404s.
-            clean: isProduction,
+            //
+            // Only clean a directory this build owns outright: a whole-site
+            // build owns dist/, and a rail owns its own r/<tag>/. A partial
+            // build at the root -- the lobby, or the unversioned operator
+            // page -- shares the tree with the others assembled beside it,
+            // and the caller clears it once before assembling.
+            clean: isProduction && (rail !== null || pages.length === ALL_PAGES.length),
         },
         optimization: {
             splitChunks: {
@@ -70,6 +154,8 @@ module.exports = (webpackEnv, argv) => {
             }),
             new webpack.DefinePlugin(envKeys),
         ].concat(
+            rail ? [new RailManifestPlugin({ tag: rail, repoRoot: __dirname })] : []
+        ).concat(lobbyPlugins).concat(
             pages.map(
                 (page) =>
                     new HtmlWebpackPlugin({

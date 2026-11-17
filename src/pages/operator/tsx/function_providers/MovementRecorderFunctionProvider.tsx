@@ -1,5 +1,5 @@
 import { FunctionProvider } from "./FunctionProvider";
-import { MovementRecorderFunction } from "../layout_components/MovementRecorder";
+import { MovementRecorderFunction } from "./MovementRecorderTypes";
 import { ActionState, RobotPose, ValidJoints } from "shared/util";
 import { movementStatesTerminal, MovementState } from "robot/tsx/robot";
 import { StorageHandler } from "../storage_handler/StorageHandler";
@@ -119,6 +119,69 @@ export class MovementRecorderFunctionProvider extends FunctionProvider {
         if (this.refreshRecordingsHandler) {
             this.refreshRecordingsHandler();
         }
+    }
+
+    /**
+     * Delete a saved pose recording by name and update pinned recordings.
+     *
+     * Args:
+     *     name: The name of the recording to delete.
+     *
+     * Returns:
+     *     None.
+     */
+    public deleteRecordingByName(name: string): void {
+        this.storageHandler.deleteRecording(name);
+        this.storageHandler.setPinnedRecordingNames(
+            this.storageHandler.getPinnedRecordingNames(),
+        );
+        this.refreshRecordings();
+    }
+
+    /**
+     * Rename a saved pose recording and preserve its pinned status.
+     *
+     * Args:
+     *     oldName: The current name of the recording.
+     *     newName: The desired new name of the recording.
+     *
+     * Returns:
+     *     None.
+     */
+    public renameRecordingByName(oldName: string, newName: string): void {
+        const poses = this.storageHandler.getRecording(oldName);
+        const pinnedBefore = this.storageHandler.getPinnedRecordingNames();
+        const nextPins = pinnedBefore.map((n) =>
+            n === oldName ? newName : n,
+        );
+        this.storageHandler.deleteRecording(oldName);
+        this.storageHandler.savePoseRecording(newName, poses);
+        this.storageHandler.setPinnedRecordingNames(nextPins);
+        this.refreshRecordings();
+    }
+
+    /**
+     * Set the pinned status for a saved pose recording.
+     *
+     * Args:
+     *     name: The name of the recording.
+     *     pinned: True to pin the recording, False to unpin.
+     *
+     * Returns:
+     *     None.
+     */
+    public pinRecording(name: string, pinned: boolean): void {
+        const currentPins = this.storageHandler.getPinnedRecordingNames();
+        let nextPins: string[];
+        if (pinned) {
+            nextPins = currentPins.includes(name)
+                ? currentPins
+                : [name, ...currentPins];
+        } else {
+            nextPins = currentPins.filter((n) => n !== name);
+        }
+        this.storageHandler.setPinnedRecordingNames(nextPins);
+        this.refreshRecordings();
     }
 
     public pushPoseSnapshot(pose: RobotPose) {
