@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Start the robot side of web teleop.
 
-Bridges ROS 2 to the operator's browser over WebRTC. Run with ROS 2 sourced
-(start_robot_peer.sh does that); start_web_server_and_robot_peer.sh starts it
-under pm2.
+Bridges ROS 2 to the operator's browser over WebRTC. web_interface.launch.py
+runs it (and restarts it if it exits); to run it by hand, source ROS 2 first.
 """
 
 import sys

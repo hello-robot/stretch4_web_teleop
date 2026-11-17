@@ -61,7 +61,7 @@ done
 # Inherited by pm2-started Node processes (server.js voiceInteractionLogger),
 # so JSONL logs and audio-snippet clips land in this run's timestamped dir.
 export REDIRECT_LOGDIR
-REDIRECT_LOGFILE="${REDIRECT_LOGFILE:-$REDIRECT_LOGDIR/start_web_server_and_robot_peer.txt}"
+REDIRECT_LOGFILE="${REDIRECT_LOGFILE:-$REDIRECT_LOGDIR/start_web_server.txt}"
 mkdir -p "$(dirname "$REDIRECT_LOGFILE")"
 echo "Arguments:" &>>$REDIRECT_LOGFILE
 echo "-l $REDIRECT_LOGDIR" &>>$REDIRECT_LOGFILE
@@ -213,8 +213,6 @@ fi
 echo "Start local server..."
 cd "$REPO_DIR" && pm2 start -s --update-env server.js &>>$REDIRECT_LOGFILE
 
-# The robot peer bridges ROS 2 to the operator over WebRTC (Python: rclpy +
-# aiortc). The kill timeout gives it time to stop the robot and release its
-# Firebase seat on SIGINT.
-echo "Start robot peer..."
-cd "$REPO_DIR" && pm2 start -s --update-env start_robot_peer.sh --name start_robot_peer --interpreter bash --kill-timeout 5000 &>>$REDIRECT_LOGFILE
+# The robot peer (start_robot_peer.py) is not started here: it is a ROS 2 node,
+# run and restarted by web_interface.launch.py, and joins server.js's room
+# once the server is up.

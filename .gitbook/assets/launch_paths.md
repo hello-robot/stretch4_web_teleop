@@ -77,7 +77,7 @@ flowchart TD
 
         subgraph ROS2["start_ros2.sh"]
             stop["<b>stop_interface.sh</b><br/>Tears down any previous stack"]
-            ros["<b>rmw_zenohd</b> router &amp; <b><code>web_interface.launch.py</code></b><br/>Verifies <code>pgrep -x rmw_zenohd</code>, then scans the launch log"]
+            ros["<b>rmw_zenohd</b> router &amp; <b><code>web_interface.launch.py</code></b> (drivers, cameras, and the respawning robot peer <code>start_robot_peer.py</code>)<br/>Verifies <code>pgrep -x rmw_zenohd</code>, then scans the launch log"]
         end
     end
 
@@ -85,14 +85,14 @@ flowchart TD
     manifest --> stop --> ros
 
     %% ================= 4. WEB SERVER & BUNDLES =================
-    subgraph WEB["4. Web Server &amp; Robot Peer (start_web_server_and_robot_peer.sh)"]
+    subgraph WEB["4. Web Server &amp; Bundles (start_web_server.sh)"]
         bld["<b>build_and_wait_bundles(HOSTING_MODE)</b><br/>Exports <code>HOSTING_MODE</code>, runs <code>clear_bundles()</code>, then builds:<br/>• <code>local</code>: <code>npm run localstorage</code> → <code>dist/</code><br/>• <code>firebase</code>: builds <code>dist/</code> + <code>dist-firebase/</code><br/>Verifies via <code>scripts/waitForBundles.js</code>"]
 
         bfail["<b>Bundle Build Failed</b><br/>Calls <code>stop_cloud_mode()</code>: <code>pm2 delete</code> &amp; <code>clear_bundles()</code>"]:::error
 
         subgraph PM2["Start PM2 Services (--update-env, Branches by HOSTING_MODE)"]
-            pm2_loc["<b>PM2: Local Mode (<code>HOSTING_MODE=local</code>)</b><br/>• <code>pm2 start -s --update-env server.js</code><br/>• <code>pm2 start -s --update-env start_robot_peer.sh</code> (robot peer: <code>LocalSignaling</code>)"]:::success
-            pm2_fire["<b>PM2: Firebase Mode (<code>HOSTING_MODE=firebase</code>)</b><br/>• <code>start_hosting_autodeploy()</code>: if <code>WEB_TELEOP_AUTODEPLOY!=0</code>,<br/>runs <code>pm2 start -s --update-env scripts/firebase_hosting_autodeploy.js</code><br/>• <code>pm2 start -s --update-env server.js</code><br/>• <code>pm2 start -s --update-env start_robot_peer.sh</code> (robot peer: <code>TeleopSignalingCoordinator</code>)"]:::success
+            pm2_loc["<b>PM2: Local Mode (<code>HOSTING_MODE=local</code>)</b><br/>• <code>pm2 start -s --update-env server.js</code>"]:::success
+            pm2_fire["<b>PM2: Firebase Mode (<code>HOSTING_MODE=firebase</code>)</b><br/>• <code>start_hosting_autodeploy()</code>: if <code>WEB_TELEOP_AUTODEPLOY!=0</code>,<br/>runs <code>pm2 start -s --update-env scripts/firebase_hosting_autodeploy.js</code><br/>• <code>pm2 start -s --update-env server.js</code>"]:::success
         end
     end
 

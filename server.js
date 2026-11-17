@@ -122,7 +122,7 @@ function endOperatorClipSession() {
 
 // "Is the cloud door open" is read from the canonical HOSTING_MODE ("local" or
 // "firebase"), shared across launch_interface.sh,
-// start_web_server_and_robot_peer.sh, and start_robot_peer.py.
+// start_web_server.sh, and start_robot_peer.py.
 const HOSTING_MODE = process.env.HOSTING_MODE || "local";
 const localDistDir = path.join(__dirname, "dist");
 const firebaseDistDir = path.join(__dirname, "dist-firebase");

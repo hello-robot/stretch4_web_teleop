@@ -177,7 +177,7 @@ function taggedSink(tag) {
 const LOG_TAGS = {
     'web_interface_launch.txt': 'ros',
     'rmw_zenohd.txt': 'zenoh',
-    'start_web_server_and_robot_peer.txt': 'web',
+    'start_web_server.txt': 'web',
 };
 
 const logTagFor = (name) => LOG_TAGS[name] || name.replace(/\.[^.]+$/, '');

@@ -11,8 +11,7 @@ ______________________________________________________________________
 ## Directory Layout
 
 ```
-start_robot_peer.sh             # pm2 entry: sources the ROS environment, execs the peer
-start_robot_peer.py             # Python entry point
+start_robot_peer.py             # entry point; web_interface.launch.py runs and respawns it
 stretch4_web_teleop_robot/
 ├── main.py                     # rclpy executor thread + asyncio loop, signals, shutdown
 ├── session.py                  # port of the robot page's index.tsx: forwarding + command dispatch

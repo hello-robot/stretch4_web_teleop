@@ -92,6 +92,10 @@ export FEATURE_LOCAL_COLLISION_AVOIDANCE
 FEATURE_EE_VELOCITY_LIMITER="$(node "$REPO_DIR/feature-flags.js" ee_velocity_limiter)" || exit 1
 export FEATURE_EE_VELOCITY_LIMITER
 
+# web_interface.launch.py runs the robot peer (start_robot_peer.py) from this
+# checkout, so it reads features.json and .env from the same place as server.js.
+export WEB_TELEOP_REPO_DIR="$REPO_DIR"
+
 LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
 echo "Start ROS2..."
 echo "ROS2 launch output: $LAUNCH_LOGFILE"

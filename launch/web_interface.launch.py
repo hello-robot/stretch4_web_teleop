@@ -418,4 +418,33 @@ def generate_launch_description():
     )
     ld.add_action(shutdown_robot_node)
 
+    ld.add_action(robot_peer_process())
+
     return ld
+
+
+def robot_peer_process() -> ExecuteProcess:
+    """The robot peer: bridges ROS 2 to the operator's browser over WebRTC.
+
+    Runs from the source checkout, like server.js, so editing it needs no
+    rebuild. The launch restarts it if it exits and, on shutdown, sends SIGINT
+    and waits long enough for it to stop the robot and release its signaling
+    seat. It reads HOSTING_MODE and the FEATURE_* flags from the environment
+    launch_interface.sh exports, and the Firebase settings from the repo's .env.
+    """
+    repo_dir = os.environ.get(
+        "WEB_TELEOP_REPO_DIR",
+        os.path.expanduser("~/ament_ws/src/stretch4_web_teleop"),
+    )
+    return ExecuteProcess(
+        name="robot_peer",
+        cmd=[
+            os.environ.get("WEB_TELEOP_PYTHON", "python3"),
+            os.path.join(repo_dir, "start_robot_peer.py"),
+        ],
+        cwd=repo_dir,
+        output="screen",
+        respawn=True,
+        respawn_delay=2.0,
+        sigterm_timeout="10",
+    )

@@ -24,6 +24,7 @@ import json
 import math
 import threading
 import time
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -204,41 +205,26 @@ class MockDriver(Node):
         self.create_timer(1.0 / 30.0, self.publish_joints, callback_group=group)
         self.create_timer(1.0, self.publish_slow, callback_group=group)
 
-        self.create_subscription(
-            Twist,
-            "/teleop/cmd_vel",
-            lambda m: self.log_twist("/teleop/cmd_vel", m),
-            10,
-            callback_group=group,
-        )
-        self.create_subscription(
-            Twist,
-            "/cmd_vel",
-            lambda m: self.log_twist("/cmd_vel", m),
-            10,
-            callback_group=group,
-        )
-        self.create_subscription(
-            Twist,
-            "/ee_cmd_vel",
-            lambda m: self.log_twist("/ee_cmd_vel", m),
-            10,
-            callback_group=group,
-        )
-        self.create_subscription(
-            JointJog,
-            "/teleop/joint_vel",
-            lambda m: self.log_jog("/teleop/joint_vel", m),
-            10,
-            callback_group=group,
-        )
-        self.create_subscription(
-            JointJog,
-            "/joint_vel",
-            lambda m: self.log_jog("/joint_vel", m),
-            10,
-            callback_group=group,
-        )
+        for topic in ("/teleop/cmd_vel", "/cmd_vel", "/ee_cmd_vel"):
+            self.create_subscription(
+                Twist, topic, self.twist_logger(topic), 10, callback_group=group
+            )
+        for topic in ("/teleop/joint_vel", "/joint_vel"):
+            self.create_subscription(
+                JointJog, topic, self.jog_logger(topic), 10, callback_group=group
+            )
+
+    def twist_logger(self, topic: str) -> Callable[[Twist], None]:
+        def log(msg: Twist) -> None:
+            self.log_twist(topic, msg)
+
+        return log
+
+    def jog_logger(self, topic: str) -> Callable[[JointJog], None]:
+        def log(msg: JointJog) -> None:
+            self.log_jog(topic, msg)
+
+        return log
 
     def service_logger(self, name: str, handler):
         def call(request, response):
@@ -338,7 +324,7 @@ def main() -> None:
 
     rclpy.init(args=ros_args)
     probe = ProbeLog(args.probe_log)
-    nodes = [
+    nodes: list[Node] = [
         MockDriver(probe, args.fps),
         ParamNode(
             "configure_video_streams_gripper",

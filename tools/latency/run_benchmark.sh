@@ -43,6 +43,17 @@ python)
 	;;
 esac
 
+# The mock robot publishes driver topics and offers driver services. On a robot
+# with the real interface up it would mix into the live ROS graph, and the
+# operator harness would talk to the live server.js. Refuse rather than do that.
+if pgrep -u "$USER" -f "web_interface.launch.py|start_robot_browser.js|start_robot_peer.py" >/dev/null ||
+	ss -ltn 2>/dev/null | grep -qE ':(80|443|9090)\s'; then
+	echo "A teleop stack (or something on port 80/443/9090) is running. Stop it first (./stop_interface.sh)." >&2
+	exit 1
+fi
+# Keep the mock and the peer in a ROS domain of their own all the same.
+export ROS_DOMAIN_ID="${BENCHMARK_ROS_DOMAIN_ID:-87}"
+
 # shellcheck disable=SC1091
 set -a && source "$REPO_DIR/.env" && set +a
 export HOSTING_MODE=local

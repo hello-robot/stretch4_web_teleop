@@ -51,7 +51,7 @@ async def run(node: Node, args) -> int:
         if not task.cancelled() and task.exception() is not None:
             log.error("Robot peer failed to start", exc_info=task.exception())
             failed = True
-            stop.set()  # exit non-zero so pm2 restarts us
+            stop.set()  # exit non-zero; the ROS launch respawns us
 
     start.add_done_callback(started)
 
