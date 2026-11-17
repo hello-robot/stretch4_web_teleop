@@ -4,9 +4,9 @@ import { SimpleCameraView } from "./SimpleCameraView";
 import { CameraViewId } from "../utils/component_definitions";
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
-import FlightIcon from '@mui/icons-material/Flight';
 import IconExpand from "operator/icons/IconExpand.svg";
 import IconCollapse from "operator/icons/IconCollapse.svg";
+import IconFlyingGripper from "operator/icons/IconFlyingGripper.png";
 
 import "../../css/GripperCamPIP.css";
 
@@ -66,11 +66,13 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
                         className="gripper-cam-frame"
                         style={{ borderRadius: FRAME_BORDER_RADIUS_PX }}
                     >
-                        <SimpleCameraView
-                            id={cameraID}
-                            remoteStreams={remoteStreams}
-                            isCameraVeilVisible={isCameraVeilVisible}
-                        />
+                        <div className="gripper-cam-frame-clip">
+                            <SimpleCameraView
+                                id={cameraID}
+                                remoteStreams={remoteStreams}
+                                isCameraVeilVisible={isCameraVeilVisible}
+                            />
+                        </div>
                     </motion.div>
                 </div>
             </div>
@@ -108,7 +110,7 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
                     disabled={!canEnterFlyingGripper}
                     aria-label="Open flying gripper"
                 >
-                    <FlightIcon />
+                    <img src={IconFlyingGripper} />
                 </button>
 
             </div>
