@@ -23,7 +23,10 @@
     * > 131px is the fixed height of the footer *        *
     ******************************************************/
     width: var(--main-video-width);
-    height: calc((var(--main-video-width) * var(--large-ratio)) + var(--gripper-cam-pip-top));
+    height: calc(
+        (var(--main-video-width) * var(--large-ratio)) +
+            var(--gripper-cam-pip-top)
+    );
     border-radius: var(--border-radius);
     translate: -50% 0;
     transform: translate(0%, 0);
@@ -111,7 +114,10 @@
     aspect-ratio: auto;
 }
 
-.gripper-cam-pip-wrapper .simple-video-container .simple-video-area video.simple-video-canvas {
+.gripper-cam-pip-wrapper
+    .simple-video-container
+    .simple-video-area
+    video.simple-video-canvas {
     margin-top: 0px !important;
     width: 100%;
     height: 100%;
@@ -146,7 +152,9 @@
     transform: translate(calc(-290%), 0%);
 }
 
-.gripper-cam-pip-wrapper .button-grippercampip-wrapper .button-grippercampip-toggle {
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-toggle {
     position: absolute;
     top: 0px;
     right: 0px;
@@ -159,17 +167,26 @@
     border-radius: var(--border-radius);
     border: none;
     cursor: pointer;
-    transform: translate(calc(-100% + (50px - 10px - var(--gripper-cam-ring))), 0%);
+    transform: translate(
+        calc(-100% + (50px - 10px - var(--gripper-cam-ring))),
+        0%
+    );
     transition: transform 300ms ease-out;
     box-shadow: none;
 }
 
-.gripper-cam-pip-wrapper.hidden .button-grippercampip-wrapper .button-grippercampip-toggle {
+.gripper-cam-pip-wrapper.hidden
+    .button-grippercampip-wrapper
+    .button-grippercampip-toggle {
     transform: translate(0, 0);
 }
 
-.gripper-cam-pip-wrapper .button-grippercampip-wrapper .button-grippercampip-size-toggle,
-.gripper-cam-pip-wrapper .button-grippercampip-wrapper .button-grippercampip-flying {
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-size-toggle,
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
     position: absolute;
     top: calc(50px + calc(var(--gripper-cam-pip-top) / 2));
     right: 0px;
@@ -182,7 +199,10 @@
     border-radius: var(--border-radius);
     border: none;
     cursor: pointer;
-    transform: translate(calc(-100% + (50px - 10px - var(--gripper-cam-ring))), 0%);
+    transform: translate(
+        calc(-100% + (50px - 10px - var(--gripper-cam-ring))),
+        0%
+    );
     transition: transform 300ms ease-out;
     box-shadow: none;
     opacity: 1;
@@ -190,12 +210,18 @@
 }
 
 /* Same gap as the size toggle sits below the hide toggle. */
-.gripper-cam-pip-wrapper .button-grippercampip-wrapper .button-grippercampip-flying {
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
     top: calc(2 * (50px + var(--gripper-cam-pip-top) / 2));
 }
 
-.gripper-cam-pip-wrapper.hidden .button-grippercampip-wrapper .button-grippercampip-size-toggle,
-.gripper-cam-pip-wrapper.hidden .button-grippercampip-wrapper .button-grippercampip-flying {
+.gripper-cam-pip-wrapper.hidden
+    .button-grippercampip-wrapper
+    .button-grippercampip-size-toggle,
+.gripper-cam-pip-wrapper.hidden
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
     transform: translate(0, 0);
     opacity: 0;
 }
