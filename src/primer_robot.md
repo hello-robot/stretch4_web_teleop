@@ -28,13 +28,15 @@ This file is the module entry. It wires together the three main subsystems — `
 ### Startup Sequence
 
 1. **Instantiates `Robot`** with a set of forwarding callbacks (one per ROS2 data stream). Each callback calls `connection.sendData()` to forward the data to the operator browser over WebRTC.
-1. **Instantiates `WebRTCConnection`** as the robot peer.
+1. **Instantiates `WebRTCConnection`** as the robot peer (`createSignaler({ role: "robot" })` selects `LocalSignaling` in `local` mode or `TeleopSignalingCoordinator` joining both `socket.io` and Firebase Realtime Database `rooms/<robotUid>` in `firebase` mode).
 1. **Instantiates media streams**: `navigationStream`, `gripperStream` (both `VideoStream`), and `audioStream` (`AudioStream`).
 1. **Sets `onRosConnectCallback`** — once ROS is ready, this callback:
    - Subscribes to the camera topics and starts the video streams.
    - Fetches the occupancy grid map (if there is one).
-   - Logs into the signaling server and joins the robot room, then waits for an operator.
+   - Logs into the signaling server (in `firebase` mode, using credentials injected into `window.__STRETCH_ROBOT_FIREBASE_AUTH__` by the loopback Playwright launcher) and joins the robot room, then waits for an operator.
 1. **Calls `robot.connect()`** to initiate the rosbridge WebSocket connection.
+
+> _**NOTE:**_ `src/pages/robot/` always runs locally onboard the robot and is omitted from Firebase Hosting `/r/<tag>/` rail builds. In `firebase` mode, the git tag checked out on the robot (`robots/<fleetId>/build`) determines which `/r/<tag>/operator/` bundle a cloud operator loads so the operator and robot WebRTC message schemas match (see [`primer_rails.md`](primer_rails.md)).
 
 ### Session Lifecycle (`handleSessionStart`)
 
