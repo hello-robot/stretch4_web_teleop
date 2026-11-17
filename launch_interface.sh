@@ -336,6 +336,11 @@ ros_status=${PIPESTATUS[0]}
 if [ "$ros_status" -eq 2 ]; then
 	ROS_LAUNCH_WARNINGS=1
 elif [ "$ros_status" -ne 0 ]; then
+	# Stop here: starting the web server on top of a broken ROS stack is what
+	# leaves the operator page spinning with a "DONE" banner above it.
+	echo ""
+	echo "ROS2 did not come up; not starting the web server."
+	echo "Whatever did start is still running. Run ./stop_interface.sh to tear it down."
 	echo_failure_help "$logdir"
 fi
 

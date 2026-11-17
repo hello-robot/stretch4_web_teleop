@@ -87,6 +87,12 @@ SINGLETON_SKIPPED = re.compile(r'\[launch singleton\] (.*)')
 DIFFERENT_ARGUMENTS = 'started with different arguments'
 # How long to keep watching after the first process dies, to catch the ones that go with it.
 DEATH_GRACE_SEC = 3.0
+# Lines of a dead node's own output to show; its traceback is at the end.
+DIED_NODE_TAIL_LINES = 15
+# The most common cause of a missing executable or package: source pulled or
+# edited without rebuilding the workspace, so install/ lacks it.
+OUT_OF_DATE_INSTALL = re.compile(r"not found on the libexec directory|[Pp]ackage '[^']+' not found")
+NOT_FOUND_PACKAGE = re.compile(r"[Pp]ackage '([^']+)' not found|install/([^/]+)/lib")
 
 
 def launch_is_running(pattern: str) -> bool:
@@ -123,6 +129,29 @@ def required_nodes(with_map: bool) -> dict:
     return nodes
 
 
+def died_node_output(log: list, tag: str) -> list:
+    """The last lines a process wrote. ros2 launch prefixes a process's output with [<tag>]."""
+    prefix = f'[{tag}] '
+    return [line for line in log if line.startswith(prefix)][-DIED_NODE_TAIL_LINES:]
+
+
+def rebuild_hint(error_lines: list) -> str:
+    text = '\n'.join(error_lines)
+    if not OUT_OF_DATE_INSTALL.search(text):
+        return ''
+    m = NOT_FOUND_PACKAGE.search(text)
+    package = (m.group(1) or m.group(2)) if m else ''
+    return ('The installed workspace looks out of date with the source. Rebuild it:\n'
+            f"    cd ~/ament_ws && colcon build{' --packages-select ' + package if package else ''}")
+
+
+def env_seconds(name: str, default: float) -> float:
+    try:
+        return float(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+
+
 def message_type(dotted: str):
     module, name = dotted.rsplit('.', 1)
     return getattr(__import__(module, fromlist=[name]), name)
@@ -134,9 +163,11 @@ def main() -> int:
     parser.add_argument('--map', action='store_true', help='a map was given, so navigation should be up')
     parser.add_argument('--launch-pattern', default='web_interface.launch.py',
                         help='command line text that identifies the launch process')
-    parser.add_argument('--timeout', type=float, default=60.0, help='seconds to wait for everything to come up')
-    parser.add_argument('--settle', type=float, default=5.0,
-                        help='seconds to keep watching once everything is up, for anything that dies right away')
+    parser.add_argument('--timeout', type=float, default=env_seconds('WEB_TELEOP_ROS_TIMEOUT_SECONDS', 60.0),
+                        help='seconds to wait for everything to come up (env: WEB_TELEOP_ROS_TIMEOUT_SECONDS)')
+    parser.add_argument('--settle', type=float, default=env_seconds('WEB_TELEOP_ROS_SETTLE_SECONDS', 5.0),
+                        help='seconds to keep watching once everything is up, for anything that dies right away '
+                             '(env: WEB_TELEOP_ROS_SETTLE_SECONDS)')
     args = parser.parse_args()
 
     import rclpy
@@ -228,14 +259,21 @@ def main() -> int:
         failed = True
         print('')
         print(f'{RED}ERROR:{NC} ros2 launch exited. Last lines of {args.log}:')
-        for line in log[-15:]:
-            print(f'  {line}')
+        for line in log[-25:]:
+            print(f'    {line}')
     if deaths:
         failed = True
         print('')
         print(f'{RED}ERROR:{NC} These processes died:')
         for proc, code in deaths.items():
             print(f'  {proc} (exit code {code})')
+        for proc in deaths:
+            output = died_node_output(log, proc)
+            if output:
+                print('')
+                print(f'{BLUE}Last output from {proc}:{NC}')
+                for line in output:
+                    print(f'    {line}')
     if reused_mismatched:
         failed = True
         print('')
@@ -263,6 +301,11 @@ def main() -> int:
             print(f'  {line}')
         if len(other_errors) > 20:
             print(f'  ...and {len(other_errors) - 20} more.')
+
+    hint = rebuild_hint([line for line in log if 'ERROR' in line])
+    if hint:
+        print('')
+        print(f'{BLUE}Hint:{NC} {hint}')
 
     print(f'Full launch output: {args.log}')
     if failed:
