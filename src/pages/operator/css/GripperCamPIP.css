@@ -61,7 +61,6 @@
     aspect-ratio: 1 / 1;
     overflow: hidden;
     outline: 2px solid hsla(0, 0%, 0%, 0.1);
-    cursor: pointer;
     touch-action: none;
 }
 
@@ -73,7 +72,6 @@
     width: var(--gripper-cam-hero-width);
     right: calc((100% - var(--gripper-cam-hero-width)) / 2);
     outline: 2px solid hsla(0, 0%, 100%, 0.12);
-    cursor: default;
 }
 
 .gripper-cam-pip-wrapper .simple-video-container {
@@ -160,7 +158,10 @@
 
 .gripper-cam-pip-wrapper
     .button-grippercampip-wrapper
-    .button-grippercampip-size-toggle {
+    .button-grippercampip-size-toggle,
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
     position: absolute;
     top: calc(50px + calc(var(--gripper-cam-pip-top) / 2));
     right: 0px;
@@ -181,9 +182,19 @@
     transition: opacity 300ms ease-out;
 }
 
+/* Same gap as the size toggle sits below the hide toggle. */
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
+    top: calc(2 * (50px + var(--gripper-cam-pip-top) / 2));
+}
+
 .gripper-cam-pip-wrapper.hidden
     .button-grippercampip-wrapper
-    .button-grippercampip-size-toggle {
+    .button-grippercampip-size-toggle,
+.gripper-cam-pip-wrapper.hidden
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
     transform: translate(0, 0);
     opacity: 0;
 }
