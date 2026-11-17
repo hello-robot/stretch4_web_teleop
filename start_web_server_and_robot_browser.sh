@@ -217,3 +217,31 @@ cd "$REPO_DIR" && pm2 start -s --update-env server.js &>>$REDIRECT_LOGFILE
 
 echo "Start robot browser..."
 cd "$REPO_DIR" && pm2 start -s --update-env start_robot_browser.js &>>$REDIRECT_LOGFILE
+
+# pm2 start returns once the process is spawned, and pm2 restarts an app that
+# crashes, so a crash shows only as a status other than online or a restart.
+# Give both a few seconds to fail, then look.
+echo "Check web server and robot browser..."
+sleep 8
+if ! pm2 jlist 2>>$REDIRECT_LOGFILE | node -e '
+	const text = require("fs").readFileSync(0, "utf8");
+	let apps = [];
+	try { apps = JSON.parse(text.slice(text.indexOf("["))); } catch (e) {}
+	const labels = { server: "Web server", start_robot_browser: "Robot browser" };
+	let ok = true;
+	for (const [name, label] of Object.entries(labels)) {
+		const app = apps.find((a) => a.name === name);
+		const status = app ? app.pm2_env.status : "not started";
+		const restarts = app ? app.pm2_env.restart_time : 0;
+		if (status === "online" && restarts === 0) {
+			console.log(`  \x1b[0;32mOK\x1b[0m       ${label} (pm2: ${name})`);
+		} else {
+			ok = false;
+			const why = restarts > 0 ? `${status}, crashed and restarted ${restarts}x` : status;
+			console.log(`  \x1b[0;31mFAILED\x1b[0m   ${label} (pm2: ${name}): ${why}. See: pm2 logs ${name}`);
+		}
+	}
+	process.exit(ok ? 0 : 1);
+'; then
+	exit 1
+fi
