@@ -105,7 +105,7 @@ flowchart TD
     subgraph DOORS["5. Operator Doors &amp; server.js Route Mounts"]
         d_lan["<b>LAN Door: <code>https://&lt;host&gt;/local/operator/</code></b><br/>• Mounts <code>/local/</code> → <code>dist/</code> (<code>local</code> also mounts <code>/</code> → <code>dist/</code>)<br/>• <code>LocalSignaling</code> (socket.io)<br/>• Served in <b>both</b> modes (<code>local</code> redirects <code>/operator/</code> → <b>302</b> → <code>/local/operator/</code>)"]:::success
         d_cloud["<b>Robot Cloud Door: <code>https://&lt;host&gt;/operator/</code></b><br/>• Mounts <code>/</code> → <code>dist-firebase/</code><br/>• <code>FirebaseSignaling</code><br/>• Served in <b>firebase</b> mode"]:::success
-        d_host["<b>Hosted Cloud Door: <code>https://&lt;project-id&gt;.web.app/operator</code></b><br/>• Served from Firebase Hosting<br/>• <b>firebase</b> mode only"]:::success
+        d_host["<b>Hosted Cloud Door: <code>https://&lt;project-id&gt;.web.app/</code></b><br/>• Lobby routes cards to <code>/r/&lt;tag&gt;/operator/?robot=&lt;id&gt;</code> (live) or <code>/operator/</code> (preview/fallback)<br/>• Served from Firebase Hosting (<b>firebase</b> mode only)"]:::success
     end
 
     pm2_loc --> d_lan
