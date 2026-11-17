@@ -418,12 +418,16 @@ A deploy that leaves the lobby in place prints `lobby  unchanged (carried from t
 publishes nothing outside `/r/`. The one exception is a Firebase project with no live release at all,
 which has no lobby to keep, so its first deploy builds one from whichever tag is deployed.
 
-To cut and publish a release, add the new tag to `release.json` **before** tagging (the file is read
-from the tagged commit), confirm `git status --porcelain` is empty (untracked files count as dirty), and
-pass `--origin` so a dirty or non-tag checkout aborts instead of falling back to a preview channel:
+To cut and publish a release, bump `package.json` and `package-lock.json` (plus `<version>X.Y.Z</version>`
+in `package.xml` when `X.Y.Z` changes) and add the new tag to `release.json` **before** tagging (the files
+are read from the tagged commit), confirm `git status --porcelain` is empty (untracked files count as
+dirty), and pass `--origin` so a dirty or non-tag checkout aborts instead of falling back to a preview
+channel:
 
 ```bash
-git add release.json && git commit -m "retain <tag>" && git push
+npm version <tag> --no-git-tag-version
+git add release.json package.json package-lock.json package.xml
+git commit -m "Release <tag>" && git push
 git tag -a <tag> -m "Release <tag>" && git push origin <tag>
 git checkout <tag>
 git status --porcelain   # must print nothing
