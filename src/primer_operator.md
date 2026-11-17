@@ -2,7 +2,7 @@
 
 The **operator page** is the browser-based UI through which a user teleoperates the Stretch 4 robot. It connects to the robot browser over WebRTC, receives sensor/camera data, and sends movement commands back.
 
-> For a worked example of adding a brand-new feature end-to-end (the "Home the Robot" button), see [`documentation/development.md`](../../../../documentation/development.md).
+> For a step-by-step checklist of adding a new capability end to end, see [How to Add a New Feature (Summary)](#how-to-add-a-new-feature-summary) below and [`primer_robot.md`](primer_robot.md#how-to-add-a-new-robot-capability-summary).
 
 ______________________________________________________________________
 
@@ -29,7 +29,7 @@ ______________________________________________________________________
 
 ## Shared Layer (`src/shared/`)
 
-Before describing the operator page itself, it helps to understand the shared layer it builds on. These four files define the common language between the two browser peers.
+Before describing the operator page itself, it helps to understand the shared layer it builds on. These modules define the common language and signaling transport between the two browser peers. Under multi-rail Firebase Hosting, WebRTC data-channel schemas (`commands.tsx`, `remoterobot.tsx`, `util.tsx`) are paired per release tag via `/r/<tag>/operator/`, whereas Realtime Database signaling rooms (`signaling/`) are governed by one shared live `database.rules.json` across all active rails (see [`primer_rails.md`](primer_rails.md)).
 
 ### `commands.tsx`
 
@@ -83,6 +83,10 @@ You generally do not need to edit this file unless adding a new WebRTC message t
 *Note: You should never touch this file!*
 
 This file contains the code used for establishing a peer connection between the operator and robot browser and setting up data channels such that they can communicate.
+
+### `signaling/`
+
+Selects and manages the WebRTC SDP/ICE signaling transport (`get_signaler.ts`): `LocalSignaling` over `socket.io` for `/local/operator/`, `FirebaseSignaling` over Realtime Database `rooms/<robotUid>` (with operator seat leases in `operatorSeat.ts`) for cloud operator bundles, and `TeleopSignalingCoordinator` on the robot page in `firebase` mode to listen on both transports simultaneously.
 
 ______________________________________________________________________
 
@@ -247,12 +251,12 @@ ______________________________________________________________________
 
 ## Storage Handler (`tsx/storage_handler/`)
 
-Persists the operator's layout and recordings across sessions. Two backends:
+Persists the operator's layout, map poses, and movement recordings across sessions. Two backends:
 
-- **`LocalStorageHandler`** — uses browser `localStorage`; default for on-robot use.
-- **`FirebaseStorageHandler`** — syncs to Firestore; used when `process.env.storage === "firebase"`.
+- **`LocalStorageHandler`** — uses browser `localStorage`; used when `process.env.storage === "localstorage"`.
+- **`FirebaseStorageHandler`** — syncs to **Firebase Realtime Database** under `operators/<alias || uid>`; used when `process.env.storage === "firebase"`.
 
-Both implement the common `StorageHandler` interface.
+Both implement the common `StorageHandler` interface. Because all deployed release rails (`/r/<tag>/operator/`) read and write the same `operators/<identity>` node in Realtime Database, schema changes to persisted layouts, map poses, or recordings must remain backward-compatible with older rails still listed in `release.json` (see [`primer_rails.md`](primer_rails.md)).
 
 ______________________________________________________________________
 
@@ -323,6 +327,8 @@ ______________________________________________________________________
 1. **`operator/tsx/index.tsx`** — instantiate the new provider and wire up any WebRTC message callbacks.
 1. **Component** — define the `enum MyFunction` and render a component that calls `myFunctionProvider.provideFunctions(...)`.
 
+> _**NOTE:**_ While developing a new `cmd` on a branch or dirty working tree, test via `/local/operator/`, `https://<robot-ip>/operator/`, or a preview channel (`./launch_interface.sh -f` `branch-*` or `npm run deploy:hosting -- --preview` `rails-*`). On the live Firebase Hosting site, cards for unreleased checkouts route to the nearest ancestor `<tag>` rail (`/r/<tag>/operator/`), which will not yet contain your new command (see [`primer_rails.md`](primer_rails.md)).
+
 ______________________________________________________________________
 
 ## Key Design Decisions
@@ -332,3 +338,5 @@ ______________________________________________________________________
 **Action modes are global, not per-component.** `FunctionProvider.actionMode` is a static field. All button pads share the same mode.
 
 **The operator does not talk to ROS directly.** All ROS communication goes through the robot browser (`robot/tsx/robot.tsx` ↔ ROSLib ↔ rosbridge). The operator only speaks to the robot browser through `remoterobot.tsx` and WebRTC.
+
+**The operator bundle runs under three `publicPath` prefixes (`/local/`, `/`, and `/r/<tag>/`).** Always import static assets (icons, fonts, media) through webpack or use `./` relative URLs; root-absolute paths such as `/operator/...` fail when served from `/local/operator/` or `/r/<tag>/operator/`.

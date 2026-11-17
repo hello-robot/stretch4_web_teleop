@@ -1,13 +1,13 @@
-# Firebase Storage Handler
+# Firebase Setup and Multi-Rail Hosting
 
 Firebase is a set of application development platforms and backend cloud computing services. This
 project uses three of them:
 
-| Service               | What it is used for                                                       |
-| --------------------- | ------------------------------------------------------------------------- |
-| **Hosting**           | Serves the dashboard and operator pages at `https://<project-id>.web.app` |
-| **Authentication**    | Sign-in for human operators and for each robot's own machine account       |
-| **Realtime Database** | Fleet state, robot ownership, launch requests, and WebRTC signaling        |
+| Service               | What it is used for                                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Hosting**           | Serves the fleet lobby (`/`), versioned release rails (`/r/<tag>/operator/`), and preview channels at `https://<project-id>.web.app` |
+| **Authentication**    | Sign-in for human operators and for each robot's own machine account                                                              |
+| **Realtime Database** | Fleet state, robot ownership, launch requests, WebRTC signaling, and per-operator settings, poses, and recordings                 |
 
 Setting up your own Firebase project will allow you to host a dashboard and grant users permission
 to launch and access the web interface without a direct robot connection.
@@ -18,7 +18,7 @@ is likely more than sufficient for your project.
 
 - [Set-up](#set-up)
 - [Adding a map](#adding-a-map)
-- [Adding more users](#adding-more-users)
+- [Managing users and robots](#managing-users-and-robots)
 - [Database layout](#database-layout)
 - [Security rules](#security-rules)
 - [Releases and rails](#releases-and-rails)
@@ -32,17 +32,23 @@ is likely more than sufficient for your project.
 If you do not have a checkout of this repository yet, clone it with
 `git clone https://github.com/hello-robot/stretch4_web_teleop.git`.
 
-The live site deploys from a clean checkout of a release tag listed in
-[`release.json`](../../../../../release.json) (see [Releases and rails](#releases-and-rails)). Fetch
-tags and check out a listed release tag:
+The live site deploys from a clean checkout of a `v*` release tag listed in
+[`release.json`](../../../../../release.json) (see [Releases and rails](#releases-and-rails)):
 
 ```bash
 git fetch --tags
 git checkout <tag>
 ```
 
-If you are setting up a brand-new fork where that tag does not exist yet, create it first with
-`git tag -a <tag> -m "Release <tag>" && git checkout <tag>`.
+Every *other* tag listed in `release.json` must already exist either on your live site or in local
+`.rails-cache/<tag>/` when Step 7 runs. On a brand-new Firebase project:
+
+- For retained tags at `v0.2.0` or newer, build each older tag locally first with
+  `git checkout <older-tag> && npm run deploy:hosting -- --rail-only` before checking out `<tag>`.
+- If you are setting up a brand-new fork or project that does not run historical pre-rail `v0.1.0`
+  robots (which predate `--rail-only`), edit `release.json` on your fork to list only the tags you
+  deploy (for example `{ "rails": ["v0.2.0"] }`), commit, create an annotated `v*` tag with
+  `git tag -a <tag> -m "Release <tag>"`, and check out `<tag>`.
 
 ### Step 2: Create a Firebase project
 
@@ -98,18 +104,21 @@ you deploy or onboard a robot (or manually with `node scripts/syncFirebaseRc.js`
 
 ### Step 7: Deploy the site
 
-Sign in with the Google account you created the project with in Step 2 and deploy the database rules
+Confirm the checkout is clean (`git status --porcelain` must print nothing, including untracked files),
+sign in with the Google account you created the project with in Step 2, and deploy the database rules
 and Hosting bundle:
 
 ```bash
+git status --porcelain   # must print nothing
 npm install --legacy-peer-deps
 npm run firebase:login
 npm run deploy:rules
-npm run deploy:hosting
+npm run deploy:hosting -- --origin https://YOUR_PROJECT_ID.web.app
 ```
 
 If you are running headless, use `./node_modules/.bin/firebase login --reauth --no-localhost` instead of
-`npm run firebase:login`.
+`npm run firebase:login`. You can verify the published lobby and rails at any time with
+`./scripts/rail_status.sh`.
 
 Your dashboard is now live at `https://YOUR_PROJECT_ID.web.app` 🎉
 
@@ -160,7 +169,10 @@ When prompted:
 1. Sign in to the Firebase CLI. Open the output URL and sign in with the Google account used to create the project.
 1. Enter the robot's `sudo` password to install the background service.
 
-The script is safe to re-run. When it finishes, the robot will appear on your dashboard.
+The script is safe to re-run. When it finishes, the robot will appear on your dashboard. On a fielded
+robot that will not publish branch preview channels via `./launch_interface.sh -f`, you can log out of
+the administrator Firebase CLI session afterwards with `./node_modules/.bin/firebase logout` — the
+background daemon authenticates with `ROBOT_USERNAME` and `ROBOT_PASSWORD` from `.env`, not the CLI.
 
 Pass `--email <address>` to skip the first prompt, and `--non-interactive` to fail rather than prompt at
 all — useful from a provisioning script, though it needs the Firebase CLI already logged in. On a host
@@ -172,8 +184,9 @@ Onboarding does not modify the git checkout. The daemon runs whatever commit is 
 working tree and publishes its git build description to `robots/<fleetId>/build` (and branch name to
 `robots/<fleetId>/branch`) so each robot's card shows what version it is running. Keep fielded robots
 checked out on a release tag listed in `release.json`; changing the version a robot runs is ordinary
-git work (`git fetch --tags`, `git checkout <tag>`, rebuild, relaunch) and needs no changes in Firebase
-or `.env`.
+git work (`git fetch --tags`, `git checkout <tag>`, rebuild, and `./firebase_console_config.sh --refresh`
+so the daemon immediately republishes `robots/<fleetId>/build`) and needs no changes in Firebase or
+`.env`.
 
 ### Step 11: Teleoperate
 
@@ -194,98 +207,86 @@ Maps are provisioned by an administrator. `maps/<mapId>` and `assignments/<ident
 `.write: false`, so no one can upload a map or grant themselves access from the dashboard.
 
 A map's id is the stem of its filename. A robot that has mapped its space with SLAM already has
-`~/stretch_user/maps/<mapId>.yaml` next to a `.pgm` of the same name.
+`~/stretch_user/maps/<mapId>.yaml` next to the `.pgm` referenced by its `image:` field.
 
 ### A map the robot already has
 
-This is the common case, and it needs no upload. Grant the person access by map id:
+This is the common case, and it needs no upload. Run the interactive permissions manager, select the
+operator, and check `<mapId>` (or enter `<mapId>` at the robot-local map prompt if it has not been
+granted before):
 
 ```bash
-./node_modules/.bin/firebase database:update "/assignments/<identity>/maps" --data '{"<mapId>":true}'
+npm run firebase:permissions -- --user
 ```
 
-`<identity>` is the Auth uid, or the alias if you set one. The map now appears under **Change map** on
-that robot's card, and the daemon loads the copy already on the robot's disk — it prefers a local file
-over anything in the database.
+This sets `assignments/<identity>/maps/<mapId>: true` (`<identity>` is the user's alias if set, else
+their Auth uid). The map now appears under **Change map** on that robot's card, and the daemon loads
+the copy already on the robot's disk — it prefers a local file over anything in the database.
 
 ### A map the robot does not have
 
-To push a map to a robot that has never seen it, the database record has to carry the map itself. Build
-it from the `.yaml` / `.pgm` pair, run from the directory holding them:
+To push a map to a robot that has never seen it, upload the `.yaml` and its `.pgm` with:
 
 ```bash
-node -e '
-const fs=require("fs"),path=require("path");
-const id=process.argv[1];
-const yaml=fs.readFileSync(id+".yaml","utf8");
-const pgm=(yaml.match(/^image:\s*(.+)$/m)||[])[1].trim();
-process.stdout.write(JSON.stringify({
-  name:id, yaml_content:yaml, pgm_filename:pgm,
-  pgm_base64:fs.readFileSync(pgm).toString("base64"),
-}));
-' <mapId> > map.json
+npm run firebase:upload-map -- <path/to/map.yaml>
 ```
 
-Then write it, grant the person, and grant the robot:
+Pass `--id <mapId>` to override the filename stem, or `--dry-run` to preview changes without uploading.
+The script reads the `.pgm` at the `image:` path declared in the YAML, prompts checkboxes for each
+operator and each robot that should have access, previews the Realtime Database diff, and writes
+`/maps/<mapId>`, `/assignments/<identity>/maps/<mapId>`, and `/assignments/<fleetId>/maps/<mapId>`
+in one atomic update.
 
-```bash
-./node_modules/.bin/firebase database:set "/maps/<mapId>" map.json
-```
+Checking the robot in that prompt is required whenever the map is not already on the robot's disk: a
+robot reads `maps/<mapId>` under its **fleet ID** (`assignments/<fleetId>/maps/<mapId>`), not its Auth
+uid, and without that grant the launch proceeds with no map.
 
-```bash
-./node_modules/.bin/firebase database:update "/assignments/<identity>/maps" --data '{"<mapId>":true}'
-```
-
-```bash
-./node_modules/.bin/firebase database:update "/assignments/<fleetId>/maps" --data '{"<mapId>":true}'
-```
-
-The third command is the one that is easy to miss. A robot reads `maps/<mapId>` under its **fleet ID**,
-not its Auth uid, so without it the robot cannot read the record and the launch proceeds with no map.
-Granting the fleet ID is unnecessary in the local-file case above, because the daemon never needs the
-record. Adding `<fleetId>: true` under the map's own `allowed_users` works equally well.
-
-`thumb_png_base64` is optional; set it to a small PNG of the map and the picker shows a thumbnail
-instead of a placeholder.
+`thumb_png_base64` on `/maps/<mapId>` is optional; set it to a small PNG of the map and the picker
+shows a thumbnail instead of a placeholder.
 
 ### Notes
 
 - A local file wins. If a robot already has `<mapId>.yaml` on disk, that copy is used and a later edit
-  to `maps/<mapId>` will not reach it. Give the revised map a new id, or delete the stale file from
+  to `maps/<mapId>` will not reach it. Give the revised map a new `--id`, or delete the stale file from
   `~/stretch_user/maps/` on the robot.
-- Revoke access the same way you revoke a robot:
-  ```bash
-  ./node_modules/.bin/firebase database:remove "/assignments/<identity>/maps/<mapId>"
-  ```
+- Revoke map access by unchecking the user or robot in `npm run firebase:permissions` (or when
+  re-running `npm run firebase:upload-map` for that map).
 - Map assignment controls what the dashboard offers, not what the robot can open. Anyone assigned to a
   robot can ask it to load any map file already on that robot's disk.
 
-## Adding more users
+## Managing users and robots
 
-1. Add the person as in [Step 8](#step-8-add-users), or have them sign in with Google.
-
-1. On each robot they should see, re-run the onboarding script and enter their email:
-
-   ```bash
-   ./onboard_firebase_robot.sh
-   ```
-
-Existing users keep their access.
-
-To grant, revoke, or alias access by hand, edit the `assignments` and `uids` paths described in
-[Database layout](#database-layout) from the console or the Firebase CLI. For example:
+Use the interactive permissions script from any machine logged into the Firebase CLI (`npm run firebase:login`):
 
 ```bash
-./node_modules/.bin/firebase database:update "/assignments/<authUid>/robots" --data '{"<fleetId>":true}'
+npm run firebase:permissions            # choose Users or Robots interactively
+npm run firebase:permissions -- --user  # jump straight to user permissions
+npm run firebase:permissions -- --robot # jump straight to robot permissions
 ```
 
+Pass `--dry-run` to preview the exact Realtime Database diff without writing.
+
+- **Users (`--user`)**: Select an existing operator or choose **+ Add new user** (which looks up the
+  email in Firebase Auth and offers to create an Email/Password account if none exists yet), optionally
+  set or migrate an alias (`uids/<authUid>`), and check or uncheck the robots and maps that user may
+  access.
+- **Robots (`--robot`)**: Select an existing robot or choose **+ Add new robot** (binding
+  `robots/<fleetId>/uid` and `assignments/<robotUid>`), then check or uncheck assigned operators,
+  assigned cloud maps, and per-robot feature flag overrides (`robots/<fleetId>/config/<flag>`), or
+  decommission the robot from Realtime Database.
+
+You can also grant an operator access to a robot directly from that robot's terminal by re-running
+`./onboard_firebase_robot.sh --email <address>`; existing users keep their access.
+
 > \[!IMPORTANT\]
-> Aliases are the easiest of these to get wrong. Once `uids/<authUid>` holds an alias, every
-> assignment is read from `assignments/<alias>` and `assignments/<authUid>` is ignored. Adding an
-> alias to an account that already has robots or maps means moving that assignment to the new key in
-> the same sitting; leaving it behind takes away everything that account could reach, with no error
-> anywhere. Write the new node first and delete the old one last, so an interruption leaves a
-> duplicate rather than an account pointing at nothing.
+> If you ever edit `uids` or `assignments` by hand instead of through `npm run firebase:permissions`,
+> keep aliases consistent across both paths. Once `uids/<authUid>` holds an alias, the dashboard UI
+> reads only `assignments/<alias>`, while `database.rules.json` still authorizes grants present under
+> either `assignments/<authUid>` or `assignments/<alias>`. Adding an alias without copying
+> `assignments/<authUid>` to `assignments/<alias>` hides every robot and map from that user's
+> dashboard with no error, while leaving `assignments/<authUid>` behind keeps stale security-rule
+> grants active after revoking under `assignments/<alias>`. `npm run firebase:permissions` updates
+> and cleans up both paths atomically.
 
 ### Why maps are assigned twice
 
@@ -399,12 +400,14 @@ stays available while the interface is running.
 [`release.json`](../../../../../release.json) lists the tags that stay published on the site:
 
 ```json
-{ "rails": ["v0.1.0-alpha1", "v0.1.0"] }
+{ "rails": ["v0.1.0", "v0.2.0"] }
 ```
 
 Every `npm run deploy:hosting` run builds the rail for the current checkout, carries forward the other
-rails listed in `release.json`, and removes any rail no longer in that list. What it does with the
-lobby and `/operator/` depends on the tag being deployed:
+rails listed in `release.json`, and removes any rail no longer in that list. Which release is **Latest**
+is queried from the GitHub repository pointed to by `git remote get-url origin` (set `GITHUB_TOKEN` in
+your environment if your fork is private). What the deploy does with the lobby and `/operator/` depends
+on the tag being deployed:
 
 | Tag being deployed | Lobby and `/operator/` | Rails |
 | :--- | :--- | :--- |
@@ -415,28 +418,45 @@ A deploy that leaves the lobby in place prints `lobby  unchanged (carried from t
 publishes nothing outside `/r/`. The one exception is a Firebase project with no live release at all,
 which has no lobby to keep, so its first deploy builds one from whichever tag is deployed.
 
-To cut and publish a release, add the new tag to `release.json` **before** tagging (the file is read
-from the tagged commit):
+To cut and publish a release, bump `package.json` and `package-lock.json` (plus `<version>X.Y.Z</version>`
+in `package.xml` when `X.Y.Z` changes) and add the new tag to `release.json` **before** tagging (the files
+are read from the tagged commit), confirm `git status --porcelain` is empty (untracked files count as
+dirty), and pass `--origin` so a dirty or non-tag checkout aborts instead of falling back to a preview
+channel:
 
 ```bash
-git add release.json && git commit -m "retain <tag>" && git push
+npm version <tag> --no-git-tag-version
+git add release.json package.json package-lock.json package.xml
+git commit -m "Release <tag>" && git push
 git tag -a <tag> -m "Release <tag>" && git push origin <tag>
 git checkout <tag>
-npm run deploy:hosting
+git status --porcelain   # must print nothing
+npm run deploy:hosting -- --origin https://YOUR_PROJECT_ID.web.app
 ```
 
 To make a release the one the lobby is built from, publish its GitHub release as **Latest** first and
-then run `npm run deploy:hosting` from its tag. Deploying before the GitHub release is published adds
-the rail and leaves the lobby alone; run the deploy again afterwards to update the lobby. A fix to the
-lobby itself therefore ships as a new **Latest** release.
+then run `npm run deploy:hosting -- --origin https://YOUR_PROJECT_ID.web.app` from its tag. Deploying
+before the GitHub release is published adds the rail and leaves the lobby alone; run the deploy again
+afterwards to update the lobby. A fix to the lobby itself therefore ships as a new **Latest** release.
 
 The default rail (used when a robot reports no release tag of its own) is that same **Latest** release,
 baked into the lobby when it is built. The lobby publishes what it was built from at `/lobby.json`
-(`tag`, `commit`, `stable`, `built`). A deploy that leaves the lobby in place reads that file and
-refuses to retire the rail the lobby defaults to.
+(`tag`, `commit`, `describe`, `stable`, `built`). A deploy that leaves the lobby in place reads that
+file and refuses to retire the rail the lobby defaults to.
 
 Rails are immutable on the live site: a deploy that would overwrite an existing `/r/<tag>/` from a
 different commit refuses rather than replacing it.
+
+To check which rails your live site currently serves against `release.json` and `/lobby.json`, run:
+
+```bash
+./scripts/rail_status.sh
+```
+
+If `release.json` retains an older `v0.2.0+` tag that is not yet on your live site (for example on a new
+Firebase project), populate the local `.rails-cache/<older-tag>/` directory first with
+`git checkout <older-tag> && npm run deploy:hosting -- --rail-only`, then check out the target tag and
+deploy.
 
 ## Day-to-day development
 
@@ -452,16 +472,18 @@ the local and the Firebase webpack watchers:
 ```
 
 - The no-login local operator stays at `https://<robot_ip>/local/operator/`.
-- The Firebase build is served at `https://<robot_ip>/operator/` and automatically published to a
-  preview channel (`branch-<branch>` or `local-branch-<branch>`) for the current checkout.
-- Saving a file rebuilds webpack and redeploys that preview channel automatically.
+- The Firebase build is served at `https://<robot_ip>/operator/` and, when the robot is checked out on a
+  branch, automatically published to a preview channel (`branch-<branch>` or `local-branch-<branch>`).
+  Preview autodeploy is skipped when checked out on a detached-`HEAD` release tag, or when
+  `WEB_TELEOP_AUTODEPLOY=0` is set in `.env`.
+- Saving a file rebuilds webpack and redeploys that branch preview channel automatically.
 
 Both URLs connect to the same robot browser and share one operator seat, so opening one blocks the
 other until teleoperation ends.
 
 Without `-f` (or `HOSTING_MODE=firebase`), `./launch_interface.sh` defaults to `local` only. Use
 `--local` (or `--hosting local`) to override a standing `HOSTING_MODE=firebase` for a single local-only
-run. See [Primer: Launching the Interface](../../../../primer_launch.md) for the full resolution rules.
+run.
 
 ### Testing rails and staging releases (`npm run deploy:hosting`)
 
@@ -471,8 +493,10 @@ Whereas `./launch_interface.sh -f` publishes a flat single-version build to `bra
 (`/operator/`) when `HEAD` is the **Latest** release (see [Releases and rails](#releases-and-rails)).
 A preview always builds its own lobby and `/operator/`.
 
-It needs one thing from you: **where to publish** — the live site (`https://YOUR_PROJECT_ID.web.app`)
-or a preview channel (`rails-<branch|tag>`).
+Pass `--origin https://YOUR_PROJECT_ID.web.app` when targeting the live site, or `--preview` when
+targeting a preview channel (`rails-<branch|tag>`). Without `--origin`, running `npm run deploy:hosting`
+from a branch or from a working tree with modified or untracked files automatically falls back to
+`--preview` rather than deploying live.
 
 The rail's name is never supplied by hand. It is read from git, and a live deploy requires `HEAD` to be
 a clean `v*` release tag listed in `release.json`. That is what makes a rail reproducible: the name it
@@ -480,7 +504,9 @@ is served under is the name you check out to rebuild it.
 
 | Goal | Checkout state | Command | Where it publishes |
 | :--- | :--- | :--- | :--- |
-| **Publish a release live** | Clean `v*` tag in `release.json` | `npm run deploy:hosting` | Live site (`YOUR_PROJECT_ID.web.app`), serving `/r/<tag>/operator/`; the lobby and `/operator/` change only if the tag is **Latest** |
+| **Publish a release live** | Clean `v*` tag in `release.json` | `npm run deploy:hosting -- --origin https://YOUR_PROJECT_ID.web.app` | Live site (`YOUR_PROJECT_ID.web.app`), serving `/r/<tag>/operator/`; the lobby and `/operator/` change only if the tag is **Latest** |
+| **Dry-run a live release** | Clean `v*` tag in `release.json` | `npm run deploy:hosting -- --dry-run --origin https://YOUR_PROJECT_ID.web.app` | Local `dist-firebase/` assembly and manifest checks only (nothing uploaded) |
+| **Cache an older rail locally** | Clean `v0.2.0+` tag | `npm run deploy:hosting -- --rail-only` | Local `.rails-cache/<tag>/` only (nothing uploaded) |
 | **Inspect a release before going live** | Clean `v*` tag | `npm run deploy:hosting -- --preview` | Preview channel `rails-<tag>`: the lobby and `/operator/`, which is that tag's interface |
 | **Test a branch or a dirty tree** | Any branch or uncommitted edits | `npm run deploy:hosting -- --preview` | Preview channel `rails-<branch>`: the lobby and `/operator/`, built from `HEAD` |
 
@@ -498,33 +524,47 @@ used by a robot's `./launch_interface.sh -f` autodeploy.
 
 For a production robot runtime, set `WEB_TELEOP_BUILD_MODE=production` in `.env`. Launch then creates
 one-shot bundles for whichever hosting mode you asked for, instead of starting webpack watchers.
-Publishing the live site stays an explicit, separate `npm run deploy:hosting` from a clean release
-tag.
+Publishing the live site stays an explicit, separate
+`npm run deploy:hosting -- --origin https://YOUR_PROJECT_ID.web.app` from a clean release tag.
 
 [`firebase_console_config.sh`](../../../../../firebase_console_config.sh) collects the common maintenance
 operations:
 
 ```bash
 ./firebase_console_config.sh --install   # create and start the background daemon service
-./firebase_console_config.sh --refresh   # clear PM2 processes and restart the daemon; resets status to standby (the card reads **Idle**)
-./firebase_console_config.sh --deploy    # build production assets and deploy hosting
+./firebase_console_config.sh --refresh   # clear PM2 processes, restart the daemon, republish build/branch, and reset status to standby (Idle)
+./firebase_console_config.sh --deploy    # delegate to npm run deploy:hosting
 ```
 
 ## Troubleshooting
 
-**`this checkout is not a release: …`**
-A live deploy builds `/r/<tag>/operator/` from `HEAD`, so `HEAD` must be a clean `v*` tag listed in
-`release.json`. Check one out, or publish this checkout to a preview channel instead with
-`npm run deploy:hosting -- --preview`.
+**`this checkout is not a release: …` (or a deploy unexpectedly publishes to a `rails-*` preview channel)**
+A live deploy builds `/r/<tag>/operator/` from `HEAD`, so `HEAD` must be an exact `v*` tag listed in
+`release.json` with an empty `git status --porcelain` (untracked files also mark the tree dirty). When
+`--origin` is omitted on a branch or dirty tree, `npm run deploy:hosting` falls back to `--preview`
+automatically; passing `--origin https://YOUR_PROJECT_ID.web.app` forces this error instead. Remove or
+move untracked files, check out a listed release tag, or pass `--preview` intentionally.
+
+**`retained, not assembled here, and not on the site: <tag>`**
+Every tag in `release.json` besides `HEAD` must already exist on your live site or in local
+`.rails-cache/<tag>/`. On a new Firebase project:
+
+- For retained tags at `v0.2.0` or newer, check out each older tag, run
+  `npm run deploy:hosting -- --rail-only` to build `.rails-cache/<tag>/`, then check out your target tag
+  and run `npm run deploy:hosting -- --origin https://YOUR_PROJECT_ID.web.app`.
+- If your self-hosted fork does not run historical pre-rail `v0.1.0` robots (which predate
+  `--rail-only`), update `release.json` on your fork to list only the tags you deploy (for example
+  `{ "rails": ["v0.2.0"] }`), commit, create an annotated `v*` tag, and deploy from that clean tag.
 
 **`the live lobby routes to <tag> by default, and release.json does not retain it`**
 The tag being deployed is not the **Latest** release, so the live lobby stays in place, and that lobby
-sends robots with no release of their own to `<tag>`. Add `<tag>` back to `release.json`, or deploy the
+sends robots with no release of its own to `<tag>`. Add `<tag>` back to `release.json`, or deploy the
 **Latest** release first so the lobby is rebuilt against it.
 
 **The lobby did not change after a deploy.**
-The deployed tag is not the GitHub release marked **Latest**. Publish it as **Latest** and run
-`npm run deploy:hosting` from the tag again.
+The deployed tag is not the GitHub release marked **Latest** on your `origin` repository. Publish it as
+**Latest** on GitHub and run `npm run deploy:hosting -- --origin https://YOUR_PROJECT_ID.web.app` from
+the tag again.
 
 **A card warns that a release is not deployed and opens the stable interface.**
 The robot is on, or has changes on top of, a tag that `release.json` does not retain, so `/r/<tag>/` is

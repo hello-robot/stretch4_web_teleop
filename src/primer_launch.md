@@ -23,11 +23,13 @@ One meaning per URL, in every mode. This is the point of the split: it used to b
 
 | URL | Serves | Signaling | Modes |
 | --- | --- | --- | --- |
-| `https://<host>/local/operator/` | LAN bundle | `socket.io`, no WAN needed | both |
-| `https://<host>/operator/` | cloud bundle | Firebase | `firebase`; redirects (302) to `/local/operator/` under `local` |
-| `https://<project-id>.web.app/operator` | cloud bundle, from Hosting | Firebase | `firebase` |
+| `https://<host>/local/operator/` | LAN bundle (`dist/`) | `socket.io`, no WAN needed | both |
+| `https://<host>/operator/` | robot's local cloud bundle (`dist-firebase/`) | Firebase | `firebase`; redirects (302) to `/local/operator/` under `local` |
+| `https://<project-id>.web.app/` | hosted fleet lobby; routes cards to `/r/<tag>/operator/?robot=<id>` | Firebase | `firebase` |
+| `https://<project-id>.web.app/r/<tag>/operator/` | immutable release rail for `<tag>`, from Hosting | Firebase | `firebase` (live site) |
+| `https://<project-id>.web.app/operator/` | unversioned fallback (and path used on preview channels) | Firebase | `firebase` |
 
-The redirect is deliberate rather than a 404: the address bar changes, so an operator can see which door they landed in. No URL ever silently serves a different bundle.
+The redirect is deliberate rather than a 404: the address bar changes, so an operator can see which door they landed in. No URL ever silently serves a different bundle. On the robot's own `express` server (`https://<host>/`), `dist-firebase/` is built from the robot's single local checkout and served off `PUBLIC_HOSTING_ORIGIN`, so `servesRails()` is `false` there and no `/r/<tag>/` prefix is used (see [`primer_rails.md`](primer_rails.md)).
 
 `/robot/` exists in both modes and is the robot's own page, loaded from loopback by `start_robot_browser.js`. Opening it by hand gets you nothing — credentials are injected only into that trusted Playwright context, on loopback, so any other robot page fails closed.
 
@@ -67,7 +69,7 @@ And **nothing downgrades**. `--firebase` (or `HOSTING_MODE=firebase`) on a robot
 | `firebase` | `0` | `firebase`, quiet |
 | `firebase` | `2` or `3` | error, exit 1 |
 
-> _**NOTE:**_ Hosting mode is a different axis from Hosting *deploys*. `WEB_TELEOP_AUTODEPLOY=0` stops preview-channel uploads while Firebase Hosting carries on serving the build it already has. A robot can be in `firebase` hosting mode with deploys switched off.
+> _**NOTE:**_ Hosting mode is a different axis from Hosting *deploys*. `WEB_TELEOP_AUTODEPLOY=0` stops `branch-*` / `local-branch-*` preview-channel uploads while Firebase Hosting carries on serving the rails and preview builds it already has (and `scripts/hostingChannel.js` skips preview uploads automatically when checked out in detached `HEAD` on a release tag). A robot can be in `firebase` hosting mode with deploys switched off.
 
 ## Two ways to launch
 
@@ -79,7 +81,7 @@ Passing `--dry-run` runs every check up through `print_launch_manifest` and exit
 
 Flags are parsed before the installation is validated, so `--help` and a misspelled flag are answered without an `npm list` on a checkout that may not have one. Everything after that waits for validation to pass, because a checkout that cannot build has nothing to say about which door should open.
 
-**From your dashboard**, `stretch_firebase_daemon.js` receives a command over the Realtime Database and spawns **the same script with the same flag**: `./launch_interface.sh -f`, with `WEB_TELEOP_LOG_DIR` in the child environment so the run lands in a directory the daemon is already tailing.
+**From your dashboard**, `stretch_firebase_daemon.js` receives a command over the Realtime Database and spawns **the same script with the same flag**: `./launch_interface.sh -f`, with `WEB_TELEOP_LOG_DIR` in the child environment so the run lands in a directory the daemon is already tailing. On daemon startup (`initDaemon`) and before each dashboard launch (`handleLaunchCommand`), the daemon also runs `git describe --tags --always --dirty --match "v*"` (`scripts/releaseTag.js`) and writes `robots/<fleetId>/build` (`{ describe, rail? }`) and `robots/<fleetId>/branch` so the hosted lobby routes the robot's card to `/r/<tag>/operator/` (see [`primer_rails.md`](primer_rails.md)). The daemon does not watch `.git/` while idle in `standby`, so switching tags on an idle robot requires `./firebase_console_config.sh --refresh` to update its card immediately.
 
 That means the daemon re-runs a Firebase probe its claim has already proved. The database rules gate `robots/$fleetId` on exactly the predicate `checkFirebaseRobotAccess.js` asserts — `assignments/<uid>/role === 'robot'`, `name === $fleetId`, `robots/$fleetId/uid === auth.uid` — so a daemon that received a claim and is reporting status has satisfied it. The probe costs one redundant sign-in, typically a second or two.
 
@@ -156,6 +158,7 @@ The same rule applies later, if the build itself fails rather than the preflight
 | | `--local` | — | Shorthand for `--hosting local`. Overrides a standing `HOSTING_MODE=firebase` in `.env` or the environment. |
 | | `-m` | path to `.yaml` | Map to load, passed to `start_ros2.sh`. Ignored if the file does not exist (continues in map-less mode). |
 | | `--dry-run` | — | Validate installation, resolve configuration and provenance, run preflights, print the manifest, and exit 0 without touching ROS2 or PM2. |
+| | `--overwrite-volume` | `[0.0-1.0]` | Overwrite system audio volume (defaults to `0.8` when passed without a value). |
 | | `-h`, `--help` | — | Show usage. |
 | `start_ros2.sh` | `-l` | directory | Log directory. Ignored if not an existing directory. |
 | | `-m` | path to `.yaml` | Map; becomes `map_yaml:=` on the ROS launch if the file exists. |
@@ -167,8 +170,8 @@ The same rule applies later, if the build itself fails rather than the preflight
 | | `-h`, `--help` | — | Show usage. |
 | `stop_interface.sh` | — | — | No arguments. |
 | `firebase_console_config.sh` | `--install` | — | Create and start the daemon service. |
-| | `--refresh` | — | Restart background processes; resets status to standby. |
-| | `--deploy` | — | Build production assets and deploy to Firebase. |
+| | `--refresh` | — | Clear PM2 processes and restart the daemon; resets status to `standby` and republishes `robots/<fleetId>/build`. |
+| | `--deploy` | — | Run `npm run deploy:hosting` (`scripts/deployHosting.js`): publishes a live rail from a clean `v*` tag in `release.json`, or a `rails-<slug>` preview channel when not on a clean release tag. |
 | `onboard_firebase_robot.sh` | `--email` | address | Operator to assign this robot to. Prompted for when omitted. |
 | | `--non-interactive` | — | Never prompt. Needs `--email` and a logged-in Firebase CLI. |
 | | `--skip-daemon` | — | Do the Firebase work only, installing no service. |
@@ -181,7 +184,7 @@ The same rule applies later, if the build itself fails rather than the preflight
 | `HOSTING_MODE` | `local` or `firebase` | Canonical hosting mode across `.env`, the process environment, `launch_interface.sh`, `start_web_server_and_robot_browser.sh`, `server.js`, and `start_robot_browser.js`. Any other value is an error, `dual` included. Defaults to `local`. |
 | `WEB_TELEOP_BUILD_MODE` | `development` or `production` | Watch-and-rebuild (`development`, default), or a one-shot production build (`production`). Process environment overrides `.env`. |
 | `WEB_TELEOP_LOG_DIR` | directory | Log directory. The daemon sets it so it can tail the whole run. |
-| `WEB_TELEOP_AUTODEPLOY` | `0` or `1` | Controls Firebase Hosting preview-channel uploads. Respects the process environment and `.env` before defaulting to `1`; cleared to `0` when the Firebase CLI has no usable credential. Does not change `HOSTING_MODE` or `fb_status`. |
+| `WEB_TELEOP_AUTODEPLOY` | `0` or `1` | Controls Firebase Hosting `branch-*` / `local-branch-*` preview-channel uploads when checked out on a branch (detached-`HEAD` release tags skip autodeploy via `scripts/hostingChannel.js`). Respects the process environment and `.env` before defaulting to `1`; cleared to `0` when the Firebase CLI has no usable credential. Does not change `HOSTING_MODE` or `fb_status`. |
 | `WEB_TELEOP_FIREBASE_PROBE_TIMEOUT_MS` | milliseconds, default `15000` | Deadline on the signaling preflight. |
 | `WEB_TELEOP_LEASE_TIMEOUT_MS` | milliseconds, default `8000` | Deadline on each teleop-lease call. |
 | `WEB_TELEOP_BUILD_TIMEOUT_MS` | milliseconds, default `120000` | How long `waitForBundles.js` waits for bundles. |
