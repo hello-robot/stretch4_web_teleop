@@ -81,9 +81,7 @@ export enum GoalStatus {
 // Names of ROS actions
 const moveBaseActionName = "/navigate_to_pose";
 const followJointTrajectoryActionName = "/follow_joint_trajectory";
-<<<<<<< HEAD
 const dockRobotActionName = "/dock_robot";
-=======
 // Path Nav2's FollowPath is given (no smoother in the BT)
 const navPlanTopicName = "/plan";
 /** Minimum spacing (m) between forwarded path points. */
@@ -120,7 +118,6 @@ function thinNavPlan(path: ROSPath): number[] {
     });
     return points;
 }
->>>>>>> main
 
 export class Robot extends React.Component {
     private ros: Ros;
