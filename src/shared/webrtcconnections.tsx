@@ -8,7 +8,6 @@ import {
     createRenegotiationRequest,
     createSingleFlight,
     renegotiationNonce,
-    shouldResetRobotPeer,
 } from "./webrtcRecovery";
 
 const peerConstraints = {
@@ -19,12 +18,15 @@ const peerConstraints = {
     ],
 };
 
+/**
+ * The operator's end of the operator <-> robot connection. The robot's end is
+ * the robot peer (stretch4_web_teleop_robot/webrtc.py), which makes the offer,
+ * adds the camera and microphone tracks, and opens the "messages" channel.
+ */
 interface WebRTCProps {
-    peerRole: "operator" | "robot";
     polite: boolean;
     onTrackAdded?: (ev: RTCTrackEvent) => void;
     onMessage: (message: WebRTCMessage) => void;
-    onRobotConnectionStart?: () => void;
     onMessageChannelOpen?: () => void;
     onOperatorDisplaced?: () => void;
 }
@@ -32,7 +34,6 @@ interface WebRTCProps {
 export class WebRTCConnection extends React.Component {
     private signaler: BaseSignaling;
     private peerConnection?: RTCPeerConnection;
-    private peerRole: string;
     private polite: boolean;
     private makingOffer = false;
     private ignoreOffer: boolean = false;
@@ -44,7 +45,6 @@ export class WebRTCConnection extends React.Component {
     private peerGeneration = 0;
     private runRecovery = createSingleFlight();
     private expectedRenegotiationNonce?: string;
-    private robotRenegotiationNonce?: string;
     public robotAvailable = false;
 
     cameraInfo: CameraInfo = {};
@@ -54,16 +54,13 @@ export class WebRTCConnection extends React.Component {
     private onTrackAdded?: (ev: RTCTrackEvent) => void;
     private onMessage: (obj: WebRTCMessage) => void;
     private onMessageChannelOpen?: () => void;
-    private onRobotConnectionStart?: () => void;
 
     constructor(props: WebRTCProps) {
         super(props);
-        this.peerRole = props.peerRole;
         this.polite = props.polite;
         this.onMessage = props.onMessage;
         this.onTrackAdded = props.onTrackAdded;
         this.onMessageChannelOpen = props.onMessageChannelOpen;
-        this.onRobotConnectionStart = props.onRobotConnectionStart;
         this.pendingIceCandidates = [];
 
         this.createPeerConnection();
@@ -74,25 +71,12 @@ export class WebRTCConnection extends React.Component {
             onSignal: this.onSignal,
             onGoodbye: this.stop,
             onOperatorDisplaced: props.onOperatorDisplaced,
-            onRobotConnectionStart: () => this.startRobotSession(),
-            role: props.peerRole,
+            role: "operator",
         });
     }
 
     configure_signaler(room_name: string) {
         return this.signaler.configure(room_name);
-    }
-
-    /**
-     * Called to create bidirectional message channels with the connected peer.
-     * Note that the peer is expected to be using this class to manage their end of the connection as well,
-     * in which case the necessary event handlers will be installed in `createPeerConnection` during `ondatachannel`.
-     */
-    openDataChannels() {
-        console.log("opened data channels");
-        if (!this.peerConnection) throw "peerConnection undefined";
-        const channel = this.peerConnection.createDataChannel("messages");
-        this.setMessageChannel(channel);
     }
 
     private setMessageChannel(channel: RTCDataChannel) {
@@ -159,14 +143,8 @@ export class WebRTCConnection extends React.Component {
                         pc === this.peerConnection &&
                         pc.localDescription
                     ) {
-                        const cameraInfo = { ...this.cameraInfo };
-                        if (this.robotRenegotiationNonce) {
-                            cameraInfo[RENEGOTIATE_CAMERA_INFO_KEY] =
-                                this.robotRenegotiationNonce;
-                        }
                         this.signaler.send({
                             sessionDescription: pc.localDescription,
-                            cameraInfo,
                         });
                     }
                 } catch (err) {
@@ -189,11 +167,7 @@ export class WebRTCConnection extends React.Component {
                 if (pc !== this.peerConnection) return;
                 console.log(pc.connectionState);
                 if (pc.connectionState !== "failed") return;
-                if (this.peerRole === "operator") {
-                    void this.recover();
-                } else {
-                    this.startRobotSession();
-                }
+                void this.recover();
             };
 
             pc.onicecandidateerror = (event) => {
@@ -219,31 +193,6 @@ export class WebRTCConnection extends React.Component {
         return this.peerConnection?.connectionState;
     }
 
-    /**
-     * Starts a robot-side session on a clean peer. Repeated Firebase `active`
-     * and explicit renegotiation events replace, rather than stack, channels.
-     */
-    private startRobotSession() {
-        if (this.peerRole !== "robot") return;
-        const pc = this.peerConnection;
-        if (
-            shouldResetRobotPeer({
-                connectionState: pc?.connectionState,
-                senderCount: pc?.getSenders().length ?? 0,
-                hasChannel: Boolean(this.messageChannel),
-            })
-        ) {
-            this.stop();
-        }
-        this.cameraInfo = {};
-        this.onRobotConnectionStart?.();
-    }
-
-    joinRobotRoom() {
-        console.log("joining room as robot");
-        return this.signaler.join_as_robot();
-    }
-
     addOperatorToRobotRoom() {
         console.log("joining room as operator");
         return this.signaler.join_as_operator();
@@ -259,13 +208,6 @@ export class WebRTCConnection extends React.Component {
 
     requestOperatorTakeover() {
         this.signaler.requestOperatorTakeover();
-    }
-
-    addTrack(track: MediaStreamTrack, stream: MediaStream, streamName: string) {
-        this.cameraInfo[stream.id] = streamName;
-        if (!this.peerConnection) throw "pc is undefined";
-        this.peerConnection.addTrack(track, stream);
-        console.log("added track");
     }
 
     hangup() {
@@ -314,7 +256,6 @@ export class WebRTCConnection extends React.Component {
      * and asks the robot for a fresh offer.
      */
     recover(): Promise<boolean> {
-        if (this.peerRole !== "operator") return Promise.resolve(false);
         if (this.isLinkUp()) return Promise.resolve(true);
         return this.runRecovery(() => this.rebuildOperatorLink());
     }
@@ -351,17 +292,6 @@ export class WebRTCConnection extends React.Component {
         console.log("Received message:", message);
         const requestedRenegotiationNonce = renegotiationNonce(cameraInfo);
         if (
-            this.peerRole === "robot" &&
-            requestedRenegotiationNonce &&
-            !sessionDescription &&
-            candidate === undefined
-        ) {
-            this.robotRenegotiationNonce = requestedRenegotiationNonce;
-            this.startRobotSession();
-            return;
-        }
-        if (
-            this.peerRole === "operator" &&
             sessionDescription?.type === "offer" &&
             this.expectedRenegotiationNonce &&
             requestedRenegotiationNonce !== this.expectedRenegotiationNonce

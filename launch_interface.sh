@@ -316,7 +316,7 @@ export FEATURE_VOICE_CONTROL_INTERFACE
 
 # 17. Start ROS2
 logfile_ros="$logdir/start_ros2.txt"
-logfile_node="$logdir/start_web_server_and_robot_browser.txt"
+logfile_node="$logdir/start_web_server_and_robot_peer.txt"
 
 cd "$REPO_DIR"
 
@@ -330,9 +330,9 @@ else
 fi
 
 # echo ""
-# 19. Start the web server and the robot browser
+# 19. Start the web server and the robot peer
 cd "$REPO_DIR"
-./start_web_server_and_robot_browser.sh -l "$logdir" -o "$logfile_node" --hosting "$HOSTING_MODE" |& tee -a "$logfile_node"
+./start_web_server_and_robot_peer.sh -l "$logdir" -o "$logfile_node" --hosting "$HOSTING_MODE" |& tee -a "$logfile_node"
 if [ $? -ne 0 ]; then
 	echo_failure_help "$logdir"
 fi

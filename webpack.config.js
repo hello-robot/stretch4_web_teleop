@@ -8,7 +8,7 @@ const { isReleaseTag } = require("./scripts/releaseTag");
 const { RailManifestPlugin } = require("./scripts/railManifest");
 const { LobbyManifestPlugin } = require("./scripts/lobbyManifest");
 
-const ALL_PAGES = ["robot", "operator", "home"];
+const ALL_PAGES = ["operator", "home"];
 
 /**
  * Entries this build emits.
@@ -80,7 +80,10 @@ module.exports = (webpackEnv, argv) => {
           ]
         : [];
     const envKeys = webpackPublicEnvDefinitions(env);
-    if (storageValue === "firebase" && !pages.includes("robot")) {
+    // A whole-site build is the robot's own: its server serves it, and its
+    // operator page falls back to this robot's HELLO_FLEET_ID as the room.
+    const wholeSite = !(webpackEnv && webpackEnv.pages);
+    if (storageValue === "firebase" && !wholeSite) {
         // Cloud-hosted lobby and operator bundles resolve fleet membership per
         // signed-in user; only the robot-local bundle reads HELLO_FLEET_ID.
         envKeys["process.env.HELLO_FLEET_ID"] = "undefined";
@@ -213,7 +216,6 @@ module.exports = (webpackEnv, argv) => {
             alias: {
                 shared: path.resolve(__dirname, "./src/shared/"),
                 operator: path.resolve(__dirname, "./src/pages/operator/"),
-                robot: path.resolve(__dirname, "./src/pages/robot/"),
                 home: path.resolve(__dirname, "./src/pages/home/"),
                 "ai-gateway": path.resolve(__dirname, "./ai-gateway/"),
             },

@@ -478,7 +478,7 @@ the local and the Firebase webpack watchers:
   `WEB_TELEOP_AUTODEPLOY=0` is set in `.env`.
 - Saving a file rebuilds webpack and redeploys that branch preview channel automatically.
 
-Both URLs connect to the same robot browser and share one operator seat, so opening one blocks the
+Both URLs connect to the same robot peer and share one operator seat, so opening one blocks the
 other until teleoperation ends.
 
 Without `-f` (or `HOSTING_MODE=firebase`), `./launch_interface.sh` defaults to `local` only. Use

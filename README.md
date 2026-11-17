@@ -123,11 +123,11 @@ The following primers provide codebase architecture, contracts, and invariants f
 
 | Primer | Description |
 | --- | --- |
-| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the fleet lobby, operator browser, robot browser, ROS2, WebRTC, and signaling transports fit together, plus the `MobileOperator` render logic flow. |
-| [Launching the Interface](src/primer_launch.md) | How `launch_interface.sh` resolves `HOSTING_MODE`, validates the installation and Firebase readiness, prints the launch manifest, and brings up ROS2, the HTTPS server, and the robot browser. |
+| [Software Architecture](src/primer_software_architecture.md) | Overview of the system architecture — how the fleet lobby, operator browser, robot peer, ROS2, WebRTC, and signaling transports fit together, plus the `MobileOperator` render logic flow. |
+| [Launching the Interface](src/primer_launch.md) | How `launch_interface.sh` resolves `HOSTING_MODE`, validates the installation and Firebase readiness, prints the launch manifest, and brings up ROS2, the HTTPS server, and the robot peer. |
 | [Multi-Rail Hosting & Lobby](src/primer_rails.md) | How self-hosted Firebase Hosting serves the fleet lobby (`/`) alongside immutable release rails (`/r/<tag>/operator/`), webpack rail builds, release tag lockstep, deploy guards, RTDB rules compatibility, and test suites. |
 | [Operator Page](src/primer_operator.md) | Deep dive into the operator page codebase — directory layout, the shared layer (`commands`, `RemoteRobot`, `util`, `webrtcconnections`, `signaling`), the entry point (`index.tsx`), function providers, component folders, storage handler, and adding new features. |
-| [Robot Page](src/primer_robot.md) | Deep dive into the robot page codebase — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, joint state processing, video streams, and bidirectional data flow between ROS2 and the operator browser. |
+| [Robot Peer](src/primer_robot.md) | Deep dive into the robot peer (`stretch4_web_teleop_robot/`) — the `Robot` class, ROS2 subscriptions/services/actions, robot modes, the video path, signaling, and bidirectional data flow between ROS2 and the operator browser. |
 
 ## Contributing
 

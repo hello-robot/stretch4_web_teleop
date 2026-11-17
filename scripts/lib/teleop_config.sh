@@ -123,9 +123,9 @@ EOF
 # caller that is not a bash script. The certificates are checked alongside the
 # node dependencies and not as a per-transport concern: server.js reads them
 # with fs.readFileSync at module scope, unguarded, so a missing certificate
-# means the robot's HTTPS server never starts -- and start_robot_browser.js can
-# only load the robot page from loopback, which that same server provides. A
-# robot with broken certificates therefore has no teleop in any hosting mode.
+# means the robot's HTTPS server never starts -- and the robot peer joins its
+# room through that same server on loopback, in every hosting mode. A robot
+# with broken certificates therefore has no teleop in any hosting mode.
 #
 # Runs before the Firebase probe, because checkFirebaseRobotAccess.js reports a
 # missing node_modules as its own "set up and broken" code; probing first would
@@ -165,7 +165,7 @@ function validate_installation {
 		return 1
 	fi
 
-	# The HTTPS server the robot page itself is served from. Fatal in every
+	# The HTTPS server the robot peer joins its room through. Fatal in every
 	# hosting mode, Firebase included.
 	if [ ! -d "$cert_dir" ]; then
 		echo -e "${RED}ERROR:${NC} Certificates folder not found at $cert_dir"

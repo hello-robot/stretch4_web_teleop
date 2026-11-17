@@ -1,24 +1,7 @@
-import { initializeApp, FirebaseOptions } from "firebase/app";
-import {
-    getAuth,
-    signInWithEmailAndPassword,
-    setPersistence,
-    inMemoryPersistence,
-    Auth,
-} from "firebase/auth";
+import { FirebaseOptions } from "firebase/app";
 import { FirebaseSignaling } from "./FirebaseSignaling";
 import { LocalSignaling } from "./LocalSignaling";
 import { SignalingProps } from "./Signaling";
-import { TeleopSignalingCoordinator } from "./TeleopSignalingCoordinator";
-
-declare global {
-    interface Window {
-        __STRETCH_ROBOT_FIREBASE_AUTH__?: Readonly<{
-            username: string;
-            password: string;
-        }>;
-    }
-}
 
 /**
  * Creates a signaling handler based on the `storage` property in the process
@@ -39,66 +22,11 @@ export function createSignaler(props: SignalingProps) {
                 appId: process.env.PUBLIC_FIREBASE_APP_ID,
                 measurementId: process.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
             };
-            // The robot listens on both transports whenever the cloud door is
-            // open, so a LAN operator can still reach it when Firebase cannot.
-            // Operators get a single transport, fixed by the bundle they
-            // loaded, which is fixed by the URL they opened.
-            if (props.role === "robot") {
-                return new TeleopSignalingCoordinator(props, config);
-            }
+            // An operator gets a single transport, fixed by the bundle it
+            // loaded, which is fixed by the URL it opened. The robot peer
+            // (start_robot_peer.py) listens on both when the cloud door is open.
             return new FirebaseSignaling(props, config);
         default:
             return new LocalSignaling(props);
-    }
-}
-
-/**
- * If using Firebase for signaling, this method logs the robot into its account.
- * The trusted local Playwright launcher injects credentials into this one page
- * before any bundle code runs. Hosted or manually opened robot pages fail
- * closed because they do not have that injected value.
- */
-export function loginFirebaseSignalerAsRobot() {
-    if (process.env.storage === "firebase") {
-        const config: FirebaseOptions = {
-            apiKey: process.env.PUBLIC_FIREBASE_API_KEY,
-            authDomain: process.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
-            databaseURL: process.env.PUBLIC_FIREBASE_DATABASE_URL,
-            projectId: process.env.PUBLIC_FIREBASE_PROJECT_ID,
-            storageBucket: process.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
-            messagingSenderId: process.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-            appId: process.env.PUBLIC_FIREBASE_APP_ID,
-            measurementId: process.env.PUBLIC_FIREBASE_MEASUREMENT_ID,
-        };
-        const app = initializeApp(config);
-        let auth: Auth = getAuth(app);
-        const credentials = window.__STRETCH_ROBOT_FIREBASE_AUTH__;
-        delete window.__STRETCH_ROBOT_FIREBASE_AUTH__;
-
-        return new Promise<void>((resolve, reject) => {
-            if (!credentials?.username || !credentials.password) {
-                console.error("Missing trusted local robot authentication");
-                reject(new Error("Missing trusted local robot authentication"));
-                return;
-            }
-
-            setPersistence(auth, inMemoryPersistence)
-                .then(() => {
-                    signInWithEmailAndPassword(
-                        auth,
-                        credentials.username,
-                        credentials.password,
-                    )
-                        .then((userCredential) => {
-                            resolve();
-                        })
-                        .catch(reject);
-                })
-                .catch(reject);
-        });
-    } else {
-        return new Promise<void>((resolve) => {
-            resolve();
-        });
     }
 }

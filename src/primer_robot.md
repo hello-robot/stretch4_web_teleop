@@ -1,120 +1,110 @@
-# Primer: Robot Page
+# Primer: Robot Peer
 
-The **robot page** is the headless browser that runs onboard the Stretch robot. It has no visible UI — its job is to bridge ROS2 (running on the robot) and the operator browser (running on a remote device) over WebRTC. When the interface is launched, this page starts first, connects to `rosbridge`, and waits for an operator to join.
+The **robot peer** is the Python process that runs onboard the Stretch robot and bridges ROS 2 to the operator's browser over WebRTC. It has no UI. When the interface is launched it waits for the cameras to come up, joins the signaling room, and waits for an operator.
 
-> For a high-level view of how the robot and operator browsers fit together, see [`primer_software_architecture.md`](primer_software_architecture.md).
+It replaced the **robot page**: a headless Firefox (driven by Playwright) that reached ROS through `rosbridge` and re-encoded camera frames through a `<canvas>`. The operator page did not change. The robot peer speaks the same signaling, data-channel messages, and track labels the robot page did. `tools/latency/` measures the two side by side and checks that they behave the same.
+
+> For a high-level view of how the robot peer and the operator browser fit together, see [`primer_software_architecture.md`](primer_software_architecture.md).
 
 ______________________________________________________________________
 
 ## Directory Layout
 
 ```
-src/pages/robot/
-├── html/                  # Entry HTML page (headless, no visible UI)
-├── css/                   # Minimal stylesheet
-└── tsx/
-    ├── index.tsx          # Module entry point — bootstraps Robot, WebRTC, and media streams
-    ├── robot.tsx          # Robot class — all ROS2 interaction lives here
-    ├── videostreams.tsx   # VideoStream class — decodes compressed images and produces a MediaStream
-    └── audiostreams.tsx   # AudioStream class — captures microphone audio for WebRTC
+start_robot_peer.sh             # pm2 entry: sources the ROS environment, execs the peer
+start_robot_peer.py             # Python entry point
+stretch4_web_teleop_robot/
+├── main.py                     # rclpy executor thread + asyncio loop, signals, shutdown
+├── session.py                  # port of the robot page's index.tsx: forwarding + command dispatch
+├── robot.py                    # port of robot.tsx: every ROS 2 interaction
+├── webrtc.py                   # robot end of WebRTCConnection (aiortc)
+├── media.py                    # camera tracks (JPEG -> encoder) and the microphone
+├── ros_util.py                 # QoS matching, message -> JSON, remote parameters
+├── joint_velocities.py         # playback velocity table (mirrors src/shared/util.tsx)
+├── features.py                 # features.json + FEATURE_* overrides
+└── signaling/
+    ├── local.py                # socket.io to server.js (the LAN door)
+    ├── firebase.py             # Realtime Database REST + event stream (the cloud door)
+    └── coordinator.py          # both doors at once, one operator at a time
 ```
+
+Python dependencies are in the `robot` group of `pyproject.toml` (`pip install --group pyproject.toml:robot`), and `version_check` flags missing ones at launch.
 
 ______________________________________________________________________
 
-## Entry Point: `tsx/index.tsx`
+## Threads
 
-This file is the module entry. It wires together the three main subsystems — `Robot`, `WebRTCConnection`, and media streams — and manages the lifecycle of a session.
+rclpy callbacks run on a `MultiThreadedExecutor` in a background thread. WebRTC, signaling, and all of the robot's state live on one asyncio loop in the main thread. `Robot` hands each ROS callback to the loop with `call_soon_threadsafe`, so its state needs no locks.
 
-### Startup Sequence
-
-1. **Instantiates `Robot`** with a set of forwarding callbacks (one per ROS2 data stream). Each callback calls `connection.sendData()` to forward the data to the operator browser over WebRTC.
-1. **Instantiates `WebRTCConnection`** as the robot peer (`createSignaler({ role: "robot" })` selects `LocalSignaling` in `local` mode or `TeleopSignalingCoordinator` joining both `socket.io` and Firebase Realtime Database `rooms/<robotUid>` in `firebase` mode).
-1. **Instantiates media streams**: `navigationStream`, `gripperStream` (both `VideoStream`), and `audioStream` (`AudioStream`).
-1. **Sets `onRosConnectCallback`** — once ROS is ready, this callback:
-   - Subscribes to the camera topics and starts the video streams.
-   - Fetches the occupancy grid map (if there is one).
-   - Logs into the signaling server (in `firebase` mode, using credentials injected into `window.__STRETCH_ROBOT_FIREBASE_AUTH__` by the loopback Playwright launcher) and joins the robot room, then waits for an operator.
-1. **Calls `robot.connect()`** to initiate the rosbridge WebSocket connection.
-
-> _**NOTE:**_ `src/pages/robot/` always runs locally onboard the robot and is omitted from Firebase Hosting `/r/<tag>/` rail builds. In `firebase` mode, the git tag checked out on the robot (`robots/<fleetId>/build`) determines which `/r/<tag>/operator/` bundle a cloud operator loads so the operator and robot WebRTC message schemas match (see [`primer_rails.md`](primer_rails.md)).
-
-### Session Lifecycle (`handleSessionStart`)
-
-Called by `WebRTCConnection` when an operator joins. It:
-
-1. Removes any existing media tracks from the peer connection.
-1. Adds the head cameras and gripper cameras to the peer connection.
-1. Opens the WebRTC data channels for bidirectional command/data flow.
-
-### Incoming Message Handler (`handleMessage`)
-
-A switch statement that routes every incoming `WebRTCMessage` from the operator browser to the appropriate `Robot` method:
-
-| Message type | Robot method called |
-| :--- | :--- |
-| `driveBase` | `executeBaseVelocity(modifier)` |
-| `setJointVelocity` | `setJointVelocity(jointName, velocity)` |
-| `incrementalMove` | `executeIncrementalMove(jointName, increment)` |
-| `stopTrajectory` | `stopTrajectoryClient()` |
-| `stopMoveBase` | `stopMoveBaseClient()` |
-| `setRobotMode` | `switchToNavigationMode()` / `switchToPositionMode()` |
-| `setCameraPerspective` | `useLeftCamera()` / `useRightCamera()` / `useCenterCamera()` |
-| `setRobotPose` | `executePoseGoal(pose)` |
-| `playbackPoses` | `executePoseGoals(poses, 0)` |
-| `moveBase` | `executeMoveBaseGoal(pose)` |
-| `setExpandedGripper` | `setExpandedGripper(toggle)` |
-| `setRunStop` | `setRunStop(toggle)` |
-| `getOccupancyGrid` | `getOccupancyGrid()` |
-| `getStretchTool` | `getStretchTool()` |
-| `homeTheRobot` | `homeTheRobot()` |
-
-### Forwarding Callbacks
-
-Each of these functions is registered with `Robot` at startup. When the robot publishes new data, `Robot` calls the callback, which packages the data and sends it to the operator browser via `connection.sendData()`:
-
-| Callback | WebRTC message type sent |
-| :--- | :--- |
-| `forwardJointStates` | `validJointState` (robotPose, limits, collision) |
-| `forwardBatteryState` | `batteryState` |
-| `forwardOccupancyGrid` | `occupancyGrid` (chunked into 50k-element slices) |
-| `forwardActionState` | `moveBaseState` or `playbackPosesState` |
-| `forwardAMCLPose` | `amclPose` |
-| `forwardMode` | `mode` |
-| `forwardIsHomed` | `isHomed` |
-| `forwardIsRunStopped` | `isRunStopped` |
-| `forwardStretchTool` | `stretchTool` |
-
-> **Note on occupancy grid chunking:** Map data can be very large. `forwardOccupancyGrid` splits the `data` array into 50,000-element slices and sends each as a separate `occupancyGrid` message. The operator browser reassembles them by concatenating the `data` arrays.
+Camera frames are the exception. Each camera subscription has its own callback group, so its JPEG decode runs on an executor thread in parallel with everything else, and only the decoded frame is handed over.
 
 ______________________________________________________________________
 
-## `robot.tsx` — The `Robot` Class
+## Startup (`session.py`, `Session.start`)
 
-`Robot` is the single source of truth for all ROS2 communication. It owns every ROSLib client (topics, services, action clients) and exposes a clean set of methods that `index.tsx` calls in response to operator commands.
+1. Waits until both camera topics have publishers. This means the driver and cameras are up, the same check the robot page made through rosbridge.
+1. `Robot.on_connect()` creates every subscription, publisher, service client, action client and parameter client.
+1. Subscribes to the two camera topics and opens the microphone.
+1. Asks `/map_server/map` for the occupancy grid.
+1. Configures signaling and joins the robot room, retrying every 500 ms until it gets in. In `firebase` mode this signs the robot account in through the Identity Toolkit REST API.
 
-### ROS Connection
+> _**NOTE:**_ The robot peer always runs locally onboard the robot; nothing robot-side is part of the Firebase Hosting `/r/<tag>/` rail builds. In `firebase` mode, the git tag checked out on the robot (`robots/<fleetId>/build`) determines which `/r/<tag>/operator/` bundle a cloud operator loads, so the operator and the robot peer speak the same data-channel message schema (see [`primer_rails.md`](primer_rails.md)).
+
+## Session lifecycle (`handle_session_start`)
+
+Called when an operator joins. It adds the overhead and gripper camera tracks and the microphone track, opens the `messages` data channel, and the robot makes the offer. Each track gets its own media stream id, and `cameraInfo` in the offer maps those ids to `overhead`, `gripper` and `audio`. That mapping is how the operator labels what it receives.
+
+## Video path
 
 ```
-robot.connect()
-  └── new Ros({ url: "wss://localhost:9090" })
-        ├── on "connection" → checkROSConnection() → onConnect()
-        ├── on "error"      → reconnect()
-        └── on "close"      → reconnect()
+/…/compressed (JPEG) → CameraSource.on_jpeg: decode once (PyAV, executor thread)
+                     → CameraTrack (newest frame only) → aiortc VP8/H.264 encoder → WebRTC
 ```
 
-`checkROSConnection()` verifies that the two required camera topics have publishers before proceeding. This guards against timing issues where rosbridge connects before all required ROS nodes have started. If the check fails, it reconnects after 1 second.
+Frames go out at the camera's own rate and resolution. Nothing is decoded while no operator is connected. The robot page decoded each JPEG into an `<img>`, drew it onto a canvas upscaled to at least 1000 px tall, and captured that canvas at 6 fps.
 
-`onConnect()` sets up all ROSLib clients:
+## Incoming messages (`Session.handle_message`)
 
-- **Subscriptions**: joint states, joint limits, battery state, mode, is-homed, is-run-stopped, action results
-- **Action clients**: `follow_joint_trajectory`, `navigate_to_pose`
-- **Topics**: `/cmd_vel` (base velocity), `/joint_vel` (joint velocity)
-- **Services**: camera switcher services, expanded gripper, run-stop, home the robot
-- **Params**: `stretch_tool`, `mode` (read/write via rosbridge parameter API)
+| Message type | Robot method |
+| :--- | :--- |
+| `driveBase` | `execute_base_velocity(modifier)` |
+| `setJointVelocity` | `set_joint_velocity(joint, velocity)` |
+| `setTaskSpaceVelocity` | `set_task_space_velocity(x, y, z)` |
+| `incrementalMove` | `execute_incremental_move(joint, increment)` |
+| `stopTrajectory` / `stopMoveBase` | `stop_trajectory_client()` / `stop_move_base_client()` |
+| `setRobotMode` | `switch_to_navigation_mode()` / `switch_to_position_mode()` |
+| `setCameraPerspective` | `use_left_camera()` / `use_right_camera()` / `use_center_camera()` |
+| `setRobotPose` / `playbackPoses` | `execute_pose_goal(pose)` / `execute_pose_goals(poses)` |
+| `moveBase` | `execute_move_base_goal(pose)` |
+| `setExpandedGripper` / `setRunStop` | `set_expanded_gripper(toggle)` / `set_run_stop(toggle)` |
+| `getOccupancyGrid` / `getStretchTool` / `getMaxEeSpeed` / `getRunStop` | reply with the current value |
+| `homeTheRobot` / `seedLocalization` / `shutdown` | `std_srvs/Trigger` services |
+| `getVoiceCapability` / `requestVoiceToken` | voice control (see `ai-gateway/`) |
 
-### Robot Modes
+Velocity, pose and navigation commands each run as their own asyncio task, so a command that has to switch the driver's mode first does not hold up the rest.
 
-Stretch operates in one of three modes, controlled by writing to the `/stretch_driver:mode` ROS parameter:
+## Outgoing messages
+
+`Robot` reports through the `Forwarder` methods on `Session`, which send the same messages the robot page did: `validJointState`, `batteryState`, `odom`, `mode`, `isHomed`, `isRunStopped`, `leaseStatus`, `stretchTool`, `maxEeSpeed`, `moveBaseState`, `playbackPosesState`, `seedLocalizationState`, `amclPose` (throttled to 2 Hz), `navPlan`, `occupancyGrid` and `occupancyGridUnavailable`.
+
+> **Occupancy grid chunking:** the `data` array is split into 50,000-cell slices, one `occupancyGrid` message each, and the operator concatenates them. If a slice would exceed the operator's SCTP message size limit, it is halved until it fits.
+
+______________________________________________________________________
+
+## `robot.py`: the `Robot` class
+
+### ROS interfaces
+
+- **Subscriptions**: `/joint_states`, `/joint_limits`, `/battery`, `/wheel_odom`, `/plan`, `/mode`, `/is_runstopped`, `/joint_states_diagnostics`, `/server_lease_holder`, `/navigate_to_pose/_action/status`, `/parameter_events`, and the two camera topics. QoS is matched to whoever publishes when the subscription is made, the same as rosbridge. If nobody publishes yet, it falls back to best-effort/volatile, which is compatible with any publisher that comes later.
+- **Publishers**: `/teleop/cmd_vel` and `/teleop/joint_vel` when `ee_velocity_limiter` is on; otherwise `/cmd_vel` or `/cmd_vel_nav` (chosen by polling collision_monitor's lifecycle state) and `/joint_vel`. Also `/ee_cmd_vel`.
+- **Actions**: `/follow_joint_trajectory`, `/navigate_to_pose`.
+- **Services**: camera switching, `/expanded_gripper`, `/runstop_the_robot`, `/joystick_control`, `/home_the_robot`, `/seed_localization`, `/system/shutdown`, `/map_server/map` (`nav_msgs/srv/GetMap`), `/collision_monitor/get_state`.
+- **Parameters** on other nodes: `stretch_driver` (`mode`, `tool_info.is_actuated`), `configure_video_streams_gripper` (`stretch_tool`), `ee_velocity_safety_filter` (`max_ee_speed`, also followed on `/parameter_events`).
+- **TF**: once a map has loaded, `base_link` in the `map` frame at 10 Hz when it moves. This replaced `tf2_web_republisher`.
+
+### Robot modes
+
+Stretch runs in one of three modes, set through the `stretch_driver` `mode` parameter:
 
 | Mode | Description |
 | :--- | :--- |
@@ -122,68 +112,15 @@ Stretch operates in one of three modes, controlled by writing to the `/stretch_d
 | `navigation` | Needed for trajectory goals. Position commands to arm; velocity commands to base. |
 | `velocity` | Velocity commands to both arm and base. Used for continuous jogging. |
 
-Methods `switchToNavigationMode()`, `switchToPositionMode()`, `switchToVelocityMode()` guard against redundant mode changes using the module-level `robotMode` variable.
-
-### Movement Methods
-
-| Method | ROS interface | Notes |
-| :--- | :--- | :--- |
-| `executeBaseVelocity(props)` | Publishes `Twist` to `/cmd_vel` | Switches to velocity mode first |
-| `setJointVelocity(joint, vel)` | Publishes `JointJog` to `/joint_vel` | Switches to velocity mode first |
-| `executeIncrementalMove(joint, inc)` | Sends goal to `/follow_joint_trajectory` | Adds `inc` to current joint value |
-| `executePoseGoal(pose)` | Sends goal to `/follow_joint_trajectory` | Switches to navigation mode |
-| `executePoseGoals(poses, idx)` | Sends multi-point goal to `/follow_joint_trajectory` | Used for movement playback |
-| `executeMoveBaseGoal(pose)` | Sends goal to `/navigate_to_pose` | Nav2 autonomous navigation |
-| `stopTrajectoryClient()` | Cancels active trajectory goal | Fires `Cancel` callback |
-| `stopMoveBaseClient()` | Cancels active move-base goal | — |
-| `homeTheRobot()` | Calls `/home_the_robot` service | `std_srvs/Trigger` |
-
-## Full Data Flow (Robot Page)
-
-```
-ROS2 (rosbridge wss://localhost:9090)
-        │
-        ▼
-  Robot subscriptions / service calls
-        │
-  ┌─────┴──────────────────────────────────────────────┐
-  │ /joint_states     → forwardJointStates             │
-  │ /battery          → forwardBatteryState            │
-  │ /mode             → forwardMode                    │
-  │ /is_homed         → forwardIsHomed                 │
-  │ is_runstopped     → forwardIsRunStopped            │
-  │ /navigate_to_pose → forwardActionState             │
-  │ AMCL TF           → forwardAMCLPose               │
-  │ map_server/map    → forwardOccupancyGrid (chunked) │
-  └────────────────────────────────────────────────────┘
-        │
-        ▼
-  connection.sendData()  →  WebRTC data channel  →  Operator browser
-
-  Operator browser  →  WebRTC data channel  →  handleMessage()
-        │
-        ▼
-  robot.executeX() / robot.setX() / robot.getX()
-        │
-        ▼
-  ROSLib → rosbridge → ROS2 (topics, services, actions)
-        │
-        ▼
-  Camera topics → VideoStream.updateImage() → MediaStream
-        │
-        ▼
-  WebRTC media channel → Operator browser camera views
-```
+`switch_to_*_mode()` skip the change when the robot is already in that mode or runstopped. Concurrent requests for the same mode share one parameter call. A velocity command is dropped, not sent, if the mode switch fails.
 
 ______________________________________________________________________
 
 ## How to Add a New Robot Capability (Summary)
 
-1. **`shared/commands.tsx`** — define `interface MyCommand { type: "myCommand"; ... }` and add it to the `cmd` union.
-1. **`shared/remoterobot.tsx`** — add `myAction() { this.robotChannel({ type: "myCommand" }); }`.
-1. **`robot/tsx/robot.tsx`** — implement the ROS2 interaction (subscribe to a topic, call a service, send an action goal). If the robot needs to push data back, accept a callback in the constructor and call it from the subscription.
-1. **`robot/tsx/index.tsx`**:
-   - Add a forwarding callback that calls `connection.sendData()` if data flows robot → operator.
-   - Add a `case "myCommand": robot.myAction(); break;` in `handleMessage()` for operator → robot commands.
-   - Pass the forwarding callback into the `Robot` constructor.
-1. **Operator side** — update `operator/tsx/index.tsx` to handle the new WebRTC message type and wire it to the appropriate function provider.
+1. **`src/shared/commands.tsx`**: define `interface MyCommand { type: "myCommand"; ... }` and add it to the `cmd` union.
+1. **`src/shared/remoterobot.tsx`**: add `myAction() { this.robotChannel({ type: "myCommand" }); }`.
+1. **`stretch4_web_teleop_robot/robot.py`**: implement the ROS 2 interaction. If data flows back to the operator, add a method to `Forwarder` and call it from the subscription handler (which runs on the asyncio loop).
+1. **`stretch4_web_teleop_robot/session.py`**: add a branch to `handle_message()` for operator → robot commands, and implement the `Forwarder` method that sends the robot → operator message.
+1. **Operator side**: update `operator/tsx/index.tsx` to handle the new message type and wire it to the appropriate function provider.
+1. Add the command to `PARITY_COMMANDS` in `tools/latency/measure_latency.js` if its replies are worth guarding.

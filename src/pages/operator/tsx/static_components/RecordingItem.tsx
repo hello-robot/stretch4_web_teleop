@@ -9,7 +9,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { ActionState } from "shared/util";
-import { MovementState } from "robot/tsx/robot";
+import { MovementState } from "shared/movementState";
 import Ellipsis from "../basic_components/Ellipsis";
 import { StatusbarType } from "../basic_components/PlaybackStatusbar";
 import { ANIMS_STATUSBAR } from "../basic_components/PlaybackStatusbar";

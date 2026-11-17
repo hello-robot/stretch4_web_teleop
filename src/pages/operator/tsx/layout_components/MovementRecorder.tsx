@@ -14,7 +14,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import SearchIcon from '@mui/icons-material/Search';
 import LocalFloristIcon from '@mui/icons-material/LocalFlorist';
 import { SharedState } from "./CustomizableComponent";
-import { MovementState, movementStatesTerminal, movementStatesTransitory } from "robot/tsx/robot";
+import { MovementState, movementStatesTerminal, movementStatesTransitory } from "shared/movementState";
 import { PlaybackStatusbar, StatusbarType } from "../basic_components/PlaybackStatusbar";
 import InfiniteCarousel from "../basic_components/InfiniteCarousel";
 import { ANIMS_STATUSBAR } from "../basic_components/PlaybackStatusbar";

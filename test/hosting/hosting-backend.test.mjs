@@ -1059,12 +1059,11 @@ suite("a bundle is ready only when its entrypoint and manifest exist", () => {
         assert.equal(railBundleReady(rail), false);
     });
 
-    test("a whole-site bundle needs all three pages", () => {
+    test("a whole-site bundle needs the home and operator pages", () => {
         const site = path.join(dir, "site");
         writeFile(path.join(site, "index.html"));
-        writeFile(path.join(site, "operator", "index.html"));
         assert.equal(hostingBundleReady(site), false);
-        writeFile(path.join(site, "robot", "index.html"));
+        writeFile(path.join(site, "operator", "index.html"));
         assert.equal(hostingBundleReady(site), true);
     });
 });
@@ -1701,12 +1700,11 @@ suite("webpack isolates a rail under /r/<tag>/ and shares the root across unvers
         );
     });
 
-    test("a whole-site build still emits all three pages and cleans", () => {
+    test("a whole-site build still emits every page and cleans", () => {
         const config = makeWebpackConfig({ storage: "firebase" }, production);
         assert.deepEqual(htmlPages(config).sort(), [
             "index.html",
             "operator/index.html",
-            "robot/index.html",
         ]);
         assert.equal(config.output.clean, true);
         assert.equal(hasManifest(config), false);
@@ -1866,7 +1864,7 @@ suite("the lobby bundle receives only allowlisted PUBLIC_ environment variables"
         }
     });
 
-    test("cloud Hosting bundles omit HELLO_FLEET_ID while robot-inclusive builds keep it", () => {
+    test("cloud Hosting bundles omit HELLO_FLEET_ID while whole-site builds keep it", () => {
         const savedFleet = process.env.HELLO_FLEET_ID;
         try {
             process.env.HELLO_FLEET_ID = "dev-fleet-from-env";

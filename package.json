@@ -76,8 +76,7 @@
         "watch-realtime-model": "node scripts/watch_realtime_model.js",
         "watch-voice": "node scripts/watch_realtime_model.js",
         "watch-mic": "node scripts/watch_mic_logs.js",
-        "watch-ros": "node scripts/watch_ros_logs.js",
-        "postinstall": "npx playwright install-deps && npx playwright install"
+        "watch-ros": "node scripts/watch_ros_logs.js"
     },
     "eslintConfig": {
         "extends": [

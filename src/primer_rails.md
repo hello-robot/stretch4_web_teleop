@@ -1,6 +1,6 @@
 # Primer: Multi-Rail Hosting and Lobby
 
-When `HOSTING_MODE=firebase` is enabled on a self-hosted Firebase project (`https://<project-id>.web.app`), operators discover and launch robots from a shared **lobby** (`src/pages/home/`) and drive them from the **operator** interface (`src/pages/operator/`). Because the operator browser and the onboard headless robot browser (`src/pages/robot/`) exchange version-coupled WebRTC commands and telemetry (`src/shared/commands.tsx`, `src/shared/remoterobot.tsx`), a single operator bundle cannot safely drive robots checked out on different software versions.
+When `HOSTING_MODE=firebase` is enabled on a self-hosted Firebase project (`https://<project-id>.web.app`), operators discover and launch robots from a shared **lobby** (`src/pages/home/`) and drive them from the **operator** interface (`src/pages/operator/`). Because the operator browser and the onboard robot peer (`start_robot_peer.py`, `stretch4_web_teleop_robot/`) exchange version-coupled WebRTC commands and telemetry (`src/shared/commands.tsx`, `src/shared/remoterobot.tsx`), a single operator bundle cannot safely drive robots checked out on different software versions.
 
 Firebase Hosting solves this by serving **multiple immutable operator rails** side by side behind a single shared lobby:
 
@@ -58,7 +58,7 @@ Configured in [`firebase.json`](../firebase.json) and enforced by [`webpack.conf
 | `/r/<tag>/operator/**` and `/r/**/bundle.js` | Clean `<tag>` checkout (`--env rail=<tag>`) | `no-cache` | Versioned operator HTML and entry chunks compiled with `publicPath: "/r/<tag>/"`. |
 | `/r/<tag>/<hash>.<ext>` and `**/*.mp4` | Clean `<tag>` checkout | `public, max-age=31536000, immutable` | Content-hashed static assets cached for 1 year. |
 
-Notice that `src/pages/robot/` is **never** built into a rail (`--env rail=<tag>` runs with `--env pages=operator`). The robot page runs exclusively inside the robot's local headless Playwright browser on loopback.
+Nothing robot-side is built into a rail (`--env rail=<tag>` runs with `--env pages=operator`). The robot side is the robot peer, a Python process that runs only onboard the robot, from whatever tag is checked out there.
 
 ## Release Tag Grammar (Three-Way Lockstep)
 

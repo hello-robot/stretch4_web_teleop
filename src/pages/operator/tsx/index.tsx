@@ -157,7 +157,6 @@ export var cameraSwitcherFunctionProvider = new CameraSwitcherFunctionProvider()
 
 // Create the WebRTC connection and connect the operator room
 connection = new WebRTCConnection({
-    peerRole: "operator",
     polite: true,
     onMessage: handleWebRTCMessage,
     onTrackAdded: handleRemoteTrackAdded,
@@ -297,7 +296,7 @@ function handleRemoteTrackAdded(event: RTCTrackEvent) {
 }
 
 /**
- * Callback to handle a new WebRTC message from the robot browser.
+ * Callback to handle a new WebRTC message from the robot peer.
  * @param message the {@link WebRTCMessage} or an array of messages.
  */
 function handleWebRTCMessage(message: WebRTCMessage | WebRTCMessage[]) {
@@ -420,7 +419,7 @@ function initializeOperator() {
 }
 
 /**
- * Configures the remote robot, which connects with the robot browser over the
+ * Configures the remote robot, which connects with the robot peer over the
  * WebRTC connection.
  */
 function configureRemoteRobot() {
