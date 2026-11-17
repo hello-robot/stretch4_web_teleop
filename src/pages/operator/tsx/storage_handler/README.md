@@ -18,7 +18,7 @@ is likely more than sufficient for your project.
 
 - [Set-up](#set-up)
 - [Adding a map](#adding-a-map)
-- [Adding more users](#adding-more-users)
+- [Managing users and robots](#managing-users-and-robots)
 - [Database layout](#database-layout)
 - [Security rules](#security-rules)
 - [Releases and rails](#releases-and-rails)
@@ -207,99 +207,86 @@ Maps are provisioned by an administrator. `maps/<mapId>` and `assignments/<ident
 `.write: false`, so no one can upload a map or grant themselves access from the dashboard.
 
 A map's id is the stem of its filename. A robot that has mapped its space with SLAM already has
-`~/stretch_user/maps/<mapId>.yaml` next to a `.pgm` of the same name.
+`~/stretch_user/maps/<mapId>.yaml` next to the `.pgm` referenced by its `image:` field.
 
 ### A map the robot already has
 
-This is the common case, and it needs no upload. Grant the person access by map id:
+This is the common case, and it needs no upload. Run the interactive permissions manager, select the
+operator, and check `<mapId>` (or enter `<mapId>` at the robot-local map prompt if it has not been
+granted before):
 
 ```bash
-./node_modules/.bin/firebase database:update "/assignments/<identity>/maps" --data '{"<mapId>":true}'
+npm run firebase:permissions -- --user
 ```
 
-`<identity>` is the Auth uid, or the alias if you set one. The map now appears under **Change map** on
-that robot's card, and the daemon loads the copy already on the robot's disk — it prefers a local file
-over anything in the database.
+This sets `assignments/<identity>/maps/<mapId>: true` (`<identity>` is the user's alias if set, else
+their Auth uid). The map now appears under **Change map** on that robot's card, and the daemon loads
+the copy already on the robot's disk — it prefers a local file over anything in the database.
 
 ### A map the robot does not have
 
-To push a map to a robot that has never seen it, the database record has to carry the map itself. Build
-it from the `.yaml` / `.pgm` pair, run from the directory holding them:
+To push a map to a robot that has never seen it, upload the `.yaml` and its `.pgm` with:
 
 ```bash
-node -e '
-const fs=require("fs"),path=require("path");
-const id=process.argv[1];
-const yaml=fs.readFileSync(id+".yaml","utf8");
-const pgm=(yaml.match(/^image:\s*(.+)$/m)||[])[1].trim();
-process.stdout.write(JSON.stringify({
-  name:id, yaml_content:yaml, pgm_filename:pgm,
-  pgm_base64:fs.readFileSync(pgm).toString("base64"),
-}));
-' <mapId> > map.json
+npm run firebase:upload-map -- <path/to/map.yaml>
 ```
 
-Then write it, grant the person, and grant the robot:
+Pass `--id <mapId>` to override the filename stem, or `--dry-run` to preview changes without uploading.
+The script reads the `.pgm` at the `image:` path declared in the YAML, prompts checkboxes for each
+operator and each robot that should have access, previews the Realtime Database diff, and writes
+`/maps/<mapId>`, `/assignments/<identity>/maps/<mapId>`, and `/assignments/<fleetId>/maps/<mapId>`
+in one atomic update.
 
-```bash
-./node_modules/.bin/firebase database:set "/maps/<mapId>" map.json
-```
+Checking the robot in that prompt is required whenever the map is not already on the robot's disk: a
+robot reads `maps/<mapId>` under its **fleet ID** (`assignments/<fleetId>/maps/<mapId>`), not its Auth
+uid, and without that grant the launch proceeds with no map.
 
-```bash
-./node_modules/.bin/firebase database:update "/assignments/<identity>/maps" --data '{"<mapId>":true}'
-```
-
-```bash
-./node_modules/.bin/firebase database:update "/assignments/<fleetId>/maps" --data '{"<mapId>":true}'
-```
-
-The third command is the one that is easy to miss. A robot reads `maps/<mapId>` under its **fleet ID**,
-not its Auth uid, so without it the robot cannot read the record and the launch proceeds with no map.
-Granting the fleet ID is unnecessary in the local-file case above, because the daemon never needs the
-record. Adding `<fleetId>: true` under the map's own `allowed_users` works equally well.
-
-`thumb_png_base64` is optional; set it to a small PNG of the map and the picker shows a thumbnail
-instead of a placeholder.
+`thumb_png_base64` on `/maps/<mapId>` is optional; set it to a small PNG of the map and the picker
+shows a thumbnail instead of a placeholder.
 
 ### Notes
 
 - A local file wins. If a robot already has `<mapId>.yaml` on disk, that copy is used and a later edit
-  to `maps/<mapId>` will not reach it. Give the revised map a new id, or delete the stale file from
+  to `maps/<mapId>` will not reach it. Give the revised map a new `--id`, or delete the stale file from
   `~/stretch_user/maps/` on the robot.
-- Revoke access the same way you revoke a robot:
-  ```bash
-  ./node_modules/.bin/firebase database:remove "/assignments/<identity>/maps/<mapId>"
-  ```
+- Revoke map access by unchecking the user or robot in `npm run firebase:permissions` (or when
+  re-running `npm run firebase:upload-map` for that map).
 - Map assignment controls what the dashboard offers, not what the robot can open. Anyone assigned to a
   robot can ask it to load any map file already on that robot's disk.
 
-## Adding more users
+## Managing users and robots
 
-1. Add the person as in [Step 8](#step-8-add-users), or have them sign in with Google.
-
-1. On each robot they should see, re-run the onboarding script and enter their email:
-
-   ```bash
-   ./onboard_firebase_robot.sh
-   ```
-
-Existing users keep their access.
-
-To grant, revoke, or alias access by hand, edit the `assignments` and `uids` paths described in
-[Database layout](#database-layout) from the console or the Firebase CLI. For example:
+Use the interactive permissions script from any machine logged into the Firebase CLI (`npm run firebase:login`):
 
 ```bash
-./node_modules/.bin/firebase database:update "/assignments/<authUid>/robots" --data '{"<fleetId>":true}'
+npm run firebase:permissions            # choose Users or Robots interactively
+npm run firebase:permissions -- --user  # jump straight to user permissions
+npm run firebase:permissions -- --robot # jump straight to robot permissions
 ```
 
+Pass `--dry-run` to preview the exact Realtime Database diff without writing.
+
+- **Users (`--user`)**: Select an existing operator or choose **+ Add new user** (which looks up the
+  email in Firebase Auth and offers to create an Email/Password account if none exists yet), optionally
+  set or migrate an alias (`uids/<authUid>`), and check or uncheck the robots and maps that user may
+  access.
+- **Robots (`--robot`)**: Select an existing robot or choose **+ Add new robot** (binding
+  `robots/<fleetId>/uid` and `assignments/<robotUid>`), then check or uncheck assigned operators,
+  assigned cloud maps, and per-robot feature flag overrides (`robots/<fleetId>/config/<flag>`), or
+  decommission the robot from Realtime Database.
+
+You can also grant an operator access to a robot directly from that robot's terminal by re-running
+`./onboard_firebase_robot.sh --email <address>`; existing users keep their access.
+
 > \[!IMPORTANT\]
-> Aliases are the easiest of these to get wrong. Once `uids/<authUid>` holds an alias, the dashboard
-> UI reads only `assignments/<alias>`, while `database.rules.json` still authorizes grants present
-> under either `assignments/<authUid>` or `assignments/<alias>`. Adding an alias without copying
+> If you ever edit `uids` or `assignments` by hand instead of through `npm run firebase:permissions`,
+> keep aliases consistent across both paths. Once `uids/<authUid>` holds an alias, the dashboard UI
+> reads only `assignments/<alias>`, while `database.rules.json` still authorizes grants present under
+> either `assignments/<authUid>` or `assignments/<alias>`. Adding an alias without copying
 > `assignments/<authUid>` to `assignments/<alias>` hides every robot and map from that user's
 > dashboard with no error, while leaving `assignments/<authUid>` behind keeps stale security-rule
-> grants active even if you later revoke them under `assignments/<alias>`. Write `assignments/<alias>`
-> first and delete `assignments/<authUid>` last in the same sitting.
+> grants active after revoking under `assignments/<alias>`. `npm run firebase:permissions` updates
+> and cleans up both paths atomically.
 
 ### Why maps are assigned twice
 
@@ -431,12 +418,16 @@ A deploy that leaves the lobby in place prints `lobby  unchanged (carried from t
 publishes nothing outside `/r/`. The one exception is a Firebase project with no live release at all,
 which has no lobby to keep, so its first deploy builds one from whichever tag is deployed.
 
-To cut and publish a release, add the new tag to `release.json` **before** tagging (the file is read
-from the tagged commit), confirm `git status --porcelain` is empty (untracked files count as dirty), and
-pass `--origin` so a dirty or non-tag checkout aborts instead of falling back to a preview channel:
+To cut and publish a release, bump `package.json` and `package-lock.json` (plus `<version>X.Y.Z</version>`
+in `package.xml` when `X.Y.Z` changes) and add the new tag to `release.json` **before** tagging (the files
+are read from the tagged commit), confirm `git status --porcelain` is empty (untracked files count as
+dirty), and pass `--origin` so a dirty or non-tag checkout aborts instead of falling back to a preview
+channel:
 
 ```bash
-git add release.json && git commit -m "retain <tag>" && git push
+npm version <tag> --no-git-tag-version
+git add release.json package.json package-lock.json package.xml
+git commit -m "Release <tag>" && git push
 git tag -a <tag> -m "Release <tag>" && git push origin <tag>
 git checkout <tag>
 git status --porcelain   # must print nothing
