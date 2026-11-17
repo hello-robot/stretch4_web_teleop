@@ -6,7 +6,7 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
 import IconExpand from "operator/icons/IconExpand.svg";
 import IconCollapse from "operator/icons/IconCollapse.svg";
-import IconFlyingGripper from "operator/icons/IconFlyingGripper.png";
+import IconFlyingGripper from "operator/icons/IconFlyingGripper.svg";
 
 import "../../css/GripperCamPIP.css";
 
