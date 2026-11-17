@@ -273,11 +273,54 @@ function buildMapUploadPatch(params) {
         ? params.snapshot.assignments
         : {};
 
+    const selectedUsers = new Set(params.selectedUserIdentities);
+    const selectedRobots = new Set(
+        params.selectedRobotFleetIds.map((r) =>
+            validateRtdbKey(r, "robot fleet ID")
+        )
+    );
+    const knownFleetIds = new Set(
+        params.directory.robots.map((r) => r.fleetId)
+    );
+    for (const r of selectedRobots) knownFleetIds.add(r);
+
+    const revokedIdentities = new Set();
+    for (const human of params.directory.humans) {
+        if (!selectedUsers.has(human.identity)) {
+            for (const key of human.assignmentKeys) {
+                revokedIdentities.add(key);
+            }
+        }
+    }
+    for (const fleetId of knownFleetIds) {
+        if (!selectedRobots.has(fleetId)) {
+            revokedIdentities.add(fleetId);
+        }
+    }
+
     const preservedMeta = {};
     if (isPlainObject(params.existingMapRecord)) {
-        for (const key of ["owner_uid", "allowed_users", "thumb_png_base64"]) {
-            if (params.existingMapRecord[key] !== undefined) {
-                preservedMeta[key] = params.existingMapRecord[key];
+        if (params.existingMapRecord.thumb_png_base64 !== undefined) {
+            preservedMeta.thumb_png_base64 =
+                params.existingMapRecord.thumb_png_base64;
+        }
+        if (
+            typeof params.existingMapRecord.owner_uid === "string" &&
+            !revokedIdentities.has(params.existingMapRecord.owner_uid)
+        ) {
+            preservedMeta.owner_uid = params.existingMapRecord.owner_uid;
+        }
+        if (isPlainObject(params.existingMapRecord.allowed_users)) {
+            const filteredAllowed = {};
+            for (const [key, val] of Object.entries(
+                params.existingMapRecord.allowed_users
+            )) {
+                if (!revokedIdentities.has(key)) {
+                    filteredAllowed[key] = val;
+                }
+            }
+            if (Object.keys(filteredAllowed).length > 0) {
+                preservedMeta.allowed_users = filteredAllowed;
             }
         }
     }
@@ -289,7 +332,6 @@ function buildMapUploadPatch(params) {
         },
     };
 
-    const selectedUsers = new Set(params.selectedUserIdentities);
     for (const human of params.directory.humans) {
         if (selectedUsers.has(human.identity)) {
             if (assignments[human.identity]?.maps?.[cleanMapId] !== true) {
@@ -311,16 +353,6 @@ function buildMapUploadPatch(params) {
             }
         }
     }
-
-    const selectedRobots = new Set(
-        params.selectedRobotFleetIds.map((r) =>
-            validateRtdbKey(r, "robot fleet ID")
-        )
-    );
-    const knownFleetIds = new Set(
-        params.directory.robots.map((r) => r.fleetId)
-    );
-    for (const r of selectedRobots) knownFleetIds.add(r);
 
     for (const fleetId of [...knownFleetIds].sort()) {
         if (selectedRobots.has(fleetId)) {

@@ -36,6 +36,7 @@ const {
     buildRobotPermissionsPatch,
     buildUserPermissionsPatch,
     parseArgs,
+    validateExtraLocalMaps,
     validateHumanAlias,
 } = require("../../scripts/firebasePermissions.js");
 
@@ -264,6 +265,15 @@ suite("Realtime Database key and disjoint multi-path patch validation", () => {
         assert.match(lines[1].summary, /"pgm_bytes":12/);
         assert.doesNotMatch(lines[1].summary, /pgm_base64/);
     });
+
+    test("assertDisjointPatchPaths handles __proto__ keys without prototype mutation", () => {
+        const input = Object.create(null);
+        input.__proto__ = true;
+        const result = assertDisjointPatchPaths(input);
+        assert.equal(Object.prototype.hasOwnProperty.call(result, "__proto__"), true);
+        assert.equal(result["__proto__"], true);
+        assert.deepEqual(Object.keys(result), ["__proto__"]);
+    });
 });
 
 suite(
@@ -380,6 +390,53 @@ suite(
                 "bob_team"
             );
         });
+
+        test("revoking a map clears legacy owner_uid and allowed_users on /maps/<mapId> when present", () => {
+            const snapshot = {
+                ...sampleSnapshot(),
+                mapAccess: {
+                    kitchen: {
+                        owner_uid: "alice",
+                        allowed_users: {
+                            alice: true,
+                            "uid-alice": true,
+                            "uid-bob": true,
+                        },
+                    },
+                },
+            };
+
+            const patch = buildUserPermissionsPatch({
+                snapshot,
+                uid: "uid-alice",
+                currentAlias: "alice",
+                targetAlias: "alice",
+                selectedRobots: ["stretch-se4-4001", "stretch-se4-4002"],
+                selectedMaps: ["legacy_lab"],
+            });
+
+            assert.equal(patch["assignments/alice/maps/kitchen"], null);
+            assert.equal(patch["maps/kitchen/owner_uid"], null);
+            assert.equal(patch["maps/kitchen/allowed_users/alice"], null);
+            assert.equal(patch["maps/kitchen/allowed_users/uid-alice"], null);
+            assert.equal(
+                patch["maps/kitchen/allowed_users/uid-bob"],
+                undefined
+            );
+        });
+
+        test("validateExtraLocalMaps accepts valid comma-separated stems and rejects invalid RTDB keys", () => {
+            assert.equal(validateExtraLocalMaps(""), true);
+            assert.equal(validateExtraLocalMaps("  lab_1 , hallway_2 "), true);
+            assert.match(
+                validateExtraLocalMaps("good_map, bad.map"),
+                /forbidden in Realtime Database keys/
+            );
+            assert.match(
+                validateExtraLocalMaps("foo/bar"),
+                /forbidden in Realtime Database keys/
+            );
+        });
     }
 );
 
@@ -477,6 +534,65 @@ suite("buildRobotPermissionsPatch and buildRobotDecommissionPatch", () => {
             "assignments/alice/robots/stretch-se4-4001": null,
             "assignments/uid-alice/robots/stretch-se4-4001": null,
         });
+    });
+
+    test("rebinding an existing fleetId to a new Auth UID clears the previous robot UID assignment and room", () => {
+        const snapshot = sampleSnapshot();
+        const directory = classifyDirectory(snapshot);
+
+        const patch = buildRobotPermissionsPatch({
+            snapshot,
+            directory,
+            fleetId: "stretch-se4-4001",
+            robotUid: "uid-robot-new",
+            selectedUserIdentities: ["alice"],
+            selectedMaps: ["kitchen"],
+            selectedFeatureFlags: ["voice_control_interface", "local_collision_avoidance"],
+            declaredFeatures,
+        });
+
+        assert.deepEqual(patch["assignments/uid-robot-new"], {
+            role: "robot",
+            name: "stretch-se4-4001",
+        });
+        assert.equal(patch["robots/stretch-se4-4001/uid"], "uid-robot-new");
+        assert.equal(patch["assignments/uid-robot-4001"], null);
+        assert.equal(patch["rooms/uid-robot-4001"], null);
+    });
+
+    test("revoking a cloud map from a robot clears legacy owner_uid and allowed_users on /maps/<mapId>", () => {
+        const snapshot = {
+            ...sampleSnapshot(),
+            mapAccess: {
+                kitchen: {
+                    owner_uid: "stretch-se4-4001",
+                    allowed_users: {
+                        "stretch-se4-4001": true,
+                        alice: true,
+                    },
+                },
+            },
+        };
+        const directory = classifyDirectory(snapshot);
+
+        const patch = buildRobotPermissionsPatch({
+            snapshot,
+            directory,
+            fleetId: "stretch-se4-4001",
+            robotUid: "uid-robot-4001",
+            selectedUserIdentities: ["alice"],
+            selectedMaps: [],
+            selectedFeatureFlags: ["voice_control_interface", "local_collision_avoidance"],
+            declaredFeatures,
+        });
+
+        assert.equal(patch["assignments/stretch-se4-4001/maps/kitchen"], null);
+        assert.equal(patch["maps/kitchen/owner_uid"], null);
+        assert.equal(
+            patch["maps/kitchen/allowed_users/stretch-se4-4001"],
+            null
+        );
+        assert.equal(patch["maps/kitchen/allowed_users/alice"], undefined);
     });
 });
 

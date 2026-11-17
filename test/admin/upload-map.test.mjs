@@ -293,8 +293,6 @@ suite(
 
             assert.deepEqual(patch, {
                 "maps/lab": {
-                    owner_uid: "alice",
-                    allowed_users: { alice: true },
                     ...mapRecord,
                 },
                 "assignments/alice/maps/lab": null,
@@ -302,6 +300,64 @@ suite(
                 "assignments/uid-bob/maps/lab": true,
                 "assignments/stretch-se4-4001/maps/lab": null,
                 "assignments/stretch-se4-4002/maps/lab": true,
+            });
+        });
+
+        test("strips revoked operators and robots from owner_uid and allowed_users while preserving unrelated metadata", () => {
+            const snapshot = {
+                authUsers: [
+                    { uid: "uid-alice", email: "alice@example.com" },
+                    { uid: "uid-bob", email: "bob@example.com" },
+                    { uid: "uid-r1", email: "r1@example.com" },
+                ],
+                uids: { "uid-alice": "alice" },
+                assignments: {
+                    alice: { maps: { lab: true } },
+                    "uid-bob": { maps: { lab: true } },
+                    "uid-r1": { role: "robot", name: "stretch-se4-4001" },
+                    "stretch-se4-4001": { maps: { lab: true } },
+                },
+                robots: {
+                    "stretch-se4-4001": { uid: "uid-r1", status: "standby" },
+                },
+                mapKeys: { lab: true },
+            };
+            const directory = classifyDirectory(snapshot);
+            const mapRecord = {
+                name: "lab",
+                yaml_content: "image: lab.pgm\n",
+                pgm_filename: "lab.pgm",
+                pgm_base64: "UDUKMSAxCjI1NQo=",
+            };
+
+            const patch = buildMapUploadPatch({
+                snapshot,
+                directory,
+                mapId: "lab",
+                mapRecord,
+                existingMapRecord: {
+                    name: "lab",
+                    owner_uid: "alice",
+                    allowed_users: {
+                        alice: true,
+                        "uid-bob": true,
+                        "stretch-se4-4001": true,
+                    },
+                    thumb_png_base64: "iVBORw0KGgo=",
+                },
+                // Revoke alice and stretch-se4-4001; keep uid-bob:
+                selectedUserIdentities: ["uid-bob"],
+                selectedRobotFleetIds: [],
+            });
+
+            assert.deepEqual(patch, {
+                "maps/lab": {
+                    allowed_users: { "uid-bob": true },
+                    thumb_png_base64: "iVBORw0KGgo=",
+                    ...mapRecord,
+                },
+                "assignments/alice/maps/lab": null,
+                "assignments/stretch-se4-4001/maps/lab": null,
             });
         });
     }

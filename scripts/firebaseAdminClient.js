@@ -155,7 +155,12 @@ function assertDisjointPatchPaths(patch) {
         if (Object.prototype.hasOwnProperty.call(normalized, clean)) {
             throw new Error(`duplicate patch path "${clean}"`);
         }
-        normalized[clean] = value;
+        Object.defineProperty(normalized, clean, {
+            value,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+        });
         paths.push(clean);
     }
     paths.sort();
@@ -738,7 +743,64 @@ async function applyRootPatch(dbClient, patch) {
     }
 }
 
+/**
+ * Fetch legacy `owner_uid` and `allowed_users` metadata for a list of cloud map IDs.
+ *
+ * @param {Client} dbClient Authenticated Realtime Database client.
+ * @param {string[]} mapIds Cloud map IDs to inspect.
+ * @returns {Promise<Record<string, {owner_uid?: string, allowed_users?: Record<string, unknown>}>>} Map access metadata keyed by map ID.
+ */
+async function fetchMapAccessMetadata(dbClient, mapIds) {
+    const unique = [...new Set(mapIds)].filter(Boolean);
+    const entries = await Promise.all(
+        unique.map(async (mapId) => {
+            const [ownerUid, allowedUsers] = await Promise.all([
+                readDbPath(dbClient, `/maps/${mapId}/owner_uid`),
+                readDbPath(dbClient, `/maps/${mapId}/allowed_users`),
+            ]);
+            const meta = {};
+            if (typeof ownerUid === "string" && ownerUid) {
+                meta.owner_uid = ownerUid;
+            }
+            if (isPlainObject(allowedUsers)) {
+                meta.allowed_users = allowedUsers;
+            }
+            return [mapId, meta];
+        })
+    );
+    return Object.fromEntries(entries);
+}
+
+/**
+ * Append `null` patch entries to clear legacy `owner_uid` and `allowed_users` grants
+ * on `/maps/<mapId>` when revoking access for `identities`.
+ *
+ * @param {Record<string, unknown>} patch Mutable multi-location patch object.
+ * @param {unknown} mapAccess Map access metadata keyed by map ID.
+ * @param {string} mapId Target map ID.
+ * @param {string[]} identities Revoked user or robot identities.
+ * @returns {void}
+ */
+function appendLegacyMapRevocations(patch, mapAccess, mapId, identities) {
+    if (!isPlainObject(mapAccess) || !isPlainObject(mapAccess[mapId])) {
+        return;
+    }
+    const meta = mapAccess[mapId];
+    const revokedSet = new Set(identities.filter(Boolean));
+    if (typeof meta.owner_uid === "string" && revokedSet.has(meta.owner_uid)) {
+        patch[`maps/${mapId}/owner_uid`] = null;
+    }
+    if (isPlainObject(meta.allowed_users)) {
+        for (const id of revokedSet) {
+            if (meta.allowed_users[id] !== undefined) {
+                patch[`maps/${mapId}/allowed_users/${id}`] = null;
+            }
+        }
+    }
+}
+
 module.exports = {
+    appendLegacyMapRevocations,
     applyRootPatch,
     assertDisjointPatchPaths,
     authenticateAdmin,
@@ -747,6 +809,7 @@ module.exports = {
     createAuthUser,
     deleteAuthUser,
     fetchAdminSnapshot,
+    fetchMapAccessMetadata,
     formatPatchLines,
     isPlainObject,
     listAuthUsers,

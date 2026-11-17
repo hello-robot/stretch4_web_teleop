@@ -23,6 +23,7 @@ const {
 } = require("firebase-tools/lib/prompt");
 
 const {
+    appendLegacyMapRevocations,
     applyRootPatch,
     assertDisjointPatchPaths,
     authenticateAdmin,
@@ -31,6 +32,7 @@ const {
     createAuthUser,
     deleteAuthUser,
     fetchAdminSnapshot,
+    fetchMapAccessMetadata,
     isPlainObject,
     printPatchPreview,
     readFirebaseEnv,
@@ -107,6 +109,28 @@ function loadDeclaredFeatures(root = defaultRepoRoot) {
         }
     }
     return out;
+}
+
+/**
+ * Validate comma-separated robot-local map stems entered at the prompt.
+ *
+ * @param {string} raw Comma-separated map ID input.
+ * @returns {true | string} `true` when valid, or an error message string.
+ */
+function validateExtraLocalMaps(raw) {
+    if (!raw || !raw.trim()) return true;
+    const stems = raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    for (const stem of stems) {
+        try {
+            validateRtdbKey(stem, "map ID");
+        } catch (err) {
+            return err.message;
+        }
+    }
+    return true;
 }
 
 /**
@@ -314,6 +338,7 @@ function buildUserPermissionsPatch(params) {
                     patch[`assignments/${k}/maps/${m}`] = null;
                 }
             }
+            appendLegacyMapRevocations(patch, snapshot.mapAccess, m, keysToClean);
         }
     }
 
@@ -402,6 +427,31 @@ function buildRobotPermissionsPatch(params) {
     const existingRobotRec = isPlainObject(robots[cleanFleetId])
         ? robots[cleanFleetId]
         : {};
+    const previousRobotUids = new Set();
+    if (
+        typeof existingRobotRec.uid === "string" &&
+        existingRobotRec.uid &&
+        existingRobotRec.uid !== cleanRobotUid
+    ) {
+        previousRobotUids.add(existingRobotRec.uid);
+    }
+    for (const [uidKey, rec] of Object.entries(assignments)) {
+        if (
+            uidKey !== cleanRobotUid &&
+            isPlainObject(rec) &&
+            rec.role === "robot" &&
+            rec.name === cleanFleetId
+        ) {
+            previousRobotUids.add(uidKey);
+        }
+    }
+    for (const oldUid of previousRobotUids) {
+        patch[`assignments/${oldUid}`] = null;
+        if (oldUid !== cleanFleetId) {
+            patch[`rooms/${oldUid}`] = null;
+        }
+    }
+
     if (existingRobotRec.uid !== cleanRobotUid) {
         patch[`robots/${cleanFleetId}/uid`] = cleanRobotUid;
     }
@@ -448,8 +498,16 @@ function buildRobotPermissionsPatch(params) {
             if (assignments[cleanFleetId]?.maps?.[m] !== true) {
                 patch[`assignments/${cleanFleetId}/maps/${m}`] = true;
             }
-        } else if (assignments[cleanFleetId]?.maps?.[m] !== undefined) {
-            patch[`assignments/${cleanFleetId}/maps/${m}`] = null;
+        } else {
+            if (assignments[cleanFleetId]?.maps?.[m] !== undefined) {
+                patch[`assignments/${cleanFleetId}/maps/${m}`] = null;
+            }
+            appendLegacyMapRevocations(
+                patch,
+                params.snapshot.mapAccess,
+                m,
+                [cleanFleetId]
+            );
         }
     }
 
@@ -531,6 +589,17 @@ function buildRobotDecommissionPatch(params) {
         }
     }
 
+    if (isPlainObject(params.snapshot.mapAccess)) {
+        for (const mapId of Object.keys(params.snapshot.mapAccess)) {
+            appendLegacyMapRevocations(
+                patch,
+                params.snapshot.mapAccess,
+                mapId,
+                [cleanFleetId]
+            );
+        }
+    }
+
     return {
         patch: assertDisjointPatchPaths(patch),
         robotUid,
@@ -564,17 +633,14 @@ async function promptConfirmedPassword(email) {
 }
 
 /**
- * Resolve an Auth account by email, offering to create one if missing.
+ * Resolve an Auth account by email, or collect credentials for deferred creation after confirmation.
  *
  * @param {{
  *   email: string,
- *   projectId: string,
- *   apiKey: string,
- *   authClient: import("firebase-tools/lib/apiv2").Client,
  *   authUsers: {uid: string, email: string}[],
  *   dryRun: boolean
  * }} ctx Lookup and creation context.
- * @returns {Promise<{uid: string, email: string, created: boolean} | null>} Resolved account or null if cancelled.
+ * @returns {Promise<{uid: string, email: string, created: boolean, pendingPassword: string | null} | null>} Resolved or pending account, or null if cancelled.
  */
 async function resolveOrCreateAuthAccount(ctx) {
     const cleanEmail = ctx.email.trim();
@@ -582,7 +648,12 @@ async function resolveOrCreateAuthAccount(ctx) {
         (u) => u.email.toLowerCase() === cleanEmail.toLowerCase()
     );
     if (existing) {
-        return { uid: existing.uid, email: existing.email, created: false };
+        return {
+            uid: existing.uid,
+            email: existing.email,
+            created: false,
+            pendingPassword: null,
+        };
     }
 
     const shouldCreate = await confirm({
@@ -593,23 +664,82 @@ async function resolveOrCreateAuthAccount(ctx) {
         return null;
     }
 
+    const safePlaceholder = `${ctx.dryRun ? "dryrun" : "pending"}-uid-${cleanEmail.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
     if (ctx.dryRun) {
-        const safePlaceholder = `dryrun-uid-${cleanEmail.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
         console.log(
             `[dry-run] Skipping Auth user creation; previewing RTDB paths with placeholder UID "${safePlaceholder}".`
         );
-        return { uid: safePlaceholder, email: cleanEmail, created: true };
+        return {
+            uid: safePlaceholder,
+            email: cleanEmail,
+            created: true,
+            pendingPassword: null,
+        };
     }
 
     const pw = await promptConfirmedPassword(cleanEmail);
-    const created = await createAuthUser(ctx.projectId, cleanEmail, pw, {
-        authClient: ctx.authClient,
-        apiKey: ctx.apiKey,
-    });
-    console.log(
-        `Created Firebase Auth user ${created.email} (${created.uid}).`
-    );
-    return { uid: created.uid, email: created.email, created: true };
+    return {
+        uid: safePlaceholder,
+        email: cleanEmail,
+        created: true,
+        pendingPassword: pw,
+    };
+}
+
+/**
+ * Create a deferred Firebase Auth account and apply the patch, rolling back the Auth user if the DB write fails.
+ *
+ * @param {{
+ *   projectId: string,
+ *   apiKey: string,
+ *   clients: {authClient: import("firebase-tools/lib/apiv2").Client, dbClient: import("firebase-tools/lib/apiv2").Client}
+ * }} ctx Runtime context.
+ * @param {{uid: string, email: string, created: boolean, pendingPassword: string | null} | null} account Pending or existing account.
+ * @param {(resolvedUid: string) => Record<string, unknown>} buildPatch Patch builder accepting the final Auth UID.
+ * @returns {Promise<void>}
+ */
+async function commitPendingAuthAndPatch(ctx, account, buildPatch) {
+    let resolvedUid = account ? account.uid : null;
+    let createdUid = null;
+    if (account && account.pendingPassword) {
+        const created = await createAuthUser(
+            ctx.projectId,
+            account.email,
+            account.pendingPassword,
+            {
+                authClient: ctx.clients.authClient,
+                apiKey: ctx.apiKey,
+            }
+        );
+        resolvedUid = created.uid;
+        createdUid = created.uid;
+        console.log(
+            `Created Firebase Auth user ${created.email} (${created.uid}).`
+        );
+    }
+
+    const finalPatch = buildPatch(resolvedUid);
+    try {
+        await applyRootPatch(ctx.clients.dbClient, finalPatch);
+    } catch (err) {
+        if (createdUid) {
+            try {
+                await deleteAuthUser(
+                    ctx.projectId,
+                    createdUid,
+                    ctx.clients.authClient
+                );
+                console.error(
+                    `Rolled back newly created Auth account ${createdUid} after database write failure.`
+                );
+            } catch (rollbackErr) {
+                console.error(
+                    `WARNING: Failed to roll back Auth account ${createdUid}: ${rollbackErr.message}`
+                );
+            }
+        }
+        throw err;
+    }
 }
 
 /**
@@ -651,6 +781,7 @@ async function runUserWorkflow(ctx) {
     });
 
     let targetHuman;
+    let pendingAccount = null;
     if (picked === ADD_NEW_SENTINEL) {
         const rawEmail = await input({
             message: "User email address:",
@@ -659,24 +790,21 @@ async function runUserWorkflow(ctx) {
                     ? true
                     : "Enter a valid email address",
         });
-        const account = await resolveOrCreateAuthAccount({
+        pendingAccount = await resolveOrCreateAuthAccount({
             email: rawEmail,
-            projectId: ctx.projectId,
-            apiKey: ctx.apiKey,
-            authClient: ctx.clients.authClient,
             authUsers: snapshot.authUsers,
             dryRun: ctx.dryRun,
         });
-        if (!account) {
+        if (!pendingAccount) {
             console.log("Aborted.");
             return;
         }
-        targetHuman = directory.humans.find((h) => h.uid === account.uid) || {
-            uid: account.uid,
-            email: account.email,
+        targetHuman = directory.humans.find((h) => h.uid === pendingAccount.uid) || {
+            uid: pendingAccount.uid,
+            email: pendingAccount.email,
             alias: null,
-            identity: account.uid,
-            assignmentKeys: [account.uid],
+            identity: pendingAccount.uid,
+            assignmentKeys: [pendingAccount.uid],
             assignedRobots: [],
             assignedMaps: [],
             hasSplitAssignments: false,
@@ -742,6 +870,7 @@ async function runUserWorkflow(ctx) {
         message:
             "Additional robot-local map IDs to grant (comma-separated stems, or leave blank):",
         default: "",
+        validate: validateExtraLocalMaps,
     });
     if (extraLocalMaps.trim()) {
         const extras = extraLocalMaps
@@ -751,21 +880,39 @@ async function runUserWorkflow(ctx) {
         selectedMaps = [...new Set([...selectedMaps, ...extras])];
     }
 
-    const patch = buildUserPermissionsPatch({
-        snapshot,
-        uid: targetHuman.uid,
-        currentAlias: targetHuman.alias,
-        targetAlias,
-        selectedRobots,
-        selectedMaps,
-    });
+    const revokedCloudMaps = targetHuman.assignedMaps.filter(
+        (m) =>
+            !selectedMaps.includes(m) && directory.cloudMapIds.includes(m)
+    );
+    const snapshotWithMapAccess =
+        revokedCloudMaps.length > 0
+            ? {
+                  ...snapshot,
+                  mapAccess: await fetchMapAccessMetadata(
+                      ctx.clients.dbClient,
+                      revokedCloudMaps
+                  ),
+              }
+            : snapshot;
 
-    if (Object.keys(patch).length === 0) {
+    const buildPatchForUid = (resolvedUid) =>
+        buildUserPermissionsPatch({
+            snapshot: snapshotWithMapAccess,
+            uid: resolvedUid,
+            currentAlias: targetHuman.alias,
+            targetAlias,
+            selectedRobots,
+            selectedMaps,
+        });
+
+    const previewPatch = buildPatchForUid(targetHuman.uid);
+
+    if (Object.keys(previewPatch).length === 0 && !pendingAccount?.pendingPassword) {
         console.log("No permission changes needed.");
         return;
     }
 
-    printPatchPreview(patch, ctx.projectId);
+    printPatchPreview(previewPatch, ctx.projectId);
     if (ctx.dryRun) {
         console.log("Dry run complete; no changes were written.");
         return;
@@ -780,7 +927,14 @@ async function runUserWorkflow(ctx) {
         return;
     }
 
-    await applyRootPatch(ctx.clients.dbClient, patch);
+    await commitPendingAuthAndPatch(
+        ctx,
+        pendingAccount,
+        (resolvedUid) =>
+            buildPatchForUid(
+                pendingAccount?.pendingPassword ? resolvedUid : targetHuman.uid
+            )
+    );
     console.log("User permissions updated.");
 }
 
@@ -820,6 +974,7 @@ async function runRobotWorkflow(ctx) {
 
     let fleetId;
     let robotUid;
+    let pendingAccount = null;
     let existingRobot = null;
 
     if (picked === ADD_NEW_SENTINEL) {
@@ -848,19 +1003,16 @@ async function runRobotWorkflow(ctx) {
                     : "Enter a valid email address",
         });
 
-        const account = await resolveOrCreateAuthAccount({
+        pendingAccount = await resolveOrCreateAuthAccount({
             email: robotEmail,
-            projectId: ctx.projectId,
-            apiKey: ctx.apiKey,
-            authClient: ctx.clients.authClient,
             authUsers: snapshot.authUsers,
             dryRun: ctx.dryRun,
         });
-        if (!account) {
+        if (!pendingAccount) {
             console.log("Aborted.");
             return;
         }
-        robotUid = account.uid;
+        robotUid = pendingAccount.uid;
     } else {
         existingRobot = directory.robots.find((r) => r.fleetId === picked);
         if (!existingRobot) {
@@ -883,8 +1035,21 @@ async function runRobotWorkflow(ctx) {
         });
 
         if (action === "decommission") {
+            const decommSnapshot =
+                directory.cloudMapIds.length > 0
+                    ? {
+                          ...snapshot,
+                          mapAccess: await fetchMapAccessMetadata(
+                              ctx.clients.dbClient,
+                              directory.cloudMapIds
+                          ),
+                      }
+                    : snapshot;
             const { patch, robotUid: resolvedUid } =
-                buildRobotDecommissionPatch({ snapshot, fleetId });
+                buildRobotDecommissionPatch({
+                    snapshot: decommSnapshot,
+                    fleetId,
+                });
             printPatchPreview(patch, ctx.projectId);
             if (ctx.dryRun) {
                 console.log("Dry run complete; no changes were written.");
@@ -929,19 +1094,16 @@ async function runRobotWorkflow(ctx) {
                         ? true
                         : "Enter a valid email address",
             });
-            const account = await resolveOrCreateAuthAccount({
+            pendingAccount = await resolveOrCreateAuthAccount({
                 email: robotEmail,
-                projectId: ctx.projectId,
-                apiKey: ctx.apiKey,
-                authClient: ctx.clients.authClient,
                 authUsers: snapshot.authUsers,
                 dryRun: ctx.dryRun,
             });
-            if (!account) {
+            if (!pendingAccount) {
                 console.log("Aborted.");
                 return;
             }
-            robotUid = account.uid;
+            robotUid = pendingAccount.uid;
         }
     }
 
@@ -991,23 +1153,41 @@ async function runRobotWorkflow(ctx) {
         });
     }
 
-    const patch = buildRobotPermissionsPatch({
-        snapshot,
-        directory,
-        fleetId,
-        robotUid,
-        selectedUserIdentities: selectedUsers,
-        selectedMaps,
-        selectedFeatureFlags: selectedFlags,
-        declaredFeatures,
-    });
+    const revokedCloudMaps = (existingRobot?.assignedMaps || []).filter(
+        (m) =>
+            !selectedMaps.includes(m) && directory.cloudMapIds.includes(m)
+    );
+    const snapshotWithMapAccess =
+        revokedCloudMaps.length > 0
+            ? {
+                  ...snapshot,
+                  mapAccess: await fetchMapAccessMetadata(
+                      ctx.clients.dbClient,
+                      revokedCloudMaps
+                  ),
+              }
+            : snapshot;
 
-    if (Object.keys(patch).length === 0) {
+    const buildPatchForUid = (resolvedUid) =>
+        buildRobotPermissionsPatch({
+            snapshot: snapshotWithMapAccess,
+            directory,
+            fleetId,
+            robotUid: resolvedUid,
+            selectedUserIdentities: selectedUsers,
+            selectedMaps,
+            selectedFeatureFlags: selectedFlags,
+            declaredFeatures,
+        });
+
+    const previewPatch = buildPatchForUid(robotUid);
+
+    if (Object.keys(previewPatch).length === 0 && !pendingAccount?.pendingPassword) {
         console.log("No robot permission or config changes needed.");
         return;
     }
 
-    printPatchPreview(patch, ctx.projectId);
+    printPatchPreview(previewPatch, ctx.projectId);
     if (ctx.dryRun) {
         console.log("Dry run complete; no changes were written.");
         return;
@@ -1022,7 +1202,14 @@ async function runRobotWorkflow(ctx) {
         return;
     }
 
-    await applyRootPatch(ctx.clients.dbClient, patch);
+    await commitPendingAuthAndPatch(
+        ctx,
+        pendingAccount,
+        (resolvedUid) =>
+            buildPatchForUid(
+                pendingAccount?.pendingPassword ? resolvedUid : robotUid
+            )
+    );
     console.log(`Updated robot "${fleetId}".`);
 }
 
@@ -1091,6 +1278,7 @@ module.exports = {
     buildUserPermissionsPatch,
     loadDeclaredFeatures,
     parseArgs,
+    validateExtraLocalMaps,
     validateHumanAlias,
 };
 
