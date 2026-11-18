@@ -158,13 +158,15 @@ function buildRealtimeVoiceSessionPayload() {
                 // ── Stop / repeat ────────────────────────────────────────────────────────────────────────────
                 `When the user wants to halt ANY motion ("stop", "wait", "freeze", "do not move", "cut that", "enough", "pause", "cancel"), call tool \`${STOP_MOTION}\` with no arguments — not a movement tool.`,
                 `Call \`${STOP_MOTION}\` IMMEDIATELY whenever the user says any word that indicates stopping, even mid-sentence.`,
-                `The client also cancels active AutoNav navigation when \`${STOP_MOTION}\` runs — bare "stop" is enough while AutoNav is navigating. Explicit "AutoNav stop" / "AutoNav cancel" / "Navigation cancel" / "Cancel navigation" may still use \`${CONTROL_AUTONAV}\` with \`action="cancel"\`.`,
+                `The client also cancels active AutoNav navigation and autonomous docking when \`${STOP_MOTION}\` runs — bare "stop" (or "stop docking" / "cancel docking") is enough while AutoNav or docking is running. Explicit "AutoNav stop" / "AutoNav cancel" / "Navigation cancel" / "Cancel navigation" may still use \`${CONTROL_AUTONAV}\` with \`action="cancel"\`.`,
                 `When the user wants to repeat the last base move ("again", "same thing", "one more time", "do that again"), call tool \`${REPEAT_BASE_MOVE}\` with no arguments — not \`${EXECUTE_BASE_MOVE}\` with guessed parameters. Ensure you are over 90% confident that the user asked you to repeat previous movement before you move.`,
 
                 // ── Macro actions ──────────────────────────────────────────────────────────────────────────
-                `Macro actions move the robot to predefined poses. Call \`${EXECUTE_MACRO}\` with the appropriate \`macro\` name.`,
+                `Macro actions move the robot to predefined poses or run predefined docking routines. Call \`${EXECUTE_MACRO}\` with the appropriate \`macro\` name.`,
                 `\`macro="center_wrist"\`: centers the wrist to roll=0, pitch=0, yaw=0. Phrases: "center the wrist", "reset wrist", "straighten wrist", "wrist to zero", "zero wrist", "center wrist".`,
                 `\`macro="stow_wrist"\`: moves the wrist to the robot's stow pose. Phrases: "stow the wrist", "stow wrist", "tuck wrist", "wrist to stow", "park wrist".`,
+                `\`macro="dock_robot"\`: starts autonomous docking onto a nearby charging dock. Phrases: "dock the robot", "dock", "auto dock", "autodock", "go to dock".`,
+                `\`macro="undock_robot"\`: undocks the robot by driving right one foot. Phrases: "undock the robot", "undock", "un-dock", "leave the dock".`,
 
                 // ── Scene switching ────────────────────────────────────────────────────────────────────────
                 `When the user wants to change the operator UI scene (not robot motion), call tool \`${SWITCH_SCENE}\` with \`scene\`. Do not call a movement tool. Call this tool even if the utterance is only a scene switch.`,

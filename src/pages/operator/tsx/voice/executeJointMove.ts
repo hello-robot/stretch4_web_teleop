@@ -29,7 +29,8 @@ import {
     type JointMoveAction,
 } from "./constants";
 import { VoiceMoveExecutor } from "./VoiceMoveExecutor";
-import { isVoiceMacroName, VOICE_MACROS } from "./voiceMacros";
+import { executeBaseMoveOnProvider } from "./executeBaseMove";
+import { isPoseMacroName, isVoiceMacroName, VOICE_MACROS } from "./voiceMacros";
 
 // ── Action metadata ───────────────────────────────────────────────────────────
 
@@ -315,6 +316,12 @@ export function executeStopMotionOnProvider(
         }
     }
 
+    try {
+        FunctionProvider.remoteRobot?.stopAutoDock();
+    } catch {
+        //
+    }
+
     const hadMotion =
         hadVelocityMotion ||
         hadFlyingMotion ||
@@ -341,6 +348,41 @@ export function executeMacroOnProvider(
     const macroName = typeof raw.macro === "string" ? raw.macro : "";
 
     if (!isVoiceMacroName(macroName)) {
+        return { ok: false, detail: `Unknown macro: "${macroName}".`, ignored: true };
+    }
+
+    if (macroName === "dock_robot") {
+        if (!FunctionProvider.remoteRobot) {
+            VoiceMoveExecutor.emitFeedback({
+                kind: "rejected",
+                reason: "disconnected",
+            });
+            return { ok: false, detail: "Robot not connected." };
+        }
+        FunctionProvider.stopAllActions(true);
+        FunctionProvider.remoteRobot.autoDock();
+        VoiceMoveExecutor.emitFeedback({
+            kind: "macro_started",
+            action: macroName,
+        });
+        return { ok: true, detail: `Macro "${macroName}" started.` };
+    }
+
+    if (macroName === "undock_robot") {
+        const res = executeBaseMoveOnProvider(provider, {
+            action: "strafe_right",
+            distance_m: 0.3048,
+        });
+        if (res.ok) {
+            VoiceMoveExecutor.emitFeedback({
+                kind: "macro_started",
+                action: macroName,
+            });
+        }
+        return res;
+    }
+
+    if (!isPoseMacroName(macroName)) {
         return { ok: false, detail: `Unknown macro: "${macroName}".`, ignored: true };
     }
 

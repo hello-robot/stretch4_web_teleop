@@ -102,7 +102,12 @@ const EXECUTE_FLYING_GRIPPER_MOVE = "execute_flying_gripper_move";
 const SET_FLYING_GRIPPER_MODE = "set_flying_gripper_mode";
 
 /** Names of available macros (matches voiceMacros.ts on the client). */
-const VOICE_MACRO_NAMES = ["center_wrist", "stow_wrist"];
+const VOICE_MACRO_NAMES = [
+    "center_wrist",
+    "stow_wrist",
+    "dock_robot",
+    "undock_robot",
+];
 
 /** Valid switch_scene.scene values (maps to operator scene ids on the client). */
 const VOICE_SCENE_NAMES = ["pilot", "autonav"];
