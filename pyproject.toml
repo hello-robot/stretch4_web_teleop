@@ -6,6 +6,11 @@ robot = [
     "hello-robot-stretch4-body>=2026.10.21",
     "hello-robot-stretch4-urdf>=2026.10.20",
     "numpy>=2.0.0",
+    # Robot peer (start_robot_peer.py): WebRTC, local and Firebase signaling.
+    "aiortc>=1.16,<2",
+    "av>=14",
+    "python-socketio[asyncio_client]>=5.11,<6",
+    "aiohttp>=3.9",
 ]
 
 tools = [

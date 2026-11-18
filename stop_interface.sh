@@ -8,8 +8,10 @@ screen -S "web_teleop_ros" -X stuff '^C' 2>/dev/null || true
 screen -S "rmw_zenohd" -X stuff '^C' 2>/dev/null || true
 sleep 3
 
-# Whatever ignored the interrupt, or was started outside a screen.
+# Whatever ignored the interrupt, or was started outside a screen. The robot
+# peer is a child of the ROS launch; SIGTERM still lets it stop the robot.
 pkill -u "$USER" -f web_interface.launch.py 2>/dev/null || true
+pkill -u "$USER" -f start_robot_peer.py 2>/dev/null || true
 
 pm2 kill 2>/dev/null || true
 exit 0

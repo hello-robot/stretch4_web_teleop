@@ -22,9 +22,7 @@ export class LocalSignaling extends BaseSignaling {
         this.socket = io();
         this.socket.on("connect", () => {
             console.log("Connected to local socket");
-            if (this.role === "robot") {
-                this.reclaimRoom(() => this.join_as_robot(), 0);
-            } else if (this.role === "operator") {
+            if (this.role === "operator") {
                 this.reclaimRoom(() => this.join_as_operator(), 0);
             }
         });
@@ -33,10 +31,6 @@ export class LocalSignaling extends BaseSignaling {
         });
         this.socket.on("bye", () => {
             this.onGoodbye();
-        });
-        this.socket.on("joined", () => {
-            console.log(`Operator has joined the room. My role: ${this.role}.`);
-            if (this.onRobotConnectionStart) this.onRobotConnectionStart();
         });
     }
 
@@ -61,17 +55,6 @@ export class LocalSignaling extends BaseSignaling {
                 () => this.reclaimRoom(join, attempt + 1),
                 RECLAIM_DELAY_MS,
             );
-        });
-    }
-
-    public join_as_robot(): Promise<boolean> {
-        return new Promise<boolean>((resolve) => {
-            this.socket.emit("join_as_robot", (response) => {
-                if (response.success) {
-                    this.role = "robot";
-                }
-                resolve(response.success);
-            });
         });
     }
 

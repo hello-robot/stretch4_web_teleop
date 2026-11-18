@@ -177,7 +177,7 @@ function taggedSink(tag) {
 const LOG_TAGS = {
     'web_interface_launch.txt': 'ros',
     'rmw_zenohd.txt': 'zenoh',
-    'start_web_server_and_robot_browser.txt': 'web',
+    'start_web_server.txt': 'web',
 };
 
 const logTagFor = (name) => LOG_TAGS[name] || name.replace(/\.[^.]+$/, '');
@@ -619,7 +619,7 @@ async function handleLaunchCommand(requestedBy, mapId) {
             console.log('[DAEMON] launch_interface.sh succeeded.');
             noteLaunchOutput('[DAEMON] launch_interface.sh succeeded.\n');
             flushLaunchLogNow();
-            // Status will be transitioned to 'online' by robot browser joining room
+            // Status will be transitioned to 'online' by the robot peer joining its room
         };
         child.once('error', finish);
         child.once('close', (code, signal) => {
@@ -819,14 +819,14 @@ async function initDaemon() {
             }
         });
 
-        // Keep currentStatus synchronized with transitions written by the robot browser
+        // Keep currentStatus synchronized with transitions written by the robot peer
         // (e.g. 'launching' -> 'online' <-> 'occupied') so launch log tailing stops as
         // soon as the robot is online and reconcileInterfaceStatus knows the live state.
         onValue(statusRef, (snapshot) => {
             const val = snapshot.val();
             if (!val || val === currentStatus) return;
             if (val === 'offline' && currentStatus === 'launching' && (isProcessingCommand || launchChild)) {
-                // A previous robot browser shutting down during relaunch wrote 'offline';
+                // A previous robot peer shutting down during relaunch wrote 'offline';
                 // restore 'launching' while the new launch is actively in progress.
                 setStatus('launching');
                 return;

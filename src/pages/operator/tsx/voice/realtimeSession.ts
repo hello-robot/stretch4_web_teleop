@@ -744,7 +744,7 @@ export type RealtimeVoiceConnectOptions = {
     /**
      * Alternative credential source returning the raw OpenAI client_secrets
      * payload. When set, tokenUrl / voiceSessionToken are ignored (Firebase:
-     * the robot browser mints and relays over the WebRTC data channel).
+     * the robot peer mints and relays over the WebRTC data channel).
      */
     mintCredential?: () => Promise<Record<string, unknown>>;
     voiceProvider: ButtonFunctionProvider;
