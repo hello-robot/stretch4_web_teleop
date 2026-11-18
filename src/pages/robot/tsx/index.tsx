@@ -74,6 +74,7 @@ connection = new WebRTCConnection({
     polite: false,
     onRobotConnectionStart: handleSessionStart,
     onMessage: handleMessage,
+    onDisconnect: () => robot.stopExecution(true),
 });
 robot.setOnRosConnectCallback(async () => {
     robot.subscribeToVideo({
@@ -121,6 +122,7 @@ robot.connect();
  * and opens the bidirectional data channels.
  */
 function handleSessionStart(): void {
+    robot.stopExecution(true);
     connection.removeTracks();
 
     console.log("adding local media stream to peer connection");
