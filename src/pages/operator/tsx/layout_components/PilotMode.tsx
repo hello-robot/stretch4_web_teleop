@@ -191,29 +191,31 @@ const PilotMode: React.FC<PilotModeProps> = ({
                     isCameraVeilVisible={isCameraVeilVisible || isFlyingGripper}
                     pilotControlsCurrent={pilotControlsCurrent}
                 />
-                <PlaybackStatusbar
-                    isVisible={Boolean(autoDockState)}
-                    type={autoDockStatusbarType}
-                >
-                    {autoDockState && (
-                        <div className="mrecord-statusbar-row mrecord-statusbar-row--loose">
-                            AutoDock{" "}
-                            <span className="mrecord-statusbar-muted">
-                                {autoDockState.state}
-                                {isAutoDockActive && (
-                                    <>
-                                        &nbsp;
-                                        <Ellipsis />
-                                    </>
-                                )}
-                            </span>
-                        </div>
-                    )}
-                </PlaybackStatusbar>
-                <ButtonCancelPlayback
-                    isRecordingPlaying={isAutoDockActive}
-                    handlePlaybackCancel={() => onStopAutoDock?.()}
-                />
+                <div className="mrecord">
+                    <PlaybackStatusbar
+                        isVisible={Boolean(autoDockState)}
+                        type={autoDockStatusbarType}
+                    >
+                        {autoDockState && (
+                            <div className="mrecord-statusbar-row mrecord-statusbar-row--loose">
+                                AutoDock{" "}
+                                <span className="mrecord-statusbar-muted">
+                                    {autoDockState.state}
+                                    {isAutoDockActive && (
+                                        <>
+                                            &nbsp;
+                                            <Ellipsis />
+                                        </>
+                                    )}
+                                </span>
+                            </div>
+                        )}
+                    </PlaybackStatusbar>
+                    <ButtonCancelPlayback
+                        isRecordingPlaying={isAutoDockActive}
+                        handlePlaybackCancel={() => onStopAutoDock?.()}
+                    />
+                </div>
             </div>
             <FooterPilotMode
                 cameraID={cameraID}
