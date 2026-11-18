@@ -14,13 +14,21 @@
  */
 import type { RobotPose } from "shared/util";
 
-export type VoiceMacroName = "center_wrist" | "stow_wrist";
+export type PoseMacroName = "center_wrist" | "stow_wrist";
+export type VoiceMacroName = PoseMacroName | "dock_robot" | "undock_robot";
+
+const VOICE_MACRO_SET = new Set<string>([
+    "center_wrist",
+    "stow_wrist",
+    "dock_robot",
+    "undock_robot",
+]);
 
 /**
- * Maps macro name → target RobotPose.
+ * Maps pose macro name → target RobotPose.
  * Only the joints listed will be moved; all others are left at their current positions.
  */
-export const VOICE_MACROS: Record<VoiceMacroName, RobotPose> = {
+export const VOICE_MACROS: Record<PoseMacroName, RobotPose> = {
     /**
      * Center all wrist DOFs: roll=0, pitch=0, yaw=0.
      * Useful for resetting the wrist to a neutral forward-facing position.
@@ -46,5 +54,12 @@ export const VOICE_MACROS: Record<VoiceMacroName, RobotPose> = {
  * Type guard — returns true when `name` is a key in VOICE_MACROS.
  */
 export function isVoiceMacroName(name: string): name is VoiceMacroName {
+    return VOICE_MACRO_SET.has(name);
+}
+
+/**
+ * Type guard — returns true when `name` is a joint-pose macro in VOICE_MACROS.
+ */
+export function isPoseMacroName(name: string): name is PoseMacroName {
     return Object.prototype.hasOwnProperty.call(VOICE_MACROS, name);
 }

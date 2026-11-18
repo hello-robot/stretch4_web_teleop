@@ -27,6 +27,7 @@ interface WebRTCProps {
     onRobotConnectionStart?: () => void;
     onMessageChannelOpen?: () => void;
     onOperatorDisplaced?: () => void;
+    onDisconnect?: () => void;
 }
 
 export class WebRTCConnection extends React.Component {
@@ -55,6 +56,7 @@ export class WebRTCConnection extends React.Component {
     private onMessage: (obj: WebRTCMessage) => void;
     private onMessageChannelOpen?: () => void;
     private onRobotConnectionStart?: () => void;
+    private onDisconnect?: () => void;
 
     constructor(props: WebRTCProps) {
         super(props);
@@ -64,6 +66,7 @@ export class WebRTCConnection extends React.Component {
         this.onTrackAdded = props.onTrackAdded;
         this.onMessageChannelOpen = props.onMessageChannelOpen;
         this.onRobotConnectionStart = props.onRobotConnectionStart;
+        this.onDisconnect = props.onDisconnect;
         this.pendingIceCandidates = [];
 
         this.createPeerConnection();
@@ -105,6 +108,11 @@ export class WebRTCConnection extends React.Component {
             if (channel.readyState === "open") {
                 this.expectedRenegotiationNonce = undefined;
                 this.onMessageChannelOpen?.();
+            } else if (
+                channel.readyState === "closed" &&
+                this.peerRole === "robot"
+            ) {
+                this.onDisconnect?.();
             }
         };
         channel.onopen = onDataChannelStateChange;
@@ -188,11 +196,21 @@ export class WebRTCConnection extends React.Component {
             pc.onconnectionstatechange = () => {
                 if (pc !== this.peerConnection) return;
                 console.log(pc.connectionState);
-                if (pc.connectionState !== "failed") return;
+                if (
+                    pc.connectionState !== "failed" &&
+                    pc.connectionState !== "closed"
+                ) {
+                    return;
+                }
                 if (this.peerRole === "operator") {
-                    void this.recover();
+                    if (pc.connectionState === "failed") {
+                        void this.recover();
+                    }
                 } else {
-                    this.startRobotSession();
+                    this.onDisconnect?.();
+                    if (pc.connectionState === "failed") {
+                        this.startRobotSession();
+                    }
                 }
             };
 
@@ -284,6 +302,9 @@ export class WebRTCConnection extends React.Component {
     stop() {
         if (!this.peerConnection) throw "peerConnection is undefined";
         console.log("Session terminated.");
+        if (this.peerRole === "robot") {
+            this.onDisconnect?.();
+        }
         this.removeTracks();
         const oldPeerConnection = this.peerConnection;
         this.messageChannel = undefined;

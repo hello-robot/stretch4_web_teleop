@@ -53,6 +53,8 @@ const ACTION_LABELS: Record<
     // MACRO ACTIONS
     center_wrist: "Centering wrist",
     stow_wrist: "Stowing wrist",
+    dock_robot: "Docking robot",
+    undock_robot: "Undocking robot",
     // FLYING GRIPPER ACTIONS
     fly_forward: "Flying forward",
     fly_backward: "Flying backward",

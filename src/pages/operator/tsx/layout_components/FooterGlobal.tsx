@@ -50,9 +50,11 @@ const ACTION_TILE_IDS = new Set([
     "mic-mute",
     "robot-mic-mute",
     "localize-aruco",
+    "autodock",
     "reload-app",
 ]);
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
+const AUTODOCK_STATUS_HOLD_MS = 2500;
 
 // @flag voice_control_interface
 // Loaded lazily so the animated voice chrome is fetched only once
@@ -92,13 +94,24 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     const localizeStatusRef = useRef<SceneItemStatus>(localizeStatus);
     const localizeSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
+    const [autoDockStatus, autoDockStatusSet] =
+        useState<SceneItemStatus>("idle");
+    const autoDockStatusRef = useRef<SceneItemStatus>(autoDockStatus);
+    const autoDockStatusTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
     localizeStatusRef.current = localizeStatus;
+    autoDockStatusRef.current = autoDockStatus;
     const { connected: voiceConnected, micMuted } = useVoiceStatus();
 
     useEffect(() => {
         const unsubscribe =
             runStopFunctionProvider.setRunStopStateChangeCallback(
-                isRunStoppedSet
+                (stopped) => {
+                    isRunStoppedSet(stopped);
+                    if (stopped && autoDockStatusRef.current === "loading") {
+                        autoDockStatusSet("idle");
+                    }
+                }
             );
         return () => {
             unsubscribe();
@@ -132,6 +145,38 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     });
 
     useEffect(() => {
+        if (!mapFunctionProvider) return;
+        return mapFunctionProvider.setAutoDockCallback((state: ActionState) => {
+            if (autoDockStatusTimeoutRef.current) {
+                clearTimeout(autoDockStatusTimeoutRef.current);
+            }
+            if (state.alert_type === "info") {
+                autoDockStatusSet("loading");
+                isMainMenuOpenSet(false);
+                swipeableViewsIdxSet(0);
+                return;
+            }
+            if (state.alert_type === "success") {
+                autoDockStatusSet("success");
+                autoDockStatusTimeoutRef.current = setTimeout(() => {
+                    autoDockStatusSet("idle");
+                }, LOCALIZE_SUCCESS_HOLD_MS);
+                return;
+            }
+            if (state.alert_type === "warning") {
+                autoDockStatusSet("idle");
+                return;
+            }
+            if (state.alert_type === "error") {
+                autoDockStatusSet("error");
+                autoDockStatusTimeoutRef.current = setTimeout(() => {
+                    autoDockStatusSet("idle");
+                }, AUTODOCK_STATUS_HOLD_MS);
+            }
+        });
+    }, [isMainMenuOpenSet, swipeableViewsIdxSet]);
+
+    useEffect(() => {
         const unsubscribe = RobotAudioPlayer.getInstance().addMuteListener(
             (muted) => isRobotAudioMutedSet(muted)
         );
@@ -139,6 +184,9 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             unsubscribe();
             if (localizeSuccessTimeoutRef.current) {
                 clearTimeout(localizeSuccessTimeoutRef.current);
+            }
+            if (autoDockStatusTimeoutRef.current) {
+                clearTimeout(autoDockStatusTimeoutRef.current);
             }
         };
     }, []);
@@ -156,6 +204,23 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             MapFunction.SeedLocalization
         ) as (() => void) | undefined;
         seedLocalization?.();
+    };
+
+    const startAutoDock = () => {
+        if (autoDockStatusRef.current === "loading") {
+            return;
+        }
+        FunctionProvider.stopAllActions(true);
+        if (autoDockStatusTimeoutRef.current) {
+            clearTimeout(autoDockStatusTimeoutRef.current);
+        }
+        autoDockStatusSet("loading");
+        isMainMenuOpenSet(false);
+        swipeableViewsIdxSet(0);
+        const autoDock = mapFunctionProvider?.provideFunctions(
+            MapFunction.AutoDock
+        ) as (() => void) | undefined;
+        autoDock?.();
     };
 
     const scenes: SceneItem[] = useMemo(
@@ -259,10 +324,11 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             {
                 id: "autodock",
                 name: "AutoDock",
-                description: "TextDescription",
-                onClick: () => console.log("You selected 'autodock'"),
+                description: "Dock onto a nearby charging station",
+                onClick: startAutoDock,
                 icon: <CheckCircleIcon />,
-                enabled: false,
+                enabled: autoDockStatus !== "loading" && !isRunStopped,
+                status: autoDockStatus,
             },
             {
                 id: "feeding",
@@ -284,6 +350,8 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         [
             voiceSvc,
             localizeStatus,
+            autoDockStatus,
+            isRunStopped,
             onSceneSelectedChange,
             swipeableViewsIdxSet,
             micMuted,
@@ -297,6 +365,13 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
         // Action-only items run their handler without switching the active scene.
         if (scene.id === "localize-aruco") {
             if (localizeStatus === "loading") {
+                return;
+            }
+            scene.onClick?.();
+            return;
+        }
+        if (scene.id === "autodock") {
+            if (autoDockStatus === "loading") {
                 return;
             }
             scene.onClick?.();
