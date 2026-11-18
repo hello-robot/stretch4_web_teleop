@@ -15,6 +15,7 @@ import { type ValidJoints } from "shared/util";
 import type { ButtonFunctionProvider } from "../function_providers/ButtonFunctionProvider";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import {
+    batteryStateFunctionProvider,
     flyingGripperFunctionProvider,
     movementRecorderFunctionProvider,
 } from "../index";
@@ -369,6 +370,9 @@ export function executeMacroOnProvider(
     }
 
     if (macroName === "undock_robot") {
+        if (!batteryStateFunctionProvider.isCharging) {
+            return { ok: false, detail: "Robot is not on the charger." };
+        }
         const res = executeBaseMoveOnProvider(provider, {
             action: "strafe_right",
             distance_m: 0.3048,
