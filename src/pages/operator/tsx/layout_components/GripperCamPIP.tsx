@@ -6,6 +6,7 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
 import IconExpand from "operator/icons/IconExpand.svg";
 import IconCollapse from "operator/icons/IconCollapse.svg";
+import IconFlyingGripper from "operator/icons/IconFlyingGripper.svg";
 
 import "../../css/GripperCamPIP.css";
 
@@ -64,19 +65,14 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
                         transition={FRAME_LAYOUT_TRANSITION}
                         className="gripper-cam-frame"
                         style={{ borderRadius: FRAME_BORDER_RADIUS_PX }}
-                        onPointerDown={
-                            canEnterFlyingGripper ? onEnterFlyingGripper : undefined
-                        }
-                        role={canEnterFlyingGripper ? "button" : undefined}
-                        aria-label={
-                            canEnterFlyingGripper ? "Open flying gripper" : undefined
-                        }
                     >
-                        <SimpleCameraView
-                            id={cameraID}
-                            remoteStreams={remoteStreams}
-                            isCameraVeilVisible={isCameraVeilVisible}
-                        />
+                        <div className="gripper-cam-frame-clip">
+                            <SimpleCameraView
+                                id={cameraID}
+                                remoteStreams={remoteStreams}
+                                isCameraVeilVisible={isCameraVeilVisible}
+                            />
+                        </div>
                     </motion.div>
                 </div>
             </div>
@@ -105,6 +101,16 @@ const GripperCamPIP: React.FC<GripperCamPIPProps> = ({
                             ? <img src={IconExpand} />
                             : <img src={IconCollapse} />
                     }
+                </button>
+                <button
+                    className="button-grippercampip-flying"
+                    onPointerDown={
+                        canEnterFlyingGripper ? onEnterFlyingGripper : undefined
+                    }
+                    disabled={!canEnterFlyingGripper}
+                    aria-label="Open flying gripper"
+                >
+                    <img src={IconFlyingGripper} />
                 </button>
 
             </div>

@@ -10,6 +10,8 @@
     --gripper-cam-pip-large-width: calc(100% * var(--large-ratio));
     --gripper-cam-hero-width: calc(100% * var(--hero-ratio));
     --border-radius: 12px;
+    /* Shared with the frame's frosted ring so the button column clears it. */
+    --gripper-cam-ring: 8px;
     z-index: 3;
     position: absolute;
     left: 50%;
@@ -38,7 +40,9 @@
 
 .gripper-cam-pip-wrapper .controls {
     opacity: 1;
-    filter: blur(0px);
+    /* `none`, not blur(0): a non-none filter is a backdrop root and would
+       hide the frosted ring's blur of the overhead camera. */
+    filter: none;
     transition:
         filter 300ms ease-out,
         opacity 300ms ease-out;
@@ -52,17 +56,34 @@
 /* The single gripper <video> lives inside this frame. Its box is the only thing
    that changes between PIP / large / flying; framer-motion `layout` animates
    the difference so the same element grows into the hero view. Border radius
-   is set inline (see GripperCamPIP.tsx) so framer can correct it mid-flight. */
+   is set inline (see GripperCamPIP.tsx) so framer can correct it mid-flight.
+   Overflow stays on the clip so the frosted ::before ring can extend past it. */
 .gripper-cam-pip-wrapper .gripper-cam-frame {
+    --gripper-cam-ring-color: hsla(0, 0%, 0%, 0.2);
     position: absolute;
     top: var(--gripper-cam-pip-top);
     right: var(--gripper-cam-pip-right);
     width: var(--gripper-cam-pip-default-width);
     aspect-ratio: 1 / 1;
-    overflow: hidden;
-    outline: 2px solid hsla(0, 0%, 0%, 0.1);
-    cursor: pointer;
     touch-action: none;
+}
+
+.gripper-cam-pip-wrapper .gripper-cam-frame::before {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--gripper-cam-ring));
+    border-radius: calc(var(--border-radius) + var(--gripper-cam-ring));
+    background: var(--gripper-cam-ring-color);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    pointer-events: none;
+}
+
+.gripper-cam-pip-wrapper .gripper-cam-frame-clip {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
 }
 
 .gripper-cam-pip-wrapper.large .gripper-cam-frame {
@@ -70,10 +91,10 @@
 }
 
 .gripper-cam-pip-wrapper.flying .gripper-cam-frame {
+    --gripper-cam-ring: 2px;
+    --gripper-cam-ring-color: hsla(0, 0%, 100%, 0.12);
     width: var(--gripper-cam-hero-width);
     right: calc((100% - var(--gripper-cam-hero-width)) / 2);
-    outline: 2px solid hsla(0, 0%, 100%, 0.12);
-    cursor: default;
 }
 
 .gripper-cam-pip-wrapper .simple-video-container {
@@ -140,14 +161,16 @@
     padding: 4px 0 0 1px;
     width: 50px;
     height: 50px;
-    background-color: hsla(0, 0%, 0%, 25%);
-    outline: 1px solid hsla(0, 0%, 0%, 30%);
     color: #ffffff;
-    backdrop-filter: blur(2px);
+    background-color: hsla(0, 0%, 0%, 25%);
+    backdrop-filter: blur(5px);
     border-radius: var(--border-radius);
     border: none;
     cursor: pointer;
-    transform: translate(calc(-100% + (50px - 10px)), 0%);
+    transform: translate(
+        calc(-100% + (50px - 10px - var(--gripper-cam-ring))),
+        0%
+    );
     transition: transform 300ms ease-out;
     box-shadow: none;
 }
@@ -160,30 +183,45 @@
 
 .gripper-cam-pip-wrapper
     .button-grippercampip-wrapper
-    .button-grippercampip-size-toggle {
+    .button-grippercampip-size-toggle,
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
     position: absolute;
     top: calc(50px + calc(var(--gripper-cam-pip-top) / 2));
     right: 0px;
     padding: 4px 0 0 1px;
     width: 50px;
     height: 50px;
-    background-color: hsla(0, 0%, 0%, 25%);
-    outline: 1px solid hsla(0, 0%, 0%, 30%);
     color: #ffffff;
-    backdrop-filter: blur(2px);
+    background-color: hsla(0, 0%, 0%, 25%);
+    backdrop-filter: blur(5px);
     border-radius: var(--border-radius);
     border: none;
     cursor: pointer;
-    transform: translate(calc(-100% + (50px - 10px)), 0%);
+    transform: translate(
+        calc(-100% + (50px - 10px - var(--gripper-cam-ring))),
+        0%
+    );
     transition: transform 300ms ease-out;
     box-shadow: none;
     opacity: 1;
     transition: opacity 300ms ease-out;
 }
 
+/* Same gap as the size toggle sits below the hide toggle. */
+.gripper-cam-pip-wrapper
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
+    top: calc(2 * (50px + var(--gripper-cam-pip-top) / 2));
+}
+
 .gripper-cam-pip-wrapper.hidden
     .button-grippercampip-wrapper
-    .button-grippercampip-size-toggle {
+    .button-grippercampip-size-toggle,
+.gripper-cam-pip-wrapper.hidden
+    .button-grippercampip-wrapper
+    .button-grippercampip-flying {
     transform: translate(0, 0);
     opacity: 0;
 }
