@@ -108,12 +108,17 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
     // update local state, "poses"
     function handleAccept(): void {
         if (locationName.length > 0) {
-            if (!poses.includes(locationName)) {
-                posesSet((prevPoses) => [...prevPoses, locationName]);
+            try {
+                functs.SaveGoal(locationName);
+                if (!poses.includes(locationName)) {
+                    posesSet((prevPoses) => [...prevPoses, locationName]);
+                }
+                addToast('info', `Location "${locationName}" added.`);
+                getPosesLatest();
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                addToast('error', `Failed to save location: ${msg}`);
             }
-            functs.SaveGoal(locationName);
-            addToast('info', `Location "${locationName}" added.`);
-            getPosesLatest();
         }
         locationNameSet("");
         isModalAddLocationVisibleSet(false);
