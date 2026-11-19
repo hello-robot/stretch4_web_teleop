@@ -295,7 +295,13 @@ export function executeStopMotionOnProvider(
     let hadTrajectoryMotion = false;
     try {
         hadTrajectoryMotion = movementRecorderFunctionProvider.cancelPlayback();
+        if (!hadTrajectoryMotion) {
+            FunctionProvider.remoteRobot?.stopTrajectory();
+        }
     } catch {
+        // Fall through to stopTrajectory()
+    }
+    if (!hadTrajectoryMotion) {
         FunctionProvider.remoteRobot?.stopTrajectory();
     }
 
