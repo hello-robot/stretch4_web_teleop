@@ -63,7 +63,7 @@ export interface AutoNavFunctions {
     CancelGoal: () => void;
     DeleteGoal: (goalId: number) => void;
     DeleteMapPose: (poseName: string) => void;
-    SaveGoal: (locationName: string) => void;
+    SaveGoal: (locationName: string, pose: Transform) => void;
     LoadGoal: (poseName: string) => Transform;
     NavigateToPose: (pose: Transform) => void;
     GetPose: () => Transform;
@@ -78,6 +78,7 @@ export interface AutoNavFunctions {
     ) => void;
     DisplayGoalMarker: (pose: Vector3, rotation?: Quaternion) => void;
     Play: () => void;
+    ClearTappedGoal: () => void;
     RemoveGoalMarker: () => void;
     RenamePose: (poseNameOld: string, poseNameNew: string) => void;
 }
@@ -133,6 +134,10 @@ const AutoNav: React.FC<AutoNavProps> = ({
     useEffect(() => {
         const callback = (pos: ROSPoint | undefined) => {
             goalPositionSet(pos);
+            // A tap replaces a previously loaded saved location.
+            if (pos) {
+                selectedLocationMenuItemSet(undefined);
+            }
         };
         const unsubscribeOnUnmount = occupancyGrid?.goalPositionSubscribe(callback);
         return () => {
@@ -193,7 +198,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
         ) as (poseName: string) => void,
         SaveGoal: underMapFunctionProvider.provideFunctions(
             UnderMapButton.SaveGoal,
-        ) as (locationName: string) => void,
+        ) as (locationName: string, pose: Transform) => void,
         LoadGoal: underMapFunctionProvider.provideFunctions(
             UnderMapButton.LoadGoal,
         ) as (poseName: string) => Transform,
@@ -239,6 +244,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
          * Play the current navigation sequence (if supported by occupancyGrid).
          */
         Play: () => occupancyGrid!.play(),
+        ClearTappedGoal: () => occupancyGrid?.clearTappedGoal(),
         RemoveGoalMarker: () => occupancyGrid!.removeGoalMarker(),
         RenamePose: underMapFunctionProvider.provideFunctions(
             UnderMapButton.RenamePose,
@@ -422,6 +428,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
                 selectedLocationMenuItem={selectedLocationMenuItem}
                 selectedLocationMenuItemSet={selectedLocationMenuItemSet}
                 goalPosition={goalPosition}
+                goalYaw={goalYaw}
                 addToast={addToast}
                 swipeableViewsIdxSet={swipeableViewsIdxSet}
                 sceneSelected={sceneSelected}

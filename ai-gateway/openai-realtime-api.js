@@ -180,7 +180,7 @@ function buildRealtimeVoiceSessionPayload() {
                 `CRITICAL DISAMBIGUATION: "open menu" / "close menu" → \`${SET_MAIN_MENU}\`. "open AutoNav" / "open Pilot" → \`${SWITCH_SCENE}\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\`.`,
 
                 // ── Save map location ──────────────────────────────────────────────────────────────────────
-                `When the user wants to save or bookmark the robot's current place with a name, call tool \`${SAVE_MAP_LOCATION}\` with \`label\`. Do not call a movement tool. Do not ask them to use the Add Location UI.`,
+                `When the user wants to save or bookmark the selected map destination with a name, call tool \`${SAVE_MAP_LOCATION}\` with \`label\`. The destination is the point the user tapped on the map, not the robot's current pose. Do not call a movement tool. Do not ask them to use the Add Location UI. Do not call the tool if no destination is selected.`,
                 `Extract the label from phrases like: "add this location as …", "save this spot as …", "name this location …", "save this location as …", "bookmark this as …".`,
                 `\`label\` must be the location name only (e.g. "Kitchen", "Docking station"). Do not call the tool if no name was given.`,
 
@@ -377,7 +377,7 @@ function buildRealtimeVoiceSessionPayload() {
                     type: "function",
                     name: SAVE_MAP_LOCATION,
                     description:
-                        "Save the robot's current map pose under a user-provided label. Use for requests like 'add this location as Kitchen' or 'save this spot as Docking station'.",
+                        "Save the selected map destination (the point tapped on the map, not the robot's current pose) under a user-provided label. Use for requests like 'add this location as Kitchen' or 'save this spot as Docking station'. Do not call if no destination is selected.",
                     parameters: {
                         type: "object",
                         properties: {

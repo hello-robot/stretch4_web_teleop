@@ -113,6 +113,11 @@ button.auto-nav-button .auto-nav-button-icon {
     background-color: transparent;
 }
 
+.add-location-wrapper button.add-location:disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
 .add-location-wrapper button.add-location .add-location-icon {
     position: relative;
     left: 7px;

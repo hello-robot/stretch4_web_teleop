@@ -1,15 +1,19 @@
 /**
  * Voice tool executor for `save_map_location`.
- * Saves the robot's current map pose under a user-provided label via SaveGoal.
+ * Saves the tapped map destination under a user-provided label.
  */
 
-import { underMapFunctionProvider } from "..";
-import { UnderMapButton } from "../function_providers/UnderMapFunctionProvider";
 import type { ExecuteToolResult } from "./constants";
 
 export type SaveMapLocationResult = {
     ok: boolean;
     label?: string;
+    detail: string;
+};
+
+/** Saves the tapped destination. Provided by AutoNav; absent when AutoNav is not mounted. */
+export type SaveSelectedGoal = (label: string) => {
+    ok: boolean;
     detail: string;
 };
 
@@ -27,10 +31,12 @@ export function parseSaveMapLocationLabel(
 }
 
 /**
- * Save the current map pose under `label` using UnderMap SaveGoal.
+ * Save the tapped destination under `label`.
+ * Refuses when no destination is selected; does not save the robot pose.
  */
 export function executeSaveMapLocation(
     raw: Record<string, unknown>,
+    saveSelectedGoal?: SaveSelectedGoal,
 ): ExecuteToolResult & { label?: string } {
     const label = parseSaveMapLocationLabel(raw);
     if (!label) {
@@ -41,7 +47,7 @@ export function executeSaveMapLocation(
         };
     }
 
-    if (!underMapFunctionProvider) {
+    if (!saveSelectedGoal) {
         return {
             ok: false,
             detail: "Map location saving is unavailable.",
@@ -50,26 +56,8 @@ export function executeSaveMapLocation(
         };
     }
 
-    try {
-        const saveGoal = underMapFunctionProvider.provideFunctions(
-            UnderMapButton.SaveGoal,
-        ) as (name: string) => void;
-        saveGoal(label);
-        return {
-            ok: true,
-            detail: `Location "${label}" added.`,
-            label,
-        };
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        const detail =
-            msg.includes("undefined map pose") || msg.includes("Cannot save")
-                ? "Cannot save location — map pose unavailable."
-                : `Failed to save location: ${msg}`;
-        return {
-            ok: false,
-            detail,
-            label,
-        };
-    }
+    const result = saveSelectedGoal(label);
+    return result.ok
+        ? { ok: true, detail: result.detail, label }
+        : { ok: false, detail: result.detail, ignored: true, label };
 }

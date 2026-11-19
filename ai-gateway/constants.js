@@ -62,7 +62,7 @@ const EXECUTE_MACRO = "execute_macro";
 /** Switch the operator UI scene (Pilot / AutoNav). */
 const SWITCH_SCENE = "switch_scene";
 
-/** Save the robot's current map pose under a user-provided label. */
+/** Save the tapped map destination under a user-provided label. */
 const SAVE_MAP_LOCATION = "save_map_location";
 
 /** Open or close the Saved Locations modal (AutoNav only). */
