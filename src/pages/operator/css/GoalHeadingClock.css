@@ -74,7 +74,7 @@
 }
 
 /* Inset box Voice Control badges. Transparent, so the wedge color shows through. */
-.goal-heading-clock__segment {
+button.goal-heading-clock__segment {
     position: absolute;
     z-index: 1;
     margin: 0;
@@ -83,6 +83,7 @@
     background: transparent;
     pointer-events: auto;
     cursor: pointer;
+    box-shadow: none;
     appearance: none;
     -webkit-appearance: none;
 }
@@ -100,11 +101,11 @@
     border: 0;
 }
 
-.goal-heading-clock__segment:focus {
+button.goal-heading-clock__segment:focus {
     outline: none;
 }
 
-.goal-heading-clock__segment:focus-visible {
+button.goal-heading-clock__segment:focus-visible {
     outline: 2px solid #fff;
     outline-offset: 2px;
 }
