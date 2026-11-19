@@ -30,7 +30,7 @@ export type AutoNavNavControlResult = {
 /** Imperative AutoNav controls registered for voice (and similar callers). */
 export type AutoNavNavControls = {
     start: () => AutoNavNavControlResult;
-    cancel: () => AutoNavNavControlResult;
+    cancel: (onlyIfActive?: boolean) => AutoNavNavControlResult;
     loadLocation: (poseName: string) => AutoNavNavControlResult;
     getSavedPoseNames: () => string[];
 };
@@ -591,17 +591,24 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         isCurrentlyMovingSet,
     ]);
 
-    const cancelAutoNav = useCallback((): AutoNavNavControlResult => {
-        functs.CancelGoal();
-        functs.RemoveGoalMarker();
-        isCurrentlyMovingSet(false);
-        isSelectingGoalSet(true);
-        return { ok: true, detail: "Cancelled AutoNav." };
-    }, [
-        functs,
-        isCurrentlyMovingSet,
-        isSelectingGoalSet,
-    ]);
+    const cancelAutoNav = useCallback(
+        (onlyIfActive: boolean = false): AutoNavNavControlResult => {
+            if (onlyIfActive && !isCurrentlyMoving) {
+                return { ok: false, detail: "AutoNav is not navigating." };
+            }
+            functs.CancelGoal();
+            functs.RemoveGoalMarker();
+            isCurrentlyMovingSet(false);
+            isSelectingGoalSet(true);
+            return { ok: true, detail: "Cancelled AutoNav." };
+        },
+        [
+            functs,
+            isCurrentlyMoving,
+            isCurrentlyMovingSet,
+            isSelectingGoalSet,
+        ],
+    );
 
     // List of saved pose names for navigation goals
     const [poses, posesSet] = useState<string[]>(
