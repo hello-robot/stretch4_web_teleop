@@ -86,9 +86,10 @@ export class UnderMapFunctionProvider extends FunctionProvider {
                 };
 
             case UnderMapButton.SaveGoal:
-                return (name: string) => {
-                    let pose = FunctionProvider.remoteRobot?.getMapPose();
-                    if (!pose) throw "Cannot save undefined map pose!";
+                return (name: string, pose: Transform) => {
+                    if (!pose?.translation || !pose?.rotation) {
+                        throw new Error("Cannot save undefined map pose!");
+                    }
                     this.storageHandler.saveMapPose(name, pose, "MAP");
                 };
             case UnderMapButton.LoadGoal:
