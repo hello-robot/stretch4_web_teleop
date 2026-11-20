@@ -37,8 +37,10 @@ export type AutoNavNavControls = {
     saveSelectedGoal: (label: string) => AutoNavNavControlResult;
 };
 
-const SELECT_DESTINATION_BEFORE_SAVE =
-    "Select a destination on the map before saving a location.";
+const SAVED_LOCATION_ALREADY_SELECTED =
+    "A saved location is already selected.";
+const MAP_POSE_UNAVAILABLE =
+    "Cannot save location — map pose unavailable.";
 
 interface FooterAutoNavProps {
     handleSelectGoal: (selectGoal: boolean) => void;
@@ -70,6 +72,8 @@ interface ModalAddLocationProps {
     getPosesLatest: () => void;
     addToast: (type: "success" | "error" | "info", message: string, duration?: number) => void;
     saveSelectedGoal: (label: string) => AutoNavNavControlResult;
+    /** True when the save is a tapped destination, not the robot pose. */
+    savingTappedDestination: boolean;
 }
 
 interface ModalLocationsMenuProps {
@@ -93,7 +97,8 @@ interface ModalLocationsMenuProps {
  * @param isModalAddLocationVisibleSet - Function to set visibility of the modal.
  * @param getPosesLatest - Function to fetch the latest poses.
  * @param addToast - Function to display toast notifications.
- * @param saveSelectedGoal - Saves the tapped destination under the entered name.
+ * @param saveSelectedGoal - Saves the tapped destination, or the robot pose when none is tapped.
+ * @param savingTappedDestination - True when the save is a tapped destination.
  */
 
 const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
@@ -104,6 +109,7 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
     getPosesLatest,
     addToast,
     saveSelectedGoal,
+    savingTappedDestination,
 }) => {
 
     const [locationName, locationNameSet] = React.useState<string>("");
@@ -159,7 +165,7 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
                         aria-label="Add location"
                         aria-disabled={locationName.length === 0}
                     >
-                        Add Location
+                        Save
                     </button>
                 </MagneticWrapper>
                 <MagneticWrapper>
@@ -179,8 +185,11 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
         <ModalMobile
             isOpen={isModalAddLocationVisible}
             onClose={() => isModalAddLocationVisibleSet(false)}
-            title="Add Location"
+            title={savingTappedDestination ? "Save Selected Location" : "Save Stretch's Location"}
             subtitle="AUTONAV"
+            modalClassName={
+                savingTappedDestination ? "modal-add-location-destination" : ""
+            }
             footer={<Footer />}
         >
             <input
@@ -666,17 +675,23 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
             if (!name) {
                 return { ok: false, detail: "Missing location label." };
             }
-            if (!goalPosition || selectedLocationMenuItem !== undefined) {
+            if (selectedLocationMenuItem !== undefined) {
                 return {
                     ok: false,
-                    detail: SELECT_DESTINATION_BEFORE_SAVE,
+                    detail: SAVED_LOCATION_ALREADY_SELECTED,
                 };
             }
             try {
-                functs.SaveGoal(
-                    name,
-                    goalToTransform(goalPosition, goalYaw ?? 0),
-                );
+                const pose = goalPosition
+                    ? goalToTransform(goalPosition, goalYaw ?? 0)
+                    : functs.GetPose();
+                if (!pose?.translation || !pose?.rotation) {
+                    return {
+                        ok: false,
+                        detail: MAP_POSE_UNAVAILABLE,
+                    };
+                }
+                functs.SaveGoal(name, pose);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 return {
@@ -689,8 +704,9 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         [functs, goalPosition, goalYaw, selectedLocationMenuItem],
     );
 
-    const canSaveDestination =
-        goalPosition !== undefined && selectedLocationMenuItem === undefined;
+    const canSaveLocation = selectedLocationMenuItem === undefined;
+    const savingTappedDestination =
+        goalPosition !== undefined && canSaveLocation;
 
     useEffect(() => {
         if (!onRegisterAutoNavNavControls) {
@@ -834,6 +850,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         getPosesLatest={getPosesLatest}
                         addToast={addToast}
                         saveSelectedGoal={saveSelectedGoal}
+                        savingTappedDestination={savingTappedDestination}
                     />
                     <button
                         type="button"
@@ -842,8 +859,8 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         }}
                         className="add-location"
                         aria-label="Add location"
-                        disabled={!canSaveDestination}
-                        aria-disabled={!canSaveDestination}
+                        disabled={!canSaveLocation}
+                        aria-disabled={!canSaveLocation}
                     >
                         <img src={AddLocationIcon} className="add-location-icon" alt="" aria-hidden="true" />
                     </button>

@@ -180,7 +180,7 @@ function buildRealtimeVoiceSessionPayload() {
                 `CRITICAL DISAMBIGUATION: "open menu" / "close menu" → \`${SET_MAIN_MENU}\`. "open AutoNav" / "open Pilot" → \`${SWITCH_SCENE}\`. "open saved locations" → \`${SET_SAVED_LOCATIONS_MODAL}\`.`,
 
                 // ── Save map location ──────────────────────────────────────────────────────────────────────
-                `When the user wants to save or bookmark the selected map destination with a name, call tool \`${SAVE_MAP_LOCATION}\` with \`label\`. The destination is the point the user tapped on the map, not the robot's current pose. Do not call a movement tool. Do not ask them to use the Add Location UI. Do not call the tool if no destination is selected.`,
+                `When the user wants to save or bookmark a place with a name, call tool \`${SAVE_MAP_LOCATION}\` with \`label\`. If a destination is tapped on the map, that point is saved. If none is tapped, the robot's current pose is saved. Do not call a movement tool. Do not ask them to use the Add Location UI.`,
                 `Extract the label from phrases like: "add this location as …", "save this spot as …", "name this location …", "save this location as …", "bookmark this as …".`,
                 `\`label\` must be the location name only (e.g. "Kitchen", "Docking station"). Do not call the tool if no name was given.`,
 
@@ -377,7 +377,7 @@ function buildRealtimeVoiceSessionPayload() {
                     type: "function",
                     name: SAVE_MAP_LOCATION,
                     description:
-                        "Save the selected map destination (the point tapped on the map, not the robot's current pose) under a user-provided label. Use for requests like 'add this location as Kitchen' or 'save this spot as Docking station'. Do not call if no destination is selected.",
+                        "Save a place under a user-provided label. If a destination is tapped on the map, save that point. If none is tapped, save the robot's current map pose. Use for requests like 'add this location as Kitchen' or 'save this spot as Docking station'.",
                     parameters: {
                         type: "object",
                         properties: {

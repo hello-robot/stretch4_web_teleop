@@ -773,8 +773,8 @@ export type RealtimeVoiceConnectOptions = {
     /** Toast UX after save_map_location succeeds or fails. */
     onSaveMapLocationResult?: (result: SaveMapLocationResult) => void;
     /**
-     * Save the tapped map destination (AutoNav-gated in MobileOperator).
-     * Refuses when no destination is selected.
+     * Save the tapped destination, or the robot's current pose when none is tapped.
+     * AutoNav-gated in MobileOperator.
      */
     onSaveSelectedGoal?: SaveSelectedGoal;
     /**

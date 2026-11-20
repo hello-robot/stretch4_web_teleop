@@ -1,6 +1,6 @@
 /**
  * Voice tool executor for `save_map_location`.
- * Saves the tapped map destination under a user-provided label.
+ * Saves the tapped destination, or the robot's current pose when none is tapped.
  */
 
 import type { ExecuteToolResult } from "./constants";
@@ -11,7 +11,7 @@ export type SaveMapLocationResult = {
     detail: string;
 };
 
-/** Saves the tapped destination. Provided by AutoNav; absent when AutoNav is not mounted. */
+/** Saves the active AutoNav place. Provided by AutoNav; absent when AutoNav is not mounted. */
 export type SaveSelectedGoal = (label: string) => {
     ok: boolean;
     detail: string;
@@ -31,8 +31,7 @@ export function parseSaveMapLocationLabel(
 }
 
 /**
- * Save the tapped destination under `label`.
- * Refuses when no destination is selected; does not save the robot pose.
+ * Save the tapped destination, or the robot pose when none is tapped.
  */
 export function executeSaveMapLocation(
     raw: Record<string, unknown>,
