@@ -388,6 +388,11 @@ const AutoNav: React.FC<AutoNavProps> = ({
                         yaw={goalYaw}
                         center={goalCenter}
                         onSelect={(yaw) => occupancyGrid?.setGoalYaw(yaw)}
+                        onDismiss={() => {
+                            occupancyGrid?.removeGoalMarker();
+                            handleSelectGoal(true);
+                            selectedLocationMenuItemSet(undefined);
+                        }}
                     />
                 )}
                 {mapStatus !== "ready" && (
