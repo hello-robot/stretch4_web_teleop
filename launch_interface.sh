@@ -25,6 +25,7 @@ export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v -E '/(\.?[a-zA-Z0-9_-]*venv|e
 # 1. Define color variables
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color (Reset)
 
@@ -196,7 +197,13 @@ function print_interface_urls {
 
 	echo ""
 	echo "#############################################"
-	echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
+	if [ "$ROS_LAUNCH_WARNINGS" -eq 1 ]; then
+		echo -e "${YELLOW}WEB TELEOP IS UP, BUT THE ROS2 LAUNCH LOGGED ERRORS.${NC}"
+		echo "Every node web teleop needs is running. The errors are listed above"
+		echo "and in $logdir/start_ros2.txt."
+	else
+		echo -e "${GREEN}DONE! WEB TELEOP IS UP!${NC}"
+	fi
 	echo ""
 
 	echo -e "${BLUE}Hosting Mode:${NC} $HOSTING_MODE ($HOSTING_MODE_SOURCE)"
@@ -320,7 +327,22 @@ logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 
 cd "$REPO_DIR"
 
+# start_ros2.sh exits 0 when every node web teleop needs is up, 2 when they are
+# up but the launch logged errors, and anything else when something did not
+# start -- which it has already listed by name.
+ROS_LAUNCH_WARNINGS=0
 ./start_ros2.sh -l "$logdir" $MAP |& tee "$logfile_ros"
+ros_status=${PIPESTATUS[0]}
+if [ "$ros_status" -eq 2 ]; then
+	ROS_LAUNCH_WARNINGS=1
+elif [ "$ros_status" -ne 0 ]; then
+	# Stop here: starting the web server on top of a broken ROS stack is what
+	# leaves the operator page spinning with a "DONE" banner above it.
+	echo ""
+	echo "ROS2 did not come up; not starting the web server."
+	echo "Whatever did start is still running. Run ./stop_interface.sh to tear it down."
+	echo_failure_help "$logdir"
+fi
 
 # 18. Configure audio
 if [ -n "$OVERWRITE_VOLUME" ]; then
