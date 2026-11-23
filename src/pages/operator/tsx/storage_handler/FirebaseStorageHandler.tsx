@@ -192,6 +192,10 @@ export class FirebaseStorageHandler extends StorageHandler {
     }
 
     public saveMapPose(name: string, pose: Transform, poseType: string) {
+        if (!this.mapPoses) this.mapPoses = {};
+        if (!this.mapPoseTypes) this.mapPoseTypes = {};
+        if (!this.mapPoses) this.mapPoses = {};
+        if (!this.mapPoseTypes) this.mapPoseTypes = {};
         this.mapPoses[name] = pose;
         this.mapPoseTypes[name] = poseType;
         this.writeMapPoses(this.mapPoses);
