@@ -54,7 +54,10 @@ import {
     getLastVoiceCommandActivityAt,
 } from "../voice/voiceCommandActivity";
 import { voiceMoveFeedbackToToast, type VoiceMoveFeedback } from "../voice/voiceMoveFeedback";
-import type { SaveMapLocationResult } from "../voice/executeSaveMapLocation";
+import type {
+    SaveMapLocationResult,
+    SaveSelectedGoal,
+} from "../voice/executeSaveMapLocation";
 import type { AddToastFn } from "../layout_components/Toasts";
 
 const SCENE_TOAST_LABELS: Record<VoiceSceneName, string> = {
@@ -101,6 +104,7 @@ export type VoiceCommandAssistantProps = {
     onCancelAutoNavOnStop: () => ControlAutoNavResult;
     onGetAutoNavSavedPoseNames: () => string[] | null;
     onLoadAutoNavLocation: (poseName: string) => LoadAutoNavLocationResult;
+    onSaveSelectedGoal: SaveSelectedGoal;
 };
 
 /** OpenAI speech-to-speech voice session controller (Realtime WebRTC). */
@@ -117,6 +121,7 @@ export const VoiceCommandAssistant = ({
     onCancelAutoNavOnStop,
     onGetAutoNavSavedPoseNames,
     onLoadAutoNavLocation,
+    onSaveSelectedGoal,
 }: VoiceCommandAssistantProps) => {
     const sessionRef =
         useRef<ActiveRealtimeVoiceSession | null>(null);
@@ -434,6 +439,7 @@ export const VoiceCommandAssistant = ({
                 onVoiceMoveFeedback,
                 onSwitchScene: handleSwitchScene,
                 onSaveMapLocationResult: handleSaveMapLocationResult,
+                onSaveSelectedGoal,
                 onSetSavedLocationsModal: handleSetSavedLocationsModal,
                 onSetMainMenu: handleSetMainMenu,
                 onSetSavedPosesModal: handleSetSavedPosesModal,
@@ -513,6 +519,7 @@ export const VoiceCommandAssistant = ({
         onVoiceMoveFeedback,
         handleSwitchScene,
         handleSaveMapLocationResult,
+        onSaveSelectedGoal,
         handleSetSavedLocationsModal,
         handleSetMainMenu,
         handleSetSavedPosesModal,

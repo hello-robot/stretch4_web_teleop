@@ -6,6 +6,7 @@ import { Pose, Quaternion, Transform, Vector3 } from "roslib";
 import { ROSOccupancyGrid, ROSPoint, ROSPose } from "shared/util";
 import { FunctionProvider } from "../function_providers/FunctionProvider";
 import { MapFunctions } from "../layout_components/AutoNav";
+import { goalToTransform } from "../utils/goalPose";
 import { directionToYaw, yawToDirection } from "./GoalHeadingClock";
 import hexToRgbArray from "../utils/hex-to-rgb-array";
 
@@ -621,10 +622,16 @@ export class OccupancyGrid extends React.Component {
                 NAV_ARROW_SCREEN_PX,
             );
             this.robotMarker.visible = true;
-            // Keep the robot marker above goal / saved-pose markers.
+            // Robot stays above saved poses. The destination stays above the robot.
             const top = this.rootObject.numChildren - 1;
             if (top >= 0) {
                 this.rootObject.setChildIndex(this.robotMarker, top);
+            }
+            if (this.goalMarker) {
+                const goalTop = this.rootObject.numChildren - 1;
+                if (goalTop >= 0) {
+                    this.rootObject.setChildIndex(this.goalMarker, goalTop);
+                }
             }
             this.rootObject.update();
         } catch (err) {
@@ -816,12 +823,6 @@ export class OccupancyGrid extends React.Component {
         );
         this.goalMarker.visible = true;
         this.rootObject.addChild(this.goalMarker);
-        if (this.robotMarker) {
-            const top = this.rootObject.numChildren - 1;
-            if (top >= 0) {
-                this.rootObject.setChildIndex(this.robotMarker, top);
-            }
-        }
         this.rootObject.update();
     }
 
@@ -865,19 +866,25 @@ export class OccupancyGrid extends React.Component {
     }
 
     /**
+     * Drop the saveable tap (position and heading) without removing the arrow.
+     * Used when a saved location replaces a map tap.
+     */
+    clearTappedGoal() {
+        this.goalPositionSet(undefined);
+        this.goal_yaw = undefined;
+        this.goalYawListeners.forEach(cb => cb(undefined));
+    }
+
+    /**
      * Sends the robot to the current goal position, if set.
      */
     play() {
         if (this.goal_position) {
             const yaw = this.goal_yaw ?? 0;
+            const pose = goalToTransform(this.goal_position, yaw);
             this.functs.MoveBase({
                 position: this.goal_position,
-                orientation: {
-                    x: 0,
-                    y: 0,
-                    z: Math.sin(yaw / 2),
-                    w: Math.cos(yaw / 2),
-                },
+                orientation: pose.rotation,
             } as ROSPose);
         }
         this.goalPositionSet(undefined);

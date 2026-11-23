@@ -123,13 +123,15 @@ type GoalHeadingClockProps = {
     /** Clock center in CSS px, relative to the positioned parent (the goal marker). */
     center: { x: number; y: number };
     onSelect: (yaw: number) => void;
+    /** Remove the destination and return AutoNav to its idle state. */
+    onDismiss: () => void;
 };
 
 /**
  * Dial drawn around the goal marker for choosing which way the robot faces at
  * the goal. Eight wedge buttons; the canvas arrow in the hole shows the heading.
  */
-export function GoalHeadingClock({ yaw, center, onSelect }: GoalHeadingClockProps) {
+export function GoalHeadingClock({ yaw, center, onSelect, onDismiss }: GoalHeadingClockProps) {
     const selected = yawToDirection(yaw);
     const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -200,6 +202,30 @@ export function GoalHeadingClock({ yaw, center, onSelect }: GoalHeadingClockProp
                     </div>
                 );
             })}
+            <button
+                type="button"
+                className="goal-heading-clock__dismiss"
+                aria-label="Clear destination"
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onDismiss();
+                }}
+            >
+                <svg
+                    width="27"
+                    height="27"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M6 6L18 18M18 6L6 18"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                    />
+                </svg>
+            </button>
         </div>
     );
 }
