@@ -18,10 +18,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition
 from launch.launch_context import LaunchContext
-from launch.launch_description_sources import (
-    FrontendLaunchDescriptionSource,
-    PythonLaunchDescriptionSource,
-)
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     EnvironmentVariable,
     FindExecutable,
@@ -75,13 +72,11 @@ def check_valid_configuration(model, has_head_cams):
 def generate_launch_description():
     teleop_interface_package = str(get_package_share_path("stretch4_web_teleop"))
     core_package = str(get_package_share_path("stretch_core"))
-    rosbridge_package = str(get_package_share_path("rosbridge_server"))
     # stretch_core_path = str(get_package_share_directory("stretch_core"))
     stretch_navigation_path = str(get_package_share_directory("stretch_nav2"))
     stretch_tag_perception_path = FindPackageShare("stretch_tag_perception")
 
     robot_params = RobotParams().get_params()[1]
-    stretch_serial_no = robot_params["robot"]["serial_no"]
     stretch_model = robot_params["robot"]["model_name"]
     stretch_tool = robot_params["robot"]["tool"]
     stretch_has_head_cams = symlinks_to_has_head_cams()
@@ -102,12 +97,6 @@ def generate_launch_description():
     )
     map_yaml = DeclareLaunchArgument(
         "map_yaml", description="filepath to previously captured map", default_value=""
-    )
-    certfile_arg = DeclareLaunchArgument(
-        "certfile", default_value=stretch_serial_no + "+6.pem"
-    )
-    keyfile_arg = DeclareLaunchArgument(
-        "keyfile", default_value=stretch_serial_no + "+6-key.pem"
     )
     nav2_params_file_param = DeclareLaunchArgument(
         "nav2_params_file",
@@ -147,20 +136,10 @@ def generate_launch_description():
             map_yaml,
             nav2_params_file_param,
             params_file,
-            certfile_arg,
-            keyfile_arg,
             bt_param,
             map_path_check_action,
         ]
     )
-
-    # TF2 web republisher (streams TF frames to the web client)
-    tf2_web_republisher_node = Node(
-        package="tf2_web_republisher",
-        executable="tf2_web_republisher_node",
-        name="tf2_web_republisher_node",
-    )
-    ld.add_action(tf2_web_republisher_node)
 
     # Stretch Driver
     stretch_driver_launch = IncludeLaunchDescription(
@@ -196,37 +175,6 @@ def generate_launch_description():
         ),
     )
     ld.add_action(gripper_camera_launch)
-
-    # Rosbridge Websocket
-    rosbridge_launch = IncludeLaunchDescription(
-        FrontendLaunchDescriptionSource(
-            PathJoinSubstitution(
-                [rosbridge_package, "launch", "rosbridge_websocket_launch.xml"]
-            )
-        ),
-        launch_arguments={
-            "port": "9090",
-            "address": "localhost",
-            "ssl": "true",
-            "certfile": PathJoinSubstitution(
-                [
-                    teleop_interface_package,
-                    "certificates",
-                    LaunchConfiguration("certfile"),
-                ]
-            ),
-            "keyfile": PathJoinSubstitution(
-                [
-                    teleop_interface_package,
-                    "certificates",
-                    LaunchConfiguration("keyfile"),
-                ]
-            ),
-            "authenticate": "false",
-            "call_services_in_new_thread": "true",
-        }.items(),
-    )
-    ld.add_action(rosbridge_launch)
 
     # Configure Video Streams
     labels = ["overhead", "gripper"]
@@ -470,4 +418,33 @@ def generate_launch_description():
     )
     ld.add_action(shutdown_robot_node)
 
+    ld.add_action(robot_peer_process())
+
     return ld
+
+
+def robot_peer_process() -> ExecuteProcess:
+    """The robot peer: bridges ROS 2 to the operator's browser over WebRTC.
+
+    Runs from the source checkout, like server.js, so editing it needs no
+    rebuild. The launch restarts it if it exits and, on shutdown, sends SIGINT
+    and waits long enough for it to stop the robot and release its signaling
+    seat. It reads HOSTING_MODE and the FEATURE_* flags from the environment
+    launch_interface.sh exports, and the Firebase settings from the repo's .env.
+    """
+    repo_dir = os.environ.get(
+        "WEB_TELEOP_REPO_DIR",
+        os.path.expanduser("~/ament_ws/src/stretch4_web_teleop"),
+    )
+    return ExecuteProcess(
+        name="robot_peer",
+        cmd=[
+            os.environ.get("WEB_TELEOP_PYTHON", "python3"),
+            os.path.join(repo_dir, "start_robot_peer.py"),
+        ],
+        cwd=repo_dir,
+        output="screen",
+        respawn=True,
+        respawn_delay=2.0,
+        sigterm_timeout="10",
+    )

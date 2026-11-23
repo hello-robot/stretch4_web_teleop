@@ -43,19 +43,6 @@ function createSingleFlight() {
     };
 }
 
-/**
- * The robot should replace its peer when the connection is no longer new,
- * already has senders, or already has a data channel. Reusing that peer would
- * stack tracks and channels.
- */
-function shouldResetRobotPeer({ connectionState, senderCount, hasChannel }) {
-    return (
-        connectionState !== "new" ||
-        senderCount !== 0 ||
-        hasChannel
-    );
-}
-
 /** Skip recovery when this tab has yielded the seat or the document is hidden. */
 function canAttemptOperatorRecovery({ yielded, hidden }) {
     return !yielded && !hidden;
@@ -96,6 +83,5 @@ module.exports = {
     createRenegotiationRequest,
     createSingleFlight,
     renegotiationNonce,
-    shouldResetRobotPeer,
     shouldScheduleForegroundRecovery,
 };

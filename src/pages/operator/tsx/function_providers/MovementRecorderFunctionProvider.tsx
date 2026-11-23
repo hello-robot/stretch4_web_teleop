@@ -1,7 +1,7 @@
 import { FunctionProvider } from "./FunctionProvider";
 import { MovementRecorderFunction } from "./MovementRecorderTypes";
 import { ActionState, RobotPose, ValidJoints } from "shared/util";
-import { movementStatesTerminal, MovementState } from "robot/tsx/robot";
+import { movementStatesTerminal, MovementState } from "shared/movementState";
 import { StorageHandler } from "../storage_handler/StorageHandler";
 
 export class MovementRecorderFunctionProvider extends FunctionProvider {

@@ -6,7 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const PAGES = ["index.html", "operator/index.html", "robot/index.html"];
+const PAGES = ["index.html", "operator/index.html"];
 
 /** The whole-site build a robot uploads to its preview channel. */
 function hostingBundleReady(distDir) {

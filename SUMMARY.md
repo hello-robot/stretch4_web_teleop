@@ -5,7 +5,7 @@
 - [WEBRTC_PROJECT_LICENSE](WEBRTC_PROJECT_LICENSE.md)
 - [src](src/README.md)
   - [Primer: Operator Page](src/primer_operator.md)
-  - [Primer: Robot Page](src/primer_robot.md)
+  - [Primer: Robot Peer](src/primer_robot.md)
   - [Primer: Launching the Interface](src/primer_launch.md)
   - [Primer: Multi-Rail Hosting and Lobby](src/primer_rails.md)
   - [Software Architecture](src/primer_software_architecture.md)

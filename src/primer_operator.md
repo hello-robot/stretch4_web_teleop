@@ -1,6 +1,6 @@
 # Primer: Operator Page
 
-The **operator page** is the browser-based UI through which a user teleoperates the Stretch 4 robot. It connects to the robot browser over WebRTC, receives sensor/camera data, and sends movement commands back.
+The **operator page** is the browser-based UI through which a user teleoperates the Stretch 4 robot. It connects to the robot peer over WebRTC, receives sensor/camera data, and sends movement commands back.
 
 > For a step-by-step checklist of adding a new capability end to end, see [How to Add a New Feature (Summary)](#how-to-add-a-new-feature-summary) below and [`primer_robot.md`](primer_robot.md#how-to-add-a-new-robot-capability-summary).
 
@@ -33,7 +33,7 @@ Before describing the operator page itself, it helps to understand the shared la
 
 ### `commands.tsx`
 
-This file defines the common language between the operator and robot browsers. It defines every **command** the interface can transmit — the full vocabulary of robot actions. For example, you can ask Nav2 to navigate the robot using the MoveBaseCommand, or you can ask the driver for the battery's current voltage using GetBatteryStateCommand. Every action taken in the web interface is converted into a command and transmitted through WebRTC's data channel to the robot browser, where it is interpreted and further transmitted to Stretch's ROS2 packages.
+This file defines the common language between the operator and the robot peer. It defines every **command** the interface can transmit — the full vocabulary of robot actions. For example, you can ask Nav2 to navigate the robot using the MoveBaseCommand, or you can ask the driver for the battery's current voltage using GetBatteryStateCommand. Every action taken in the web interface is converted into a command and transmitted through WebRTC's data channel to the robot peer, where it is interpreted and further transmitted to Stretch's ROS2 packages.
 
 Each command is a TypeScript interface with a `type` discriminant:
 
@@ -53,7 +53,7 @@ export type cmd = DriveCommand | IncrementalMove | HomeTheRobotCommand | ...;
 
 ### `remoterobot.tsx`
 
-This file wraps the logic for receiving and transmitting commands, sensor streams, etc. over the WebRTC channels in a nice API for the operator browser. You can think of `RemoteRobot` as the bridge between the operator browser and the robot. The interface creates a single instance of `RemoteRobot` and uses it for the duration of the session that it is connected to the robot. On the other end, the robot browser is listening for commands from / transmitting data to `RemoteRobot`. Each method packages a command and sends it through the WebRTC data channel:
+This file wraps the logic for receiving and transmitting commands, sensor streams, etc. over the WebRTC channels in a nice API for the operator browser. You can think of `RemoteRobot` as the bridge between the operator browser and the robot. The interface creates a single instance of `RemoteRobot` and uses it for the duration of the session that it is connected to the robot. On the other end, the robot peer is listening for commands from / transmitting data to `RemoteRobot`. Each method packages a command and sends it through the WebRTC data channel:
 
 ```ts
 homeTheRobot() {
@@ -82,11 +82,11 @@ You generally do not need to edit this file unless adding a new WebRTC message t
 
 *Note: You should never touch this file!*
 
-This file contains the code used for establishing a peer connection between the operator and robot browser and setting up data channels such that they can communicate.
+This file contains the code used for establishing a peer connection between the operator and the robot peer and setting up data channels such that they can communicate.
 
 ### `signaling/`
 
-Selects and manages the WebRTC SDP/ICE signaling transport (`get_signaler.ts`): `LocalSignaling` over `socket.io` for `/local/operator/`, `FirebaseSignaling` over Realtime Database `rooms/<robotUid>` (with operator seat leases in `operatorSeat.ts`) for cloud operator bundles, and `TeleopSignalingCoordinator` on the robot page in `firebase` mode to listen on both transports simultaneously.
+Selects and manages the WebRTC SDP/ICE signaling transport (`get_signaler.ts`): `LocalSignaling` over `socket.io` for `/local/operator/`, `FirebaseSignaling` over Realtime Database `rooms/<robotUid>` (with operator seat leases in `operatorSeat.ts`) for cloud operator bundles. On the robot, the robot peer's `TeleopSignalingCoordinator` (`stretch4_web_teleop_robot/signaling/coordinator.py`) listens on both transports simultaneously in `firebase` mode.
 
 ______________________________________________________________________
 
@@ -95,7 +95,7 @@ ______________________________________________________________________
 This file is the module entry. It:
 
 1. **Creates** all `FunctionProvider` singletons (see below).
-1. **Establishes** the WebRTC connection to the robot browser.
+1. **Establishes** the WebRTC connection to the robot peer.
 1. **Handles two WebRTC callbacks**:
    - `handleRemoteTrackAdded()` — subscribes to video/audio media channels so they feed the camera views.
    - `handleWebRTCMessage()` — a switch statement that routes incoming robot data to the right function provider or state variable:
@@ -309,10 +309,10 @@ WebRTC data channel (robot → operator)
   WebRTC data channel (operator → robot)
         │
         ▼
-  robot/index.tsx handleMessage() switch
+  stretch4_web_teleop_robot/session.py handle_message()
         │
         ▼
-  Robot.executeX() → ROSLib → rosbridge → ROS2
+  Robot.execute_x() → rclpy → ROS2
 ```
 
 ______________________________________________________________________
@@ -321,8 +321,8 @@ ______________________________________________________________________
 
 1. **`shared/commands.tsx`** — define a new `interface MyCommand { type: "myCommand"; ... }` and add it to the `cmd` union.
 1. **`shared/remoterobot.tsx`** — add a method `myAction() { this.robotChannel({ type: "myCommand" }); }`.
-1. **`robot/tsx/index.tsx`** — add a `case "myCommand": robot.myAction(); break;` in `handleMessage()`.
-1. **`robot/tsx/robot.tsx`** — implement `myAction()` using ROSLib (service, topic, or action client).
+1. **`stretch4_web_teleop_robot/session.py`** — add a `myCommand` branch to `handle_message()`.
+1. **`stretch4_web_teleop_robot/robot.py`** — implement `my_action()` with rclpy (service, topic, or action client).
 1. **`operator/tsx/function_providers/MyFunctionProvider.tsx`** — extend `FunctionProvider`, implement `provideFunctions()`.
 1. **`operator/tsx/index.tsx`** — instantiate the new provider and wire up any WebRTC message callbacks.
 1. **Component** — define the `enum MyFunction` and render a component that calls `myFunctionProvider.provideFunctions(...)`.
@@ -337,6 +337,6 @@ ______________________________________________________________________
 
 **Action modes are global, not per-component.** `FunctionProvider.actionMode` is a static field. All button pads share the same mode.
 
-**The operator does not talk to ROS directly.** All ROS communication goes through the robot browser (`robot/tsx/robot.tsx` ↔ ROSLib ↔ rosbridge). The operator only speaks to the robot browser through `remoterobot.tsx` and WebRTC.
+**The operator does not talk to ROS directly.** All ROS communication goes through the robot peer (`stretch4_web_teleop_robot/robot.py` ↔ rclpy). The operator only speaks to the robot peer through `remoterobot.tsx` and WebRTC.
 
 **The operator bundle runs under three `publicPath` prefixes (`/local/`, `/`, and `/r/<tag>/`).** Always import static assets (icons, fonts, media) through webpack or use `./` relative URLs; root-absolute paths such as `/operator/...` fail when served from `/local/operator/` or `/r/<tag>/operator/`.

@@ -122,7 +122,7 @@ function endOperatorClipSession() {
 
 // "Is the cloud door open" is read from the canonical HOSTING_MODE ("local" or
 // "firebase"), shared across launch_interface.sh,
-// start_web_server_and_robot_browser.sh, and start_robot_browser.js.
+// start_web_server.sh, and start_robot_peer.py.
 const HOSTING_MODE = process.env.HOSTING_MODE || "local";
 const localDistDir = path.join(__dirname, "dist");
 const firebaseDistDir = path.join(__dirname, "dist-firebase");
@@ -151,7 +151,9 @@ function cacheHashedVideo(res, filePath) {
 //   /local/operator/  always the LAN bundle, signalling over socket.io
 //   /operator/        always the cloud bundle -- a visible redirect to the LAN
 //                     door when no cloud door was opened
-//   /robot/           the robot's own page, from whichever bundle this mode runs
+//
+// The robot side is not a page any more: start_robot_peer.py joins the room
+// over socket.io directly (and over Firebase when the cloud door is open).
 //
 // The redirect is registered before the static mounts so it wins over them, and
 // it is a redirect rather than a 404 because the address bar then shows which
@@ -166,8 +168,7 @@ if (HOSTING_MODE !== "firebase") {
 app.use("/local/", express.static(localDistDir, { setHeaders: cacheHashedVideo }));
 // The localstorage bundle is built with publicPath /local/, so its assets
 // resolve through the mount above no matter which path served the HTML. That is
-// what lets local mode serve /robot/ and the home page from the root mount too,
-// which start_robot_browser.js requires: it loads https://localhost/robot.
+// what lets local mode serve the home page from the root mount too.
 app.use(
     "/",
     express.static(

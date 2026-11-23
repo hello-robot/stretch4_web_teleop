@@ -73,14 +73,8 @@ export class FirebaseSignaling extends BaseSignaling {
     private leaveEpoch = 0;
     private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
-    private get robot_key(): string {
-        return (this.role === "robot" && this.robot_name) ? this.robot_name : this.uid;
-    }
-
     private applyRoomSignal(currSignal) {
         if (!this.is_joined || !currSignal) return;
-        const localOperatorLease =
-            this.role === "robot" && currSignal.transport === "local";
         const changes = {};
         for (const key in currSignal) {
             if (
@@ -94,19 +88,9 @@ export class FirebaseSignaling extends BaseSignaling {
         this.prevSignal = currSignal;
 
         if (
-            localOperatorLease &&
-            (Object.keys(changes).includes("active") ||
-                Object.keys(changes).includes("transport"))
-        ) {
-            this.onGoodbye();
-            return;
-        }
-
-        if (
-            !localOperatorLease &&
-            (Object.keys(changes).includes("candidate") ||
-                Object.keys(changes).includes("sessionDescription") ||
-                Object.keys(changes).includes("cameraInfo"))
+            Object.keys(changes).includes("candidate") ||
+            Object.keys(changes).includes("sessionDescription") ||
+            Object.keys(changes).includes("cameraInfo")
         ) {
             if (Object.keys(changes).includes("active")) {
                 delete changes["active"];
@@ -115,29 +99,8 @@ export class FirebaseSignaling extends BaseSignaling {
         }
         if (Object.keys(changes).includes("active") && !changes["active"]) {
             console.log("bye");
-            if (this.role === "robot") {
-                update(ref(this.db, "robots/" + this.robot_key), {
-                    status: "online",
-                });
-            } else {
-                this.leave();
-            }
+            this.leave();
             this.onGoodbye();
-            return;
-        }
-        if (
-            this.role === "robot" &&
-            !localOperatorLease &&
-            Object.keys(changes).includes("active") &&
-            changes["active"]
-        ) {
-            console.log(
-                `Operator has joined the room. My role: ${this.role}.`,
-            );
-            update(ref(this.db, "robots/" + this.robot_key), {
-                status: "occupied",
-            });
-            if (this.onRobotConnectionStart) this.onRobotConnectionStart();
         }
     }
 
@@ -150,9 +113,6 @@ export class FirebaseSignaling extends BaseSignaling {
     }
 
     private async _get_room_uid(room_name: string): Promise<string> {
-        if (this.role === "robot") {
-            return this.uid;
-        }
         if (this.role !== "operator") {
             throw new Error("Invalid signaling role");
         }
@@ -198,64 +158,6 @@ export class FirebaseSignaling extends BaseSignaling {
                 this._loginState = user ? "authenticated" : "not_authenticated";
 
                 if (this._loginState === "authenticated") {
-                    if (this.initialRole === "robot") {
-                        const urlParams = new URLSearchParams(window.location.search);
-                        const requestedFleetId =
-                            urlParams.get("fleet_id") ||
-                            process.env.HELLO_FLEET_ID;
-                        get(
-                            ref(
-                                this.db,
-                                "assignments/" + this.uid,
-                            ),
-                        ).then((assignmentSnapshot) => {
-                            const assignment = assignmentSnapshot.val();
-                            if (
-                                !assignment ||
-                                assignment.role !== "robot" ||
-                                typeof assignment.name !== "string" ||
-                                assignment.name !== requestedFleetId
-                            ) {
-                                throw new Error(
-                                    "Robot account is not provisioned for this fleet",
-                                );
-                            }
-                            this.alias = this.uid;
-                            this.role = "robot";
-                            this.robot_name = assignment.name;
-                            console.log(
-                                `FirebaseSignaling: verified robot ${this.robot_name}`,
-                            );
-
-                            return this._get_room_uid(room_name);
-                        }).then((room_uid) => {
-                            this.room_uid = room_uid;
-                            let opposite_role = "operator";
-                            console.log("FirebaseSignaling: room_uid is:", this.room_uid, ". Listening to rooms/" + this.room_uid + "/" + opposite_role);
-                            onValue(
-                                ref(
-                                    this.db,
-                                    "rooms/" +
-                                        this.room_uid +
-                                        "/" +
-                                        opposite_role,
-                                ),
-                                (snapshot) => {
-                                    this.applyRoomSignal(snapshot.val());
-                                },
-                            );
-
-                            resolve();
-                        }).catch((error) => {
-                            console.error(
-                                "FirebaseSignaling: robot identity verification failed:",
-                                error,
-                            );
-                            reject(error);
-                        });
-                        return;
-                    }
-
                     console.log("FirebaseSignaling: authenticated. Querying uids/" + this.uid);
                     get(ref(this.db, "uids/" + this.uid)).then((uidSnapshot) => {
                         const alias = uidSnapshot.val() || this.uid;
@@ -278,7 +180,7 @@ export class FirebaseSignaling extends BaseSignaling {
 
                                 const continueConfigure = () => {
                                     console.log(`My role: ${this.role}, My name: ${this.robot_name}`);
-                                    if (!["robot", "operator"].includes(this.role)) {
+                                    if (this.role !== "operator") {
                                         console.error("ERROR: invalid role");
                                         throw new Error("Invalid role");
                                     }
@@ -324,10 +226,8 @@ export class FirebaseSignaling extends BaseSignaling {
                                                 },
                                             );
                                         }
-                                        let opposite_role =
-                                            this.role === "robot"
-                                                ? "operator"
-                                                : "robot";
+                                        // The robot peer writes rooms/<uid>/robot.
+                                        let opposite_role = "robot";
                                         console.log("FirebaseSignaling: room_uid is:", this.room_uid, ". Listening to rooms/" + this.room_uid + "/" + opposite_role);
                                         onValue(
                                             ref(
@@ -370,44 +270,6 @@ export class FirebaseSignaling extends BaseSignaling {
                 throw error;
             },
         );
-    }
-
-    private claimRoomSlot(): Promise<void> {
-        const slotRef = ref(
-            this.db,
-            "rooms/" + this.room_uid + "/" + this.role,
-        );
-        // Tab close / refresh often skips leave(); clear the seat when Firebase drops us.
-        onDisconnect(slotRef).set({ active: false });
-        return set(slotRef, {
-            active: true,
-            uid: this.uid || null,
-        }).then(() => {
-            this.is_joined = true;
-        });
-    }
-
-    public join_as_robot(): Promise<boolean> {
-        return new Promise<boolean>((resolve) => {
-            // onwindowunload is flaky. is_active might stay true when the robot
-            // browser exits, so we always reclaim this seat.
-            this.claimRoomSlot()
-                .then(() => {
-                    update(ref(this.db, "robots/" + this.robot_key), {
-                        status: "online",
-                    });
-                    resolve(true);
-                })
-                .catch((error) => {
-                    // Resolving false leaves the retry to the caller. Hanging
-                    // here would strand a robot that still has local signaling.
-                    console.error(
-                        "FirebaseSignaling: robot seat claim failed:",
-                        error,
-                    );
-                    resolve(false);
-                });
-        });
     }
 
     public operatorJoinBlocked(): boolean {
@@ -538,17 +400,12 @@ export class FirebaseSignaling extends BaseSignaling {
             "rooms/" + this.room_uid + "/" + this.role,
         );
         const sessionId = this.sessionId;
-        const release =
-            this.role === "operator"
-                ? this.operatorRelease()
-                : { active: false };
+        const release = this.operatorRelease();
         // Keep onDisconnect armed until the release lands. A tab close often
         // dies before this write finishes; the queued disconnect still clears us.
         runTransaction(slotRef, (current) => {
             if (this.leaveEpoch !== epoch || this.is_joined) return;
-            if (this.role === "operator") {
-                if (!current || current.sessionId !== sessionId) return;
-            }
+            if (!current || current.sessionId !== sessionId) return;
             return release;
         }).then((result) => {
             if (result.committed && this.leaveEpoch === epoch && !this.is_joined) {
@@ -557,11 +414,6 @@ export class FirebaseSignaling extends BaseSignaling {
         }).catch((err) => {
             console.error("FirebaseSignaling: leave failed", err);
         });
-        if (this.role === "robot") {
-            update(ref(this.db, "robots/" + this.robot_key), {
-                status: "offline",
-            });
-        }
     }
 
     public send(signal: SignallingMessage): void {

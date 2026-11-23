@@ -331,7 +331,7 @@ export function executeStopMotionOnProvider(
 
 /**
  * Execute a named voice macro — moves the robot to an absolute pose target.
- * Uses setRobotPose (relayed via RemoteRobot → FollowJointTrajectory on the robot page).
+ * Uses setRobotPose (relayed via RemoteRobot → FollowJointTrajectory on the robot peer).
  * Only the joints defined in the macro are moved; all others stay put.
  */
 export function executeMacroOnProvider(

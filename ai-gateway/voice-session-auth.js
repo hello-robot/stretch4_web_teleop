@@ -69,8 +69,8 @@ function validate(token, operSockId, io) {
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 /**
- * True for requests from the robot's own browser (Playwright on the robot,
- * loading https://localhost/robot). It relays minted credentials to the
+ * True for requests from the robot peer (start_robot_peer.py, on the robot
+ * itself, over loopback). It relays minted credentials to the
  * operator over the WebRTC data channel when the operator page is served
  * from Firebase Hosting and cannot reach this server.
  *

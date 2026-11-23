@@ -4,7 +4,7 @@
  * checkFirebaseRobotAccess.js
  *
  * Firebase signaling preflight. Signs in with the robot account from .env and
- * reads assignments/<uid> -- what the robot page and the teleop lease do
+ * reads assignments/<uid> -- what the robot peer and the teleop lease do
  * moments later.
  *
  * Scope: the Firebase CLI credential is not consulted. It uploads Hosting and
