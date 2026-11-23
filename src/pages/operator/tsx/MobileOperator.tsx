@@ -26,7 +26,10 @@ import {
 import { FunctionProvider } from "./function_providers/FunctionProvider";
 import { ButtonPad } from "./layout_components/ButtonPad";
 import { SharedState } from "./layout_components/CustomizableComponent";
-import type { AutoNavNavControls } from "./layout_components/FooterAutoNav";
+import type {
+    AutoNavNavControlResult,
+    AutoNavNavControls,
+} from "./layout_components/FooterAutoNav";
 import PilotMode from "./layout_components/PilotMode";
 import { StorageHandler } from "./storage_handler/StorageHandler";
 import {
@@ -289,6 +292,26 @@ export const MobileOperator = (props: {
         return controls.getSavedPoseNames();
     }, []);
 
+    const handleSaveSelectedGoal = React.useCallback(
+        (label: string): AutoNavNavControlResult => {
+            if (sceneSelectedRef.current !== "autonav") {
+                return {
+                    ok: false,
+                    detail: "Saving a location is only available in AutoNav",
+                };
+            }
+            const controls = autoNavNavControlsRef.current;
+            if (!controls) {
+                return {
+                    ok: false,
+                    detail: "AutoNav is not ready.",
+                };
+            }
+            return controls.saveSelectedGoal(label);
+        },
+        [],
+    );
+
     const handleLoadAutoNavLocation = React.useCallback(
         (poseName: string): LoadAutoNavLocationResult => {
             if (sceneSelectedRef.current !== "autonav") {
@@ -542,6 +565,7 @@ export const MobileOperator = (props: {
                         onCancelAutoNavOnStop={handleCancelAutoNavOnStop}
                         onGetAutoNavSavedPoseNames={handleGetAutoNavSavedPoseNames}
                         onLoadAutoNavLocation={handleLoadAutoNavLocation}
+                        onSaveSelectedGoal={handleSaveSelectedGoal}
                         onSetFlyingGripperMode={handleSetFlyingGripperMode}
                         isFlyingGripperActive={isFlyingGripper}
                     />

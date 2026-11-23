@@ -20,6 +20,7 @@ import AddLocationIcon from '../../icons/AddLocationIcon.svg';
 import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
 import StartNavIcon from '../../icons/StartNavIcon.svg';
 import { LocalStorageHandler } from '../storage_handler/LocalStorageHandler';
+import { goalToTransform } from '../utils/goalPose';
 
 /** Result from imperative AutoNav start/cancel (voice + UI share this path). */
 export type AutoNavNavControlResult = {
@@ -33,7 +34,13 @@ export type AutoNavNavControls = {
     cancel: () => AutoNavNavControlResult;
     loadLocation: (poseName: string) => AutoNavNavControlResult;
     getSavedPoseNames: () => string[];
+    saveSelectedGoal: (label: string) => AutoNavNavControlResult;
 };
+
+const SAVED_LOCATION_ALREADY_SELECTED =
+    "A saved location is already selected.";
+const MAP_POSE_UNAVAILABLE =
+    "Cannot save location — map pose unavailable.";
 
 interface FooterAutoNavProps {
     handleSelectGoal: (selectGoal: boolean) => void;
@@ -49,6 +56,7 @@ interface FooterAutoNavProps {
     selectedLocationMenuItem?: string;
     selectedLocationMenuItemSet: Dispatch<SetStateAction<string | undefined>>;
     goalPosition: ROSPoint | undefined; // Assuming goalPosition is a Vector3
+    goalYaw: number | undefined;
     addToast: (type: "success" | "error" | "info", message: string, duration?: number) => void;
     swipeableViewsIdxSet?: Dispatch<SetStateAction<number>>;
     sceneSelected?: string;
@@ -57,13 +65,15 @@ interface FooterAutoNavProps {
 }
 
 interface ModalAddLocationProps {
-    functs: AutoNavFunctions;
     poses: string[];
     posesSet: Dispatch<SetStateAction<string[]>>;
     isModalAddLocationVisible: boolean;
     isModalAddLocationVisibleSet: Dispatch<SetStateAction<boolean>>;
     getPosesLatest: () => void;
     addToast: (type: "success" | "error" | "info", message: string, duration?: number) => void;
+    saveSelectedGoal: (label: string) => AutoNavNavControlResult;
+    /** True when the save is a tapped destination, not the robot pose. */
+    savingTappedDestination: boolean;
 }
 
 interface ModalLocationsMenuProps {
@@ -81,23 +91,25 @@ interface ModalLocationsMenuProps {
  * ModalAddLocation component allows users to add a new location
  * by entering a name for the location.
  *
- * @param functs - Functions for handling auto navigation.
  * @param poses - Current list of saved poses.
  * @param posesSet - Function to update the list of saved poses.
  * @param isModalAddLocationVisible - State to control visibility of the modal.
  * @param isModalAddLocationVisibleSet - Function to set visibility of the modal.
  * @param getPosesLatest - Function to fetch the latest poses.
  * @param addToast - Function to display toast notifications.
+ * @param saveSelectedGoal - Saves the tapped destination, or the robot pose when none is tapped.
+ * @param savingTappedDestination - True when the save is a tapped destination.
  */
 
 const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
-    functs,
     poses,
     posesSet,
     isModalAddLocationVisibleSet,
     isModalAddLocationVisible,
     getPosesLatest,
     addToast,
+    saveSelectedGoal,
+    savingTappedDestination,
 }) => {
 
     const [locationName, locationNameSet] = React.useState<string>("");
@@ -108,16 +120,16 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
     // update local state, "poses"
     function handleAccept(): void {
         if (locationName.length > 0) {
-            try {
-                functs.SaveGoal(locationName);
-                if (!poses.includes(locationName)) {
-                    posesSet((prevPoses) => [...prevPoses, locationName]);
+            const result = saveSelectedGoal(locationName);
+            if (result.ok) {
+                const name = locationName.trim();
+                if (!poses.includes(name)) {
+                    posesSet((prevPoses) => [...prevPoses, name]);
                 }
-                addToast('info', `Location "${locationName}" added.`);
+                addToast('info', result.detail);
                 getPosesLatest();
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                addToast('error', `Failed to save location: ${msg}`);
+            } else {
+                addToast('error', result.detail);
             }
         }
         locationNameSet("");
@@ -153,7 +165,7 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
                         aria-label="Add location"
                         aria-disabled={locationName.length === 0}
                     >
-                        Add Location
+                        Save
                     </button>
                 </MagneticWrapper>
                 <MagneticWrapper>
@@ -173,8 +185,11 @@ const ModalAddLocation: React.FC<ModalAddLocationProps> = ({
         <ModalMobile
             isOpen={isModalAddLocationVisible}
             onClose={() => isModalAddLocationVisibleSet(false)}
-            title="Add Location"
+            title={savingTappedDestination ? "Save Selected Location" : "Save Stretch's Location"}
             subtitle="AUTONAV"
+            modalClassName={
+                savingTappedDestination ? "modal-add-location-destination" : ""
+            }
             footer={<Footer />}
         >
             <input
@@ -514,6 +529,7 @@ const ModalLocationsMenu: React.FC<ModalLocationsMenuProps> = ({
  * @param selectedLocationMenuItem - The name of the selected location menu item.
  * @param swipeableViewsIdxSet - Function to set the index of the swipeable views.
  * @param goalPosition - Current goal position for navigation.
+ * @param goalYaw - Heading of the tapped destination, in map-frame radians.
  * @param addToast - Function to display toast notifications.
  */
 
@@ -532,6 +548,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     selectedLocationMenuItemSet,
     swipeableViewsIdxSet,
     goalPosition,
+    goalYaw,
     addToast,
     sceneSelected,
     onSceneSelectedChange,
@@ -542,6 +559,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         if (selectedLocationMenuItem) {
             let pose: Transform = functs.LoadGoal(selectedLocationMenuItem)!;
             functs.DisplayGoalMarker(pose.translation, pose.rotation);
+            functs.ClearTappedGoal();
         }
     }, [selectedLocationMenuItem]);
 
@@ -566,7 +584,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         if (selectedLocationMenuItem !== undefined) {
             let pose: Transform = functs.LoadGoal(selectedLocationMenuItem)!;
             functs.NavigateToPose(pose);
-            // functs.DisplayGoalMarker(pose.translation);
+            functs.ClearTappedGoal();
             isCurrentlyMovingSet(true);
             isSelectingGoalSet(false);
             selectedLocationMenuItemSet(undefined);
@@ -651,6 +669,45 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         ],
     );
 
+    const saveSelectedGoal = useCallback(
+        (label: string): AutoNavNavControlResult => {
+            const name = label.trim();
+            if (!name) {
+                return { ok: false, detail: "Missing location label." };
+            }
+            if (selectedLocationMenuItem !== undefined) {
+                return {
+                    ok: false,
+                    detail: SAVED_LOCATION_ALREADY_SELECTED,
+                };
+            }
+            try {
+                const pose = goalPosition
+                    ? goalToTransform(goalPosition, goalYaw ?? 0)
+                    : functs.GetPose();
+                if (!pose?.translation || !pose?.rotation) {
+                    return {
+                        ok: false,
+                        detail: MAP_POSE_UNAVAILABLE,
+                    };
+                }
+                functs.SaveGoal(name, pose);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                return {
+                    ok: false,
+                    detail: `Failed to save location: ${msg}`,
+                };
+            }
+            return { ok: true, detail: `Location "${name}" added.` };
+        },
+        [functs, goalPosition, goalYaw, selectedLocationMenuItem],
+    );
+
+    const canSaveLocation = selectedLocationMenuItem === undefined;
+    const savingTappedDestination =
+        goalPosition !== undefined && canSaveLocation;
+
     useEffect(() => {
         if (!onRegisterAutoNavNavControls) {
             return;
@@ -660,6 +717,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
             cancel: cancelAutoNav,
             loadLocation,
             getSavedPoseNames,
+            saveSelectedGoal,
         });
         return () => onRegisterAutoNavNavControls(null);
     }, [
@@ -668,6 +726,7 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
         cancelAutoNav,
         loadLocation,
         getSavedPoseNames,
+        saveSelectedGoal,
     ]);
 
     // Voice (and other non-UI) saves write storage without updating React state.
@@ -784,13 +843,14 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                 {/* <AddLocationButton> */}
                 <div className="add-location-wrapper">
                     <ModalAddLocation
-                        functs={functs}
                         poses={poses}
                         posesSet={posesSet}
                         isModalAddLocationVisible={isModalAddLocationVisible}
                         isModalAddLocationVisibleSet={isModalAddLocationVisibleSet}
                         getPosesLatest={getPosesLatest}
                         addToast={addToast}
+                        saveSelectedGoal={saveSelectedGoal}
+                        savingTappedDestination={savingTappedDestination}
                     />
                     <button
                         type="button"
@@ -799,6 +859,8 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         }}
                         className="add-location"
                         aria-label="Add location"
+                        disabled={!canSaveLocation}
+                        aria-disabled={!canSaveLocation}
                     >
                         <img src={AddLocationIcon} className="add-location-icon" alt="" aria-hidden="true" />
                     </button>

@@ -74,7 +74,7 @@
 }
 
 /* Inset box Voice Control badges. Transparent, so the wedge color shows through. */
-.goal-heading-clock__segment {
+button.goal-heading-clock__segment {
     position: absolute;
     z-index: 1;
     margin: 0;
@@ -83,6 +83,7 @@
     background: transparent;
     pointer-events: auto;
     cursor: pointer;
+    box-shadow: none;
     appearance: none;
     -webkit-appearance: none;
 }
@@ -100,11 +101,53 @@
     border: 0;
 }
 
-.goal-heading-clock__segment:focus {
+button.goal-heading-clock__segment:focus {
     outline: none;
 }
 
-.goal-heading-clock__segment:focus-visible {
+button.goal-heading-clock__segment:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.goal-heading-clock__dismiss {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    margin: 0;
+    padding: 0;
+    transform: translate(-60%, 60%);
+    border: none;
+    border-radius: 50%;
+    background: hsl(184deg 25% 50% / 80%);
+    color: hsl(171 100% 50% / 1);
+    box-shadow: none;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.goal-heading-clock__dismiss:hover {
+    background: hsl(171deg 60% 50% / 90%);
+    color: hsla(184deg 42% 25% / 100%);
+}
+
+.goal-heading-clock__dismiss:active {
+    background: var(--clock-accent);
+}
+
+.goal-heading-clock__dismiss:focus {
+    outline: none;
+}
+
+.goal-heading-clock__dismiss:focus-visible {
     outline: 2px solid #fff;
     outline-offset: 2px;
 }
