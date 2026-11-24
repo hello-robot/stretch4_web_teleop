@@ -31,6 +31,7 @@ import {
 import {
     executeSaveMapLocation,
     type SaveMapLocationResult,
+    type SaveSelectedGoal,
 } from "./executeSaveMapLocation";
 import {
     executeDeletePose,
@@ -772,6 +773,11 @@ export type RealtimeVoiceConnectOptions = {
     /** Toast UX after save_map_location succeeds or fails. */
     onSaveMapLocationResult?: (result: SaveMapLocationResult) => void;
     /**
+     * Save the tapped destination, or the robot's current pose when none is tapped.
+     * AutoNav-gated in MobileOperator.
+     */
+    onSaveSelectedGoal?: SaveSelectedGoal;
+    /**
      * Open/close Saved Locations modal (AutoNav-gated in MobileOperator).
      * Return result for tool output; VoiceCommandAssistant toasts errors.
      */
@@ -1381,7 +1387,10 @@ export async function connectOpenAIRealtimeVoice(
                 );
                 rawArgs = {};
             }
-            const result = executeSaveMapLocation(rawArgs);
+            const result = executeSaveMapLocation(
+                rawArgs,
+                opts.onSaveSelectedGoal,
+            );
             opts.onSaveMapLocationResult?.({
                 ok: result.ok,
                 label: result.label,
