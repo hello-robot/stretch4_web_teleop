@@ -321,6 +321,10 @@ logfile_node="$logdir/start_web_server_and_robot_browser.txt"
 cd "$REPO_DIR"
 
 ./start_ros2.sh -l "$logdir" $MAP |& tee "$logfile_ros"
+if [ $? -ne 0 ]; then
+	echo_failure_help "$logdir"
+	exit 1
+fi
 
 # 18. Configure audio
 if [ -n "$OVERWRITE_VOLUME" ]; then
