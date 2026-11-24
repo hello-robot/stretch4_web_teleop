@@ -62,6 +62,10 @@ interface FooterAutoNavProps {
     sceneSelected?: string;
     onSceneSelectedChange?: Dispatch<SetStateAction<string>>;
     onRegisterAutoNavNavControls?: (controls: AutoNavNavControls | null) => void;
+    /** Robot-pose mode replaces the nav controls with Cancel / Set Location. */
+    isSettingRobotPose?: boolean;
+    onConfirmRobotPose?: () => void;
+    onCancelRobotPose?: () => void;
 }
 
 interface ModalAddLocationProps {
@@ -553,6 +557,9 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     sceneSelected,
     onSceneSelectedChange,
     onRegisterAutoNavNavControls,
+    isSettingRobotPose = false,
+    onConfirmRobotPose,
+    onCancelRobotPose,
 }) => {
 
     React.useEffect(() => {
@@ -743,6 +750,31 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
             );
         };
     }, [getPosesLatest]);
+
+    if (isSettingRobotPose) {
+        return (
+            <div className="footer-auto-nav">
+                <div className="footer-row footer-row-robot-pose">
+                    <button
+                        type="button"
+                        className="btn btn-tertiary"
+                        onClick={onCancelRobotPose}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={onConfirmRobotPose}
+                        disabled={!goalPosition}
+                        aria-disabled={!goalPosition}
+                    >
+                        Set Location
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="footer-auto-nav">

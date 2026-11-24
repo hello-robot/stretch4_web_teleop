@@ -50,6 +50,7 @@ const ACTION_TILE_IDS = new Set([
     "mic-mute",
     "robot-mic-mute",
     "localize-aruco",
+    "localize-map",
     "reload-app",
 ]);
 const LOCALIZE_SUCCESS_HOLD_MS = 1500;
@@ -67,6 +68,8 @@ interface FooterGlobalProps {
     onSceneSelectedChange: React.Dispatch<React.SetStateAction<string>>;
     isMainMenuOpen: boolean;
     isMainMenuOpenSet: React.Dispatch<React.SetStateAction<boolean>>;
+    /** Enter AutoNav's "tap where the robot is" mode. */
+    isSettingRobotPoseSet: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const FooterGlobal: React.FC<FooterGlobalProps> = ({
@@ -75,6 +78,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
     onSceneSelectedChange,
     isMainMenuOpen,
     isMainMenuOpenSet,
+    isSettingRobotPoseSet,
 }) => {
     const [isRunStopped, isRunStoppedSet] = useState<boolean>(false);
     const [batteryPercentage, batteryPercentageSet] = useState<number>(0);
@@ -192,6 +196,18 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 status: localizeStatus,
             },
             {
+                id: "localize-map",
+                name: "Localize (Map)",
+                description: "Tap Stretch's location on the map",
+                onClick: () => {
+                    onSceneSelectedChange("autonav");
+                    swipeableViewsIdxSet(1);
+                    isSettingRobotPoseSet(true);
+                },
+                icon: <CheckCircleIcon />,
+                enabled: true,
+            },
+            {
                 id: "robot-mic-mute",
                 name: isRobotAudioMuted ? "Unmute Robot Mic" : "Mute Robot Mic",
                 description: "Toggle robot microphone audio stream playback",
@@ -262,6 +278,7 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
             localizeStatus,
             onSceneSelectedChange,
             swipeableViewsIdxSet,
+            isSettingRobotPoseSet,
             micMuted,
             voiceConnected,
             isRobotAudioMuted,
@@ -276,6 +293,11 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 return;
             }
             scene.onClick?.();
+            return;
+        }
+        if (scene.id === "localize-map") {
+            scene.onClick?.();
+            isMainMenuOpenSet(false);
             return;
         }
         if (scene.id === "robot-mic-mute" || scene.id === "mic-mute") {

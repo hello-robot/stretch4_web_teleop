@@ -41,6 +41,10 @@ export class MapFunctionProvider extends FunctionProvider {
                 return () => {
                     FunctionProvider.remoteRobot?.seedLocalization();
                 };
+            case MapFunction.SetInitialPose:
+                return (pose: ROSPose) => {
+                    FunctionProvider.remoteRobot?.setInitialPose(pose);
+                };
         }
     }
 }

@@ -474,6 +474,9 @@ function handleMessage(message: WebRTCMessage) {
                 );
             });
             break;
+        case "setInitialPose":
+            robot.setInitialPose(message.pose);
+            break;
         case "shutdown":
             robot.shutdown((response) => {
                 console.log("Shutdown initiated:", response);

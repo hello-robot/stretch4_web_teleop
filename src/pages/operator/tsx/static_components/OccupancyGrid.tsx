@@ -149,6 +149,9 @@ export class OccupancyGrid extends React.Component {
     private goal_position?: ROSPoint;
     // The current goal heading in the map frame
     private goal_yaw?: number;
+    // True while the operator is placing the robot's pose (seeding localization)
+    // instead of a destination.
+    private robotPoseMode = false;
 
     // Listeners for goal_position changes
     private goalPositionListeners: ((pos: ROSPoint | undefined) => void)[] = [];
@@ -795,7 +798,7 @@ export class OccupancyGrid extends React.Component {
      * @param ros Whether the coordinates are in ROS space
      */
     public createGoalMarker(x: number, y: number, ros: boolean, rotation?: Quaternion) {
-        const color = hexToRgbArray('#2EE4C8');
+        const color = hexToRgbArray(this.robotPoseMode ? '#008AE5' : '#2EE4C8');
         let globalCoord = { x: x, y: y };
         if (ros)
             globalCoord = this.rosToGlobal({
@@ -953,7 +956,7 @@ export class OccupancyGrid extends React.Component {
 
         // A tap places the goal facing the nearest dial direction to the direction of travel.
         this.rootObject.on("mousedown", (event) => {
-            if (!this.functs.SelectGoal()) return;
+            if (!this.robotPoseMode && !this.functs.SelectGoal()) return;
             const evt = event as createjs.MouseEvent;
             const goal = this.globalToRos(evt.stageX, evt.stageY);
             this.goalPositionSet(goal);
@@ -986,12 +989,28 @@ export class OccupancyGrid extends React.Component {
     }
 
     /**
+     * Switch taps between placing a destination and placing the robot's own pose.
+     * Clears any marker that was placed in the other mode.
+     */
+    public setRobotPoseMode(on: boolean) {
+        if (this.robotPoseMode === on) return;
+        this.robotPoseMode = on;
+        this.removeGoalMarker();
+    }
+
+    /**
      * Heading for a freshly tapped goal: the direction of travel from the robot,
      * or the robot's current heading if the goal is on top of it.
+     * When placing the robot's pose, always the robot's current heading.
      */
     private defaultGoalYaw(goal: ROSPoint): number {
         try {
             const pose = this.functs.GetPose();
+            if (this.robotPoseMode) {
+                return pose?.rotation
+                    ? (-this.rosQuaternionToGlobalTheta(pose.rotation) * Math.PI) / 180
+                    : 0;
+            }
             if (!pose?.translation) return 0;
             const dx = goal.x - pose.translation.x;
             const dy = goal.y - pose.translation.y;

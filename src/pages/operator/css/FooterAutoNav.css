@@ -325,3 +325,13 @@ button.cancel-auto-nav-button {
 svg.cancel-auto-nav-icon {
     fill: hsl(0 70% 40% / 1);
 }
+
+/* Robot-pose mode: Cancel / Set Location replace the nav controls */
+.footer-auto-nav .footer-row-robot-pose {
+    gap: 12px;
+}
+
+.footer-auto-nav .footer-row-robot-pose .btn {
+    flex: 1 1 0;
+    margin: 0;
+}

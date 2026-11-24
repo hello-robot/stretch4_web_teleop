@@ -16,6 +16,7 @@ import {
     RequestVoiceTokenCommand,
     RobotPoseCommand,
     SeedLocalizationCommand,
+    SetInitialPoseCommand,
     SetJointVelocityCommand,
     setRobotModeCommand,
     SetTaskSpaceVelocityCommand,
@@ -342,6 +343,17 @@ export class RemoteRobot extends React.Component<{}, any> {
     seedLocalization() {
         let cmd: SeedLocalizationCommand = {
             type: "seedLocalization",
+        };
+        this.robotChannel(cmd);
+    }
+
+    /**
+     * Seed the robot's localization with a map-frame pose chosen by the operator.
+     */
+    setInitialPose(pose: ROSPose) {
+        let cmd: SetInitialPoseCommand = {
+            type: "setInitialPose",
+            pose: pose,
         };
         this.robotChannel(cmd);
     }

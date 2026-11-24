@@ -210,6 +210,7 @@ export class Robot extends React.Component {
     private modeParam: Param;
     private homeTheRobotService?: Service;
     private seedLocalizationService?: Service;
+    private initialPoseTopic?: Topic;
     private shutdownService?: Service;
     private stretchToolName: string = "unknown";
     private toolIsActuated: boolean = true;
@@ -443,6 +444,7 @@ export class Robot extends React.Component {
         // this.subscribeToMapTF();
         this.createHomeTheRobotService();
         this.createSeedLocalizationService();
+        this.createInitialPoseTopic();
         this.createShutdownService();
         this.initStretchParams();
 
@@ -1179,6 +1181,14 @@ export class Robot extends React.Component {
         });
     }
 
+    createInitialPoseTopic() {
+        this.initialPoseTopic = new Topic({
+            ros: this.ros,
+            name: "/initialpose",
+            messageType: "geometry_msgs/msg/PoseWithCovarianceStamped",
+        });
+    }
+
     createShutdownService() {
         this.shutdownService = new Service({
             ros: this.ros,
@@ -1439,6 +1449,39 @@ export class Robot extends React.Component {
                 resultCallback?.(response);
             }
         );
+    }
+
+    /**
+     * Seed localization with an operator-chosen map-frame pose by publishing
+     * to /initialpose.
+     */
+    setInitialPose(pose: ROSPose) {
+        if (!this.initialPoseTopic) {
+            console.warn("setInitialPose: /initialpose publisher not ready");
+            return;
+        }
+        const covariance = new Array(36).fill(0);
+        covariance[0] = 0.05;
+        covariance[7] = 0.05;
+        covariance[35] = 0.03;
+        const nowMs = Date.now();
+        this.initialPoseTopic.publish({
+            header: {
+                frame_id: "map",
+                stamp: {
+                    sec: Math.floor(nowMs / 1000),
+                    nanosec: (nowMs % 1000) * 1e6,
+                },
+            },
+            pose: {
+                pose: {
+                    position: { x: pose.position.x, y: pose.position.y, z: 0 },
+                    orientation: pose.orientation,
+                },
+                covariance,
+            },
+        });
+        console.log("Published /initialpose", pose);
     }
 
     /**
