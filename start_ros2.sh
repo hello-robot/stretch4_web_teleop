@@ -96,13 +96,16 @@ LAUNCH_LOGFILE="$REDIRECT_LOGDIR/web_interface_launch.txt"
 echo "Start ROS2..."
 echo "ROS2 launch output: $LAUNCH_LOGFILE"
 screen -dm -S "web_teleop_ros" bash -c "unset VIRTUAL_ENV PYTHONHOME && export PATH=\$(echo \"\$PATH\" | tr ':' '\n' | grep -v -E '/(\.?[a-zA-Z0-9_-]*venv|env)/bin' | paste -sd:) && export PATH=\"\$HOME/.local/bin:\$PATH\" && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && source /opt/ros/jazzy/setup.bash && source ~/ament_ws/install/setup.bash && ros2 launch stretch4_web_teleop web_interface.launch.py $MAP_ARG > $LAUNCH_LOGFILE 2>&1"
-sleep 8
 
-# Check if the launch log contains any errors
-ERRORS=$(grep -E "ERROR" "$LAUNCH_LOGFILE" | grep -vE "Model name OAK-FFC-3P not found|load firetimes error|Inflation layer either not found|rcl_shutdown already called" || true)
-if [ -n "$ERRORS" ]; then
-	echo ""
-	echo "Errors found in web_interface.launch.py output:"
-	echo "$ERRORS"
-	exit 1
+# Wait for every node web teleop needs, whoever launched it, and report the
+# ones that died or never came up. Exit 2 means up, but with errors in the log;
+# launch_interface.sh reads that from the exit code of this script.
+CHECK_ARGS=(--log "$LAUNCH_LOGFILE")
+if [ -n "$MAP_ARG" ]; then
+	CHECK_ARGS+=(--map)
 fi
+set +e
+python3 "$REPO_DIR/scripts/check_ros2_launch.py" "${CHECK_ARGS[@]}"
+CHECK_STATUS=$?
+set -e
+exit $CHECK_STATUS

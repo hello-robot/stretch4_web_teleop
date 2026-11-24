@@ -217,3 +217,15 @@ cd "$REPO_DIR" && pm2 start -s --update-env server.js &>>$REDIRECT_LOGFILE
 
 echo "Start robot browser..."
 cd "$REPO_DIR" && pm2 start -s --update-env start_robot_browser.js &>>$REDIRECT_LOGFILE
+
+# pm2 start reports success the moment it spawns a process, even one that
+# crashes on its first line. Make sure both actually stay up, and fail the
+# launch with their logs if not. Output goes to the terminal, which
+# launch_interface.sh tees into this run's log.
+echo "Check local server and robot browser stay up..."
+if ! node "$REPO_DIR/scripts/checkPm2Health.js" server start_robot_browser; then
+	pm2 delete server start_robot_browser &>>$REDIRECT_LOGFILE || true
+	stop_cloud_mode
+	echo "Web server or robot browser failed to start."
+	exit 1
+fi
