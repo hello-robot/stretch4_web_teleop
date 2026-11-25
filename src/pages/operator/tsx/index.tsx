@@ -542,6 +542,15 @@ function showOperatorSeatNotice(detail: string) {
     host.append(notice);
 }
 
+/**
+ * Check if URL is Hello Robot Cloud (Firebase).
+ */
+function isFirebaseHostingPage(hostname = window.location.hostname): boolean {
+    return (
+        hostname.endsWith(".web.app") || hostname.endsWith(".firebaseapp.com")
+    );
+}
+
 /** Up-chevron used by the Dashboard control on the boot screen. */
 function appendChevronUp(parent: HTMLElement) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -568,22 +577,9 @@ function createBootScreen(label: string): HTMLDivElement {
     const screen = document.createElement("div");
     screen.className = "boot-screen";
 
-    const dashboard = document.createElement("a");
-    dashboard.className = "boot-screen__dashboard";
-    dashboard.href = "/";
-    dashboard.setAttribute("aria-label", "Dashboard");
-    dashboard.addEventListener("click", (event) => {
-        event.preventDefault();
-        window.history.back();
-    });
-    const icon = document.createElement("span");
-    icon.className = "boot-screen__dashboard-icon";
-    icon.setAttribute("aria-hidden", "true");
-    appendChevronUp(icon);
-    const dashboardLabel = document.createElement("span");
-    dashboardLabel.className = "boot-screen__dashboard-label";
-    dashboardLabel.textContent = "Dashboard";
-    dashboard.append(icon, dashboardLabel);
+    const dashboard = isFirebaseHostingPage()
+        ? createBootDashboardLink()
+        : null;
 
     const spinner = document.createElement("div");
     spinner.className = "boot-screen__spinner";
@@ -605,8 +601,26 @@ function createBootScreen(label: string): HTMLDivElement {
         window.location.reload();
     });
 
-    screen.append(dashboard, spinner, reload);
+    if (dashboard) screen.append(dashboard);
+    screen.append(spinner, reload);
     return screen;
+}
+
+/** Dashboard control on the boot screen. Only built for Firebase Hosting. */
+function createBootDashboardLink(): HTMLAnchorElement {
+    const dashboard = document.createElement("a");
+    dashboard.className = "boot-screen__dashboard";
+    dashboard.href = "https://stretch4-web-interface.web.app/";
+    dashboard.setAttribute("aria-label", "Dashboard");
+    const icon = document.createElement("span");
+    icon.className = "boot-screen__dashboard-icon";
+    icon.setAttribute("aria-hidden", "true");
+    appendChevronUp(icon);
+    const dashboardLabel = document.createElement("span");
+    dashboardLabel.className = "boot-screen__dashboard-label";
+    dashboardLabel.textContent = "Dashboard";
+    dashboard.append(icon, dashboardLabel);
+    return dashboard;
 }
 
 /**
