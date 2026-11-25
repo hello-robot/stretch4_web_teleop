@@ -117,6 +117,12 @@ body,
     opacity: 1;
 }
 
+/* Default fill for MagneticWrapper. Footer pose buttons override this. */
+.magnetic-wrapper {
+    position: relative;
+    width: 100%;
+}
+
 /* ================= Button Styles ================= */
 
 /* Base button styles */

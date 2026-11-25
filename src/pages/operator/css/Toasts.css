@@ -1,4 +1,5 @@
 .toast-container {
+    --toast-width: min(360px, calc(100vw - 32px));
     position: absolute;
     top: 16px;
     left: 50%;
@@ -7,19 +8,17 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 1rem;
+    padding: 3px;
     box-sizing: border-box;
-    width: min(360px, calc(100vw - 32px));
-    max-width: min(360px, calc(100vw - 32px));
+    max-width: var(--toast-width);
 }
 
 .toast-notification {
     display: flex;
     align-items: center;
     box-sizing: border-box;
-    width: fit-content;
     max-width: 100%;
-    padding: 10px 20px;
+    padding: 10px 15px;
     margin-bottom: 10px;
     color: white;
     border-radius: 20px;
@@ -35,10 +34,22 @@
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
+    text-align: center;
 }
 
 .toast-success {
-    background-color: green;
+    position: relative;
+    isolation: isolate;
+    justify-content: center;
+    border: none;
+    border-radius: 38px;
+    background: transparent;
+    background-color: hsla(204, 100%, 50%, 85%);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 22px;
+    text-align: center;
+    backdrop-filter: blur(5px);
 }
 
 .toast-error {
@@ -72,12 +83,10 @@
     inset: 0;
     z-index: 0;
     border-radius: inherit;
-    background: linear-gradient(
-        180deg,
-        hsla(204, 100%, 70%, 0.9) 1%,
-        hsla(204, 100%, 50%, 0.5) 40%,
-        hsla(204, 80%, 50%, 1) 100%
-    );
+    background: linear-gradient(180deg,
+            hsla(204, 100%, 70%, 0.9) 1%,
+            hsla(204, 100%, 50%, 0.5) 40%,
+            hsla(204, 80%, 50%, 1) 100%);
     pointer-events: none;
     opacity: 0.9;
 }

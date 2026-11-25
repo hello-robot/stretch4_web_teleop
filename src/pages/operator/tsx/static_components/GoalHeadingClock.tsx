@@ -127,6 +127,8 @@ type GoalHeadingClockProps = {
     onDismiss: () => void;
     /** Accessible name of the dismiss button. */
     dismissLabel?: string;
+    /** Blue dial for placing Stretch's pose. Teal is the goal dial. */
+    robotPose?: boolean;
 };
 
 /**
@@ -139,6 +141,7 @@ export function GoalHeadingClock({
     onSelect,
     onDismiss,
     dismissLabel = "Clear destination",
+    robotPose = false,
 }: GoalHeadingClockProps) {
     const selected = yawToDirection(yaw);
     const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -156,7 +159,11 @@ export function GoalHeadingClock({
 
     return (
         <div
-            className="goal-heading-clock"
+            className={
+                robotPose
+                    ? "goal-heading-clock goal-heading-clock--pose"
+                    : "goal-heading-clock"
+            }
             role="radiogroup"
             aria-label="Robot facing direction"
             style={{

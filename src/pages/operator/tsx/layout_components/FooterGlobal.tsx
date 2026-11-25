@@ -390,19 +390,21 @@ const FooterGlobal: React.FC<FooterGlobalProps> = ({
                 />
             </div>
             <div className="run-stop-container">
-                <button
-                    onClick={() => functs.onClick()}
-                    type="button"
-                    className={`run-stop-button ${isRunStopped ? "stopped" : "running"}`}
-                    aria-label={isRunStopped ? "Run" : "Stop"}
-                >
-                    <img
-                        src={!isRunStopped ? runStopStopIcon : runStopRunIcon}
-                        alt=""
-                        aria-hidden="true"
-                        className="icon"
-                    />
-                </button>
+                <MagneticWrapper>
+                    <button
+                        onClick={() => functs.onClick()}
+                        type="button"
+                        className={`run-stop-button ${isRunStopped ? "stopped" : "running"}`}
+                        aria-label={isRunStopped ? "Run" : "Stop"}
+                    >
+                        <img
+                            src={!isRunStopped ? runStopStopIcon : runStopRunIcon}
+                            alt=""
+                            aria-hidden="true"
+                            className="icon"
+                        />
+                    </button>
+                </MagneticWrapper>
             </div>
         </div>
     );

@@ -405,7 +405,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
     useEffect(() => {
         if (!isSettingRobotPose || !mapReady) return;
         const timer = window.setTimeout(() => {
-            addToast('info', "Tap where Stretch is on the map, then choose which way it faces");
+            addToast('info', "Tap on the map to manually localize Stretch");
         }, 500);
         return () => window.clearTimeout(timer);
     }, [isSettingRobotPose, mapReady, addToast]);
@@ -419,7 +419,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
             orientation: pose.rotation,
         } as ROSPose);
         isSettingRobotPoseSet(false);
-        addToast('success', "Stretch's location set");
+        addToast('success', "Stretch localized");
     };
 
     const cancelRobotPose = () => {
@@ -455,6 +455,7 @@ const AutoNav: React.FC<AutoNavProps> = ({
                                 ? "Clear Stretch's location"
                                 : "Clear destination"
                         }
+                        robotPose={isSettingRobotPose}
                     />
                 )}
                 {mapStatus !== "ready" && (
