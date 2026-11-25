@@ -23,6 +23,7 @@
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.bak
 
 # Package manager logs
 npm-debug.log*
@@ -41,8 +42,9 @@ dist-firebase/*
 # Outcomes
 outcomes/*
 
-# Compiled Python
-*/__pycache__
+# Compiled Python (any depth)
+__pycache__/
+*.py[cod]
 
 # Specialized URDFs
 urdf/*.urdf

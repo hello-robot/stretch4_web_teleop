@@ -136,6 +136,8 @@ export const MobileOperator = (props: {
 
     // State for selected scene
     const [sceneSelected, setSceneSelected] = useState<string>("pilot-mode");
+    // AutoNav map taps place the robot's pose (seed localization) instead of a goal.
+    const [isSettingRobotPose, isSettingRobotPoseSet] = useState<boolean>(false);
     /** Live scene for voice tools (connect opts capture callbacks, not render values). */
     const sceneSelectedRef = React.useRef(sceneSelected);
     sceneSelectedRef.current = sceneSelected;
@@ -698,6 +700,8 @@ export const MobileOperator = (props: {
                             onRegisterAutoNavNavControls={
                                 registerAutoNavNavControls
                             }
+                            isSettingRobotPose={isSettingRobotPose}
+                            isSettingRobotPoseSet={isSettingRobotPoseSet}
                         />
                     </div>
                 </SwipeableViews>
@@ -707,6 +711,7 @@ export const MobileOperator = (props: {
                     onSceneSelectedChange={setSceneSelected}
                     isMainMenuOpen={isMainMenuOpen}
                     isMainMenuOpenSet={isMainMenuOpenSet}
+                    isSettingRobotPoseSet={isSettingRobotPoseSet}
                 />
             </div>
         </div>

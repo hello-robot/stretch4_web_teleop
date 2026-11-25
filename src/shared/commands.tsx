@@ -22,6 +22,7 @@ export type cmd =
     | GetMaxEeSpeed
     | HomeTheRobotCommand
     | SeedLocalizationCommand
+    | SetInitialPoseCommand
     | ShutdownCommand
     | GetVoiceCapabilityCommand
     | RequestVoiceTokenCommand;
@@ -32,6 +33,12 @@ export interface ShutdownCommand {
 
 export interface SeedLocalizationCommand {
     type: "seedLocalization";
+}
+
+/** Seed localization with an operator-chosen map-frame pose. */
+export interface SetInitialPoseCommand {
+    type: "setInitialPose";
+    pose: ROSPose;
 }
 
 /** Ask the robot whether its server can mint OpenAI Realtime credentials. */

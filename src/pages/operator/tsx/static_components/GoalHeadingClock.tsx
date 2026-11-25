@@ -125,13 +125,24 @@ type GoalHeadingClockProps = {
     onSelect: (yaw: number) => void;
     /** Remove the destination and return AutoNav to its idle state. */
     onDismiss: () => void;
+    /** Accessible name of the dismiss button. */
+    dismissLabel?: string;
+    /** Blue dial for placing Stretch's pose. Teal is the goal dial. */
+    robotPose?: boolean;
 };
 
 /**
  * Dial drawn around the goal marker for choosing which way the robot faces at
  * the goal. Eight wedge buttons; the canvas arrow in the hole shows the heading.
  */
-export function GoalHeadingClock({ yaw, center, onSelect, onDismiss }: GoalHeadingClockProps) {
+export function GoalHeadingClock({
+    yaw,
+    center,
+    onSelect,
+    onDismiss,
+    dismissLabel = "Clear destination",
+    robotPose = false,
+}: GoalHeadingClockProps) {
     const selected = yawToDirection(yaw);
     const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -148,7 +159,11 @@ export function GoalHeadingClock({ yaw, center, onSelect, onDismiss }: GoalHeadi
 
     return (
         <div
-            className="goal-heading-clock"
+            className={
+                robotPose
+                    ? "goal-heading-clock goal-heading-clock--pose"
+                    : "goal-heading-clock"
+            }
             role="radiogroup"
             aria-label="Robot facing direction"
             style={{
@@ -205,7 +220,7 @@ export function GoalHeadingClock({ yaw, center, onSelect, onDismiss }: GoalHeadi
             <button
                 type="button"
                 className="goal-heading-clock__dismiss"
-                aria-label="Clear destination"
+                aria-label={dismissLabel}
                 onClick={(event) => {
                     event.stopPropagation();
                     onDismiss();

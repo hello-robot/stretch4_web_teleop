@@ -6,6 +6,11 @@
     --clock-accent-hover: hsl(171deg 60% 50% / 35%);
     --clock-accent-selected: hsl(171deg 100% 55% / 80%);
     --clock-accent-selected-hover: hsl(171deg 100% 60% / 60%);
+    --clock-wash: hsl(184deg 50% 20% / 15%);
+    --clock-dismiss: hsl(184deg 25% 50% / 80%);
+    --clock-dismiss-mark: hsl(171 100% 50% / 1);
+    --clock-dismiss-hover: hsl(171deg 60% 50% / 90%);
+    --clock-dismiss-hover-mark: hsl(184deg 42% 25% / 100%);
 
     position: absolute;
     left: clamp(
@@ -30,13 +35,26 @@
     animation: goal-heading-emerge 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Localize (Map): same dial, in the pose marker's blue. */
+.goal-heading-clock--pose {
+    --clock-accent: hsl(204deg 25% 32.5% / 50%);
+    --clock-accent-hover: hsl(204deg 60% 50% / 35%);
+    --clock-accent-selected: hsl(204deg 100% 55% / 80%);
+    --clock-accent-selected-hover: hsl(204deg 100% 60% / 60%);
+    --clock-wash: hsl(204deg 50% 20% / 15%);
+    --clock-dismiss: hsl(204deg 25% 50% / 80%);
+    --clock-dismiss-mark: hsl(204 100% 90% / 1);
+    --clock-dismiss-hover: hsl(204deg 100% 37% / 80%);
+    --clock-dismiss-hover-mark: hsl(204deg 100% 85% / 100%);
+}
+
 /* White separators. The hole stays clear so the canvas arrow shows through. */
 .goal-heading-clock::before {
     content: "";
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: hsl(184deg 50% 20% / 15%);
+    background: var(--clock-wash);
     pointer-events: none;
     -webkit-mask: radial-gradient(
         circle at center,
@@ -125,8 +143,8 @@ button.goal-heading-clock__segment:focus-visible {
     transform: translate(-60%, 60%);
     border: none;
     border-radius: 50%;
-    background: hsl(184deg 25% 50% / 80%);
-    color: hsl(171 100% 50% / 1);
+    background: var(--clock-dismiss);
+    color: var(--clock-dismiss-mark);
     box-shadow: none;
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
@@ -135,8 +153,8 @@ button.goal-heading-clock__segment:focus-visible {
 }
 
 .goal-heading-clock__dismiss:hover {
-    background: hsl(171deg 60% 50% / 90%);
-    color: hsla(184deg 42% 25% / 100%);
+    background: var(--clock-dismiss-hover);
+    color: var(--clock-dismiss-hover-mark);
 }
 
 .goal-heading-clock__dismiss:active {

@@ -2,8 +2,6 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ModeEditIcon from '@mui/icons-material/ModeEdit';
 import SearchIcon from '@mui/icons-material/Search';
-import StopCircleIcon from '@mui/icons-material/StopCircle';
-import { motion } from 'framer-motion';
 import "operator/css/FooterAutoNav.css";
 import React, { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
 import { Transform } from 'roslib';
@@ -15,10 +13,10 @@ import ModalMobile from '../basic_components/ModalMobile';
 import MagneticWrapper from '../static_components/MagneticWrapper';
 import ScrollableList from '../static_components/ScrollableList';
 import { AutoNavFunctions } from "./AutoNav";
+import { FooterCenterSlot } from "./FooterCenterSlot";
 
 import AddLocationIcon from '../../icons/AddLocationIcon.svg';
 import LocationsMenuIcon from '../../icons/LocationsMenuIcon.svg';
-import StartNavIcon from '../../icons/StartNavIcon.svg';
 import { LocalStorageHandler } from '../storage_handler/LocalStorageHandler';
 import { goalToTransform } from '../utils/goalPose';
 
@@ -62,6 +60,10 @@ interface FooterAutoNavProps {
     sceneSelected?: string;
     onSceneSelectedChange?: Dispatch<SetStateAction<string>>;
     onRegisterAutoNavNavControls?: (controls: AutoNavNavControls | null) => void;
+    /** Robot-pose mode replaces the center Start control with Cancel / Localize. */
+    isSettingRobotPose?: boolean;
+    onConfirmRobotPose?: () => void;
+    onCancelRobotPose?: () => void;
 }
 
 interface ModalAddLocationProps {
@@ -553,6 +555,9 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     sceneSelected,
     onSceneSelectedChange,
     onRegisterAutoNavNavControls,
+    isSettingRobotPose = false,
+    onConfirmRobotPose,
+    onCancelRobotPose,
 }) => {
 
     React.useEffect(() => {
@@ -714,6 +719,17 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
     const canSaveLocation = selectedLocationMenuItem === undefined;
     const savingTappedDestination =
         goalPosition !== undefined && canSaveLocation;
+    const locationActionsDisabled = isSettingRobotPose;
+
+    useEffect(() => {
+        if (!isSettingRobotPose) return;
+        isModalLocationsMenuVisibleSet(false);
+        isModalAddLocationVisibleSet(false);
+    }, [
+        isSettingRobotPose,
+        isModalLocationsMenuVisibleSet,
+        isModalAddLocationVisibleSet,
+    ]);
 
     useEffect(() => {
         if (!onRegisterAutoNavNavControls) {
@@ -766,86 +782,41 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         getPosesLatest={getPosesLatest}
                         addToast={addToast}
                     />
-                    <button
-                        type="button"
-                        onClick={() => {
-                            isModalLocationsMenuVisibleSet(true);
-                        }}
-                        className="locations-menu"
-                        aria-label="Open locations menu"
-                    >
-                        <img src={LocationsMenuIcon} className="locations-menu-icon" alt="" aria-hidden="true" />
-                    </button>
+                    <MagneticWrapper>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                isModalLocationsMenuVisibleSet(true);
+                            }}
+                            className="locations-menu"
+                            aria-label="Open locations menu"
+                            disabled={locationActionsDisabled}
+                            aria-disabled={locationActionsDisabled}
+                        >
+                            <img src={LocationsMenuIcon} className="locations-menu-icon" alt="" aria-hidden="true" />
+                        </button>
+                    </MagneticWrapper>
                 </div>
                 {/* </LocationsMenu> */}
-                {/* <StartNavButton> */}
-                {!isCurrentlyMoving
-                    ? (
-                        <motion.button
-                            onClick={() => {
-                                startAutoNav();
-                            }}
-                            disabled={!goalPosition && !selectedLocationMenuItem}
-                            className="auto-nav-button"
-                            initial={false}
-                            animate={
-                                goalPosition || selectedLocationMenuItem
-                                    ? { width: 100 }
-                                    : { width: 70 }
-                            }
-                            transition={{
-                                type: 'spring',
-                                stiffness: 300,
-                                damping: 20,
-                                mass: 0.7,
-                                bounce: 0.6,
-                            }}
-                            style={{ overflow: 'hidden', display: 'inline-flex', alignItems: 'center' }}
-                        >
-                            <span>Start</span>
-                            <motion.img
-                                src={StartNavIcon}
-                                className="auto-nav-button-icon"
-                                initial={{ x: -40, opacity: 0, filter: 'brightness(1)' }}
-                                animate={goalPosition || selectedLocationMenuItem
-                                    ? { x: 0, opacity: 1, filter: ['brightness(1)', 'brightness(1.7)', 'brightness(1)'] }
-                                    : { x: 20, opacity: 0, filter: 'brightness(1)' }
-                                }
-                                transition={goalPosition || selectedLocationMenuItem
-                                    ? {
-                                        type: 'spring',
-                                        stiffness: 400,
-                                        damping: 12,
-                                        mass: 0.6,
-                                        bounce: 0.7,
-                                        filter: {
-                                            duration: 2,
-                                            repeat: Infinity,
-                                            repeatType: 'loop',
-                                            ease: 'easeInOut',
-                                        },
-                                    }
-                                    : {
-                                        type: 'spring',
-                                        stiffness: 400,
-                                        damping: 12,
-                                        mass: 0.6,
-                                        bounce: 0.7,
-                                    }
-                                }
-                                style={{ display: 'inline-block', marginLeft: 8 }}
-                            />
-                        </motion.button>
-                    )
-                    : (<button
-                        className="cancel-auto-nav-button"
-                        onClick={() => {
-                            cancelAutoNav();
-                        }}
-                    >
-                        <span>Stop</span>
-                        <StopCircleIcon className="cancel-auto-nav-icon" />
-                    </button>)}
+                <FooterCenterSlot
+                    mode={
+                        isSettingRobotPose
+                            ? "pose"
+                            : isCurrentlyMoving
+                                ? "stop"
+                                : "start"
+                    }
+                    goalReady={Boolean(goalPosition || selectedLocationMenuItem)}
+                    localizeReady={Boolean(goalPosition)}
+                    onStart={() => {
+                        startAutoNav();
+                    }}
+                    onStop={() => {
+                        cancelAutoNav();
+                    }}
+                    onCancelPose={() => onCancelRobotPose?.()}
+                    onConfirmPose={() => onConfirmRobotPose?.()}
+                />
                 {/* </AutoNavMainButton> */}
                 {/* <AddLocationButton> */}
                 <div className="add-location-wrapper">
@@ -859,18 +830,20 @@ const FooterAutoNav: React.FC<FooterAutoNavProps> = ({
                         saveSelectedGoal={saveSelectedGoal}
                         savingTappedDestination={savingTappedDestination}
                     />
-                    <button
-                        type="button"
-                        onClick={() => {
-                            isModalAddLocationVisibleSet(true);
-                        }}
-                        className="add-location"
-                        aria-label="Add location"
-                        disabled={!canSaveLocation}
-                        aria-disabled={!canSaveLocation}
-                    >
-                        <img src={AddLocationIcon} className="add-location-icon" alt="" aria-hidden="true" />
-                    </button>
+                    <MagneticWrapper>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                isModalAddLocationVisibleSet(true);
+                            }}
+                            className="add-location"
+                            aria-label="Add location"
+                            disabled={locationActionsDisabled || !canSaveLocation}
+                            aria-disabled={locationActionsDisabled || !canSaveLocation}
+                        >
+                            <img src={AddLocationIcon} className="add-location-icon" alt="" aria-hidden="true" />
+                        </button>
+                    </MagneticWrapper>
                 </div>
                 {/* </AddLocationButton> */}
             </div>

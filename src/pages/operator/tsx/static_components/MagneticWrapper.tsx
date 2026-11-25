@@ -10,6 +10,8 @@ interface MagneticWrapperProps {
     children: ReactNode;
 }
 
+const magneticMotion = primaryInput !== 'touch';
+
 const MagneticWrapper: React.FC<MagneticWrapperProps> = ({ children }) => {
     const [isHovered, setIsHovered] = useState(false)
     const x = useMotionValue(0)
@@ -73,22 +75,17 @@ const MagneticWrapper: React.FC<MagneticWrapperProps> = ({ children }) => {
         scale.set(1)
     }
 
-    // Disable magnetic effect for
-    // devices where "touch" is the primary input...
-    if (primaryInput === 'touch') return children;
-    // ...for non-touch devices, apply the magnetic effect
-    else return (
+    return (
         <motion.div
             ref={ref}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={handleMouseLeave}
-            style={{
-                position: 'relative', // Ensures children are positioned relative to this moving div
+            className="magnetic-wrapper"
+            onMouseEnter={magneticMotion ? () => setIsHovered(true) : undefined}
+            onMouseLeave={magneticMotion ? handleMouseLeave : undefined}
+            style={magneticMotion ? {
                 x: springX,
                 y: springY,
                 scale: springScale,
-                width: '100%',
-            }}
+            } : undefined}
         >
             {children}
         </motion.div>

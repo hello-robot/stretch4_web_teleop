@@ -31,6 +31,7 @@ import FooterAutoNav, { type AutoNavNavControls } from './FooterAutoNav';
 import { Map } from './Map';
 import type { AddToastFn } from './Toasts';
 import { useExclusiveModal } from '../react_hooks/useExclusiveModal';
+import { goalToTransform } from '../utils/goalPose';
 
 interface AutoNavProps {
     sharedState: SharedState;
@@ -44,6 +45,9 @@ interface AutoNavProps {
     onRegisterAutoNavNavControls?: (controls: AutoNavNavControls | null) => void;
     /** Terminal move-base alerts clear AutoNav Start/Stop UI. */
     moveBaseState?: ActionState;
+    /** True while the operator is placing the robot's pose to seed localization. */
+    isSettingRobotPose: boolean;
+    isSettingRobotPoseSet: Dispatch<SetStateAction<boolean>>;
 }
 
 export enum MapFunction {
@@ -51,6 +55,7 @@ export enum MapFunction {
     GetPose,
     MoveBase,
     SeedLocalization,
+    SetInitialPose,
 }
 
 /**
@@ -90,6 +95,7 @@ export interface MapFunctions {
     SelectGoal: () => boolean;
     SetSelectGoal: (selectGoal: boolean) => void;
     SeedLocalization: () => void;
+    SetInitialPose: (pose: ROSPose) => void;
 }
 
 /**
@@ -112,6 +118,8 @@ const AutoNav: React.FC<AutoNavProps> = ({
     isModalLocationsMenuVisibleSet,
     onRegisterAutoNavNavControls,
     moveBaseState,
+    isSettingRobotPose,
+    isSettingRobotPoseSet,
 }) => {
 
     // Index of the selected .locations-menu-list-item
@@ -278,6 +286,9 @@ const AutoNav: React.FC<AutoNavProps> = ({
         SeedLocalization: mapFunctionProvider.provideFunctions(
             MapFunction.SeedLocalization,
         ) as () => void,
+        SetInitialPose: mapFunctionProvider.provideFunctions(
+            MapFunction.SetInitialPose,
+        ) as (pose: ROSPose) => void,
         /**
          * Returns whether a goal is currently being selected.
          */
@@ -369,10 +380,56 @@ const AutoNav: React.FC<AutoNavProps> = ({
         };
     }, [mapReady]);
 
+    // Robot-pose mode: taps place where the robot is.
+    // Entering it cancels any goal in progress.
+    useEffect(() => {
+        if (!occupancyGrid) return;
+        if (isSettingRobotPose) {
+            if (isCurrentlyMoving) {
+                functs.CancelGoal();
+                isCurrentlyMovingSet(false);
+            }
+            selectedLocationMenuItemSet(undefined);
+            isSelectingGoalSet(true);
+        }
+        occupancyGrid.setRobotPoseMode(isSettingRobotPose);
+    }, [isSettingRobotPose, occupancyGrid]);
+
+    // Leaving AutoNav abandons a pose that was never confirmed.
+    useEffect(() => {
+        if (sceneSelected !== "autonav" && isSettingRobotPose) {
+            isSettingRobotPoseSet(false);
+        }
+    }, [sceneSelected]);
+
+    useEffect(() => {
+        if (!isSettingRobotPose || !mapReady) return;
+        const timer = window.setTimeout(() => {
+            addToast('info', "Tap on the map to manually localize Stretch");
+        }, 500);
+        return () => window.clearTimeout(timer);
+    }, [isSettingRobotPose, mapReady, addToast]);
+
+    /** Seed localization with the placed pose, then return to normal AutoNav. */
+    const confirmRobotPose = () => {
+        if (!goalPosition) return;
+        const pose = goalToTransform(goalPosition, goalYaw ?? 0);
+        mapFn.SetInitialPose({
+            position: { x: goalPosition.x, y: goalPosition.y, z: 0 },
+            orientation: pose.rotation,
+        } as ROSPose);
+        isSettingRobotPoseSet(false);
+        addToast('success', "Stretch localized");
+    };
+
+    const cancelRobotPose = () => {
+        isSettingRobotPoseSet(false);
+    };
+
     // Show friendly, helpful toast when
     // user dives into the AutoNav UX with a map on screen
     useEffect(() => {
-        if (swipeableViewsIdx !== 1 || !mapReady) return;
+        if (swipeableViewsIdx !== 1 || !mapReady || isSettingRobotPose) return;
         const timer = window.setTimeout(() => {
             addToast('info', 'Tap a location in the map');
         }, 500);
@@ -393,6 +450,12 @@ const AutoNav: React.FC<AutoNavProps> = ({
                             handleSelectGoal(true);
                             selectedLocationMenuItemSet(undefined);
                         }}
+                        dismissLabel={
+                            isSettingRobotPose
+                                ? "Clear Stretch's location"
+                                : "Clear destination"
+                        }
+                        robotPose={isSettingRobotPose}
                     />
                 )}
                 {mapStatus !== "ready" && (
@@ -439,6 +502,9 @@ const AutoNav: React.FC<AutoNavProps> = ({
                 sceneSelected={sceneSelected}
                 onSceneSelectedChange={onSceneSelectedChange}
                 onRegisterAutoNavNavControls={onRegisterAutoNavNavControls}
+                isSettingRobotPose={isSettingRobotPose}
+                onConfirmRobotPose={confirmRobotPose}
+                onCancelRobotPose={cancelRobotPose}
             />
         </div>
     );
