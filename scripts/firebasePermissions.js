@@ -691,7 +691,6 @@ async function resolveOrCreateAuthAccount(ctx) {
  *
  * @param {{
  *   projectId: string,
- *   apiKey: string,
  *   clients: {authClient: import("firebase-tools/lib/apiv2").Client, dbClient: import("firebase-tools/lib/apiv2").Client}
  * }} ctx Runtime context.
  * @param {{uid: string, email: string, created: boolean, pendingPassword: string | null} | null} account Pending or existing account.
@@ -708,7 +707,6 @@ async function commitPendingAuthAndPatch(ctx, account, buildPatch) {
             account.pendingPassword,
             {
                 authClient: ctx.clients.authClient,
-                apiKey: ctx.apiKey,
             }
         );
         resolvedUid = created.uid;
@@ -747,7 +745,6 @@ async function commitPendingAuthAndPatch(ctx, account, buildPatch) {
  *
  * @param {{
  *   projectId: string,
- *   apiKey: string,
  *   clients: {authClient: import("firebase-tools/lib/apiv2").Client, dbClient: import("firebase-tools/lib/apiv2").Client},
  *   snapshot: Awaited<ReturnType<typeof fetchAdminSnapshot>>,
  *   directory: ReturnType<typeof classifyDirectory>,
@@ -943,7 +940,6 @@ async function runUserWorkflow(ctx) {
  *
  * @param {{
  *   projectId: string,
- *   apiKey: string,
  *   clients: {authClient: import("firebase-tools/lib/apiv2").Client, dbClient: import("firebase-tools/lib/apiv2").Client},
  *   snapshot: Awaited<ReturnType<typeof fetchAdminSnapshot>>,
  *   directory: ReturnType<typeof classifyDirectory>,
@@ -1231,7 +1227,7 @@ async function main() {
         );
     }
 
-    const { projectId, databaseOrigin, apiKey } = readFirebaseEnv();
+    const { projectId, databaseOrigin } = readFirebaseEnv();
     const actor = await authenticateAdmin(projectId);
     console.log(`Authenticated to "${projectId}" as ${actor}.`);
 
@@ -1258,7 +1254,6 @@ async function main() {
 
     const ctx = {
         projectId,
-        apiKey,
         clients,
         snapshot,
         directory,

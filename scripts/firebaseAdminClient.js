@@ -272,10 +272,15 @@ async function listAuthUsers(projectId, authClient) {
 /**
  * Create an Email/Password account in Firebase Authentication.
  *
+ * Authenticates via the OAuth 2.0 Bearer token on `authClient` without a `key`
+ * query parameter; sending a project Web API key alongside a Firebase CLI OAuth
+ * token triggers HTTP 400 ("The API Key and the authentication credential are
+ * from different projects").
+ *
  * @param {string} projectId Firebase project ID.
  * @param {string} email Account email address.
  * @param {string} password Initial password (at least 6 characters).
- * @param {{authClient: Client, apiKey?: string}} deps Authenticated Identity Toolkit client and optional web API key.
+ * @param {{authClient: Client}} deps Authenticated Identity Toolkit client.
  * @returns {Promise<{uid: string, email: string}>} Newly created Auth UID and email.
  * @throws {Error} When validation fails or Identity Toolkit rejects account creation.
  */
@@ -290,12 +295,10 @@ async function createAuthUser(projectId, email, password, deps) {
         );
     }
 
-    const queryParams = deps.apiKey ? { key: deps.apiKey } : {};
     try {
         const res = await deps.authClient.request({
             method: "POST",
             path: `/v1/projects/${encodeURIComponent(projectId)}/accounts`,
-            queryParams,
             body: { email: cleanEmail, password },
             skipLog: { reqBody: true, resBody: true },
         });

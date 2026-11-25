@@ -709,9 +709,11 @@ suite("firebaseAdminClient env and REST wrappers", () => {
             "proj-1",
             "three@example.com",
             "secret123",
-            { authClient: stubAuthClient, apiKey: "k-1" }
+            { authClient: stubAuthClient }
         );
         assert.deepEqual(created, { uid: "u3", email: "three@example.com" });
+        const createCall = calls.find((c) => c.path.endsWith("/accounts"));
+        assert.equal(createCall?.queryParams, undefined);
 
         await assert.rejects(
             () => deleteAuthUser("proj-1", "   ", stubAuthClient),
