@@ -271,12 +271,17 @@ export const MobileOperator = (props: {
         React.useCallback((): ControlAutoNavResult => {
             const controls = autoNavNavControlsRef.current;
             if (!controls) {
+                underMapFunctionProvider?.cancelGoal(true);
                 return {
                     ok: false,
                     detail: "AutoNav is not ready.",
                 };
             }
-            return controls.cancel();
+            const result = controls.cancel(true);
+            if (!result.ok) {
+                underMapFunctionProvider?.cancelGoal(true);
+            }
+            return result;
         }, []);
 
     const handleGetAutoNavSavedPoseNames = React.useCallback(():

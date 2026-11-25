@@ -144,6 +144,7 @@ export class Robot extends React.Component {
     private poseGoal?: Goal;
     private poseGoalID?: string;
     private poseGoalWatchdogTimerID?: ReturnType<typeof setTimeout>;
+    private trajectoryStopSeq = 0;
     private isRunStopped?: boolean;
     private moveBaseGoal?: Goal;
     private moveBaseGoalID?: string;
@@ -1863,9 +1864,10 @@ export class Robot extends React.Component {
             }
             return;
         }
+        const stopSeq = this.trajectoryStopSeq;
         await this.switchToNavigationMode();
-        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
-            console.warn("Ignoring executePoseGoal while robot is runstopped (after switch mode)");
+        if (this.trajectoryStopSeq !== stopSeq || this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoal while robot is stopped/runstopped (after switch mode)");
             if (this.playbackPosesResultCallback) {
                 this.playbackPosesResultCallback({
                     state: MovementState.Cancel,
@@ -1969,9 +1971,10 @@ export class Robot extends React.Component {
             }
             return;
         }
+        const stopSeq = this.trajectoryStopSeq;
         await this.switchToNavigationMode();
-        if (this.isRunStopped || robotMode === ("runstopped" as any)) {
-            console.warn("Ignoring executePoseGoals while robot is runstopped (after switch mode)");
+        if (this.trajectoryStopSeq !== stopSeq || this.isRunStopped || robotMode === ("runstopped" as any)) {
+            console.warn("Ignoring executePoseGoals while robot is stopped/runstopped (after switch mode)");
             if (this.playbackPosesResultCallback) {
                 this.playbackPosesResultCallback({
                     state: MovementState.Cancel,
@@ -2201,11 +2204,20 @@ export class Robot extends React.Component {
             console.warn("Ignoring executeIncrementalMove while robot is runstopped");
             return;
         }
+        const stopSeq = this.trajectoryStopSeq;
         await this.switchToNavigationMode();
+        if (
+            this.trajectoryStopSeq !== stopSeq ||
+            this.isRunStopped ||
+            robotMode === ("runstopped" as any)
+        ) {
+            console.warn("Ignoring executeIncrementalMove after stop/runstop");
+            return;
+        }
         // this.stopAutonomousClients();
         this.poseGoal = this.makeIncrementalMoveGoal(jointName, increment);
         console.log("incremental: ", jointName, increment, this.poseGoal);
-        this.trajectoryClient.sendGoal(
+        const goalID = this.trajectoryClient.sendGoal(
             this.poseGoal,
             (result) => {
                 console.log(
@@ -2214,8 +2226,10 @@ export class Robot extends React.Component {
                     ": " +
                     result.error_string
                 );
-                this.poseGoal = undefined;
-                this.poseGoalID = undefined;
+                if (this.poseGoalID === goalID) {
+                    this.poseGoal = undefined;
+                    this.poseGoalID = undefined;
+                }
             },
             (feedback) => {
                 console.log(
@@ -2232,10 +2246,13 @@ export class Robot extends React.Component {
                     ": " +
                     error
                 );
-                this.poseGoal = undefined;
-                this.poseGoalID = undefined;
+                if (this.poseGoalID === goalID) {
+                    this.poseGoal = undefined;
+                    this.poseGoalID = undefined;
+                }
             }
         );
+        this.poseGoalID = goalID;
     }
 
     /**
@@ -2274,23 +2291,32 @@ export class Robot extends React.Component {
      *     None.
      */
     stopTrajectoryClient(): void {
+        this.trajectoryStopSeq += 1;
         if (!this.trajectoryClient) throw "trajectoryClient is undefined";
         if (this.poseGoalWatchdogTimerID) {
             clearTimeout(this.poseGoalWatchdogTimerID);
             this.poseGoalWatchdogTimerID = undefined;
         }
-        if (this.poseGoal || this.poseGoalID) {
-            if (this.poseGoalID) {
+        const hadPoseGoal = Boolean(this.poseGoal || this.poseGoalID);
+        if (this.poseGoalID) {
+            try {
                 this.trajectoryClient.cancelGoal(this.poseGoalID);
+            } catch (err) {
+                console.warn("cancelGoal failed:", err);
             }
-            this.poseGoal = undefined;
-            this.poseGoalID = undefined;
-            if (this.playbackPosesResultCallback) {
-                this.playbackPosesResultCallback({
-                    state: MovementState.Cancel,
-                    alert_type: "error",
-                });
-            }
+        }
+        try {
+            this.trajectoryClient.cancelAllGoals();
+        } catch (err) {
+            console.warn("cancelAllGoals failed:", err);
+        }
+        this.poseGoal = undefined;
+        this.poseGoalID = undefined;
+        if (hadPoseGoal && this.playbackPosesResultCallback) {
+            this.playbackPosesResultCallback({
+                state: MovementState.Cancel,
+                alert_type: "error",
+            });
         }
     }
 

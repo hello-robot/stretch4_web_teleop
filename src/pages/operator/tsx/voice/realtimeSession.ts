@@ -1997,10 +1997,15 @@ export async function connectOpenAIRealtimeVoice(
                 // Local stop for short transcripts matching VOICE_STOP_KEYWORDS — both
                 // asleep and awake (safety). Otherwise wait for stop_motion or a
                 // superseding movement tool.
-                const words = transcript.trim().toLowerCase().split(/\s+/);
+                const words = transcript
+                    .trim()
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .map((w) => w.replace(/[^a-z]/g, ""))
+                    .filter(Boolean);
                 if (
                     words.length <= 3 &&
-                    words.some((w) => VOICE_STOP_KEYWORDS.has(w))
+                    words.some((w) => VOICE_STOP_KEYWORDS.has(w.replace(/[^a-z]/g, "")))
                 ) {
                     opts.onLog?.(
                         `[Realtime] Fast-path stop triggered by transcript: "${transcript.trim()}"`,

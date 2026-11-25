@@ -26,11 +26,20 @@ export function useToasts() {
     const [toasts, toastsSet] = useState<Toast[]>([]);
 
     const addToast = useCallback<AddToastFn>((type, message, duration, variant) => {
-        const id = genUUID();
-        toastsSet((prevToasts) => [
-            ...prevToasts,
-            { id, type, message, duration, variant },
-        ]);
+        toastsSet((prevToasts) => {
+            if (
+                prevToasts.some(
+                    (toast) => toast.message === message && toast.type === type,
+                )
+            ) {
+                return prevToasts;
+            }
+            const id = genUUID();
+            return [
+                ...prevToasts,
+                { id, type, message, duration, variant },
+            ];
+        });
     }, []);
 
     return { toasts, toastsSet, addToast };
