@@ -22,9 +22,19 @@ export type cmd =
     | GetMaxEeSpeed
     | HomeTheRobotCommand
     | SeedLocalizationCommand
+    | AutoDockCommand
+    | StopAutoDockCommand
     | ShutdownCommand
     | GetVoiceCapabilityCommand
     | RequestVoiceTokenCommand;
+
+export interface AutoDockCommand {
+    type: "autoDock";
+}
+
+export interface StopAutoDockCommand {
+    type: "stopAutoDock";
+}
 
 export interface ShutdownCommand {
     type: "shutdown";

@@ -49,6 +49,8 @@ export const robot = new Robot({
     odomCallback: forwardOdom,
     moveBaseResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "moveBaseState"),
+    autoDockResultCallback: (goalState: ActionState) =>
+        forwardActionState(goalState, "autoDockState"),
     playbackPosesResultCallback: (goalState: ActionState) =>
         forwardActionState(goalState, "playbackPosesState"),
     amclPoseCallback: forwardAMCLPose,
@@ -72,6 +74,7 @@ connection = new WebRTCConnection({
     polite: false,
     onRobotConnectionStart: handleSessionStart,
     onMessage: handleMessage,
+    onDisconnect: () => robot.stopExecution(true),
 });
 robot.setOnRosConnectCallback(async () => {
     robot.subscribeToVideo({
@@ -119,6 +122,7 @@ robot.connect();
  * and opens the bidirectional data channels.
  */
 function handleSessionStart(): void {
+    robot.stopExecution(true);
     connection.removeTracks();
 
     console.log("adding local media stream to peer connection");
@@ -473,6 +477,12 @@ function handleMessage(message: WebRTCMessage) {
                     "seedLocalizationState"
                 );
             });
+            break;
+        case "autoDock":
+            void robot.executeAutoDock();
+            break;
+        case "stopAutoDock":
+            robot.stopDockRobotClient();
             break;
         case "shutdown":
             robot.shutdown((response) => {
