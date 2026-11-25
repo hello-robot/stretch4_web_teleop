@@ -167,7 +167,7 @@
 
         .boot-screen__reload {
             appearance: none;
-            margin: 0;
+            margin: auto 0 0;
             border: none;
             outline: none;
             border-radius: 12px;
@@ -249,7 +249,7 @@
 <body>
     <div id="root" aria-relevant="all" aria-live="assertive" tabindex="0">
         <div class="boot-screen">
-            <a class="boot-screen__dashboard" href="/" aria-label="Dashboard" onclick="history.back(); return false;">
+            <a class="boot-screen__dashboard" href="https://stretch4-web-interface.web.app/" aria-label="Dashboard">
                 <span class="boot-screen__dashboard-icon" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                         <path d="M3 10.5 8 5.5 13 10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -257,6 +257,16 @@
                 </span>
                 <span class="boot-screen__dashboard-label">Dashboard</span>
             </a>
+            <script>
+                // Same host check as isFirebaseHostingPage in operator/tsx/index.tsx.
+                // Runs before first paint so Tailscale and ngrok never show this link.
+                (function () {
+                    var host = location.hostname;
+                    if (host.endsWith(".web.app") || host.endsWith(".firebaseapp.com")) return;
+                    var link = document.querySelector(".boot-screen__dashboard");
+                    if (link) link.remove();
+                })();
+            </script>
             <div class="boot-screen__spinner" role="status">
                 <div class="boot-screen__spinner-ring" aria-hidden="true"></div>
                 <span class="boot-screen__spinner-label">Loading</span>
